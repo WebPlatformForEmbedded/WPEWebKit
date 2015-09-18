@@ -35,7 +35,6 @@
 
 #include "ExceptionBase.h"
 #include "ScriptWrappable.h"
-#include <wtf/PassRefPtr.h>
 #include <wtf/RefCounted.h>
 #include <wtf/RefPtr.h>
 #include <wtf/text/WTFString.h>
@@ -48,19 +47,24 @@ class RTCIceCandidateDescriptor;
 class RTCIceCandidate : public RefCounted<RTCIceCandidate>, public ScriptWrappable {
 public:
     static RefPtr<RTCIceCandidate> create(const Dictionary&, ExceptionCode&);
-    static Ref<RTCIceCandidate> create(PassRefPtr<RTCIceCandidateDescriptor>);
+    static Ref<RTCIceCandidate> create(const String& candidate, const String& sdpMid, unsigned short sdpMLineIndex);
     virtual ~RTCIceCandidate();
 
     const String& candidate() const;
-    const String& sdpMid() const;
-    unsigned short sdpMLineIndex() const;
+    void setCandidate(const String&);
 
-    RTCIceCandidateDescriptor* descriptor();
+    const String& sdpMid() const;
+    void setSdpMid(const String&);
+
+    unsigned short sdpMLineIndex() const;
+    void setSdpMLineIndex(unsigned short);
 
 private:
-    explicit RTCIceCandidate(PassRefPtr<RTCIceCandidateDescriptor>);
+    explicit RTCIceCandidate(const String& candidate, const String& sdpMid, unsigned short sdpMLineIndex);
 
-    RefPtr<RTCIceCandidateDescriptor> m_descriptor;
+    String m_candidate;
+    String m_sdpMid;
+    unsigned short m_sdpMLineIndex;
 };
 
 } // namespace WebCore

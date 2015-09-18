@@ -329,6 +329,8 @@ list(APPEND WebKit2_SOURCES
 
     WebProcess/MediaCache/WebMediaKeyStorageManager.cpp
 
+    WebProcess/MediaStream/UserMediaPermissionRequestManager.cpp
+
     WebProcess/Plugins/Netscape/unix/PluginProxyUnix.cpp
 
     WebProcess/Plugins/Netscape/x11/NetscapePluginX11.cpp

@@ -30,20 +30,37 @@
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 find_package(PkgConfig)
-pkg_check_modules(OPENWEBRTC openwebrtc-0.1 openwebrtc-gst-0.1)
+pkg_check_modules(OPENWEBRTC openwebrtc-0.3 openwebrtc-gst-0.3)
 
-set(VERSION_OK TRUE)
-if (OPENWEBRTC_VERSION)
-    if (OPENWEBRTC_FIND_VERSION_EXACT)
-        if (NOT("${OPENWEBRTC_FIND_VERSION}" VERSION_EQUAL "${OPENWEBRTC_VERSION}"))
-            set(VERSION_OK FALSE)
-        endif ()
-    else ()
-        if ("${OPENWEBRTC_VERSION}" VERSION_LESS "${OPENWEBRTC_FIND_VERSION}")
-            set(VERSION_OK FALSE)
+if ("${OPENWEBRTC_FOUND}")
+    find_path(
+        OWR_INCLUDE_DIR 
+        NAMES owr.h
+        HINTS ${OPENWEBRTC_INCLUDE_DIRS}
+        PATH_SUFFIXES owr
+    )
+    list(APPEND OPENWEBRTC_INCLUDE_DIRS "${OWR_INCLUDE_DIR}" )    
+    
+    find_path(
+        OWR_GST_INCLUDE_DIR 
+        NAMES gst.h 
+        HINTS ${OPENWEBRTC_INCLUDE_DIRS}
+        PATH_SUFFIXES gst
+    )
+    list(APPEND OPENWEBRTC_INCLUDE_DIRS "${OWR_GST_INCLUDE_DIR}" )
+    set(VERSION_OK TRUE)
+    if (OPENWEBRTC_VERSION)
+        if (OPENWEBRTC_FIND_VERSION_EXACT)
+            if (NOT("${PC_OPENWEBRTC_FIND_VERSION}" VERSION_EQUAL "${OPENWEBRTC_VERSION}"))
+                set(VERSION_OK FALSE)
+            endif ()
+        else ()
+            if ("${OPENWEBRTC_VERSION}" VERSION_LESS "${OPENWEBRTC_FIND_VERSION}")
+                set(VERSION_OK FALSE)
+            endif ()
         endif ()
     endif ()
 endif ()
 
 include(FindPackageHandleStandardArgs)
-FIND_PACKAGE_HANDLE_STANDARD_ARGS(OPENWEBRTC DEFAULT_MSG OPENWEBRTC_INCLUDE_DIRS OPENWEBRTC_LIBRARIES VERSION_OK)
+FIND_PACKAGE_HANDLE_STANDARD_ARGS(OPENWEBRTC DEFAULT_MSG OPENWEBRTC_FOUND OPENWEBRTC_LIBRARIES OPENWEBRTC_INCLUDE_DIRS VERSION_OK)

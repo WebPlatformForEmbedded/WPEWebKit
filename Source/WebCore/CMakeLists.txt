@@ -227,7 +227,6 @@ set(WebCore_NON_SVG_IDL_FILES
     Modules/mediastream/MediaSourceStates.idl
     Modules/mediastream/MediaStream.idl
     Modules/mediastream/MediaStreamCapabilities.idl
-    Modules/mediastream/MediaStreamEvent.idl
     Modules/mediastream/MediaStreamTrack.idl
     Modules/mediastream/MediaStreamTrackEvent.idl
     Modules/mediastream/MediaStreamTrackSourcesCallback.idl
@@ -249,11 +248,14 @@ set(WebCore_NON_SVG_IDL_FILES
     Modules/mediastream/RTCIceServer.idl
     Modules/mediastream/RTCPeerConnection.idl
     Modules/mediastream/RTCPeerConnectionErrorCallback.idl
+    Modules/mediastream/RTCRtpReceiver.idl
+    Modules/mediastream/RTCRtpSender.idl
     Modules/mediastream/RTCSessionDescription.idl
     Modules/mediastream/RTCSessionDescriptionCallback.idl
     Modules/mediastream/RTCStatsCallback.idl
     Modules/mediastream/RTCStatsReport.idl
     Modules/mediastream/RTCStatsResponse.idl
+    Modules/mediastream/RTCTrackEvent.idl
     Modules/mediastream/SourceInfo.idl
 
     Modules/navigatorcontentutils/NavigatorContentUtils.idl
@@ -891,10 +893,10 @@ set(WebCore_SOURCES
     Modules/mediastream/MediaConstraintsImpl.cpp
     Modules/mediastream/MediaDeviceInfo.cpp
     Modules/mediastream/MediaDevices.cpp
+    Modules/mediastream/MediaEndpointPeerConnection.cpp
     Modules/mediastream/MediaSourceStates.cpp
     Modules/mediastream/MediaStream.cpp
     Modules/mediastream/MediaStreamCapabilities.cpp
-    Modules/mediastream/MediaStreamEvent.cpp
     Modules/mediastream/MediaStreamRegistry.cpp
     Modules/mediastream/MediaStreamTrack.cpp
     Modules/mediastream/MediaStreamTrackEvent.cpp
@@ -904,6 +906,7 @@ set(WebCore_SOURCES
     Modules/mediastream/MediaTrackConstraints.cpp
     Modules/mediastream/NavigatorMediaDevices.cpp
     Modules/mediastream/NavigatorUserMediaError.cpp
+    Modules/mediastream/RTCConfiguration.cpp
     Modules/mediastream/RTCDTMFSender.cpp
     Modules/mediastream/RTCDTMFToneChangeEvent.cpp
     Modules/mediastream/RTCDataChannel.cpp
@@ -912,15 +915,22 @@ set(WebCore_SOURCES
     Modules/mediastream/RTCIceCandidateEvent.cpp
     Modules/mediastream/RTCOfferAnswerOptions.cpp
     Modules/mediastream/RTCPeerConnection.cpp
+    Modules/mediastream/RTCRtpReceiver.cpp
+    Modules/mediastream/RTCRtpSender.cpp
+    Modules/mediastream/RTCRtpSenderReceiverBase.cpp
     Modules/mediastream/RTCSessionDescription.cpp
-    Modules/mediastream/RTCSessionDescriptionRequestImpl.cpp
+    # Modules/mediastream/RTCSessionDescriptionRequestImpl.cpp
     Modules/mediastream/RTCStatsReport.cpp
     Modules/mediastream/RTCStatsRequestImpl.cpp
     Modules/mediastream/RTCStatsResponse.cpp
+    Modules/mediastream/RTCTrackEvent.cpp
     Modules/mediastream/RTCVoidRequestImpl.cpp
     Modules/mediastream/SourceInfo.cpp
     Modules/mediastream/UserMediaController.cpp
     Modules/mediastream/UserMediaRequest.cpp
+
+    
+    
 
     Modules/navigatorcontentutils/NavigatorContentUtils.cpp
 
@@ -2228,6 +2238,8 @@ set(WebCore_SOURCES
     platform/graphics/transforms/TranslateTransformOperation.cpp
 
     platform/mediastream/MediaDevicesPrivate.cpp
+    platform/mediastream/MediaEndpointConfigurationConversions.cpp
+    platform/mediastream/MediaEndpointInit.cpp
     platform/mediastream/MediaStreamPrivate.cpp
     platform/mediastream/MediaStreamTrackPrivate.cpp
     platform/mediastream/RTCIceCandidateDescriptor.cpp

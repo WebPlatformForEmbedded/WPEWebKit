@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2012 Google Inc. All rights reserved.
  * Copyright (C) 2013 Nokia Corporation and/or its subsidiary(-ies).
+ * Copyright (C) 2015 Ericsson AB. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -35,51 +36,44 @@
     CustomConstructor(Dictionary rtcConfiguration),
     ConstructorCallWith=ScriptExecutionContext,
     ConstructorRaisesException,
-    ConstructorCallWith=ScriptExecutionContext,
     EventTarget,
     InterfaceName=webkitRTCPeerConnection,
 ] interface RTCPeerConnection {
-    [RaisesException] void createOffer(RTCSessionDescriptionCallback successCallback, RTCPeerConnectionErrorCallback failureCallback, optional Dictionary offerOptions);
 
-    [RaisesException] void createAnswer(RTCSessionDescriptionCallback successCallback,  RTCPeerConnectionErrorCallback failureCallback, optional Dictionary answerOptions);
+    [Custom, RaisesException] Promise createOffer(optional Dictionary offerOptions);
+    [Custom, RaisesException] Promise createAnswer(optional Dictionary answerOptions);
 
-    [RaisesException] void setLocalDescription(RTCSessionDescription description, VoidCallback successCallback, RTCPeerConnectionErrorCallback failureCallback);
-    [GetterRaisesException] readonly attribute RTCSessionDescription localDescription;
+    sequence<RTCRtpSender> getSenders();
 
-    [RaisesException] void setRemoteDescription(RTCSessionDescription description, VoidCallback successCallback, RTCPeerConnectionErrorCallback failureCallback);
-    [GetterRaisesException] readonly attribute RTCSessionDescription remoteDescription;
+    [StrictTypeChecking, RaisesException] RTCRtpSender addTrack(MediaStreamTrack track, MediaStream stream);
+    [StrictTypeChecking, RaisesException] void removeTrack(RTCRtpSender sender);
+
+    [Custom, RaisesException] Promise setLocalDescription(RTCSessionDescription description);
+    readonly attribute RTCSessionDescription localDescription;
+
+    [Custom, RaisesException] Promise setRemoteDescription(RTCSessionDescription description);
+    readonly attribute RTCSessionDescription remoteDescription;
 
     readonly attribute DOMString signalingState;
 
     [RaisesException] void updateIce(Dictionary configuration);
-
-    [RaisesException] void addIceCandidate(RTCIceCandidate candidate, VoidCallback successCallback, RTCPeerConnectionErrorCallback failureCallback);
+    [Custom, RaisesException] Promise addIceCandidate(RTCIceCandidate candidate);
 
     readonly attribute DOMString iceGatheringState;
     readonly attribute DOMString iceConnectionState;
 
-    sequence<MediaStream> getLocalStreams();
-    sequence<MediaStream> getRemoteStreams();
-    MediaStream getStreamById(DOMString streamId);
-
     RTCConfiguration getConfiguration();
-
-    [StrictTypeChecking, RaisesException] void addStream(MediaStream stream);
-    [StrictTypeChecking, RaisesException] void removeStream(MediaStream stream);
 
     void getStats(RTCStatsCallback successCallback, RTCPeerConnectionErrorCallback failureCallback, [Default=Undefined] optional MediaStreamTrack selector);
 
     [RaisesException] RTCDataChannel createDataChannel([TreatNullAs=NullString, TreatUndefinedAs=NullString] DOMString label, optional Dictionary options);
 
-    [RaisesException] RTCDTMFSender createDTMFSender(MediaStreamTrack track);
-
-    [RaisesException] void close();
+    void close();
 
     attribute EventHandler onnegotiationneeded;
     attribute EventHandler onicecandidate;
     attribute EventHandler onsignalingstatechange;
-    attribute EventHandler onaddstream;
-    attribute EventHandler onremovestream;
+    attribute EventHandler ontrack;
     attribute EventHandler oniceconnectionstatechange;
     attribute EventHandler ondatachannel;
 

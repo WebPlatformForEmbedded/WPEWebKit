@@ -195,6 +195,8 @@ list(APPEND WebKit2_SOURCES
     WebProcess/InjectedBundle/efl/InjectedBundleEfl.cpp
 
     WebProcess/MediaCache/WebMediaKeyStorageManager.cpp
+    
+    WebProcess/MediaStream/UserMediaPermissionRequestManager.cpp
 
     WebProcess/Plugins/Netscape/unix/PluginProxyUnix.cpp
 

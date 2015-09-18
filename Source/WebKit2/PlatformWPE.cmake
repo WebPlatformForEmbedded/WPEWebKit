@@ -94,6 +94,7 @@ list(APPEND WebKit2_SOURCES
     WebProcess/Cookies/soup/WebKitSoupCookieJarSqlite.cpp
     WebProcess/InjectedBundle/wpe/InjectedBundleWPE.cpp
     WebProcess/MediaCache/WebMediaKeyStorageManager.cpp
+    WebProcess/MediaStream/wpe/UserMediaPermissionRequestManagerWPE.cpp
     WebProcess/WebCoreSupport/soup/WebFrameNetworkingContext.cpp
     WebProcess/WebCoreSupport/wpe/WebContextMenuClientWPE.cpp
     WebProcess/WebCoreSupport/wpe/WebEditorClientWPE.cpp

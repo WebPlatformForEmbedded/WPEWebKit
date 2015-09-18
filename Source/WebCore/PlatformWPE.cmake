@@ -33,6 +33,7 @@ list(APPEND WebCore_INCLUDE_DIRECTORIES
     "${WEBCORE_DIR}/platform/graphics/opentype"
     "${WEBCORE_DIR}/platform/graphics/wayland"
     "${WEBCORE_DIR}/platform/linux"
+    "${WEBCORE_DIR}/platform/mediastream"
     "${WEBCORE_DIR}/platform/mediastream/openwebrtc"
     "${WEBCORE_DIR}/platform/mock/mediasource"
     "${WEBCORE_DIR}/platform/network/soup"
@@ -129,8 +130,6 @@ list(APPEND WebCore_SOURCES
     platform/image-decoders/webp/WEBPImageDecoder.cpp
     platform/image-encoders/JPEGImageEncoder.cpp
     platform/linux/MemoryPressureHandlerLinux.cpp
-    platform/mediastream/openwebrtc/OpenWebRTCUtilities.cpp
-    platform/mediastream/openwebrtc/RealtimeMediaSourceCenterOwr.cpp
     platform/network/soup/AuthenticationChallengeSoup.cpp
     platform/network/soup/CertificateInfo.cpp
     platform/network/soup/CookieJarSoup.cpp
@@ -387,4 +386,19 @@ if ((ENABLE_ENCRYPTED_MEDIA OR ENABLE_ENCRYPTED_MEDIA_V2) AND ENABLE_DXDRM)
             platform/graphics/gstreamer/CDMPRSessionGStreamer.cpp
         )
     endif ()
+endif ()
+
+if (ENABLE_MEDIA_STREAM)
+    list(APPEND WebCore_SYSTEM_INCLUDE_DIRECTORIES
+        ${OPENWEBRTC_INCLUDE_DIRS}
+    )
+    list(APPEND WebCore_LIBRARIES
+        ${OPENWEBRTC_LIBRARIES}
+    )
+    list(APPEND WebCore_SOURCES
+        platform/graphics/gstreamer/MediaPlayerPrivateGStreamerOwr.cpp
+        platform/mediastream/openwebrtc/MediaEndpointOwr.cpp
+        platform/mediastream/openwebrtc/OpenWebRTCUtilities.cpp
+        platform/mediastream/openwebrtc/RealtimeMediaSourceCenterOwr.cpp
+        )
 endif ()

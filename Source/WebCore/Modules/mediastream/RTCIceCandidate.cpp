@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2012 Google Inc. All rights reserved.
  * Copyright (C) 2013 Nokia Corporation and/or its subsidiary(-ies).
+ * Copyright (C) 2015 Ericsson AB. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -37,7 +38,6 @@
 
 #include "Dictionary.h"
 #include "ExceptionCode.h"
-#include "RTCIceCandidateDescriptor.h"
 
 namespace WebCore {
 
@@ -71,16 +71,18 @@ RefPtr<RTCIceCandidate> RTCIceCandidate::create(const Dictionary& dictionary, Ex
         }
     }
 
-    return adoptRef(*new RTCIceCandidate(RTCIceCandidateDescriptor::create(candidate, sdpMid, sdpMLineIndex)));
+    return adoptRef(new RTCIceCandidate(candidate, sdpMid, sdpMLineIndex));
 }
 
-Ref<RTCIceCandidate> RTCIceCandidate::create(PassRefPtr<RTCIceCandidateDescriptor> descriptor)
+Ref<RTCIceCandidate> RTCIceCandidate::create(const String& candidate, const String& sdpMid, unsigned short sdpMLineIndex)
 {
-    return adoptRef(*new RTCIceCandidate(descriptor));
+    return adoptRef(*new RTCIceCandidate(candidate, sdpMid, sdpMLineIndex));
 }
 
-RTCIceCandidate::RTCIceCandidate(PassRefPtr<RTCIceCandidateDescriptor> descriptor)
-    : m_descriptor(descriptor)
+RTCIceCandidate::RTCIceCandidate(const String& candidate, const String& sdpMid, unsigned short sdpMLineIndex)
+    : m_candidate(candidate)
+    , m_sdpMid(sdpMid)
+    , m_sdpMLineIndex(sdpMLineIndex)
 {
 }
 
@@ -90,22 +92,33 @@ RTCIceCandidate::~RTCIceCandidate()
 
 const String& RTCIceCandidate::candidate() const
 {
-    return m_descriptor->candidate();
+    return m_candidate;
 }
+
+void RTCIceCandidate::setCandidate(const String& candidate)
+{
+    m_candidate = candidate;
+}
+
 
 const String& RTCIceCandidate::sdpMid() const
 {
-    return m_descriptor->sdpMid();
+    return m_sdpMid;
+}
+
+void RTCIceCandidate::setSdpMid(const String& sdpMid)
+{
+    m_sdpMid = sdpMid;
 }
 
 unsigned short RTCIceCandidate::sdpMLineIndex() const
 {
-    return m_descriptor->sdpMLineIndex();
+    return m_sdpMLineIndex;
 }
 
-RTCIceCandidateDescriptor* RTCIceCandidate::descriptor()
+void RTCIceCandidate::setSdpMLineIndex(unsigned short sdpMLineIndex)
 {
-    return m_descriptor.get();
+    m_sdpMLineIndex = sdpMLineIndex;
 }
 
 } // namespace WebCore

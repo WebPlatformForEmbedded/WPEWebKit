@@ -65,13 +65,18 @@ RefPtr<RTCSessionDescription> RTCSessionDescription::create(const Dictionary& di
     return adoptRef(*new RTCSessionDescription(RTCSessionDescriptionDescriptor::create(type, sdp)));
 }
 
-RefPtr<RTCSessionDescription> RTCSessionDescription::create(PassRefPtr<RTCSessionDescriptionDescriptor> descriptor)
+RefPtr<RTCSessionDescription> RTCSessionDescription::create(RefPtr<RTCSessionDescriptionDescriptor> descriptor)
 {
     ASSERT(descriptor);
     return adoptRef(*new RTCSessionDescription(descriptor));
 }
 
-RTCSessionDescription::RTCSessionDescription(PassRefPtr<RTCSessionDescriptionDescriptor> descriptor)
+Ref<RTCSessionDescription> RTCSessionDescription::create(const String& type, const String& sdp)
+{
+    return adoptRef(*new RTCSessionDescription(RTCSessionDescriptionDescriptor::create(type, sdp)));
+}
+
+RTCSessionDescription::RTCSessionDescription(RefPtr<RTCSessionDescriptionDescriptor> descriptor)
     : m_descriptor(descriptor)
 {
 }

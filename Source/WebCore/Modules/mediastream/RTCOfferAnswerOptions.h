@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2014 Apple Inc. All rights reserved.
+ * Copyright (C) 2015 Ericsson AB. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,45 +31,55 @@
 
 #include "Dictionary.h"
 #include "ExceptionCode.h"
-#include "RTCOfferAnswerOptionsPrivate.h"
-#include <wtf/PassRefPtr.h>
+#include <wtf/RefPtr.h>
 #include <wtf/RefCounted.h>
 
 namespace WebCore {
 
 class Dictionary;
 
+// FIXME: The WebRTC spec (as of 2015-04-13) only has a RTCOfferOptions, but a pending pull request
+// reintroduces RTCOfferAnswerOptions as a common base for RTCOfferOptions and RTCAnswerOptions.
+// This feature needs to be updated accordingly when that discussion is resolved.
 class RTCOfferAnswerOptions : public RefCounted<RTCOfferAnswerOptions> {
 public:
-    static RefPtr<RTCOfferAnswerOptions> create(const Dictionary&, ExceptionCode&);
-
-    const String& requestIdentity() const { return m_private->requestIdentity(); }
-    RTCOfferAnswerOptionsPrivate* privateOfferAnswerOptions() const { return m_private.get(); }
-
     virtual ~RTCOfferAnswerOptions() { }
+
+    bool voiceActivityDetection() const { return m_voiceActivityDetection; }
 
 protected:
     virtual bool initialize(const Dictionary&);
-    RTCOfferAnswerOptions() { }
+    RTCOfferAnswerOptions();
 
-    RefPtr<RTCOfferAnswerOptionsPrivate> m_private;
+    bool m_voiceActivityDetection;
 };
 
 class RTCOfferOptions : public RTCOfferAnswerOptions {
 public:
     static RefPtr<RTCOfferOptions> create(const Dictionary&, ExceptionCode&);
-
-    int64_t offerToReceiveVideo() const { return privateOfferOptions()->offerToReceiveVideo(); }
-    int64_t offerToReceiveAudio() const { return privateOfferOptions()->offerToReceiveAudio(); }
-    bool voiceActivityDetection() const { return privateOfferOptions()->voiceActivityDetection(); }
-    bool iceRestart() const { return privateOfferOptions()->iceRestart(); }
-    RTCOfferOptionsPrivate* privateOfferOptions() const { return static_cast<RTCOfferOptionsPrivate*>(m_private.get()); }
-
     virtual ~RTCOfferOptions() { }
+
+    int64_t offerToReceiveVideo() const { return m_offerToReceiveVideo; }
+    int64_t offerToReceiveAudio() const { return m_offerToReceiveAudio; }
+    bool iceRestart() const { return m_iceRestart; }
 
 private:
     virtual bool initialize(const Dictionary&) override;
-    RTCOfferOptions() { }
+    RTCOfferOptions();
+
+    int64_t m_offerToReceiveVideo;
+    int64_t m_offerToReceiveAudio;
+    bool m_iceRestart;
+};
+
+class RTCAnswerOptions : public RTCOfferAnswerOptions {
+public:
+    static RefPtr<RTCAnswerOptions> create(const Dictionary&, ExceptionCode&);
+    virtual ~RTCAnswerOptions() { }
+
+private:
+    virtual bool initialize(const Dictionary&) override;
+    RTCAnswerOptions() { }
 };
 
 } // namespace WebCore

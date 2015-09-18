@@ -554,8 +554,6 @@ set(WebKit2_SOURCES
 
     WebProcess/MediaCache/WebMediaCacheManager.cpp
 
-    WebProcess/MediaStream/UserMediaPermissionRequestManager.cpp
-
     WebProcess/Network/NetworkProcessConnection.cpp
     WebProcess/Network/WebResourceLoadScheduler.cpp
     WebProcess/Network/WebResourceLoader.cpp

@@ -29,6 +29,7 @@
     Constructor(MediaStream stream),
     Constructor(MediaStreamTrack[] tracks),
     ConstructorCallWith=ScriptExecutionContext,
+    InterfaceName=webkitMediaStream,
 ] interface MediaStream {
 
     readonly attribute DOMString id;
@@ -36,6 +37,7 @@
     sequence<MediaStreamTrack> getAudioTracks();
     sequence<MediaStreamTrack> getVideoTracks();
     sequence<MediaStreamTrack> getTracks();
+
     MediaStreamTrack getTrackById(DOMString trackId);
 
     void addTrack(MediaStreamTrack track);

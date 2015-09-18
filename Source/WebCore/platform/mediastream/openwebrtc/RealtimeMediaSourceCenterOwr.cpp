@@ -72,6 +72,15 @@ static void mediaSourcesAvailableCallback(GList* sources, gpointer userData)
 RealtimeMediaSourceCenterOwr::RealtimeMediaSourceCenterOwr()
 {
     initializeOpenWebRTC();
+
+    // Temporary solution to hint about preferred device names.
+    char* preferredSourceName = getenv("WEBKIT_AUDIO_SOURCE_NAME");
+    if (preferredSourceName)
+        m_preferredAudioSourceName = String(preferredSourceName);
+
+    preferredSourceName = getenv("WEBKIT_VIDEO_SOURCE_NAME");
+    if (preferredSourceName)
+        m_preferredVideoSourceName = String(preferredSourceName);
 }
 
 RealtimeMediaSourceCenterOwr::~RealtimeMediaSourceCenterOwr()
@@ -112,7 +121,7 @@ void RealtimeMediaSourceCenterOwr::createMediaStream(PassRefPtr<MediaStreamCreat
     if (audioConstraints) {
         // TODO: verify constraints according to registered
         // sources. For now, unconditionally pick the first source, see bug #123345.
-        RefPtr<RealtimeMediaSource> audioSource = firstSource(RealtimeMediaSource::Audio);
+        RefPtr<RealtimeMediaSource> audioSource = selectSource(RealtimeMediaSource::Audio);
         if (audioSource) {
             audioSource->reset();
             audioSources.append(audioSource.release());
@@ -122,7 +131,7 @@ void RealtimeMediaSourceCenterOwr::createMediaStream(PassRefPtr<MediaStreamCreat
     if (videoConstraints) {
         // TODO: verify constraints according to registered
         // sources. For now, unconditionally pick the first source, see bug #123345.
-        RefPtr<RealtimeMediaSource> videoSource = firstSource(RealtimeMediaSource::Video);
+        RefPtr<RealtimeMediaSource> videoSource = selectSource(RealtimeMediaSource::Video);
         if (videoSource) {
             videoSource->reset();
             videoSources.append(videoSource.release());
@@ -164,22 +173,28 @@ void RealtimeMediaSourceCenterOwr::mediaSourcesAvailable(GList* sources)
         RealtimeMediaSourceOwrMap::iterator sourceIterator = m_sourceMap.find(id);
         if (sourceIterator == m_sourceMap.end())
             m_sourceMap.add(id, mediaSource);
-
     }
 
     // TODO: Make sure contraints are actually validated by checking source types.
     m_client->constraintsValidated(Vector<RefPtr<RealtimeMediaSource>>(), Vector<RefPtr<RealtimeMediaSource>>());
 }
 
-PassRefPtr<RealtimeMediaSource> RealtimeMediaSourceCenterOwr::firstSource(RealtimeMediaSource::Type type)
+PassRefPtr<RealtimeMediaSource> RealtimeMediaSourceCenterOwr::selectSource(RealtimeMediaSource::Type type)
 {
+    RefPtr<RealtimeMediaSource> selectedSource = nullptr;
+    const String& preferredSourceName = type == RealtimeMediaSource::Audio ? m_preferredAudioSourceName : m_preferredVideoSourceName;
+
     for (auto iter = m_sourceMap.begin(); iter != m_sourceMap.end(); ++iter) {
         RefPtr<RealtimeMediaSource> source = iter->value;
-        if (source->type() == type)
-            return source;
+        bool foundPreferred = source->name() == preferredSourceName;
+        if (source->type() == type && (!selectedSource || foundPreferred)) {
+            selectedSource = source;
+            if (foundPreferred)
+                break;
+        }
     }
 
-    return nullptr;
+    return selectedSource;
 }
 
 RefPtr<TrackSourceInfo> RealtimeMediaSourceCenterOwr::sourceWithUID(const String& UID, RealtimeMediaSource::Type, MediaConstraints*)

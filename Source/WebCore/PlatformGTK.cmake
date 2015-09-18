@@ -131,6 +131,7 @@ list(APPEND WebCore_SOURCES
     platform/graphics/gstreamer/InbandTextTrackPrivateGStreamer.cpp
     platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
     platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp
+    platform/graphics/gstreamer/MediaPlayerPrivateGStreamerOwr.cpp
     platform/graphics/gstreamer/MediaSourceGStreamer.cpp
     platform/graphics/gstreamer/SourceBufferPrivateGStreamer.cpp
     platform/graphics/gstreamer/TextCombinerGStreamer.cpp
@@ -187,6 +188,7 @@ list(APPEND WebCore_SOURCES
     platform/linux/GamepadDeviceLinux.cpp
     platform/linux/MemoryPressureHandlerLinux.cpp
 
+    platform/mediastream/openwebrtc/MediaEndpointOwr.cpp
     platform/mediastream/openwebrtc/OpenWebRTCUtilities.cpp
     platform/mediastream/openwebrtc/RealtimeMediaSourceCenterOwr.cpp
 
