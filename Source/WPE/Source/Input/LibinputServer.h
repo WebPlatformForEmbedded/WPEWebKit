@@ -47,6 +47,7 @@ public:
     void setClient(Input::Client* client);
     void setHandlePointerEvents(bool handle);
     void setPointerBounds(uint32_t, uint32_t);
+    void configureHandleTouchEvents(bool enable, uint32_t touchWidth, uint32_t touchHeight);
 
 private:
     LibinputServer();
@@ -67,6 +68,18 @@ private:
     bool m_handlePointerEvents { false };
     std::pair<int32_t, int32_t> m_pointerCoords;
     std::pair<uint32_t, uint32_t> m_pointerBounds;
+
+    bool m_handleTouchEvents { false };
+    void handleTouchEvent(struct libinput_event *event, Input::TouchEvent::Type type, bool has_position);
+    void simulateClickEvent(uint32_t time, int32_t x, int32_t y);
+
+    std::array<Input::TouchEvent::Raw, 10> m_touchEvents;
+    std::pair<uint32_t, uint32_t> m_touchSize;
+    int m_touchFingers;
+    int m_touchClickId;
+    int32_t m_touchStartTime;
+    int32_t m_touchStartX;
+    int32_t m_touchStartY;
 
     class EventSource {
     public:
