@@ -160,6 +160,7 @@ if (USE_WPE_BACKEND_WESTEROS)
 
         Source/ViewBackend/Westeros/ViewBackendWesteros.cpp
         Source/ViewBackend/Westeros/WesterosViewbackendInput.cpp
+        Source/ViewBackend/Westeros/WesterosViewbackendOutput.cpp
     )
 endif ()
 
