@@ -320,16 +320,18 @@ void MediaPlayerPrivateGStreamerBase::setPipeline(GstElement* pipeline)
 {
     m_pipeline = pipeline;
 #if USE(HOLE_PUNCH_GSTREAMER)
-    GValue val = G_VALUE_INIT;
-    g_value_init(&val, G_TYPE_STRING);
-    char rectString[64];
-    GstElement* sinkElement;
-
-    sprintf(rectString,"%d,%d,%d,%d",m_position.x(), m_position.y(), m_size.width(),m_size.height());
-    g_value_set_static_string(&val,rectString);
+    GstElement* sinkElement = nullptr;
     g_object_get(m_pipeline.get(), "video-sink", &sinkElement, nullptr);
-    g_object_set_property(G_OBJECT(sinkElement),"window_set",&val);
-    g_value_unset(&val);
+    if(sinkElement) {
+        INFO_MEDIA_MESSAGE("Setting video sink size and position to x:%d y:%d, width=%d, height=%d\n",m_position.x(),m_position.y(), m_size.width(),m_size.height());
+        GValue val = G_VALUE_INIT;
+        g_value_init(&val, G_TYPE_STRING);
+        char rectString[64];
+        sprintf(rectString,"%d,%d,%d,%d",m_position.x(), m_position.y(), m_size.width(),m_size.height());
+        g_value_set_static_string(&val,rectString);
+        g_object_set_property(G_OBJECT(sinkElement),"window_set",&val);
+        g_value_unset(&val);
+    }
 #endif
 }
 
@@ -857,17 +859,18 @@ void MediaPlayerPrivateGStreamerBase::setPosition(const IntPoint& position)
     m_position = position;
 
     if(m_pipeline) {
-        printf("MediaPlayerPrivateGStreamerBase::setPosition setting video sink size to x:%d y:%d, width=%d, height=%d\n",m_position.x(),m_position.y(), m_size.width(),m_size.height());
-        GValue val = G_VALUE_INIT;
-        g_value_init(&val, G_TYPE_STRING);
-        char rectString[64];
-        GstElement* sinkElement;
-
-        sprintf(rectString,"%d,%d,%d,%d",m_position.x(), m_position.y(), m_size.width(),m_size.height());
-        g_value_set_static_string(&val,rectString);
+        GstElement* sinkElement = nullptr;
         g_object_get(m_pipeline.get(), "video-sink", &sinkElement, nullptr);
-        g_object_set_property(G_OBJECT(sinkElement),"window_set",&val);
-        g_value_unset(&val);
+        if(sinkElement) {
+            INFO_MEDIA_MESSAGE("Setting video sink size and position to x:%d y:%d, width=%d, height=%d\n",m_position.x(),m_position.y(), m_size.width(),m_size.height());
+            GValue val = G_VALUE_INIT;
+            g_value_init(&val, G_TYPE_STRING);
+            char rectString[64];
+            sprintf(rectString,"%d,%d,%d,%d",m_position.x(), m_position.y(), m_size.width(),m_size.height());
+            g_value_set_static_string(&val,rectString);
+            g_object_set_property(G_OBJECT(sinkElement),"window_set",&val);
+            g_value_unset(&val);
+        }
     }
 }
 
