@@ -322,12 +322,13 @@ void MediaPlayerPrivateGStreamerBase::setPipeline(GstElement* pipeline)
 #if USE(HOLE_PUNCH_GSTREAMER)
     GstElement* sinkElement = nullptr;
     g_object_get(m_pipeline.get(), "video-sink", &sinkElement, nullptr);
-    if(sinkElement) {
-        INFO_MEDIA_MESSAGE("setPipeline: Setting video sink size and position to x:%d y:%d, width=%d, height=%d\n",m_position.x(),m_position.y(), m_size.width(),m_size.height());
-        gchar rectString[64] = {0};
-        g_snprintf(rectString, sizeof(rectString), "%d,%d,%d,%d", m_position.x(), m_position.y(), m_size.width(),m_size.height());
-        g_object_set(G_OBJECT(sinkElement),"window_set",rectString, nullptr);
-    }
+    if(!sinkElement)
+        return;
+
+    INFO_MEDIA_MESSAGE("setPipeline: Setting video sink size and position to x:%d y:%d, width=%d, height=%d\n",m_position.x(),m_position.y(), m_size.width(),m_size.height());
+    gchar rectString[64] = {0};
+    g_snprintf(rectString, sizeof(rectString), "%d,%d,%d,%d", m_position.x(), m_position.y(), m_size.width(),m_size.height());
+    g_object_set(G_OBJECT(sinkElement),"window_set",rectString, nullptr);
 #endif
 }
 
@@ -849,21 +850,23 @@ void MediaPlayerPrivateGStreamerBase::setSize(const IntSize& size)
 
 void MediaPlayerPrivateGStreamerBase::setPosition(const IntPoint& position)
 {
-    if (position == m_position) {
+    if (position == m_position)
         return;
-    }
+
     m_position = position;
 
-    if(m_pipeline) {
-        GstElement* sinkElement = nullptr;
-        g_object_get(m_pipeline.get(), "video-sink", &sinkElement, nullptr);
-        if(sinkElement) {
-            INFO_MEDIA_MESSAGE("setPosition: Setting video sink size and position to x:%d y:%d, width=%d, height=%d\n",m_position.x(),m_position.y(), m_size.width(),m_size.height());
-            gchar rectString[64] = {0};
-            g_snprintf(rectString, sizeof(rectString), "%d,%d,%d,%d", m_position.x(), m_position.y(), m_size.width(),m_size.height());
-            g_object_set(G_OBJECT(sinkElement),"window_set",rectString, nullptr);
-        }
-    }
+    if(!m_pipeline)
+        return;
+
+    GstElement* sinkElement = nullptr;
+    g_object_get(m_pipeline.get(), "video-sink", &sinkElement, nullptr);
+    if(!sinkElement)
+        return;
+
+    INFO_MEDIA_MESSAGE("setPosition: Setting video sink size and position to x:%d y:%d, width=%d, height=%d\n",m_position.x(),m_position.y(), m_size.width(),m_size.height());
+    gchar rectString[64] = {0};
+    g_snprintf(rectString, sizeof(rectString), "%d,%d,%d,%d", m_position.x(), m_position.y(), m_size.width(),m_size.height());
+    g_object_set(G_OBJECT(sinkElement),"window_set",rectString, nullptr);
 }
 
 void MediaPlayerPrivateGStreamerBase::paint(GraphicsContext& context, const FloatRect& rect)
