@@ -42,6 +42,7 @@ list(APPEND WebCore_INCLUDE_DIRECTORIES
     "${WEBCORE_DIR}/platform/text/icu"
     ${WPE_DIR}
     ${WTF_DIR}
+    ${WAYLAND_INCLUDE_DIRS}
 )
 
 list(APPEND WebCore_SOURCES
@@ -111,7 +112,9 @@ list(APPEND WebCore_SOURCES
     platform/graphics/opentype/OpenTypeVerticalData.cpp
 
     platform/graphics/wpe/PlatformDisplayWPE.cpp
-
+    platform/graphics/wayland/PlatformDisplayWayland.cpp
+    platform/graphics/wayland/WaylandEventSource.cpp
+    platform/graphics/wayland/WaylandSurface.cpp
     platform/image-encoders/JPEGImageEncoder.cpp
 
     platform/image-decoders/cairo/ImageDecoderCairo.cpp
@@ -213,6 +216,7 @@ list(APPEND WebCore_LIBRARIES
     ${LIBXML2_LIBRARIES}
     ${LIBXSLT_LIBRARIES}
     ${SQLITE_LIBRARIES}
+    ${WAYLAND_LIBRARIES}
     WPE
 )
 
@@ -271,5 +275,3 @@ if (ENABLE_SUBTLE_CRYPTO)
         crypto/keys/CryptoKeySerializationRaw.cpp
     )
 endif ()
-
-

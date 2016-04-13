@@ -29,6 +29,11 @@
 #include "ThreadedCompositor.h"
 
 #include <WebCore/GLContextEGL.h>
+#if PLATFORM(WAYLAND)
+#include <wayland-client.h>
+#include <WebCore/PlatformDisplayWayland.h>
+#endif
+#include <WebCore/PlatformDisplayWPE.h>
 #include <WebCore/PlatformDisplayWPE.h>
 #include <WebCore/TransformationMatrix.h>
 #include <cstdio>
@@ -44,9 +49,102 @@
 #include <GL/gl.h>
 #endif
 
+#if PLATFORM(WPE) && PLATFORM(WAYLAND)
+//KEYBOARD SUPPORT
+#include "NativeWebKeyboardEvent.h"
+#include "NativeWebMouseEvent.h"
+//KEYBOARD SUPPORT
+#endif
+
 using namespace WebCore;
 
 namespace WebKit {
+#if PLATFORM(WPE) && PLATFORM(WAYLAND)
+const struct wl_callback_listener g_frameCallbackListener = {
+      // frame
+          [](void* data, struct wl_callback* callback, uint32_t)
+              {
+                 auto& callbackData = *static_cast<WebKit::ThreadedCompositor*>(data);
+                 callbackData.didFrameComplete();
+                 wl_callback_destroy(callback);
+              },
+};
+#endif
+
+class CompositingRunLoop {
+    WTF_MAKE_NONCOPYABLE(CompositingRunLoop);
+    WTF_MAKE_FAST_ALLOCATED;
+public:
+    CompositingRunLoop(std::function<void()> updateFunction)
+        : m_runLoop(RunLoop::current())
+        , m_updateTimer(m_runLoop, this, &CompositingRunLoop::updateTimerFired)
+        , m_updateFunction(WTFMove(updateFunction))
+   {
+        m_updateState.store(UpdateState::Completed);
+   }
+
+    void callOnCompositingRunLoop(std::function<void()> function)
+    {
+        if (&m_runLoop == &RunLoop::current()) {
+            function();
+            return;
+        }
+
+        m_runLoop.dispatch(WTFMove(function));
+    }
+
+    void scheduleUpdate()
+   {
+        if (m_updateState.compareExchangeStrong(UpdateState::Completed, UpdateState::InProgress)) {
+            m_updateTimer.startOneShot(0);
+            return;
+       }
+
+        if (m_updateState.compareExchangeStrong(UpdateState::InProgress, UpdateState::PendingAfterCompletion))
+            return;
+    }
+
+   void stopUpdates()
+    {
+        m_updateTimer.stop();
+        m_updateState.store(UpdateState::Completed);
+    }
+
+    void updateCompleted()
+    {
+        if (m_updateState.compareExchangeStrong(UpdateState::InProgress, UpdateState::Completed))
+            return;
+
+        if (m_updateState.compareExchangeStrong(UpdateState::PendingAfterCompletion, UpdateState::InProgress)) {
+            m_updateTimer.startOneShot(0);
+            return;
+        }
+
+        ASSERT_NOT_REACHED();
+    }
+
+    RunLoop& runLoop()
+    {
+        return m_runLoop;
+    }
+
+private:
+    enum class UpdateState {
+        Completed,
+        InProgress,
+        PendingAfterCompletion,
+    };
+
+    void updateTimerFired()
+    {
+        m_updateFunction();
+    }
+
+    RunLoop& m_runLoop;
+    RunLoop::Timer<CompositingRunLoop> m_updateTimer;
+    std::function<void()> m_updateFunction;
+    Atomic<UpdateState> m_updateState;
+};
 
 Ref<ThreadedCompositor> ThreadedCompositor::create(Client* client, WebPage& webPage)
 {
@@ -61,6 +159,11 @@ ThreadedCompositor::ThreadedCompositor(Client* client, WebPage& webPage)
 #if USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
     , m_displayRefreshMonitor(adoptRef(new DisplayRefreshMonitor(*this)))
 #endif
+//KEYBOARD SUPPORT - //THIS NEEDS TO BE TESTED WITH THIS WEBPAGE TO AVOID HAVING ONE MORE API getWebPage in threaded client
+#if PLATFORM(WPE) && PLATFORM(WAYLAND)
+    , webpage(webPage)
+#endif
+//KEYBOARD SUPPORT
 {
     m_clientRendersNextFrame.store(false);
     m_coordinateUpdateCompletionWithClient.store(false);
@@ -188,13 +291,28 @@ GLContext* ThreadedCompositor::glContext()
         return m_context.get();
 
 #if PLATFORM(WPE)
+#if PLATFORM(WAYLAND)
+    RELEASE_ASSERT(is<PlatformDisplayWayland>(PlatformDisplay::sharedDisplay()));
+#else
     RELEASE_ASSERT(is<PlatformDisplayWPE>(PlatformDisplay::sharedDisplay()));
-
+#endif
     IntSize size(viewportController()->visibleContentsRect().size());
     uint32_t targetHandle = m_compositingManager->constructRenderingTarget(std::max(0, size.width()), std::max(0, size.height()));
+#if PLATFORM(WAYLAND)
+    m_surface = downcast<PlatformDisplayWayland>(PlatformDisplay::sharedDisplay()).createSurface(size, targetHandle);
+#else
     m_surface = downcast<PlatformDisplayWPE>(PlatformDisplay::sharedDisplay()).createSurface(size, targetHandle, *m_compositingManager);
+#endif
     if (!m_surface)
         return nullptr;
+
+#if PLATFORM(WAYLAND)
+//KEYBOARD SUPPORT
+    printf("Registering input client [%x] \n",this);
+    fflush(stdout);
+    downcast<PlatformDisplayWayland>(PlatformDisplay::sharedDisplay()).registerInputClient(m_surface->surface(),this);
+//KEYBOARD SUPPORT
+#endif
 
     setNativeSurfaceHandleForCompositing(0);
     m_context = m_surface->createGLContext();
@@ -237,11 +355,21 @@ void ThreadedCompositor::renderLayerTree()
 
     m_scene->paintToCurrentGLContext(viewportTransform, 1, clipRect, Color::white, false, scrollPostion);
 
+#if PLATFORM(WPE) && PLATFORM(WAYLAND)
+    requestFrame();
+#endif
+
     glContext()->swapBuffers();
 
 #if PLATFORM(WPE)
+#if PLATFORM(WAYLAND)
+    using BufferExport = WPE::Graphics::RenderingBackend::BufferExport;
+    BufferExport bufferExport = {};
+    m_compositingManager->commitBuffer(bufferExport);
+#else
     auto bufferExport = m_surface->lockFrontBuffer();
     m_compositingManager->commitBuffer(bufferExport);
+#endif
 #endif
 }
 
@@ -296,6 +424,11 @@ void ThreadedCompositor::runCompositingThread()
         m_viewportController = std::make_unique<SimpleViewportController>(this);
 
         m_initializeRunLoopCondition.notifyOne();
+#if PLATFORM(WAYLAND)
+//KEYBOARD SUPPORT
+    downcast<PlatformDisplayWayland>(PlatformDisplay::sharedDisplay()).unregisterInputClient(m_surface->surface());
+//KEYBOARD SUPPORT
+#endif
     }
 
     m_compositingRunLoop->runLoop().run();
@@ -343,11 +476,13 @@ static void debugThreadedCompositorFPS()
     }
 }
 
+#if PLATFORM(WPE)
 void ThreadedCompositor::releaseBuffer(uint32_t handle)
 {
     ASSERT(&RunLoop::current() == &m_compositingRunLoop->runLoop());
     m_surface->releaseBuffer(handle);
 }
+#endif
 
 void ThreadedCompositor::frameComplete()
 {
@@ -496,6 +631,41 @@ void ThreadedCompositor::CompositingRunLoop::updateTimerFired()
 {
     m_updateFunction();
 }
+
+#if PLATFORM(WAYLAND)
+void ThreadedCompositor::requestFrame()
+{ 
+    struct wl_callback* frameCallback = wl_surface_frame(m_surface->surface());
+    wl_callback_add_listener(frameCallback, &(WebKit::g_frameCallbackListener), this);
+    wl_display_flush(downcast<PlatformDisplayWayland>(PlatformDisplay::sharedDisplay()).native());
+}
+void ThreadedCompositor::didFrameComplete()
+{
+    frameComplete();
+}
+#endif
+//KEYBOARD SUPPORT
+#if PLATFORM(WPE) && PLATFORM(WAYLAND)
+void ThreadedCompositor::handleKeyboardEvent(WPE::Input::KeyboardEvent&& event)
+{
+        fflush(stdout);
+        m_client->getWebPage()->keyEvent(WebKit::NativeWebKeyboardEvent(WTFMove(event)));
+}
+void ThreadedCompositor::handlePointerEvent(WPE::Input::PointerEvent&& event)
+{
+        fflush(stdout);
+        m_client->getWebPage()->mouseEvent(WebKit::NativeWebMouseEvent(WTFMove(event)));
+}
+
+void ThreadedCompositor::handleAxisEvent(WPE::Input::AxisEvent&& event)
+{
+}
+
+void ThreadedCompositor::handleTouchEvent(WPE::Input::TouchEvent&& event)
+{
+}
+#endif
+//KEYBOARD SUPPORT
 
 }
 #endif // USE(COORDINATED_GRAPHICS_THREADED)

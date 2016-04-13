@@ -40,6 +40,7 @@ WEBKIT_OPTION_DEFINE(USE_WPE_BACKEND_DRM_TEGRA "Whether to enable support for th
 WEBKIT_OPTION_DEFINE(USE_WPE_BACKEND_WAYLAND "Whether to enable support for the Wayland WPE backend" PUBLIC OFF)
 WEBKIT_OPTION_DEFINE(USE_WPE_BACKEND_WESTEROS "Whether to enable support for the Westeros WPE backend" PUBLIC OFF)
 WEBKIT_OPTION_DEFINE(USE_WESTEROS_SINK "Westeros-Sink to be used as video-sink for GStreamer video player" PUBLIC OFF)
+WEBKIT_OPTION_DEFINE(USE_WPE_BACKEND_WINDOWLESS "Whether to enable support for the Windlowless WPE backend" PUBLIC ON)
 WEBKIT_OPTION_DEFINE(USE_WPE_BUFFER_MANAGEMENT_GBM "Whether to enable support for the GBM WPE rendering backend" PUBLIC OFF)
 WEBKIT_OPTION_DEFINE(USE_WPE_BUFFER_MANAGEMENT_BCM_RPI "Whether to enable support for the BCM RPi rendering backend" PUBLIC OFF)
 WEBKIT_OPTION_DEFINE(USE_WPE_BUFFER_MANAGEMENT_BCM_NEXUS "Whether to enable support for the BCM_NEXUS rendering backend" PUBLIC OFF)
@@ -90,6 +91,7 @@ endif ()
 
 find_package(OpenGLES2 REQUIRED)
 find_package(EGL REQUIRED)
+find_package(WaylandEGL REQUIRED)
 
 if (USE_WPE_BACKEND_BCM_RPI)
     find_package(BCMHost REQUIRED)
@@ -159,6 +161,7 @@ SET_AND_EXPOSE_TO_BUILD(USE_EGL TRUE)
 SET_AND_EXPOSE_TO_BUILD(WTF_PLATFORM_BCM_NEXUS ${USE_WPE_BACKEND_BCM_NEXUS})
 SET_AND_EXPOSE_TO_BUILD(WTF_PLATFORM_BCM_RPI ${USE_WPE_BACKEND_BCM_RPI})
 SET_AND_EXPOSE_TO_BUILD(WTF_PLATFORM_INTEL_CE ${USE_WPE_BACKEND_INTEL_CE})
+SET_AND_EXPOSE_TO_BUILD(WTF_PLATFORM_WAYLAND ${USE_WPE_BACKEND_WINDOWLESS})
 
 set(FORWARDING_HEADERS_DIR ${DERIVED_SOURCES_DIR}/ForwardingHeaders)
 
@@ -168,3 +171,4 @@ if (NOT DEVELOPER_MODE)
     set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -fvisibility=hidden")
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -fvisibility=hidden -fvisibility-inlines-hidden")
 endif ()
+set(EGL_LIBRARIES "-lwayland-egl -lwayland-client -lEGL")

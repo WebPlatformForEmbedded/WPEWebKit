@@ -45,6 +45,20 @@
 #include <WebCore/DisplayRefreshMonitor.h>
 #endif
 
+#if PLATFORM(WPE) && PLATFORM(WAYLAND)
+#include <WebCore/WaylandSurface.h>
+//KEYBOARD SUPPORT
+#include <WPE/Input/Handling.h>
+#include "WebPage.h"
+//KEYBOARD SUPPORT
+#endif
+
+
+
+#if PLATFORM(WPE) && PLATFORM(WAYLAND)
+#include <WebCore/WaylandSurface.h>
+#endif
+
 namespace WebCore {
 struct CoordinatedGraphicsState;
 }
@@ -55,7 +69,13 @@ class CoordinatedGraphicsScene;
 class CoordinatedGraphicsSceneClient;
 class WebPage;
 
+//KEYBOARD SUPPORT
+#if PLATFORM(WPE) && PLATFORM(WAYLAND)
+class ThreadedCompositor : public ThreadSafeRefCounted<ThreadedCompositor>, public SimpleViewportController::Client, public CoordinatedGraphicsSceneClient, public CompositingManager::Client, public WPE::Input::Client {
+#else
 class ThreadedCompositor : public ThreadSafeRefCounted<ThreadedCompositor>, public SimpleViewportController::Client, public CoordinatedGraphicsSceneClient, public CompositingManager::Client {
+#endif
+//KEYBOARD SUPPORT
     WTF_MAKE_NONCOPYABLE(ThreadedCompositor);
     WTF_MAKE_FAST_ALLOCATED;
 public:
@@ -65,6 +85,11 @@ public:
         virtual void purgeBackingStores() = 0;
         virtual void renderNextFrame() = 0;
         virtual void commitScrollOffset(uint32_t layerID, const WebCore::IntSize& offset) = 0;
+//KEYBOARD SUPPORT
+#if PLATFORM(WPE) && PLATFORM(WAYLAND)
+        virtual WebPage* getWebPage() = 0;
+#endif
+//KEYBOARD SUPPORT
     };
 
     static Ref<ThreadedCompositor> create(Client*, WebPage&);
@@ -84,7 +109,17 @@ public:
     void scrollBy(const WebCore::IntSize&);
 
     RefPtr<WebCore::DisplayRefreshMonitor> createDisplayRefreshMonitor(PlatformDisplayID);
+#if PLATFORM(WPE) && PLATFORM(WAYLAND)
+    void requestFrame();
+    void didFrameComplete();
+//KEYBOARD SUPPORT
+    void handleKeyboardEvent(WPE::Input::KeyboardEvent&&) override;
+    void handlePointerEvent(WPE::Input::PointerEvent&& event) override;
+    void handleAxisEvent(WPE::Input::AxisEvent&& event) override;
+    void handleTouchEvent(WPE::Input::TouchEvent&& event) override;
+//KEYBOARD SUPPORT
 
+#endif
 private:
     ThreadedCompositor(Client*, WebPage&);
 
@@ -117,7 +152,11 @@ private:
     std::unique_ptr<SimpleViewportController> m_viewportController;
 
 #if PLATFORM(WPE)
+#if PLATFORM(WAYLAND)
+    std::unique_ptr<WebCore::WaylandSurface> m_surface;
+#else
     std::unique_ptr<WebCore::PlatformDisplayWPE::Surface> m_surface;
+#endif
 #endif
     std::unique_ptr<WebCore::GLContext> m_context;
 
@@ -186,6 +225,11 @@ private:
 
     Atomic<bool> m_clientRendersNextFrame;
     Atomic<bool> m_coordinateUpdateCompletionWithClient;
+//KEYBOARD SUPPORT
+#if PLATFORM(WPE) && PLATFORM(WAYLAND)
+    WebPage& webpage;
+#endif
+//KEYBOARD SUPPORT      
 };
 
 } // namespace WebKit

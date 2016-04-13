@@ -29,11 +29,24 @@
 #if PLATFORM(WAYLAND)
 
 #include "PlatformDisplay.h"
+#if PLATFORM(GTK)
 #include "WebKitGtkWaylandClientProtocol.h"
+#endif
 #include <memory>
 #include <wayland-client.h>
 #include <wayland-egl.h>
 #include <EGL/egl.h>
+
+#if !PLATFORM(GTK)
+#include <glib.h>
+//KEYBOARD SUPPORT
+#include <unordered_map>
+#include <WPE/Input/Handling.h>
+#include <WPE/Input/Events.h>
+#include <xkbcommon/xkbcommon-compose.h>
+#include <xkbcommon/xkbcommon.h>
+//KEYBOARD SUPPORT
+#endif
 
 namespace WebCore {
 
@@ -52,6 +65,55 @@ public:
 
     std::unique_ptr<GLContextEGL> createSharingGLContext();
 
+//KEYBOARD SUPPORT
+#if !PLATFORM(GTK)
+    void registerInputClient(struct wl_surface*, WPE::Input::Client*);
+    void unregisterInputClient(struct wl_surface*);
+    struct SeatData {
+       std::unordered_map<struct wl_surface*, WPE::Input::Client*> inputClients;
+
+        struct {
+            struct wl_pointer* object;
+            std::pair<struct wl_surface*, WPE::Input::Client*> target;
+            std::pair<int, int> coords;
+        } pointer { nullptr, { }, { 0, 0 } };
+
+        struct {
+            struct wl_keyboard* object;
+            std::pair<struct wl_surface*, WPE::Input::Client*> target;
+        } keyboard { nullptr, { } };
+
+        struct {
+            struct xkb_context* context;
+            struct xkb_keymap* keymap;
+            struct xkb_state* state;
+            struct {
+                xkb_mod_index_t control;
+                xkb_mod_index_t alt;
+                xkb_mod_index_t shift;
+            } indexes;
+            uint8_t modifiers;
+            struct xkb_compose_table* composeTable;
+            struct xkb_compose_state* composeState;
+        } xkb { nullptr, nullptr, nullptr, { 0, 0, 0 }, 0, nullptr, nullptr };
+        struct {
+            int32_t rate;
+            int32_t delay;
+        } repeatInfo { 0, 0 };
+
+        struct {
+            uint32_t key;
+            uint32_t time;
+            uint32_t state;
+            uint32_t eventSource;
+        } repeatData { 0, 0, 0, 0 };
+
+        uint32_t serial; 
+        WPE::Input::Client* inputHandler; //RISKY
+    };
+    uint32_t serial() const { return m_seatData.serial; } 
+#endif
+//KEYBOARD SUPPORT
 private:
     static const struct wl_registry_listener m_registryListener;
     static void globalCallback(void* data, struct wl_registry*, uint32_t name, const char* interface, uint32_t version);
@@ -67,8 +129,15 @@ private:
     struct wl_display* m_display;
     struct wl_registry* m_registry;
     struct wl_compositor* m_compositor;
+    struct wl_shell *m_shell;
+#if PLATFORM(GTK)
     struct wl_webkitgtk* m_webkitgtk;
-
+#endif
+#if !PLATFORM(GTK)
+    struct wl_seat* m_seat;
+    GSource* m_eventSource;
+    SeatData m_seatData;
+#endif
     EGLConfig m_eglConfig;
     bool m_eglConfigChosen;
 };

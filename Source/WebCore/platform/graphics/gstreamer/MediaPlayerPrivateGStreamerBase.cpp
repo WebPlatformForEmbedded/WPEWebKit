@@ -86,7 +86,7 @@
 #define WL_EGL_PLATFORM
 
 #if USE(OPENGL_ES_2)
-#if GST_CHECK_VERSION(1, 3, 0)
+#if GST_CHECK_VERSION(1, 3, 0) && USE(GSTREAMER_GL)
 #if !USE(HOLE_PUNCH_GSTREAMER)
 #define GST_USE_UNSTABLE_API
 #include <gst/gl/egl/gsteglimagememory.h>
@@ -650,7 +650,7 @@ void MediaPlayerPrivateGStreamerBase::updateTexture(BitmapTextureGL& texture, Gs
 {
     GstBuffer* buffer = gst_sample_get_buffer(m_sample.get());
 
-#if USE(OPENGL_ES_2) && GST_CHECK_VERSION(1, 1, 2) && !USE(HOLE_PUNCH_GSTREAMER)
+#if USE(OPENGL_ES_2) && GST_CHECK_VERSION(1, 1, 2) && !USE(HOLE_PUNCH_GSTREAMER) && USE(GSTREAMER_GL)
     GstMemory *mem;
     if (gst_buffer_n_memory (buffer) >= 1) {
         if ((mem = gst_buffer_peek_memory (buffer, 0)) && gst_is_egl_image_memory (mem)) {
@@ -942,7 +942,7 @@ void MediaPlayerPrivateGStreamerBase::paintToTextureMapper(TextureMapper& textur
 #endif
 
 #if USE(GSTREAMER_GL)
-NativeImagePtr MediaPlayerPrivateGStreamerBase::nativeImageForCurrentTime()
+PassNativeImagePtr MediaPlayerPrivateGStreamerBase::nativeImageForCurrentTime()
 {
 #if !USE(CAIRO) || !ENABLE(ACCELERATED_2D_CANVAS)
     return nullptr;

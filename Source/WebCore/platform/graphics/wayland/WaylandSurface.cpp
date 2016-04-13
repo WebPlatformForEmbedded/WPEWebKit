@@ -78,6 +78,11 @@ void WaylandSurface::requestFrame()
     wl_callback_add_listener(frameCallback, &frameListener, this);
 }
 
+#if !PLATFORM(GTK)
+void WaylandSurface::releaseBuffer(uint32_t handle)
+{
+}
+#endif
 } // namespace WebCore
 
 #endif // PLATFORM(WAYLAND)

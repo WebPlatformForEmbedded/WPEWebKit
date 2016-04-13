@@ -26,6 +26,7 @@
 
 #include "Config.h"
 
+#include <WPE/Graphics/RenderingBackend.h>
 #include "RenderingBackendBCMNexus.h"
 #include "RenderingBackendBCMRPi.h"
 #include "RenderingBackendIntelCE.h"

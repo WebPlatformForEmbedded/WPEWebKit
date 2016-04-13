@@ -51,7 +51,9 @@ public:
     std::unique_ptr<GLContextEGL> createGLContext();
 
     void requestFrame();
-
+#if !PLATFORM(GTK)
+    void releaseBuffer(uint32_t handle);
+#endif
 private:
     struct wl_surface* m_wlSurface;
     EGLNativeWindowType m_nativeWindow;
