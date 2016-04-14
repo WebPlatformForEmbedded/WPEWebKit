@@ -47,6 +47,10 @@
 #include <WebCore/Page.h>
 #include <wtf/CurrentTime.h>
 
+#if PLATFORM(WPE) && PLATFORM(WAYLAND)
+#include "NativeWebKeyboardEvent.h"
+#endif
+
 using namespace WebCore;
 
 namespace WebKit {
@@ -284,6 +288,15 @@ void ThreadedCoordinatedLayerTreeHost::commitScrollOffset(uint32_t layerID, cons
 {
     m_coordinator->commitScrollOffset(layerID, offset);
 }
+
+//KEYBOARD SUPPORT
+#if PLATFORM(WPE) && PLATFORM(WAYLAND)
+WebPage* ThreadedCoordinatedLayerTreeHost::getWebPage()
+{
+     return m_webPage;
+}
+#endif
+//KEYBOARD SUPPORT     
 
 void ThreadedCoordinatedLayerTreeHost::notifyFlushRequired()
 {

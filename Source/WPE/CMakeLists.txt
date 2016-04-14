@@ -49,6 +49,10 @@ if (USE_WPE_BACKEND_WESTEROS)
     add_definitions(-DWPE_BACKEND_WESTEROS=1)
 endif ()
 
+if (USE_WPE_BACKEND_WINDOWLESS)
+    add_definitions(-DWPE_BACKEND_WINDOWLESS=1)
+endif ()
+
 if (USE_WPE_BUFFER_MANAGEMENT_GBM)
     find_package(LibGBM REQUIRED)
     add_definitions(-DWPE_BUFFER_MANAGEMENT_GBM=1)
@@ -84,6 +88,7 @@ set(WPE_INCLUDE_DIRECTORIES
     "${CMAKE_SOURCE_DIR}/Source/WPE/Source/ViewBackend/Wayland"
     "${CMAKE_SOURCE_DIR}/Source/WPE/Source/ViewBackend/Wayland/Protocols"
     "${CMAKE_SOURCE_DIR}/Source/WPE/Source/ViewBackend/Westeros"
+    "${CMAKE_SOURCE_DIR}/Source/WPE/Source/ViewBackend/Windowless"
     ${BCM_HOST_INCLUDE_DIRS}
     ${GDL_INCLUDE_DIRS}
     ${GLIB_INCLUDE_DIRS}
@@ -131,6 +136,7 @@ if (USE_WPE_BACKEND_BCM_NEXUS)
 
         Source/ViewBackend/BCMNexus/ViewBackendBCMNexus.cpp
     )
+    list(APPEND WPE_LIBRARIES nxclient)
 endif ()
 
 if (USE_WPE_BACKEND_BCM_RPI)
@@ -174,6 +180,16 @@ if (USE_WPE_BACKEND_WESTEROS)
         Source/ViewBackend/Westeros/WesterosViewbackendInput.cpp
         Source/ViewBackend/Westeros/WesterosViewbackendOutput.cpp
     )
+endif ()
+
+if (USE_WPE_BACKEND_WINDOWLESS)
+     list(APPEND WPE_SOURCES
+        Source/Graphics/Westeros/RenderingBackendWesteros.cpp
+
+        Source/ViewBackend/Westeros/ViewBackendWesteros.cpp
+        Source/ViewBackend/Westeros/WesterosViewbackendInput.cpp
+        Source/ViewBackend/Windowless/ViewBackendWindowless.cpp
+   )
 endif ()
 
 if (USE_WPE_BUFFER_MANAGEMENT_GBM)

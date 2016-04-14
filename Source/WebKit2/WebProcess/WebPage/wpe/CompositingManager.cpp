@@ -63,27 +63,41 @@ Vector<uint8_t> CompositingManager::authenticate()
 
 uint32_t CompositingManager::constructRenderingTarget(uint32_t width, uint32_t height)
 {
+#if PLATFORM(WAYLAND)  
+    return 0;
+#else
     uint32_t handle = 0;
     m_connection->sendSync(Messages::CompositingManagerProxy::ConstructRenderingTarget(width, height),
         Messages::CompositingManagerProxy::ConstructRenderingTarget::Reply(handle), 0);
     return handle;
+#endif
 }
 
+#if PLATFORM(WAYLAND)
+void CompositingManager::commitBuffer(const WPE::Graphics::RenderingBackend::BufferExport& bufferExport)
+{
+}
+#else
 void CompositingManager::commitBuffer(const WebCore::PlatformDisplayWPE::BufferExport& bufferExport)
 {
     m_connection->send(Messages::CompositingManagerProxy::CommitBuffer(
         IPC::Attachment(std::get<0>(bufferExport)),
         IPC::DataReference(std::get<1>(bufferExport), std::get<2>(bufferExport))), 0);
 }
+#endif
 
 void CompositingManager::destroyBuffer(uint32_t handle)
 {
+#if !PLATFORM(WAYLAND)
     m_connection->send(Messages::CompositingManagerProxy::DestroyBuffer(handle), 0);
+#endif
 }
 
 void CompositingManager::releaseBuffer(uint32_t handle)
 {
+#if !PLATFORM(WAYLAND)
     m_client.releaseBuffer(handle);
+#endif
 }
 
 void CompositingManager::frameComplete()

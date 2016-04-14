@@ -31,6 +31,9 @@
 #include "ViewBackendBCMRPi.h"
 #include "ViewBackendIntelCE.h"
 #include "ViewBackendWesteros.h"
+#if WPE_BACKEND(WINDOWLESS)
+#include "ViewBackendWindowless.h"
+#endif
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
@@ -78,6 +81,11 @@ std::unique_ptr<ViewBackend> ViewBackend::create()
 #if WPE_BACKEND(WESTEROS)
     if (!backendEnv || !std::strcmp(backendEnv, "westeros"))
         return std::unique_ptr<ViewBackendWesteros>(new ViewBackendWesteros);
+#endif
+
+#if WPE_BACKEND(WINDOWLESS)
+        if (!backendEnv || !std::strcmp(backendEnv, "windowless"))
+        return std::unique_ptr<ViewBackendWindowless>(new ViewBackendWindowless);
 #endif
 
     fprintf(stderr, "ViewBackend: no usable backend found, will crash.\n");

@@ -28,13 +28,20 @@
 
 #include "Connection.h"
 #include "MessageReceiver.h"
+#if !PLATFORM(WAYLAND)
 #include <WebCore/PlatformDisplayWPE.h>
-
+#endif
+#if PLATFORM(WPE) && PLATFORM(WAYLAND)
+#include <WPE/Graphics/RenderingBackend.h>
+#endif
 namespace WebKit {
 
 class WebPage;
-
+#if PLATFORM(WAYLAND)
+class CompositingManager final : public IPC::Connection::Client {
+#else
 class CompositingManager final : public IPC::Connection::Client, public WebCore::PlatformDisplayWPE::Surface::Client {
+#endif
     WTF_MAKE_FAST_ALLOCATED;
 public:
     class Client {
@@ -50,8 +57,11 @@ public:
 
     Vector<uint8_t> authenticate();
     uint32_t constructRenderingTarget(uint32_t, uint32_t);
+#if PLATFORM(WAYLAND)
+    void commitBuffer(const WPE::Graphics::RenderingBackend::BufferExport&);
+#else    
     void commitBuffer(const WebCore::PlatformDisplayWPE::BufferExport&);
-
+#endif
     CompositingManager(const CompositingManager&) = delete;
     CompositingManager& operator=(const CompositingManager&) = delete;
     CompositingManager(CompositingManager&&) = delete;
@@ -67,8 +77,12 @@ private:
     IPC::ProcessType localProcessType() override { return IPC::ProcessType::Web; }
     IPC::ProcessType remoteProcessType() override { return IPC::ProcessType::UI; }
 
+#if PLATFORM(WPE) && PLATFORM(WAYLAND)
+    void destroyBuffer(uint32_t);
+#else
     // PlatformDisplayWPE::Surface::Client
     void destroyBuffer(uint32_t) override;
+#endif
 
     void releaseBuffer(uint32_t);
     void frameComplete();

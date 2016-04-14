@@ -939,6 +939,13 @@ public:
 
     void insertNewlineInQuotedContent();
 
+//KEYBOARD SUPPORT
+#if (PLATFORM(WPE) && PLATFORM(WAYLAND))
+    void keyEvent(const WebKeyboardEvent&);
+    void mouseEvent(const WebMouseEvent&);
+#endif
+//KEYBOARD SUPPORT
+
 #if USE(OS_STATE)
     std::chrono::system_clock::time_point loadCommitTime() const { return m_loadCommitTime; }
 #endif
@@ -1018,8 +1025,13 @@ private:
 
     void updateUserActivity();
 
+//KEYBOARD SUPPORT
+#if !(PLATFORM(WPE) && PLATFORM(WAYLAND))
     void mouseEvent(const WebMouseEvent&);
     void keyEvent(const WebKeyboardEvent&);
+#endif 
+//KEYBOARD SUPPORT
+
 #if ENABLE(IOS_TOUCH_EVENTS)
     void touchEventSync(const WebTouchEvent&, bool& handled);
 #elif ENABLE(TOUCH_EVENTS)

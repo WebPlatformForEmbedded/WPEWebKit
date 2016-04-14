@@ -2148,7 +2148,12 @@ void WebPage::mouseEvent(const WebMouseEvent& mouseEvent)
 #endif
 
     if (!shouldHandleEvent) {
+//MOUSE SUPPORT
+#if !(PLATFORM(WPE) && PLATFORM(WAYLAND))
         send(Messages::WebPageProxy::DidReceiveEvent(static_cast<uint32_t>(mouseEvent.type()), false));
+#endif
+//MOUSE SUPPORT
+
         return;
     }
 
@@ -2172,8 +2177,11 @@ void WebPage::mouseEvent(const WebMouseEvent& mouseEvent)
         bool onlyUpdateScrollbars = !(m_page->focusController().isActive() || (mouseEvent.button() != WebMouseEvent::NoButton));
         handled = handleMouseEvent(mouseEvent, this, onlyUpdateScrollbars);
     }
-
+//MOUSE SUPPORT
+#if !(PLATFORM(WPE) && PLATFORM(WAYLAND))
     send(Messages::WebPageProxy::DidReceiveEvent(static_cast<uint32_t>(mouseEvent.type()), handled));
+#endif
+//MOUSE SUPPORT
 }
 
 static bool handleWheelEvent(const WebWheelEvent& wheelEvent, Page* page)
@@ -2218,7 +2226,11 @@ void WebPage::keyEvent(const WebKeyboardEvent& keyboardEvent)
     if (!handled)
         handled = performDefaultBehaviorForKeyEvent(keyboardEvent);
 
-    send(Messages::WebPageProxy::DidReceiveEvent(static_cast<uint32_t>(keyboardEvent.type()), handled));
+//KEYBOARD SUPPORT
+#if !(PLATFORM(WPE) && PLATFORM(WAYLAND))
+     send(Messages::WebPageProxy::DidReceiveEvent(static_cast<uint32_t>(keyboardEvent.type()), handled));
+#endif
+//KEYBOARD SUPPORT
 }
 
 void WebPage::validateCommand(const String& commandName, uint64_t callbackID)

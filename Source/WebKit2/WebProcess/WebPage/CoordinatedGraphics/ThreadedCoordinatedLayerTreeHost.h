@@ -121,6 +121,12 @@ private:
     void renderNextFrame() override;
     void commitScrollOffset(uint32_t layerID, const WebCore::IntSize& offset) override;
 
+//KEYBOARD SUPPORT
+#if PLATFORM(WPE) && PLATFORM(WAYLAND)
+    virtual WebPage* getWebPage();
+#endif
+//KEYBOARD SUPPORT
+
     // CompositingCoordinator::Client
     void didFlushRootLayer(const WebCore::FloatRect&) override { }
     void notifyFlushRequired() override;

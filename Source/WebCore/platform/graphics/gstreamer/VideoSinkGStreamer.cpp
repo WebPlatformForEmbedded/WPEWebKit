@@ -38,7 +38,7 @@
 #include <wtf/Condition.h>
 #include <wtf/RunLoop.h>
 
-#if USE(EGL)
+#if USE(EGL) && USE(GSTREAMER_GL)
 #define WL_EGL_PLATFORM
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
@@ -70,7 +70,7 @@ using namespace WebCore;
 
 #if GST_CHECK_VERSION(1, 1, 0)
 #define GST_FEATURED_CAPS_GL GST_VIDEO_CAPS_MAKE_WITH_FEATURES(GST_CAPS_FEATURE_META_GST_VIDEO_GL_TEXTURE_UPLOAD_META, GST_CAPS_FORMAT) ";"
-#if GST_CHECK_VERSION(1, 3, 0)
+#if GST_CHECK_VERSION(1, 3, 0) && USE(GSTREAMER_GL)
 #define GST_FEATURED_CAPS GST_FEATURED_CAPS_GL GST_VIDEO_CAPS_MAKE_WITH_FEATURES(GST_CAPS_FEATURE_MEMORY_EGL_IMAGE, GST_CAPS_FORMAT) ";"
 #else
 #define GST_FEATURED_CAPS GST_FEATURED_CAPS_GL
@@ -205,7 +205,7 @@ struct _WebKitVideoSinkPrivate {
         if (currentCaps)
             gst_caps_unref(currentCaps);
 
-#if USE(OPENGL_ES_2) && GST_CHECK_VERSION(1, 5, 1)
+#if USE(OPENGL_ES_2) && GST_CHECK_VERSION(1, 5, 1) && USE(GSTREAMER_GL)
         if (context) {
             gst_gl_context_destroy(context);
             gst_object_unref(context);
@@ -225,7 +225,7 @@ struct _WebKitVideoSinkPrivate {
     GstVideoInfo info;
     GstCaps* currentCaps;
 
-#if USE(OPENGL_ES_2) && GST_CHECK_VERSION(1, 3, 0)
+#if USE(OPENGL_ES_2) && GST_CHECK_VERSION(1, 3, 0) && USE(GSTREAMER_GL)
     GstGLDisplay *display;
     GstGLContext *context;
     GstGLContext *other_context;
@@ -433,7 +433,7 @@ static gboolean webkitVideoSinkProposeAllocation(GstBaseSink* baseSink, GstQuery
     if (!gst_video_info_from_caps(&sink->priv->info, caps))
         return FALSE;
 
-#if USE(OPENGL_ES_2) && GST_CHECK_VERSION(1, 3, 0)
+#if USE(OPENGL_ES_2) && GST_CHECK_VERSION(1, 3, 0) && USE(GSTREAMER_GL)
     // Code adapted from gst-plugins-bad's glimagesink.
 
     if (!_ensure_gl_setup(sink))
@@ -492,7 +492,7 @@ static gboolean webkitVideoSinkQuery(GstBaseSink* baseSink, GstQuery* query)
     switch (GST_QUERY_TYPE(query)) {
     case GST_QUERY_DRAIN:
     {
-#if USE(OPENGL_ES_2) && GST_CHECK_VERSION(1, 3, 0)
+#if USE(OPENGL_ES_2) && GST_CHECK_VERSION(1, 3, 0) && USE(GSTREAMER_GL)
         priv->scheduler.drain();
 
         LOG_MEDIA_MESSAGE("Drain query, emitting DRAIN signal and releasing EGL samples");
@@ -525,7 +525,7 @@ static gboolean webkitVideoSinkEvent(GstBaseSink *baseSink, GstEvent *event)
 
     switch (GST_EVENT_TYPE(event)) {
     case GST_EVENT_FLUSH_START:
-#if USE(OPENGL_ES_2) && GST_CHECK_VERSION(1, 3, 0)
+#if USE(OPENGL_ES_2) && GST_CHECK_VERSION(1, 3, 0) && USE(GSTREAMER_GL)
         priv->scheduler.drain();
 
         LOG_MEDIA_MESSAGE("Flush-start, emitting DRAIN signal and releasing EGL samples");
@@ -541,7 +541,7 @@ static gboolean webkitVideoSinkEvent(GstBaseSink *baseSink, GstEvent *event)
     }
 }
 
-#if GST_CHECK_VERSION(1, 3, 0)
+#if GST_CHECK_VERSION(1, 3, 0) && USE(GSTREAMER_GL)
 static void
 webkitVideoSinkSetContext(GstElement* element, GstContext* context)
 {
@@ -579,7 +579,7 @@ static void webkit_video_sink_class_init(WebKitVideoSinkClass* klass)
     baseSinkClass->query = webkitVideoSinkQuery;
     baseSinkClass->event = webkitVideoSinkEvent;
 
-#if GST_CHECK_VERSION(1, 3, 0)
+#if GST_CHECK_VERSION(1, 3, 0) && USE(GSTREAMER_GL)
     elementClass->set_context = webkitVideoSinkSetContext;
 #endif
 

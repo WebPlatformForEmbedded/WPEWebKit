@@ -42,7 +42,9 @@
 #endif
 
 #if PLATFORM(WPE)
+#if !PLATFORM(WAYLAND)
 #include "PlatformDisplayWPE.h"
+#endif
 #endif
 
 #if PLATFORM(GTK)
@@ -94,9 +96,12 @@ std::unique_ptr<PlatformDisplay> PlatformDisplay::createPlatformDisplay()
 #endif
 
 #if PLATFORM(WPE)
+#if PLATFORM(WAYLAND)
+    return PlatformDisplayWayland::create();
+#else
     return std::make_unique<PlatformDisplayWPE>();
 #endif
-
+#endif
     ASSERT_NOT_REACHED();
     return nullptr;
 }

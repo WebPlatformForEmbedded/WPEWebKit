@@ -47,6 +47,10 @@
 #include "RenderingBackendWesteros.h"
 #endif
 
+#if WPE_BACKEND(WINDOWLESS)
+#include <WPE/Graphics/RenderingBackend.h>
+#endif
+
 namespace WPE {
 
 namespace Graphics {
