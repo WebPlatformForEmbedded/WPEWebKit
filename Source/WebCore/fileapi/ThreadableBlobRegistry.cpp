@@ -35,7 +35,9 @@
 #include "BlobPart.h"
 #include "BlobRegistry.h"
 #include "BlobURL.h"
+#if GCC_VERSION_AT_LEAST(4, 9, 0)
 #include "CrossThreadTask.h"
+#endif
 #include "SecurityOrigin.h"
 #include <mutex>
 #include <wtf/HashMap.h>
@@ -80,10 +82,18 @@ public:
     {
     }
 
+    BlobRegistryContext(const URL& url, const URL& srcURL, const String& fileBackedPath)
+        : url(url.isolatedCopy())
+        , srcURL(srcURL.isolatedCopy())
+        , fileBackedPath(fileBackedPath.isolatedCopy())
+    {
+    }
+
     URL url;
     URL srcURL;
     String path;
     String contentType;
+    String fileBackedPath;
     Vector<BlobPart> blobParts;
 };
 
@@ -100,6 +110,7 @@ static ThreadSpecific<BlobUrlOriginMap>& originMap()
     return *map;
 }
 
+#if GCC_VERSION_AT_LEAST(4, 9, 0)
 static MessageQueue<CrossThreadTask>& threadableQueue()
 {
     static std::once_flag onceFlag;
@@ -110,6 +121,7 @@ static MessageQueue<CrossThreadTask>& threadableQueue()
 
     return *queue;
 }
+#endif
 
 void ThreadableBlobRegistry::registerFileBlobURL(const URL& url, const String& path, const String& contentType)
 {
@@ -162,6 +174,7 @@ void ThreadableBlobRegistry::registerBlobURLOptionallyFileBacked(const URL& url,
     if (isMainThread())
         blobRegistry().registerBlobURLOptionallyFileBacked(url, srcURL, BlobDataFileReference::create(fileBackedPath));
     else {
+        #if GCC_VERSION_AT_LEAST(4, 9, 0)
         threadableQueue().append(createCrossThreadTask(ThreadableBlobRegistry::registerBlobURLOptionallyFileBacked, url, srcURL, fileBackedPath));
 
         callOnMainThread([] {
@@ -169,6 +182,13 @@ void ThreadableBlobRegistry::registerBlobURLOptionallyFileBacked(const URL& url,
             ASSERT(task);
             task->performTask();
         });
+        #else
+        BlobRegistryContext* context = new BlobRegistryContext(url, srcURL, fileBackedPath);
+        callOnMainThread([context] {
+            std::unique_ptr<BlobRegistryContext> blobRegistryContext(context);
+            blobRegistry().registerBlobURLOptionallyFileBacked(blobRegistryContext->url, blobRegistryContext->srcURL, BlobDataFileReference::create(blobRegistryContext->fileBackedPath));
+        });
+        #endif
     }
 }
 

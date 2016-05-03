@@ -58,11 +58,13 @@
 #include <wtf/ProcessID.h>
 #include <wtf/RAMSize.h>
 
+#if USE(FOUNDATION)
 #if __has_include(<objc/objc-internal.h>)
 #include <objc/objc-internal.h>
 #else
 extern "C" void* objc_autoreleasePoolPush(void);
 extern "C" void objc_autoreleasePoolPop(void *context);
+#endif
 #endif
 
 using namespace std;
