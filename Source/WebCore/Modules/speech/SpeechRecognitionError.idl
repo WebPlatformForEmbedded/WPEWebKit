@@ -1,0 +1,8 @@
+
+[
+    NoInterfaceObject,
+    Conditional=SPEECH_RECOGNITION,
+] interface SpeechRecognitionError : Event {
+    [InitializedByEventConstructor] readonly attribute DOMString error;
+    [InitializedByEventConstructor] readonly attribute DOMString message;
+};

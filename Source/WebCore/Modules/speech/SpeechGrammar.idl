@@ -1,0 +1,9 @@
+
+[
+    NoInterfaceObject,
+    Conditional=SPEECH_RECOGNITION,
+    Constructor
+] interface SpeechGrammar {
+    [URL,CallWith=ScriptExecutionContext] attribute DOMString src;
+    attribute float weight;
+};

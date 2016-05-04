@@ -1,0 +1,10 @@
+
+[
+    Conditional=SPEECH_RECOGNITION,
+] interface SpeechRecognitionEvent : Event {
+    readonly attribute unsigned long resultIndex;
+    readonly attribute SpeechRecognitionResultList results;
+
+    readonly attribute Document interpretation;
+    readonly attribute Document emma;
+};

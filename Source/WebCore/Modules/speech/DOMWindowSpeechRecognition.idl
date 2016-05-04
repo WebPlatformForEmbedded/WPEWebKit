@@ -1,0 +1,7 @@
+
+[
+    Conditional=SPEECH_RECOGNITION,
+] partial interface DOMWindow {
+
+    readonly attribute SpeechRecognition speechRecognition;
+};

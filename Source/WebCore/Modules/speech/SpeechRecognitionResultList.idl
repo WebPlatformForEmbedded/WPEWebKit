@@ -1,0 +1,8 @@
+
+[
+    NoInterfaceObject,
+    Conditional=SPEECH_RECOGNITION,
+] interface SpeechRecognitionResultList {
+    readonly attribute unsigned long length;
+    getter SpeechRecognitionResult item(in unsigned long index);
+};
