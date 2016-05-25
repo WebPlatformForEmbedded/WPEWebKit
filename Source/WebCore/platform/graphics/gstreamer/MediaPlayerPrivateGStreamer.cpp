@@ -1407,13 +1407,15 @@ float MediaPlayerPrivateGStreamer::maxTimeLoaded() const
 
     float loaded = m_maxTimeLoaded;
     if (!loaded && !m_fillTimer.isActive()){
-        if (m_cachedPosition)
+        if (m_cachedPosition > 0)
             loaded = m_cachedPosition;
-        else
+        else if (m_mediaDuration)
             loaded = m_mediaDuration;
     }
-    if (m_isEndReached && m_mediaDuration)
+    if (m_isEndReached && m_mediaDuration){
+        LOG_MEDIA_MESSAGE("maxTimeLoaded at EOS: %f", loaded);
         loaded = m_mediaDuration;
+    }
     LOG_MEDIA_MESSAGE("maxTimeLoaded: %f", loaded);
     return loaded;
 }
