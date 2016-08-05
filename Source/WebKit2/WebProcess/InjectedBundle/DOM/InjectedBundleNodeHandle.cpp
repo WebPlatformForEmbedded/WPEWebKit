@@ -254,6 +254,15 @@ IntRect InjectedBundleNodeHandle::htmlInputElementAutoFillButtonBounds()
     return autoFillButton->boundsInRootViewSpace();
 }
 
+String InjectedBundleNodeHandle::getHtmlInputElementAttribute(const String &attr)
+{
+    if (!is<Element>(m_node) || !is<HTMLInputElement>(m_node))
+        return String();
+
+    Element *element = (Element*)(&downcast<HTMLInputElement>(m_node.get()));
+    return element->getAttribute(attr);
+}
+
 bool InjectedBundleNodeHandle::htmlInputElementLastChangeWasUserEdit()
 {
     if (!is<HTMLInputElement>(m_node))

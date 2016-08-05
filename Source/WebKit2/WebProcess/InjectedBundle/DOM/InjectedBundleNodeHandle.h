@@ -65,6 +65,7 @@ public:
     WebCore::IntRect renderRect(bool*);
     PassRefPtr<WebImage> renderedImage(SnapshotOptions);
     PassRefPtr<InjectedBundleRangeHandle> visibleRange();
+    String getHtmlInputElementAttribute(const String &attr);
     void setHTMLInputElementValueForUser(const String&);
     bool isHTMLInputElementAutoFilled() const;
     void setHTMLInputElementAutoFilled(bool);

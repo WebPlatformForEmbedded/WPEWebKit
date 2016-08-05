@@ -58,6 +58,7 @@ WK_EXPORT WKBundleRangeHandleRef WKBundleNodeHandleCopyVisibleRange(WKBundleNode
 WK_EXPORT WKRect WKBundleNodeHandleGetElementBounds(WKBundleNodeHandleRef elementHandle);
 
 /* HTMLInputElement Specific Operations */
+WK_EXPORT WKStringRef WKBundleNodeHandleGetElementAttribute(WKBundleNodeHandleRef htmlInputElementHandle, WKStringRef attrRef);
 WK_EXPORT void WKBundleNodeHandleSetHTMLInputElementValueForUser(WKBundleNodeHandleRef htmlInputElementHandle, WKStringRef value);
 WK_EXPORT bool WKBundleNodeHandleGetHTMLInputElementAutoFilled(WKBundleNodeHandleRef htmlInputElementHandle);
 WK_EXPORT void WKBundleNodeHandleSetHTMLInputElementAutoFilled(WKBundleNodeHandleRef htmlInputElementHandle, bool filled);

@@ -85,6 +85,11 @@ WKBundleRangeHandleRef WKBundleNodeHandleCopyVisibleRange(WKBundleNodeHandleRef 
     return toAPI(rangeHandle.release().leakRef());
 }
 
+WKStringRef WKBundleNodeHandleGetElementAttribute(WKBundleNodeHandleRef htmlInputElementHandleRef, WKStringRef attrRef)
+{
+    return toCopiedAPI(toImpl(htmlInputElementHandleRef)->getHtmlInputElementAttribute(toWTFString(attrRef)));
+}
+
 WKRect WKBundleNodeHandleGetElementBounds(WKBundleNodeHandleRef elementHandleRef)
 {
     return toAPI(toImpl(elementHandleRef)->elementBounds());
