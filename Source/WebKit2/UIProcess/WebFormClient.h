@@ -32,7 +32,7 @@
 
 namespace API {
 template<> struct ClientTraits<WKPageFormClientBase> {
-    typedef std::tuple<WKPageFormClientV0> Versions;
+    typedef std::tuple<WKPageFormClientV0, WKPageFormClientV1> Versions;
 };
 }
 
@@ -43,6 +43,8 @@ public:
     explicit WebFormClient(const WKPageFormClientBase*);
 
     void willSubmitForm(WebPageProxy&, WebFrameProxy&, WebFrameProxy&, const Vector<std::pair<String, String>>& textFieldValues, API::Object* userData, Ref<WebFormSubmissionListenerProxy>&&) override;
+
+    void inputFocusChanged(WebPageProxy& page, const String& elemId, const String& elemName, const String& elemType, const String& elemValue) override;
 };
 
 } // namespace WebKit

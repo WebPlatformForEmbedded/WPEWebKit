@@ -3504,6 +3504,10 @@ void WebPageProxy::unableToImplementPolicy(uint64_t frameID, const ResourceError
 }
 
 // FormClient
+void WebPageProxy::inputFocusChanged(const String& elemId, const String& elemName, const String& elemType, const String& elemValue)
+{
+    m_formClient->inputFocusChanged(*this, elemId, elemName, elemType, elemValue);
+}
 
 void WebPageProxy::willSubmitForm(uint64_t frameID, uint64_t sourceFrameID, const Vector<std::pair<String, String>>& textFieldValues, uint64_t listenerID, const UserData& userData)
 {

@@ -46,6 +46,10 @@ public:
     {
         listener->continueSubmission();
     }
+
+    virtual void inputFocusChanged(WebKit::WebPageProxy&, const WTF::String&, const WTF::String&, const WTF::String&, const WTF::String&)
+    {
+    }
 };
 
 } // namespace API

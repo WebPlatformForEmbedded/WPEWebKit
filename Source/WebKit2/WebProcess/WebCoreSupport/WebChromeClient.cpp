@@ -190,7 +190,16 @@ void WebChromeClient::takeFocus(FocusDirection direction)
 void WebChromeClient::focusedElementChanged(Element* element)
 {
     if (!is<HTMLInputElement>(element))
+    {
+        m_page->send(Messages::WebPageProxy::InputFocusChanged("", "", "-", ""));
         return;
+    }
+
+    m_page->send(Messages::WebPageProxy::InputFocusChanged(
+                element->getAttribute("id"),
+                element->getAttribute("name"),
+                element->getAttribute("type"),
+                element->getAttribute("value")));
 
     HTMLInputElement& inputElement = downcast<HTMLInputElement>(*element);
     if (!inputElement.isText())
