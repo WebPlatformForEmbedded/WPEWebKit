@@ -106,7 +106,7 @@ void WebAutomationSession::setProcessPool(WebKit::WebProcessPool* processPool)
 // NOTE: this class could be split at some point to support local and remote automation sessions.
 // For now, it only works with a remote automation driver over a RemoteInspector connection.
 
-#if ENABLE(REMOTE_INSPECTOR)
+//#if ENABLE(REMOTE_INSPECTOR)
 
 // Inspector::RemoteAutomationTarget API
 
@@ -118,27 +118,29 @@ void WebAutomationSession::dispatchMessageFromRemote(const String& message)
 void WebAutomationSession::connect(Inspector::FrontendChannel* channel, bool isAutomaticConnection)
 {
     UNUSED_PARAM(isAutomaticConnection);
-
     m_remoteChannel = channel;
     m_frontendRouter->connectFrontend(channel);
 
+#if ENABLE(REMOTE_INSPECTOR)
     setIsPaired(true);
+#endif
 }
 
 void WebAutomationSession::disconnect(Inspector::FrontendChannel* channel)
 {
     ASSERT(channel == m_remoteChannel);
-
     m_remoteChannel = nullptr;
     m_frontendRouter->disconnectFrontend(channel);
 
+#if ENABLE(REMOTE_INSPECTOR)
     setIsPaired(false);
+#endif
 
     if (m_client)
         m_client->didDisconnectFromRemote(this);
 }
 
-#endif // ENABLE(REMOTE_INSPECTOR)
+//#endif // ENABLE(REMOTE_INSPECTOR)
 
 WebPageProxy* WebAutomationSession::webPageProxyForHandle(const String& handle)
 {
