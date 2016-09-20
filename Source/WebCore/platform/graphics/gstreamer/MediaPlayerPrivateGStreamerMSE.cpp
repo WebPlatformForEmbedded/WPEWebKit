@@ -292,24 +292,18 @@ void MediaPlayerPrivateGStreamerMSE::pause()
     MediaPlayerPrivateGStreamer::pause();
 }
 
-float MediaPlayerPrivateGStreamerMSE::duration() const
+double MediaPlayerPrivateGStreamerMSE::durationDouble() const
 {
     if (!m_pipeline)
-        return 0.0f;
+        return 0.0;
 
     if (m_errorOccured)
-        return 0.0f;
+        return 0.0;
 
-    return m_mediaTimeDuration.toFloat();
+    return m_mediaTimeDuration.toDouble();
 }
 
-float MediaPlayerPrivateGStreamerMSE::mediaTimeForTimeValue(float timeValue) const
-{
-    GstClockTime position = toGstClockTime(timeValue);
-    return MediaTime(position, GST_SECOND).toFloat();
-}
-
-void MediaPlayerPrivateGStreamerMSE::seek(float time)
+void MediaPlayerPrivateGStreamerMSE::seekDouble(double time)
 {
     if (!m_pipeline)
         return;
@@ -320,7 +314,7 @@ void MediaPlayerPrivateGStreamerMSE::seek(float time)
     INFO_MEDIA_MESSAGE("[Seek] seek attempt to %f secs", time);
 
     // Avoid useless seeking.
-    float current = currentTime();
+    double current = currentTimeDouble();
     if (time == current) {
         if (!m_seeking)
             timeChanged();
@@ -337,7 +331,7 @@ void MediaPlayerPrivateGStreamerMSE::seek(float time)
 
     LOG_MEDIA_MESSAGE("Seeking from %f to %f seconds", current, time);
 
-    float prevSeekTime = m_seekTime;
+    double prevSeekTime = m_seekTime;
     m_seekTime = time;
 
     if (!doSeek()) {
@@ -386,7 +380,7 @@ void MediaPlayerPrivateGStreamerMSE::notifySeekNeedsData(const MediaTime& seekTi
     }
 }
 
-bool MediaPlayerPrivateGStreamerMSE::doSeek(gint64, float, GstSeekFlags)
+bool MediaPlayerPrivateGStreamerMSE::doSeek(gint64, double, GstSeekFlags)
 {
     // Use doSeek() instead. If anybody is calling this version of doSeek(), something is wrong.
     notImplemented();
@@ -459,7 +453,7 @@ bool MediaPlayerPrivateGStreamerMSE::doSeek()
             const MediaTime miniGap = MediaTime::createWithDouble(0.1);
             MediaTime nearest = m_mediaSource->buffered()->nearest(seekTime);
             if (nearest.isValid() && nearest > seekTime && (nearest - seekTime) <= miniGap && timeIsBuffered(nearest + miniGap)) {
-                LOG_MEDIA_MESSAGE("[Seek] Changed the seek target time from %f to %f, a near point in the future", seekTime.toFloat(), nearest.toFloat());
+                LOG_MEDIA_MESSAGE("[Seek] Changed the seek target time from %f to %f, a near point in the future", seekTime.toDouble(), nearest.toDouble());
                 seekTime = nearest;
             }
         }
@@ -631,7 +625,7 @@ void MediaPlayerPrivateGStreamerMSE::seekCompleted()
         m_player->timeChanged();
 }
 
-void MediaPlayerPrivateGStreamerMSE::setRate(float rate)
+void MediaPlayerPrivateGStreamerMSE::setRateDouble(double rate)
 {
     UNUSED_PARAM(rate);
     notImplemented();
@@ -866,7 +860,7 @@ void MediaPlayerPrivateGStreamerMSE::durationChanged()
     }
     m_mediaTimeDuration = m_mediaSourceClient->duration();
 
-    TRACE_MEDIA_MESSAGE("previous=%f, new=%f", previousDuration.toFloat(), m_mediaTimeDuration.toFloat());
+    TRACE_MEDIA_MESSAGE("previous=%lf, new=%lf", previousDuration.toDouble(), m_mediaTimeDuration.toDouble());
 
     // Avoid emiting durationchanged in the case where the previous
     // duration was 0 because that case is already handled by the
@@ -1130,8 +1124,8 @@ void GStreamerMediaSample::offsetTimestampsBy(const MediaTime& timestampOffset) 
     m_dts += timestampOffset;
     GstBuffer* buffer = gst_sample_get_buffer(m_sample);
     if (buffer) {
-        GST_BUFFER_PTS(buffer) = toGstClockTime(m_pts.toFloat());
-        GST_BUFFER_DTS(buffer) = toGstClockTime(m_dts.toFloat());
+        GST_BUFFER_PTS(buffer) = toGstClockTime(m_pts.toDouble());
+        GST_BUFFER_DTS(buffer) = toGstClockTime(m_dts.toDouble());
     }
 }
 
@@ -1820,12 +1814,12 @@ void AppendPipeline::appSinkNewSample(GstSample* sample)
 
     RefPtr<GStreamerMediaSample> mediaSample = WebCore::GStreamerMediaSample::create(sample, m_presentationSize, trackId());
 
-    TRACE_MEDIA_MESSAGE("append: trackId=%s PTS=%f presentationSize=%.0fx%.0f", mediaSample->trackID().string().utf8().data(), mediaSample->presentationTime().toFloat(), mediaSample->presentationSize().width(), mediaSample->presentationSize().height());
+    TRACE_MEDIA_MESSAGE("append: trackId=%s PTS=%lf presentationSize=%.0fx%.0f", mediaSample->trackID().string().utf8().data(), mediaSample->presentationTime().toDouble(), mediaSample->presentationSize().width(), mediaSample->presentationSize().height());
 
     // If we're beyond the duration, ignore this sample and the remaining ones.
     MediaTime duration = m_mediaSourceClient->duration();
     if (duration.isValid() && !duration.indefiniteTime() && mediaSample->presentationTime() > duration) {
-        LOG_MEDIA_MESSAGE("Detected sample (%f) beyond the duration (%f), declaring LastSample", mediaSample->presentationTime().toFloat(), duration.toFloat());
+        LOG_MEDIA_MESSAGE("Detected sample (%lf) beyond the duration (%lf), declaring LastSample", mediaSample->presentationTime().toDouble(), duration.toDouble());
         setAppendStage(LastSample);
         m_flowReturn = GST_FLOW_OK;
         g_cond_signal(&m_newSampleCondition);
@@ -2351,11 +2345,11 @@ MediaSourcePrivate::AddStatus MediaSourceClientGStreamerMSE::addSourceBuffer(Ref
     return m_playerPrivate->m_playbackPipeline->addSourceBuffer(sourceBufferPrivate);
 }
 
-float MediaPlayerPrivateGStreamerMSE::currentTime() const
+double MediaPlayerPrivateGStreamerMSE::currentTimeDouble() const
 {
-    float position = MediaPlayerPrivateGStreamer::currentTime();
+    double position = MediaPlayerPrivateGStreamer::currentTimeDouble();
 
-    if (m_eosPending && (paused() || (position >= duration()))) {
+    if (m_eosPending && (paused() || (position >= durationDouble()))) {
         if (m_networkState != MediaPlayer::Loaded) {
             m_networkState = MediaPlayer::Loaded;
             m_player->networkStateChanged();
@@ -2363,8 +2357,8 @@ float MediaPlayerPrivateGStreamerMSE::currentTime() const
 
         m_eosPending = false;
         m_isEndReached = true;
-        m_cachedPosition = m_mediaTimeDuration.toFloat();
-        m_mediaDuration = m_mediaTimeDuration.toFloat();
+        m_cachedPosition = m_mediaTimeDuration.toDouble();
+        m_mediaDuration = m_mediaTimeDuration.toDouble();
         m_player->timeChanged();
     }
     return position;
@@ -2381,7 +2375,7 @@ void MediaSourceClientGStreamerMSE::durationChanged(const MediaTime& duration)
 {
     ASSERT(WTF::isMainThread());
 
-    TRACE_MEDIA_MESSAGE("duration: %f", duration.toFloat());
+    TRACE_MEDIA_MESSAGE("duration: %lf", duration.toDouble());
     if (!duration.isValid() || duration.isPositiveInfinite() || duration.isNegativeInfinite())
         return;
 
@@ -2508,21 +2502,21 @@ void MediaSourceClientGStreamerMSE::clearPlayerPrivate()
     m_playerPrivate = nullptr;
 }
 
-float MediaPlayerPrivateGStreamerMSE::maxTimeSeekable() const
+MediaTime MediaPlayerPrivateGStreamerMSE::maxMediaTimeSeekable() const
 {
     if (m_errorOccured)
-        return 0.0f;
+        return MediaTime::zeroTime();
 
     LOG_MEDIA_MESSAGE("maxTimeSeekable");
-    float result = duration();
+    double result = durationDouble();
     // infinite duration means live stream
-    if (isinf(result)) {
+    if (std::isinf(result)) {
         MediaTime maxBufferedTime = buffered()->maximumBufferedTime();
         // Return the highest end time reported by the buffered attribute.
-        result = maxBufferedTime.isValid() ? maxBufferedTime.toFloat() : 0;
+        result = maxBufferedTime.isValid() ? maxBufferedTime.toDouble() : 0.0;
     }
 
-    return result;
+    return MediaTime::createWithDouble(result);
 }
 
 bool MediaPlayerPrivateGStreamerMSE::didLoadingProgress() const

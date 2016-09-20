@@ -174,12 +174,12 @@ unsigned getGstPlayFlag(const char* nick)
     return flag->value;
 }
 
-GstClockTime toGstClockTime(float time)
+GstClockTime toGstClockTime(double time)
 {
     // Extract the integer part of the time (seconds) and the fractional part (microseconds). Attempt to
     // round the microseconds so no floating point precision is lost and we can perform an accurate seek.
-    float seconds;
-    float microSeconds = modff(time, &seconds) * 1000000;
+    double seconds;
+    double microSeconds = modf(time, &seconds) * 1000000;
     GTimeVal timeValue;
     timeValue.tv_sec = static_cast<glong>(seconds);
     timeValue.tv_usec = static_cast<glong>(floor(microSeconds + 0.5));

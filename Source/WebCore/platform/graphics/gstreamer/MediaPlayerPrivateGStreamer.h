@@ -92,11 +92,11 @@ public:
     bool paused() const override;
     bool seeking() const override;
 
-    float duration() const override;
-    float currentTime() const override;
-    virtual void seek(float) override;
+    double durationDouble() const override;
+    double currentTimeDouble() const override;
+    virtual void seekDouble(double) override;
 
-    void setRate(float) override;
+    void setRateDouble(double) override;
     double rate() const override;
     void setPreservesPitch(bool) override;
 
@@ -104,10 +104,10 @@ public:
     void fillTimerFired();
 
     std::unique_ptr<PlatformTimeRanges> buffered() const override;
-    virtual float maxTimeSeekable() const override;
+    virtual MediaTime maxMediaTimeSeekable() const override;
     virtual bool didLoadingProgress() const override;
     virtual unsigned long long totalBytes() const override;
-    float maxTimeLoaded() const override;
+    double maxTimeLoaded() const override;
 
     void loadStateChanged();
     void timeChanged();
@@ -143,7 +143,7 @@ private:
 
     GstElement* createAudioSink() override;
 
-    float playbackPosition() const;
+    double playbackPositionDouble() const;
 
     virtual void updateStates();
     virtual void asyncStateChangeDone();
@@ -162,7 +162,7 @@ private:
     void processTableOfContents(GstMessage*);
     void processTableOfContentsEntry(GstTocEntry*, GstTocEntry* parent);
 #endif
-    virtual bool doSeek(gint64 position, float rate, GstSeekFlags seekType);
+    virtual bool doSeek(gint64 position, double rate, GstSeekFlags seekType);
     virtual void updatePlaybackRate();
 
     String engineDescription() const override { return "GStreamer"; }
@@ -174,12 +174,12 @@ protected:
 
     bool m_buffering;
     int m_bufferingPercentage;
-    mutable float m_cachedPosition;
+    mutable double m_cachedPosition;
     bool m_downloadFinished;
     bool m_errorOccured;
-    mutable gfloat m_mediaDuration;
+    mutable gdouble m_mediaDuration;
     bool m_paused;
-    float m_playbackRate;
+    double m_playbackRate;
     GstState m_requestedState;
     bool m_resetPipeline;
     bool m_seeking;
@@ -218,22 +218,22 @@ protected:
     GRefPtr<GstElement> m_textAppSink;
     GRefPtr<GstPad> m_textAppSinkPad;
 #endif
-    float m_seekTime;
+    double m_seekTime;
     bool m_changingRate;
     mutable bool m_isEndReached;
     mutable bool m_isStreaming;
     GstStructure* m_mediaLocations;
     int m_mediaLocationCurrentIndex;
     bool m_playbackRatePause;
-    float m_timeOfOverlappingSeek;
+    double m_timeOfOverlappingSeek;
     bool m_canFallBackToLastFinishedSeekPosition;
-    float m_lastPlaybackRate;
+    double m_lastPlaybackRate;
     Timer m_fillTimer;
-    float m_maxTimeLoaded;
+    double m_maxTimeLoaded;
     MediaPlayer::Preload m_preload;
     bool m_delayingLoad;
     bool m_mediaDurationKnown;
-    mutable float m_maxTimeLoadedAtLastDidLoadingProgress;
+    mutable double m_maxTimeLoadedAtLastDidLoadingProgress;
     bool m_hasVideo;
     bool m_hasAudio;
     RunLoop::Timer<MediaPlayerPrivateGStreamer> m_readyTimerHandler;

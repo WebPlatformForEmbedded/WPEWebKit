@@ -75,7 +75,7 @@ public:
 
     FloatSize naturalSize() const override;
 
-    void setVolume(float) override;
+    void setVolumeDouble(double) override;
 #if PLATFORM(WPE)
     float volume() const override;
 #endif
@@ -101,7 +101,7 @@ public:
     void paint(GraphicsContext&, const FloatRect&) override;
 
     bool hasSingleSecurityOrigin() const override { return true; }
-    virtual float maxTimeLoaded() const { return 0.0; }
+    virtual double maxTimeLoaded() const { return 0.0; }
 
     bool supportsFullscreen() const override;
     PlatformMedia platformMedia() const override;

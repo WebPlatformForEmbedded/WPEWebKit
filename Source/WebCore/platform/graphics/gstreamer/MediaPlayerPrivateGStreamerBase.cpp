@@ -501,13 +501,13 @@ FloatSize MediaPlayerPrivateGStreamerBase::naturalSize() const
     return m_videoSize;
 }
 
-void MediaPlayerPrivateGStreamerBase::setVolume(float volume)
+void MediaPlayerPrivateGStreamerBase::setVolumeDouble(double volume)
 {
     if (!m_volumeElement)
         return;
 
-    LOG_MEDIA_MESSAGE("Setting volume: %f", volume);
-    gst_stream_volume_set_volume(m_volumeElement.get(), GST_STREAM_VOLUME_FORMAT_CUBIC, static_cast<double>(volume));
+    LOG_MEDIA_MESSAGE("Setting volume: %lf", volume);
+    gst_stream_volume_set_volume(m_volumeElement.get(), GST_STREAM_VOLUME_FORMAT_CUBIC, volume);
 }
 
 #if PLATFORM(WPE)
@@ -530,7 +530,7 @@ void MediaPlayerPrivateGStreamerBase::notifyPlayerOfVolumeChange()
     // applies software user gain via third party application (GNOME
     // volume control for instance).
     volume = CLAMP(volume, 0.0, 1.0);
-    m_player->volumeChanged(static_cast<float>(volume));
+    m_player->volumeChanged(volume);
 }
 
 void MediaPlayerPrivateGStreamerBase::volumeChangedCallback(MediaPlayerPrivateGStreamerBase* player)

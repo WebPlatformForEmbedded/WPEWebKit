@@ -351,7 +351,7 @@ static GstElement* findVideoDecoder(GstElement *element)
 #endif
 
 
-float MediaPlayerPrivateGStreamer::playbackPosition() const
+double MediaPlayerPrivateGStreamer::playbackPositionDouble() const
 {
 
     if (m_isEndReached) {
@@ -379,13 +379,13 @@ float MediaPlayerPrivateGStreamer::playbackPosition() const
 #if USE(FUSION_SINK)
     g_object_get(m_pipeline.get(), "video-sink", &videoDec, nullptr);
     if (!GST_IS_ELEMENT(videoDec))
-        return 0.0f;
+        return 0.0;
 #else
     videoDec = m_pipeline.get();
 #endif
     if (gst_element_query(videoDec, query))
         gst_query_parse_position(query, 0, &position);
-    float result = 0.0f;
+    double result = 0.0;
     if (static_cast<GstClockTime>(position) != GST_CLOCK_TIME_NONE)
         result = static_cast<double>(position) / GST_SECOND;
     else if (m_canFallBackToLastFinishedSeekPosition)
@@ -497,17 +497,17 @@ void MediaPlayerPrivateGStreamer::pause()
         loadingFailed(MediaPlayer::Empty);
 }
 
-float MediaPlayerPrivateGStreamer::duration() const
+double MediaPlayerPrivateGStreamer::durationDouble() const
 {
     if (!m_pipeline)
-        return 0.0f;
+        return 0.0;
 
     if (m_errorOccured)
-        return 0.0f;
+        return 0.0;
 
     // Media duration query failed already, don't attempt new useless queries.
     if (!m_mediaDurationKnown)
-        return numeric_limits<float>::infinity();
+        return numeric_limits<double>::infinity();
 
 #if !USE(FUSION_SINK)
     if (m_mediaDuration)
@@ -518,7 +518,7 @@ float MediaPlayerPrivateGStreamer::duration() const
 
     if (!gst_element_query_duration(m_pipeline.get(), GST_FORMAT_TIME, &timeLength) || static_cast<guint64>(timeLength) == GST_CLOCK_TIME_NONE) {
         LOG_MEDIA_MESSAGE("Time duration query failed for %s", m_url.string().utf8().data());
-        return numeric_limits<float>::infinity();
+        return numeric_limits<double>::infinity();
     }
 
     LOG_MEDIA_MESSAGE("Duration: %" GST_TIME_FORMAT, GST_TIME_ARGS(timeLength));
@@ -528,13 +528,13 @@ float MediaPlayerPrivateGStreamer::duration() const
     // FIXME: handle 3.14.9.5 properly
 }
 
-float MediaPlayerPrivateGStreamer::currentTime() const
+double MediaPlayerPrivateGStreamer::currentTimeDouble() const
 {
     if (!m_pipeline)
-        return 0.0f;
+        return 0.0;
 
     if (m_errorOccured)
-        return 0.0f;
+        return 0.0;
 
     if (m_seeking)
         return m_seekTime;
@@ -545,12 +545,12 @@ float MediaPlayerPrivateGStreamer::currentTime() const
     // negative playback rate. There's no upstream accepted patch for
     // this bug yet, hence this temporary workaround.
     if (m_isEndReached && m_playbackRate < 0)
-        return 0.0f;
+        return 0.0;
 
-    return playbackPosition();
+    return playbackPositionDouble();
 }
 
-void MediaPlayerPrivateGStreamer::seek(float time)
+void MediaPlayerPrivateGStreamer::seekDouble(double time)
 {
     if (!m_pipeline)
         return;
@@ -558,17 +558,17 @@ void MediaPlayerPrivateGStreamer::seek(float time)
     if (m_errorOccured)
         return;
 
-    INFO_MEDIA_MESSAGE("[Seek] seek attempt to %f secs", time);
+    INFO_MEDIA_MESSAGE("[Seek] seek attempt to %lf secs", time);
 
     // Avoid useless seeking.
-    if (time == currentTime())
+    if (time == currentTimeDouble())
         return;
 
     if (isLiveStream())
         return;
 
     GstClockTime clockTime = toGstClockTime(time);
-    INFO_MEDIA_MESSAGE("[Seek] seeking to %" GST_TIME_FORMAT " (%f)", GST_TIME_ARGS(clockTime), time);
+    INFO_MEDIA_MESSAGE("[Seek] seeking to %" GST_TIME_FORMAT " (%lf)", GST_TIME_ARGS(clockTime), time);
 
     if (m_seeking) {
         m_timeOfOverlappingSeek = time;
@@ -613,7 +613,7 @@ void MediaPlayerPrivateGStreamer::seek(float time)
     m_isEndReached = false;
 }
 
-bool MediaPlayerPrivateGStreamer::doSeek(gint64 position, float rate, GstSeekFlags seekType)
+bool MediaPlayerPrivateGStreamer::doSeek(gint64 position, double rate, GstSeekFlags seekType)
 {
     gint64 startTime, endTime;
 
@@ -625,7 +625,7 @@ bool MediaPlayerPrivateGStreamer::doSeek(gint64 position, float rate, GstSeekFla
         // If we are at beginning of media, start from the end to
         // avoid immediate EOS.
         if (position < 0)
-            endTime = static_cast<gint64>(duration() * GST_SECOND);
+            endTime = static_cast<gint64>(durationDouble() * GST_SECOND);
         else
             endTime = position;
     }
@@ -645,18 +645,18 @@ void MediaPlayerPrivateGStreamer::updatePlaybackRate()
     if (!m_changingRate)
         return;
 
-    float currentPosition = static_cast<float>(playbackPosition() * GST_SECOND);
+    double currentPosition = static_cast<double>(playbackPositionDouble() * GST_SECOND);
     bool mute = false;
 
-    INFO_MEDIA_MESSAGE("Set Rate to %f", m_playbackRate);
+    INFO_MEDIA_MESSAGE("Set Rate to %lf", m_playbackRate);
 
     if (m_playbackRate > 0) {
         // Mute the sound if the playback rate is too extreme and
         // audio pitch is not adjusted.
         mute = (!m_preservesPitch && (m_playbackRate < 0.8 || m_playbackRate > 2));
     } else {
-        if (currentPosition == 0.0f)
-            currentPosition = -1.0f;
+        if (currentPosition == 0.0)
+            currentPosition = -1.0;
         mute = true;
     }
 
@@ -915,7 +915,7 @@ void MediaPlayerPrivateGStreamer::newTextSample()
 }
 #endif
 
-void MediaPlayerPrivateGStreamer::setRate(float rate)
+void MediaPlayerPrivateGStreamer::setRateDouble(double rate)
 {
     // Higher rate causes crash.
     rate = clampTo(rate, -20.0, 20.0);
@@ -975,7 +975,7 @@ std::unique_ptr<PlatformTimeRanges> MediaPlayerPrivateGStreamer::buffered() cons
     if (m_errorOccured || isLiveStream())
         return timeRanges;
 
-    float mediaDuration(duration());
+    double mediaDuration(durationDouble());
     if (!mediaDuration || std::isinf(mediaDuration))
         return timeRanges;
 
@@ -997,7 +997,7 @@ std::unique_ptr<PlatformTimeRanges> MediaPlayerPrivateGStreamer::buffered() cons
     // Fallback to the more general maxTimeLoaded() if no range has
     // been found.
     if (!timeRanges->length())
-        if (float loaded = maxTimeLoaded())
+        if (double loaded = maxTimeLoaded())
             timeRanges->add(MediaTime::zeroTime(), MediaTime::createWithDouble(loaded));
 
     gst_query_unref(query);
@@ -1347,7 +1347,7 @@ void MediaPlayerPrivateGStreamer::fillTimerFired()
         if (fillStatus == 100.0)
             m_maxTimeLoaded = m_mediaDuration;
         else
-            m_maxTimeLoaded = static_cast<float>((fillStatus * m_mediaDuration) / 100.0);
+            m_maxTimeLoaded = static_cast<double>(fillStatus * m_mediaDuration) / 100.0;
         LOG_MEDIA_MESSAGE("[Buffering] Updated maxTimeLoaded: %f", m_maxTimeLoaded);
     }
 
@@ -1364,25 +1364,25 @@ void MediaPlayerPrivateGStreamer::fillTimerFired()
     updateStates();
 }
 
-float MediaPlayerPrivateGStreamer::maxTimeSeekable() const
+MediaTime MediaPlayerPrivateGStreamer::maxMediaTimeSeekable() const
 {
     if (m_errorOccured)
-        return 0.0f;
+        return MediaTime::zeroTime();
 
     LOG_MEDIA_MESSAGE("maxTimeSeekable");
     // infinite duration means live stream
-    if (std::isinf(duration()))
-        return 0.0f;
+    if (std::isinf(durationDouble()))
+        return MediaTime::zeroTime();
 
-    return duration();
+    return MediaTime::createWithDouble(durationDouble());
 }
 
-float MediaPlayerPrivateGStreamer::maxTimeLoaded() const
+double MediaPlayerPrivateGStreamer::maxTimeLoaded() const
 {
     if (m_errorOccured)
-        return 0.0f;
+        return 0.0;
 
-    float loaded = m_maxTimeLoaded;
+    double loaded = m_maxTimeLoaded;
     if (!loaded && !m_fillTimer.isActive()){
         if (m_cachedPosition > 0)
             loaded = m_cachedPosition;
@@ -1390,10 +1390,10 @@ float MediaPlayerPrivateGStreamer::maxTimeLoaded() const
             loaded = m_mediaDuration;
     }
     if (m_isEndReached && m_mediaDuration){
-        LOG_MEDIA_MESSAGE("maxTimeLoaded at EOS: %f", loaded);
+        LOG_MEDIA_MESSAGE("maxTimeLoaded at EOS: %lf", loaded);
         loaded = m_mediaDuration;
     }
-    LOG_MEDIA_MESSAGE("maxTimeLoaded: %f", loaded);
+    LOG_MEDIA_MESSAGE("maxTimeLoaded: %lf", loaded);
     return loaded;
 }
 
@@ -1401,7 +1401,7 @@ bool MediaPlayerPrivateGStreamer::didLoadingProgress() const
 {
     if (!m_pipeline || !totalBytes() || !m_mediaDuration)
         return false;
-    float currentMaxTimeLoaded = maxTimeLoaded();
+    double currentMaxTimeLoaded = maxTimeLoaded();
     bool didLoadingProgress = currentMaxTimeLoaded != m_maxTimeLoadedAtLastDidLoadingProgress;
     m_maxTimeLoadedAtLastDidLoadingProgress = currentMaxTimeLoaded;
     LOG_MEDIA_MESSAGE("didLoadingProgress: %d", didLoadingProgress);
@@ -1788,8 +1788,8 @@ void MediaPlayerPrivateGStreamer::didEnd()
     // Synchronize position and duration values to not confuse the
     // HTMLMediaElement. In some cases like reverse playback the
     // position is not always reported as 0 for instance.
-    float now = currentTime();
-    if (now > 0 && now <= duration() && m_mediaDuration != now) {
+    double now = currentTimeDouble();
+    if (now > 0 && now <= durationDouble() && m_mediaDuration != now) {
         m_mediaDurationKnown = true;
         m_mediaDuration = now;
         m_player->durationChanged();
@@ -1810,7 +1810,7 @@ void MediaPlayerPrivateGStreamer::cacheDuration()
     if (m_mediaDuration || !m_mediaDurationKnown)
         return;
 
-    float newDuration = duration();
+    double newDuration = durationDouble();
     if (std::isinf(newDuration)) {
         // Only pretend that duration is not available if the the query failed in a stable pipeline state.
         GstState state;
@@ -1834,7 +1834,7 @@ void MediaPlayerPrivateGStreamer::notifyDurationChanged()
 
 void MediaPlayerPrivateGStreamer::durationChanged()
 {
-    float previousDuration = m_mediaDuration;
+    double previousDuration = m_mediaDuration;
 
     cacheDuration();
     // Avoid emiting durationchanged in the case where the previous

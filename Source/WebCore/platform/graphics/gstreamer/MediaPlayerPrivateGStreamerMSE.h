@@ -56,21 +56,20 @@ public:
     void setDownloadBuffering() override { };
 
     bool isLiveStream() const override { return false; }
-    float currentTime() const override;
+    double currentTimeDouble() const override;
 
     void pause() override;
     bool seeking() const override;
-    void seek(float) override;
+    void seekDouble(double) override;
     void configurePlaySink() override;
     bool changePipelineState(GstState) override;
 
     void durationChanged() override;
     MediaTime durationMediaTime() const override { return m_mediaTimeDuration; }
-    float duration() const override;
-    float mediaTimeForTimeValue(float timeValue) const;
-    void setRate(float) override;
+    double durationDouble() const override;
+    void setRateDouble(double) override;
     std::unique_ptr<PlatformTimeRanges> buffered() const override;
-    virtual float maxTimeSeekable() const override;
+    virtual MediaTime maxMediaTimeSeekable() const override;
     bool didLoadingProgress() const override;
     unsigned long long totalBytes() const override { return 0; }
 
@@ -102,7 +101,7 @@ private:
     // TODO: reduce code duplication.
     void updateStates() override;
 
-    bool doSeek(gint64 position, float rate, GstSeekFlags seekType) override;
+    bool doSeek(gint64 position, double rate, GstSeekFlags seekType) override;
     bool doSeek();
     void maybeFinishSeek();
     void updatePlaybackRate() override;
