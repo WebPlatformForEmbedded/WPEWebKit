@@ -255,7 +255,7 @@ void MediaSource::monitorSourceBuffers()
     // https://dvcs.w3.org/hg/html-media/raw-file/default/media-source/media-source.html#buffer-monitoring
 
     // Note, the behavior if activeSourceBuffers is empty is undefined.
-    if (!m_activeSourceBuffers) {
+    if (!m_activeSourceBuffers || m_activeSourceBuffers->length() == 0) {
         m_private->setReadyState(MediaPlayer::HaveNothing);
         return;
     }

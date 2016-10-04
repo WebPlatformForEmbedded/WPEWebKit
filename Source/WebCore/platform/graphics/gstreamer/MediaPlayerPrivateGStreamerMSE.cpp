@@ -874,7 +874,7 @@ void MediaPlayerPrivateGStreamerMSE::durationChanged()
     if (m_mediaTimeDuration != previousDuration && m_mediaTimeDuration.isValid() && previousDuration.isValid()) {
         m_player->durationChanged();
         m_playbackPipeline->notifyDurationChanged();
-        m_mediaSource->durationChanged(m_mediaTimeDuration);
+        m_mediaSource->durationChanged(durationMediaTime());
     }
 }
 
@@ -2382,7 +2382,7 @@ void MediaSourceClientGStreamerMSE::durationChanged(const MediaTime& duration)
     ASSERT(WTF::isMainThread());
 
     TRACE_MEDIA_MESSAGE("duration: %f", duration.toFloat());
-    if (!duration.isValid() || duration.isPositiveInfinite() || duration.isNegativeInfinite())
+    if (!duration.isValid() || duration.isNegativeInfinite())
         return;
 
     m_duration = duration;
@@ -2514,15 +2514,19 @@ float MediaPlayerPrivateGStreamerMSE::maxTimeSeekable() const
         return 0.0f;
 
     LOG_MEDIA_MESSAGE("maxTimeSeekable");
-    float result = duration();
-    // infinite duration means live stream
-    if (isinf(result)) {
-        MediaTime maxBufferedTime = buffered()->maximumBufferedTime();
-        // Return the highest end time reported by the buffered attribute.
-        result = maxBufferedTime.isValid() ? maxBufferedTime.toFloat() : 0;
-    }
+    return durationMediaTime().toFloat();
+}
 
-    return result;
+MediaTime MediaPlayerPrivateGStreamerMSE::durationMediaTime() const
+{
+    // Infinite duration means live stream
+    if (!m_mediaTimeDuration.isPositiveInfinite())
+        return m_mediaTimeDuration;
+
+    MediaTime maxBufferedTime = buffered()->maximumBufferedTime();
+
+    // Return the highest end time reported by the buffered attribute
+    return maxBufferedTime.isValid() ? maxBufferedTime : MediaTime::zeroTime();
 }
 
 bool MediaPlayerPrivateGStreamerMSE::didLoadingProgress() const
