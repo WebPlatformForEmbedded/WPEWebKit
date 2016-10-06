@@ -1357,7 +1357,7 @@ MediaTime MediaPlayerPrivateGStreamer::maxMediaTimeSeekable() const
 
     GST_DEBUG("maxTimeSeekable, duration: %lf", durationMediaTime().toDouble());
     // infinite duration means live stream
-    if (std::isinf(durationMediaTime.toDouble()))
+    if (std::isinf(durationMediaTime().toDouble()))
         return MediaTime::zeroTime();
 
     return durationMediaTime();
