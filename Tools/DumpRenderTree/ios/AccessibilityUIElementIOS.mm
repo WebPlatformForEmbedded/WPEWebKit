@@ -95,6 +95,8 @@ AccessibilityUIElement::~AccessibilityUIElement()
 - (NSUInteger)accessibilityARIAColumnIndex;
 - (UIAccessibilityTraits)_axContainedByFieldsetTrait;
 - (id)_accessibilityFieldsetAncestor;
+- (BOOL)_accessibilityHasTouchEventListener;
+- (NSString *)accessibilityExpandedTextValue;
 
 // TextMarker related
 - (NSArray *)textMarkerRange;
@@ -646,6 +648,9 @@ JSStringRef AccessibilityUIElement::stringAttributeValue(JSStringRef attribute)
     
     if (JSStringIsEqualToUTF8CString(attribute, "AXARIACurrent"))
         return [[m_element accessibilityARIACurrentStatus] createJSStringRef];
+
+    if (JSStringIsEqualToUTF8CString(attribute, "AXExpandedTextValue"))
+        return [[m_element accessibilityExpandedTextValue] createJSStringRef];
     
     return JSStringCreateWithCharacters(0, 0);
 }
@@ -667,6 +672,8 @@ bool AccessibilityUIElement::isDecrementActionSupported()
 
 bool AccessibilityUIElement::boolAttributeValue(JSStringRef attribute)
 {
+    if (JSStringIsEqualToUTF8CString(attribute, "AXHasTouchEventListener"))
+        return [m_element _accessibilityHasTouchEventListener];
     return false;
 }
 

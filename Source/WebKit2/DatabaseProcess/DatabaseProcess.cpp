@@ -76,10 +76,10 @@ bool DatabaseProcess::shouldTerminate()
 
 void DatabaseProcess::didClose(IPC::Connection&)
 {
-    RunLoop::current().stop();
+    stopRunLoop();
 }
 
-void DatabaseProcess::didReceiveMessage(IPC::Connection& connection, IPC::MessageDecoder& decoder)
+void DatabaseProcess::didReceiveMessage(IPC::Connection& connection, IPC::Decoder& decoder)
 {
     if (messageReceiverMap().dispatchMessage(connection, decoder))
         return;
@@ -92,7 +92,7 @@ void DatabaseProcess::didReceiveMessage(IPC::Connection& connection, IPC::Messag
 
 void DatabaseProcess::didReceiveInvalidMessage(IPC::Connection&, IPC::StringReference, IPC::StringReference)
 {
-    RunLoop::current().stop();
+    stopRunLoop();
 }
 
 #if ENABLE(INDEXED_DATABASE)
@@ -182,8 +182,8 @@ void DatabaseProcess::createDatabaseToWebProcessConnection()
     mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE, &listeningPort);
 
     // Create a listening connection.
-    RefPtr<DatabaseToWebProcessConnection> connection = DatabaseToWebProcessConnection::create(IPC::Connection::Identifier(listeningPort));
-    m_databaseToWebProcessConnections.append(connection.release());
+    auto connection = DatabaseToWebProcessConnection::create(IPC::Connection::Identifier(listeningPort));
+    m_databaseToWebProcessConnections.append(WTFMove(connection));
 
     IPC::Attachment clientPort(listeningPort, MACH_MSG_TYPE_MAKE_SEND);
     parentProcessConnection()->send(Messages::DatabaseProcessProxy::DidCreateDatabaseToWebProcessConnection(clientPort), 0);
@@ -238,6 +238,7 @@ void DatabaseProcess::deleteWebsiteDataForOrigins(WebCore::SessionID, OptionSet<
 #endif
 }
 
+#if ENABLE(SANDBOX_EXTENSIONS)
 void DatabaseProcess::grantSandboxExtensionsForBlobs(const Vector<String>& paths, const SandboxExtension::HandleArray& handles)
 {
     ASSERT(paths.size() == handles.size());
@@ -247,6 +248,7 @@ void DatabaseProcess::grantSandboxExtensionsForBlobs(const Vector<String>& paths
         ASSERT_UNUSED(result, result.isNewEntry);
     }
 }
+#endif
 
 #if ENABLE(INDEXED_DATABASE)
 void DatabaseProcess::prepareForAccessToTemporaryFile(const String& path)
@@ -284,7 +286,8 @@ Vector<RefPtr<WebCore::SecurityOrigin>> DatabaseProcess::indexedDatabaseOrigins(
 
 #endif
 
-void DatabaseProcess::getSandboxExtensionsForBlobFiles(const Vector<String>& filenames, std::function<void (const SandboxExtension::HandleArray&)> completionHandler)
+#if ENABLE(SANDBOX_EXTENSIONS)
+void DatabaseProcess::getSandboxExtensionsForBlobFiles(const Vector<String>& filenames, std::function<void (SandboxExtension::HandleArray&&)> completionHandler)
 {
     static uint64_t lastRequestID;
 
@@ -293,11 +296,12 @@ void DatabaseProcess::getSandboxExtensionsForBlobFiles(const Vector<String>& fil
     parentProcessConnection()->send(Messages::DatabaseProcessProxy::GetSandboxExtensionsForBlobFiles(requestID, filenames), 0);
 }
 
-void DatabaseProcess::didGetSandboxExtensionsForBlobFiles(uint64_t requestID, const SandboxExtension::HandleArray& handles)
+void DatabaseProcess::didGetSandboxExtensionsForBlobFiles(uint64_t requestID, SandboxExtension::HandleArray&& handles)
 {
     if (auto handler = m_sandboxExtensionForBlobsCompletionHandlers.take(requestID))
-        handler(handles);
+        handler(WTFMove(handles));
 }
+#endif
 
 #if !PLATFORM(COCOA)
 void DatabaseProcess::initializeProcess(const ChildProcessInitializationParameters&)

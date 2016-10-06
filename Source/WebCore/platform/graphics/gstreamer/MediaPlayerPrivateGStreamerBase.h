@@ -28,16 +28,20 @@
 #include "MainThreadNotifier.h"
 #include "MediaPlayerPrivate.h"
 #include "PlatformLayer.h"
-#include "TextureMapperGL.h"
-#include "TextureMapperPlatformLayer.h"
-#include "TextureMapperPlatformLayerProxy.h"
 #include <glib.h>
+#include <gst/gst.h>
 #include <wtf/Condition.h>
 #include <wtf/Forward.h>
 #include <wtf/RunLoop.h>
 
-typedef struct _GstBaseSink GstBaseSink;
-typedef struct _GstMessage GstMessage;
+#if USE(TEXTURE_MAPPER)
+#include "TextureMapperPlatformLayer.h"
+#include "TextureMapperPlatformLayerProxy.h"
+#if USE(TEXTURE_MAPPER_GL)
+#include "TextureMapperGL.h"
+#endif
+#endif
+
 typedef struct _GstStreamVolume GstStreamVolume;
 typedef struct _GstVideoInfo GstVideoInfo;
 typedef struct _GstGLContext GstGLContext;
@@ -64,13 +68,6 @@ class MediaPlayerPrivateGStreamerBase : public MediaPlayerPrivateInterface
 {
 
 public:
-    enum VideoSourceRotation {
-        NoVideoSourceRotation,
-        VideoSourceRotation90,
-        VideoSourceRotation180,
-        VideoSourceRotation270
-    };
-
     virtual ~MediaPlayerPrivateGStreamerBase();
 
     FloatSize naturalSize() const override;
@@ -157,14 +154,16 @@ public:
     static bool supportsKeySystem(const String& keySystem, const String& mimeType);
     static MediaPlayer::SupportsType extendedSupportsType(const MediaEngineSupportParameters& parameters, MediaPlayer::SupportsType);
 
-    GstElement* pipeline() const { return m_pipeline.get(); }
-
-    void setVideoSourceRotation(VideoSourceRotation rotation);
-
 #if USE(GSTREAMER_GL)
     NativeImagePtr nativeImageForCurrentTime() override;
     void clearCurrentBuffer();
 #endif
+
+    void setVideoSourceOrientation(const ImageOrientation&);
+
+    GstElement* pipeline() const { return m_pipeline.get(); }
+
+    virtual bool handleSyncMessage(GstMessage*);
 
 protected:
     MediaPlayerPrivateGStreamerBase(MediaPlayer*);
@@ -174,6 +173,9 @@ protected:
 #endif
 
 #if USE(GSTREAMER_GL)
+    static GstFlowReturn newSampleCallback(GstElement*, MediaPlayerPrivateGStreamerBase*);
+    static GstFlowReturn newPrerollCallback(GstElement*, MediaPlayerPrivateGStreamerBase*);
+    GstElement* createGLAppSink();
     GstElement* createVideoSinkGL();
 #endif
 
@@ -184,18 +186,11 @@ protected:
     void setPipeline(GstElement*);
     void clearSamples();
 
-    virtual bool handleSyncMessage(GstMessage*);
-
     void triggerRepaint(GstSample*);
     void repaint();
 
 #if !USE(HOLE_PUNCH_GSTREAMER)
     static void repaintCallback(MediaPlayerPrivateGStreamerBase*, GstSample*);
-    static void drainCallback(MediaPlayerPrivateGStreamerBase*);
-#endif
-
-#if USE(GSTREAMER_GL)
-    static gboolean drawCallback(MediaPlayerPrivateGStreamerBase*, GstBuffer*, GstPad*, GstBaseSink*);
 #endif
 
     void notifyPlayerOfVolumeChange();
@@ -213,6 +208,7 @@ protected:
 #if ENABLE(VIDEO_TRACK)
         TextChanged = 1 << 5,
 #endif
+        SizeChanged = 1 << 6
     };
 
     MainThreadNotifier<MainThreadNotification> m_notifier;
@@ -235,7 +231,6 @@ protected:
     mutable FloatSize m_videoSize;
     bool m_usingFallbackVideoSink;
 #if USE(TEXTURE_MAPPER_GL) && !USE(COORDINATED_GRAPHICS_MULTIPROCESS)
-    guint m_orientation;
     void updateTexture(BitmapTextureGL&, GstVideoInfo&);
 #endif
 #if USE(GSTREAMER_GL)
@@ -270,11 +265,10 @@ private:
     std::unique_ptr<CDMSession> createSession(const String&, CDMSessionClient*);
     CDMSession* m_cdmSession;
 #endif
-    VideoSourceRotation m_videoSourceRotation;
+    ImageOrientation m_videoSourceOrientation;
 #if USE(TEXTURE_MAPPER_GL)
-    TextureMapperGL::Flags m_textureMapperRotationFlag ;
+    TextureMapperGL::Flags m_textureMapperRotationFlag;
 #endif
-
 };
 }
 

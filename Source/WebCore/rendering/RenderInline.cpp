@@ -168,10 +168,9 @@ static void updateStyleOfAnonymousBlockContinuations(const RenderBlock& block, c
 void RenderInline::styleWillChange(StyleDifference diff, const RenderStyle& newStyle)
 {
     RenderBoxModelObject::styleWillChange(diff, newStyle);
-
-    // Check if this inline can hold absolute positioned elmements even after the style change.
+    // RenderInlines forward their absolute positioned descendants to their (non-anonymous) containing block.
+    // Check if this non-anonymous containing block can hold the absolute positioned elements when the inline is no longer positioned.
     if (canContainAbsolutelyPositionedObjects() && newStyle.position() == StaticPosition) {
-        // RenderInlines forward their absolute positioned descendants to their (non-anonymous) containing block.
         auto* container = containingBlockForAbsolutePosition();
         if (container && !container->canContainAbsolutelyPositionedObjects())
             container->removePositionedObjects(nullptr, NewContainingBlock);
@@ -249,7 +248,7 @@ void RenderInline::updateAlwaysCreateLineBoxes(bool fullLayout)
     }
 }
 
-LayoutRect RenderInline::localCaretRect(InlineBox* inlineBox, int, LayoutUnit* extraWidthToEndOfLine)
+LayoutRect RenderInline::localCaretRect(InlineBox* inlineBox, unsigned, LayoutUnit* extraWidthToEndOfLine)
 {
     if (firstChild()) {
         // This condition is possible if the RenderInline is at an editing boundary,
@@ -563,7 +562,7 @@ void RenderInline::splitFlow(RenderObject* beforeChild, RenderBlock* newBlockBox
         madeNewBeforeBlock = true;
     }
 
-    RenderBlock& post = downcast<RenderBlock>(*pre->createAnonymousBoxWithSameTypeAs(block));
+    auto& post = downcast<RenderBlock>(*pre->createAnonymousBoxWithSameTypeAs(*block).release());
 
     RenderObject* boxFirst = madeNewBeforeBlock ? block->firstChild() : pre->nextSibling();
     if (madeNewBeforeBlock)
@@ -1234,8 +1233,8 @@ LayoutRect RenderInline::clippedOverflowRectForRepaint(const RenderLayerModelObj
     if (hitRepaintContainer || !containingBlock)
         return repaintRect;
 
-    if (containingBlock->hasOverflowClip())
-        containingBlock->applyCachedClipAndScrollOffsetForRepaint(repaintRect);
+    if (containingBlock->hasOverflowClip() && containingBlock->shouldApplyClipAndScrollPositionForRepaint(repaintContainer))
+        containingBlock->applyCachedClipAndScrollPositionForRepaint(repaintRect);
 
     repaintRect = containingBlock->computeRectForRepaint(repaintRect, repaintContainer);
 
@@ -1296,7 +1295,7 @@ LayoutRect RenderInline::computeRectForRepaint(const LayoutRect& rect, const Ren
     // its controlClipRect will be wrong. For overflow clip we use the values cached by the layer.
     adjustedRect.setLocation(topLeft);
     if (container->hasOverflowClip()) {
-        downcast<RenderBox>(*container).applyCachedClipAndScrollOffsetForRepaint(adjustedRect);
+        downcast<RenderBox>(*container).applyCachedClipAndScrollPositionForRepaint(adjustedRect);
         if (adjustedRect.isEmpty())
             return adjustedRect;
     }
@@ -1811,8 +1810,7 @@ void RenderInline::addAnnotatedRegions(Vector<AnnotatedRegionValue>& regions)
         if (!container)
             container = this;
 
-        region.clip = region.bounds;
-        container->computeAbsoluteRepaintRect(region.clip);
+        region.clip = container->computeAbsoluteRepaintRect(region.bounds);
         if (region.clip.height() < 0) {
             region.clip.setHeight(0);
             region.clip.setWidth(0);

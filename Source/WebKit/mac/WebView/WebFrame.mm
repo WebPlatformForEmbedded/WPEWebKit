@@ -717,12 +717,12 @@ static inline WebDataSource *dataSource(DocumentLoader* loader)
         
     if (startNode && startNode->renderer()) {
 #if !PLATFORM(IOS)
-        startNode->renderer()->scrollRectToVisible(enclosingIntRect(rangeRect), ScrollAlignment::alignToEdgeIfNeeded, ScrollAlignment::alignToEdgeIfNeeded);
+        startNode->renderer()->scrollRectToVisible(SelectionRevealMode::Reveal, enclosingIntRect(rangeRect), ScrollAlignment::alignToEdgeIfNeeded, ScrollAlignment::alignToEdgeIfNeeded);
 #else
         RenderLayer* layer = startNode->renderer()->enclosingLayer();
         if (layer) {
             layer->setAdjustForIOSCaretWhenScrolling(true);
-            startNode->renderer()->scrollRectToVisible(enclosingIntRect(rangeRect), ScrollAlignment::alignToEdgeIfNeeded, ScrollAlignment::alignToEdgeIfNeeded);
+            startNode->renderer()->scrollRectToVisible(SelectionRevealMode::Reveal, enclosingIntRect(rangeRect), ScrollAlignment::alignToEdgeIfNeeded, ScrollAlignment::alignToEdgeIfNeeded);
             layer->setAdjustForIOSCaretWhenScrolling(false);
             _private->coreFrame->selection().setCaretRectNeedsUpdate();
             _private->coreFrame->selection().updateAppearance();
@@ -741,7 +741,7 @@ static inline WebDataSource *dataSource(DocumentLoader* loader)
         RenderLayer* layer = startNode->renderer()->enclosingLayer();
         if (layer) {
             layer->setAdjustForIOSCaretWhenScrolling(true);
-            startNode->renderer()->scrollRectToVisible(enclosingIntRect(rangeRect), ScrollAlignment::alignToEdgeIfNeeded, ScrollAlignment::alignToEdgeIfNeeded);
+            startNode->renderer()->scrollRectToVisible(SelectionRevealMode::Reveal, enclosingIntRect(rangeRect), ScrollAlignment::alignToEdgeIfNeeded, ScrollAlignment::alignToEdgeIfNeeded);
             layer->setAdjustForIOSCaretWhenScrolling(false);
 
             Frame *coreFrame = core(self);
@@ -911,7 +911,7 @@ static inline WebDataSource *dataSource(DocumentLoader* loader)
     while ((node = [nodeEnum nextObject]))
         nodesVector.append(core(node));
 
-    RefPtr<DocumentFragment> fragment = document->createDocumentFragment();
+    auto fragment = document->createDocumentFragment();
 
     for (auto* node : nodesVector) {
         auto element = createDefaultParagraphElement(*document);
@@ -919,7 +919,7 @@ static inline WebDataSource *dataSource(DocumentLoader* loader)
         fragment->appendChild(element);
     }
 
-    return kit(fragment.release().get());
+    return kit(fragment.ptr());
 }
 
 - (void)_replaceSelectionWithNode:(DOMNode *)node selectReplacement:(BOOL)selectReplacement smartReplace:(BOOL)smartReplace matchStyle:(BOOL)matchStyle
@@ -977,7 +977,7 @@ static inline WebDataSource *dataSource(DocumentLoader* loader)
         return;
     // FIXME: These are fake modifier keys here, but they should be real ones instead.
     PlatformMouseEvent event(IntPoint(windowLoc), IntPoint(globalPoint(windowLoc, [view->platformWidget() window])),
-        LeftButton, PlatformEvent::MouseMoved, 0, false, false, false, false, currentTime(), WebCore::ForceAtClick);
+                             LeftButton, PlatformEvent::MouseMoved, 0, false, false, false, false, currentTime(), WebCore::ForceAtClick, WebCore::NoTap);
     _private->coreFrame->eventHandler().dragSourceEndedAt(event, (DragOperation)operation);
 }
 #endif
@@ -1202,10 +1202,10 @@ static WebFrameLoadType toWebFrameLoadType(FrameLoadType frameLoadType)
 #endif
 
 #if PLATFORM(IOS)
+
 - (unsigned)formElementsCharacterCount
 {
-    WebCore::Frame *frame = core(self);
-    return frame->formElementsCharacterCount();
+    return core(self)->formElementsCharacterCount();
 }
 
 - (void)setTimeoutsPaused:(BOOL)flag
@@ -1375,7 +1375,7 @@ static WebFrameLoadType toWebFrameLoadType(FrameLoadType frameLoadType)
 {
     WebCore::Frame *frame = core(self);
     RevealExtentOption revealExtentOption = revealExtent ? RevealExtent : DoNotRevealExtent;
-    frame->selection().revealSelection(ScrollAlignment::alignToEdgeIfNeeded, revealExtentOption);
+    frame->selection().revealSelection(SelectionRevealMode::Reveal, ScrollAlignment::alignToEdgeIfNeeded, revealExtentOption);
 }
 
 - (void)resetSelection
@@ -1386,20 +1386,28 @@ static WebFrameLoadType toWebFrameLoadType(FrameLoadType frameLoadType)
 
 - (BOOL)hasEditableSelection
 {
-    WebCore::Frame *frame = core(self);
-    return frame->selection().selection().isContentEditable();
+    return core(self)->selection().selection().isContentEditable();
 }
 
 - (int)preferredHeight
 {
-    WebCore::Frame *frame = core(self);
-    return frame->preferredHeight();
+    return core(self)->preferredHeight();
 }
 
 - (int)innerLineHeight:(DOMNode *)node
 {
-    WebCore::Frame *frame = core(self);
-    return frame->innerLineHeight(node);
+    if (!node)
+        return 0;
+
+    auto& coreNode = *core(node);
+
+    coreNode.document().updateLayout();
+
+    auto* renderer = coreNode.renderer();
+    if (!renderer)
+        return 0;
+
+    return renderer->innerLineHeight();
 }
 
 - (void)updateLayout
@@ -1422,14 +1430,12 @@ static WebFrameLoadType toWebFrameLoadType(FrameLoadType frameLoadType)
 
 - (NSRect)caretRect
 {
-    WebCore::Frame *frame = core(self);
-    return frame->caretRect();
+    return core(self)->caretRect();
 }
 
 - (NSRect)rectForScrollToVisible
 {
-    WebCore::Frame *frame = core(self);
-    return frame->rectForScrollToVisible();
+    return core(self)->rectForScrollToVisible();
 }
 
 - (void)setCaretColor:(CGColorRef)color
@@ -1526,20 +1532,17 @@ static WebFrameLoadType toWebFrameLoadType(FrameLoadType frameLoadType)
 
 - (unichar)characterInRelationToCaretSelection:(int)amount
 {
-    WebCore::Frame *frame = core(self);
-    return frame->selection().characterInRelationToCaretSelection(amount);
+    return core(self)->selection().characterInRelationToCaretSelection(amount);
 }
 
 - (unichar)characterBeforeCaretSelection
 {
-    WebCore::Frame *frame = core(self);
-    return frame->selection().characterBeforeCaretSelection();
+    return core(self)->selection().characterBeforeCaretSelection();
 }
 
 - (unichar)characterAfterCaretSelection
 {
-    WebCore::Frame *frame = core(self);
-    return frame->selection().characterAfterCaretSelection();
+    return core(self)->selection().characterAfterCaretSelection();
 }
 
 - (DOMRange *)wordRangeContainingCaretSelection
@@ -1558,20 +1561,17 @@ static WebFrameLoadType toWebFrameLoadType(FrameLoadType frameLoadType)
 
 - (int)wordOffsetInRange:(DOMRange *)range
 {
-    WebCore::Frame *frame = core(self);
-    return frame->selection().wordOffsetInRange(core(range));
+    return core(self)->selection().wordOffsetInRange(core(range));
 }
 
 - (BOOL)spaceFollowsWordInRange:(DOMRange *)range
 {
-    WebCore::Frame *frame = core(self);
-    return frame->selection().spaceFollowsWordInRange(core(range));
+    return core(self)->selection().spaceFollowsWordInRange(core(range));
 }
 
 - (NSArray *)wordsInCurrentParagraph
 {
-    WebCore::Frame *frame = core(self);
-    return frame->wordsInCurrentParagraph();
+    return core(self)->wordsInCurrentParagraph();
 }
 
 - (BOOL)selectionAtDocumentStart
@@ -2524,11 +2524,6 @@ static NSURL *createUniqueWebDataURL()
 #endif
 
     ResourceRequest request(baseURL);
-
-#if PLATFORM(MAC)
-    // hack because Mail checks for this property to detect data / archive loads
-    [NSURLProtocol setProperty:@"" forKey:@"WebDataRequest" inRequest:(NSMutableURLRequest *)request.nsURLRequest(UpdateHTTPBody)];
-#endif
 
     ResourceResponse response(responseURL, MIMEType, [data length], encodingName);
     SubstituteData substituteData(WebCore::SharedBuffer::wrapNSData(data), [unreachableURL absoluteURL], response, SubstituteData::SessionHistoryVisibility::Hidden);

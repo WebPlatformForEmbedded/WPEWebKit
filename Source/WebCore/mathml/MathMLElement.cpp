@@ -2,6 +2,7 @@
  * Copyright (C) 2009 Alex Milowski (alex@milowski.com). All rights reserved.
  * Copyright (C) 2010 Apple Inc. All rights reserved.
  * Copyright (C) 2010 François Sausset (sausset@gmail.com). All rights reserved.
+ * Copyright (C) 2016 Igalia S.L.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,6 +33,9 @@
 #include "MathMLElement.h"
 
 #include "ElementIterator.h"
+#include "Event.h"
+#include "EventHandler.h"
+#include "HTMLAnchorElement.h"
 #include "HTMLElement.h"
 #include "HTMLHtmlElement.h"
 #include "HTMLMapElement.h"
@@ -40,20 +44,22 @@
 #include "MathMLMathElement.h"
 #include "MathMLNames.h"
 #include "MathMLSelectElement.h"
+#include "MouseEvent.h"
 #include "RenderTableCell.h"
 #include "SVGElement.h"
 #include "SVGNames.h"
 #include "SVGSVGElement.h"
+#include "XLinkNames.h"
 
 namespace WebCore {
-    
+
 using namespace MathMLNames;
-    
+
 MathMLElement::MathMLElement(const QualifiedName& tagName, Document& document)
     : StyledElement(tagName, document, CreateMathMLElement)
 {
 }
-    
+
 Ref<MathMLElement> MathMLElement::create(const QualifiedName& tagName, Document& document)
 {
     return adoptRef(*new MathMLElement(tagName, document));
@@ -201,7 +207,7 @@ unsigned MathMLElement::colSpan() const
 {
     if (!hasTagName(mtdTag))
         return 1u;
-    const AtomicString& colSpanValue = fastGetAttribute(columnspanAttr);
+    auto& colSpanValue = attributeWithoutSynchronization(columnspanAttr);
     return std::max(1u, limitToOnlyHTMLNonNegative(colSpanValue, 1u));
 }
 
@@ -209,14 +215,19 @@ unsigned MathMLElement::rowSpan() const
 {
     if (!hasTagName(mtdTag))
         return 1u;
-    const AtomicString& rowSpanValue = fastGetAttribute(rowspanAttr);
+    auto& rowSpanValue = attributeWithoutSynchronization(rowspanAttr);
     static const unsigned maxRowspan = 8190; // This constant comes from HTMLTableCellElement.
     return std::max(1u, std::min(limitToOnlyHTMLNonNegative(rowSpanValue, 1u), maxRowspan));
 }
 
 void MathMLElement::parseAttribute(const QualifiedName& name, const AtomicString& value)
 {
-    if (name == rowspanAttr) {
+    if (name == hrefAttr) {
+        bool wasLink = isLink();
+        setIsLink(!value.isNull() && !shouldProhibitLinks(this));
+        if (wasLink != isLink())
+            setNeedsStyleRecalc();
+    } else if (name == rowspanAttr) {
         if (is<RenderTableCell>(renderer()) && hasTagName(mtdTag))
             downcast<RenderTableCell>(*renderer()).colSpanOrRowSpanChanged();
     } else if (name == columnspanAttr) {
@@ -268,41 +279,293 @@ void MathMLElement::collectStyleForPresentationAttribute(const QualifiedName& na
 
 bool MathMLElement::childShouldCreateRenderer(const Node& child) const
 {
-    if (hasTagName(annotation_xmlTag)) {
-        const AtomicString& value = fastGetAttribute(MathMLNames::encodingAttr);
-
-        // See annotation-xml.model.mathml, annotation-xml.model.svg and annotation-xml.model.xhtml in the HTML5 RelaxNG schema.
-
-        if (is<MathMLElement>(child) && (MathMLSelectElement::isMathMLEncoding(value) || MathMLSelectElement::isHTMLEncoding(value))) {
-            auto& mathmlElement = downcast<MathMLElement>(child);
-            return is<MathMLMathElement>(mathmlElement);
-        }
-
-        if (is<SVGElement>(child) && (MathMLSelectElement::isSVGEncoding(value) || MathMLSelectElement::isHTMLEncoding(value))) {
-            auto& svgElement = downcast<SVGElement>(child);
-            return is<SVGSVGElement>(svgElement);
-        }
-
-        if (is<HTMLElement>(child) && MathMLSelectElement::isHTMLEncoding(value)) {
-            auto& htmlElement = downcast<HTMLElement>(child);
-            return is<HTMLHtmlElement>(htmlElement) || (isFlowContent(htmlElement) && StyledElement::childShouldCreateRenderer(child));
-        }
-
-        return false;
-    }
-
     // In general, only MathML children are allowed. Text nodes are only visible in token MathML elements.
     return is<MathMLElement>(child);
 }
 
-void MathMLElement::attributeChanged(const QualifiedName& name, const AtomicString& oldValue, const AtomicString& newValue, AttributeModificationReason reason)
+bool MathMLElement::willRespondToMouseClickEvents()
 {
-    if (isSemanticAnnotation() && (name == MathMLNames::srcAttr || name == MathMLNames::encodingAttr)) {
-        Element* parent = parentElement();
-        if (is<MathMLElement>(parent) && parent->hasTagName(semanticsTag))
-            downcast<MathMLElement>(*parent).updateSelectedChild();
+    return isLink() || StyledElement::willRespondToMouseClickEvents();
+}
+
+void MathMLElement::defaultEventHandler(Event* event)
+{
+    if (isLink()) {
+        if (focused() && isEnterKeyKeydownEvent(event)) {
+            event->setDefaultHandled();
+            dispatchSimulatedClick(event);
+            return;
+        }
+        if (MouseEvent::canTriggerActivationBehavior(*event)) {
+            auto& href = attributeWithoutSynchronization(hrefAttr);
+            const auto& url = stripLeadingAndTrailingHTMLSpaces(href);
+            event->setDefaultHandled();
+            if (auto* frame = document().frame())
+                frame->loader().urlSelected(document().completeURL(url), "_self", event, LockHistory::No, LockBackForwardList::No, MaybeSendReferrer, document().shouldOpenExternalURLsPolicyToPropagate());
+            return;
+        }
     }
-    StyledElement::attributeChanged(name, oldValue, newValue, reason);
+
+    StyledElement::defaultEventHandler(event);
+}
+
+bool MathMLElement::canStartSelection() const
+{
+    if (!isLink())
+        return StyledElement::canStartSelection();
+
+    return hasEditableStyle();
+}
+
+bool MathMLElement::isFocusable() const
+{
+    if (renderer() && renderer()->absoluteClippedOverflowRect().isEmpty())
+        return false;
+
+    return StyledElement::isFocusable();
+}
+
+bool MathMLElement::isKeyboardFocusable(KeyboardEvent* event) const
+{
+    if (isFocusable() && StyledElement::supportsFocus())
+        return StyledElement::isKeyboardFocusable(event);
+
+    if (isLink())
+        return document().frame()->eventHandler().tabsToLinks(event);
+
+    return StyledElement::isKeyboardFocusable(event);
+}
+
+bool MathMLElement::isMouseFocusable() const
+{
+    // Links are focusable by default, but only allow links with tabindex or contenteditable to be mouse focusable.
+    // https://bugs.webkit.org/show_bug.cgi?id=26856
+    if (isLink())
+        return StyledElement::supportsFocus();
+
+    return StyledElement::isMouseFocusable();
+}
+
+bool MathMLElement::isURLAttribute(const Attribute& attribute) const
+{
+    return attribute.name().localName() == hrefAttr || StyledElement::isURLAttribute(attribute);
+}
+
+bool MathMLElement::supportsFocus() const
+{
+    if (hasEditableStyle())
+        return StyledElement::supportsFocus();
+    // If not a link we should still be able to focus the element if it has tabIndex.
+    return isLink() || StyledElement::supportsFocus();
+}
+
+int MathMLElement::tabIndex() const
+{
+    // Skip the supportsFocus check in StyledElement.
+    return Element::tabIndex();
+}
+
+static inline StringView skipLeadingAndTrailingWhitespace(const StringView& stringView)
+{
+    unsigned start = 0, stringLength = stringView.length();
+    while (stringLength > 0 && isHTMLSpace(stringView[start])) {
+        start++;
+        stringLength--;
+    }
+    while (stringLength > 0 && isHTMLSpace(stringView[start + stringLength - 1]))
+        stringLength--;
+    return stringView.substring(start, stringLength);
+}
+
+MathMLElement::Length MathMLElement::parseNumberAndUnit(const StringView& string)
+{
+    LengthType lengthType = LengthType::UnitLess;
+    unsigned stringLength = string.length();
+    UChar lastChar = string[stringLength - 1];
+    if (lastChar == '%') {
+        lengthType = LengthType::Percentage;
+        stringLength--;
+    } else if (stringLength >= 2) {
+        UChar penultimateChar = string[stringLength - 2];
+        if (penultimateChar == 'c' && lastChar == 'm')
+            lengthType = LengthType::Cm;
+        if (penultimateChar == 'e' && lastChar == 'm')
+            lengthType = LengthType::Em;
+        else if (penultimateChar == 'e' && lastChar == 'x')
+            lengthType = LengthType::Ex;
+        else if (penultimateChar == 'i' && lastChar == 'n')
+            lengthType = LengthType::In;
+        else if (penultimateChar == 'm' && lastChar == 'm')
+            lengthType = LengthType::Mm;
+        else if (penultimateChar == 'p' && lastChar == 'c')
+            lengthType = LengthType::Pc;
+        else if (penultimateChar == 'p' && lastChar == 't')
+            lengthType = LengthType::Pt;
+        else if (penultimateChar == 'p' && lastChar == 'x')
+            lengthType = LengthType::Px;
+
+        if (lengthType != LengthType::UnitLess)
+            stringLength -= 2;
+    }
+
+    bool ok;
+    float lengthValue = string.substring(0, stringLength).toFloat(ok);
+    if (!ok)
+        return Length();
+
+    Length length;
+    length.type = lengthType;
+    length.value = lengthValue;
+    return length;
+}
+
+MathMLElement::Length MathMLElement::parseNamedSpace(const StringView& string)
+{
+    // Named space values are case-sensitive.
+    int namedSpaceValue;
+    if (string == "veryverythinmathspace")
+        namedSpaceValue = 1;
+    else if (string == "verythinmathspace")
+        namedSpaceValue = 2;
+    else if (string == "thinmathspace")
+        namedSpaceValue = 3;
+    else if (string == "mediummathspace")
+        namedSpaceValue = 4;
+    else if (string == "thickmathspace")
+        namedSpaceValue = 5;
+    else if (string == "verythickmathspace")
+        namedSpaceValue = 6;
+    else if (string == "veryverythickmathspace")
+        namedSpaceValue = 7;
+    else if (string == "negativeveryverythinmathspace")
+        namedSpaceValue = -1;
+    else if (string == "negativeverythinmathspace")
+        namedSpaceValue = -2;
+    else if (string == "negativethinmathspace")
+        namedSpaceValue = -3;
+    else if (string == "negativemediummathspace")
+        namedSpaceValue = -4;
+    else if (string == "negativethickmathspace")
+        namedSpaceValue = -5;
+    else if (string == "negativeverythickmathspace")
+        namedSpaceValue = -6;
+    else if (string == "negativeveryverythickmathspace")
+        namedSpaceValue = -7;
+    else
+        return Length();
+
+    Length length;
+    length.type = LengthType::MathUnit;
+    length.value = namedSpaceValue;
+    return length;
+}
+
+MathMLElement::Length MathMLElement::parseMathMLLength(const String& string)
+{
+    // The regular expression from the MathML Relax NG schema is as follows:
+    //
+    //   pattern = '\s*((-?[0-9]*([0-9]\.?|\.[0-9])[0-9]*(e[mx]|in|cm|mm|p[xtc]|%)?)|(negative)?((very){0,2}thi(n|ck)|medium)mathspace)\s*'
+    //
+    // We do not perform a strict verification of the syntax of whitespaces and number.
+    // Instead, we just use isHTMLSpace and toFloat to parse these parts.
+
+    // We first skip whitespace from both ends of the string.
+    StringView stringView = skipLeadingAndTrailingWhitespace(string);
+
+    if (stringView.isEmpty())
+        return Length();
+
+    // We consider the most typical case: a number followed by an optional unit.
+    UChar firstChar = stringView[0];
+    if (isASCIIDigit(firstChar) || firstChar == '-' || firstChar == '.')
+        return parseNumberAndUnit(stringView);
+
+    // Otherwise, we try and parse a named space.
+    return parseNamedSpace(stringView);
+}
+
+const MathMLElement::Length& MathMLElement::cachedMathMLLength(const QualifiedName& name, Optional<Length>& length)
+{
+    if (length)
+        return length.value();
+    length = parseMathMLLength(attributeWithoutSynchronization(name));
+    return length.value();
+}
+
+const MathMLElement::BooleanValue& MathMLElement::cachedBooleanAttribute(const QualifiedName& name, Optional<BooleanValue>& attribute)
+{
+    if (attribute)
+        return attribute.value();
+
+    // In MathML, attribute values are case-sensitive.
+    const AtomicString& value = attributeWithoutSynchronization(name);
+    if (value == "true")
+        attribute = BooleanValue::True;
+    else if (value == "false")
+        attribute = BooleanValue::False;
+    else
+        attribute = BooleanValue::Default;
+
+    return attribute.value();
+}
+
+MathMLElement::MathVariant MathMLElement::parseMathVariantAttribute(const AtomicString& attributeValue)
+{
+    // The mathvariant attribute values is case-sensitive.
+    if (attributeValue == "normal")
+        return MathVariant::Normal;
+    if (attributeValue == "bold")
+        return MathVariant::Bold;
+    if (attributeValue == "italic")
+        return MathVariant::Italic;
+    if (attributeValue == "bold-italic")
+        return MathVariant::BoldItalic;
+    if (attributeValue == "double-struck")
+        return MathVariant::DoubleStruck;
+    if (attributeValue == "bold-fraktur")
+        return MathVariant::BoldFraktur;
+    if (attributeValue == "script")
+        return MathVariant::Script;
+    if (attributeValue == "bold-script")
+        return MathVariant::BoldScript;
+    if (attributeValue == "fraktur")
+        return MathVariant::Fraktur;
+    if (attributeValue == "sans-serif")
+        return MathVariant::SansSerif;
+    if (attributeValue == "bold-sans-serif")
+        return MathVariant::BoldSansSerif;
+    if (attributeValue == "sans-serif-italic")
+        return MathVariant::SansSerifItalic;
+    if (attributeValue == "sans-serif-bold-italic")
+        return MathVariant::SansSerifBoldItalic;
+    if (attributeValue == "monospace")
+        return MathVariant::Monospace;
+    if (attributeValue == "initial")
+        return MathVariant::Initial;
+    if (attributeValue == "tailed")
+        return MathVariant::Tailed;
+    if (attributeValue == "looped")
+        return MathVariant::Looped;
+    if (attributeValue == "stretched")
+        return MathVariant::Stretched;
+    return MathVariant::None;
+}
+
+Optional<bool> MathMLElement::specifiedDisplayStyle()
+{
+    if (!acceptsDisplayStyleAttribute())
+        return Nullopt;
+    const MathMLElement::BooleanValue& specifiedDisplayStyle = cachedBooleanAttribute(displaystyleAttr, m_displayStyle);
+    return toOptionalBool(specifiedDisplayStyle);
+}
+
+Optional<MathMLElement::MathVariant> MathMLElement::specifiedMathVariant()
+{
+    if (!acceptsMathVariantAttribute())
+        return Nullopt;
+    if (!m_mathVariant)
+        m_mathVariant = parseMathVariantAttribute(attributeWithoutSynchronization(mathvariantAttr));
+    return m_mathVariant.value() == MathVariant::None ? Nullopt : m_mathVariant;
 }
 
 }

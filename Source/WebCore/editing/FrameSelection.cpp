@@ -36,6 +36,7 @@
 #include "ElementIterator.h"
 #include "Event.h"
 #include "EventHandler.h"
+#include "EventNames.h"
 #include "ExceptionCode.h"
 #include "FloatQuad.h"
 #include "FocusController.h"
@@ -126,7 +127,6 @@ FrameSelection::FrameSelection(Frame* frame)
 #if PLATFORM(IOS)
     , m_updateAppearanceEnabled(false)
     , m_caretBlinks(true)
-    , m_scrollingSuppressCount(0)
 #endif
 {
     if (shouldAlwaysUseDirectionalSelection(m_frame))
@@ -387,7 +387,7 @@ void FrameSelection::updateAndRevealSelection(const AXTextStateChangeIntent& int
         else
             alignment = m_alwaysAlignCursorOnScrollWhenRevealingSelection ? ScrollAlignment::alignTopAlways : ScrollAlignment::alignToEdgeIfNeeded;
 
-        revealSelection(alignment, RevealExtent);
+        revealSelection(SelectionRevealMode::Reveal, alignment, RevealExtent);
     }
 
     notifyAccessibilityForSelectionChange(intent);
@@ -2088,8 +2088,11 @@ void FrameSelection::updateAppearance()
     // because we don't yet notify the FrameSelection of text removal.
     if (startPos.isNotNull() && endPos.isNotNull() && selection.visibleStart() != selection.visibleEnd()) {
         RenderObject* startRenderer = startPos.deprecatedNode()->renderer();
+        int startOffset = startPos.deprecatedEditingOffset();
         RenderObject* endRenderer = endPos.deprecatedNode()->renderer();
-        view->setSelection(startRenderer, startPos.deprecatedEditingOffset(), endRenderer, endPos.deprecatedEditingOffset());
+        int endOffset = endPos.deprecatedEditingOffset();
+        ASSERT(startOffset >= 0 && endOffset >= 0);
+        view->setSelection(startRenderer, startOffset, endRenderer, endOffset);
     }
 }
 
@@ -2098,7 +2101,7 @@ void FrameSelection::setCaretVisibility(CaretVisibility visibility)
     if (caretVisibility() == visibility)
         return;
 
-    // FIXME: We shouldn't trigger a synchrnously layout here.
+    // FIXME: We shouldn't trigger a synchronous layout here.
     if (m_frame)
         updateSelectionByUpdatingLayoutOrStyle(*m_frame);
 
@@ -2289,8 +2292,11 @@ HTMLFormElement* FrameSelection::currentForm() const
     return scanForForm(start);
 }
 
-void FrameSelection::revealSelection(const ScrollAlignment& alignment, RevealExtentOption revealExtentOption)
+void FrameSelection::revealSelection(SelectionRevealMode revealMode, const ScrollAlignment& alignment, RevealExtentOption revealExtentOption)
 {
+    if (revealMode == SelectionRevealMode::DoNotReveal)
+        return;
+
     LayoutRect rect;
 
     switch (m_selection.selectionType()) {
@@ -2311,7 +2317,7 @@ void FrameSelection::revealSelection(const ScrollAlignment& alignment, RevealExt
         if (RenderLayer* layer = start.deprecatedNode()->renderer()->enclosingLayer()) {
             if (!m_scrollingSuppressCount) {
                 layer->setAdjustForIOSCaretWhenScrolling(true);
-                layer->scrollRectToVisible(rect, alignment, alignment);
+                layer->scrollRectToVisible(revealMode, rect, alignment, alignment);
                 layer->setAdjustForIOSCaretWhenScrolling(false);
                 updateAppearance();
                 if (m_frame->page())
@@ -2322,7 +2328,7 @@ void FrameSelection::revealSelection(const ScrollAlignment& alignment, RevealExt
         // FIXME: This code only handles scrolling the startContainer's layer, but
         // the selection rect could intersect more than just that.
         // See <rdar://problem/4799899>.
-        if (start.deprecatedNode()->renderer()->scrollRectToVisible(rect, alignment, alignment))
+        if (start.deprecatedNode()->renderer()->scrollRectToVisible(revealMode, rect, alignment, alignment))
             updateAppearance();
 #endif
     }

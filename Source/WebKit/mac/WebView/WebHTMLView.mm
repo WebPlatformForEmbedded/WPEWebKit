@@ -90,7 +90,6 @@
 #import <WebCore/EditorDeleteAction.h>
 #import <WebCore/Element.h>
 #import <WebCore/EventHandler.h>
-#import <WebCore/ExceptionHandlers.h>
 #import <WebCore/FloatRect.h>
 #import <WebCore/FocusController.h>
 #import <WebCore/Font.h>
@@ -2557,10 +2556,7 @@ static bool mouseEventIsPartOfClickOrDrag(NSEvent *event)
         return [[self _frame] _documentFragmentWithMarkupString:HTMLString baseURLString:nil];
     }
 
-    // The _hasHTMLDocument clause here is a workaround for a bug in NSAttributedString: Radar 5052369.
-    // If we call _documentFromRange on an XML document we'll get "setInnerHTML: method not found".
-    // FIXME: Remove this once bug 5052369 is fixed.
-    if ([self _hasHTMLDocument] && (pboardType == NSRTFPboardType || pboardType == NSRTFDPboardType)) {
+    if (pboardType == NSRTFPboardType || pboardType == NSRTFDPboardType) {
         NSAttributedString *string = nil;
         if (pboardType == NSRTFDPboardType)
             string = [[NSAttributedString alloc] initWithRTFD:[pasteboard dataForType:NSRTFDPboardType] documentAttributes:NULL];
@@ -3146,7 +3142,7 @@ WEBCORE_COMMAND(toggleUnderline)
     COMMAND_PROLOGUE
 
     if (Frame* coreFrame = core([self _frame]))
-        coreFrame->selection().revealSelection(ScrollAlignment::alignCenterAlways);
+        coreFrame->selection().revealSelection(SelectionRevealMode::Reveal, ScrollAlignment::alignCenterAlways);
 }
 
 #if !PLATFORM(IOS)
@@ -5345,7 +5341,7 @@ static PassRefPtr<KeyboardEvent> currentKeyboardEvent(Frame* coreFrame)
     COMMAND_PROLOGUE
 
     if (Frame* coreFrame = core([self _frame]))
-        coreFrame->selection().revealSelection(ScrollAlignment::alignCenterAlways);
+        coreFrame->selection().revealSelection(SelectionRevealMode::Reveal, ScrollAlignment::alignCenterAlways);
 }
 
 #if !PLATFORM(IOS)
@@ -6360,30 +6356,15 @@ static BOOL writingDirectionKeyBindingsEnabled()
 
 - (void)_lookUpInDictionaryFromMenu:(id)sender
 {
-    // Dictionary API will accept a whitespace-only string and display UI as if it were real text,
-    // so bail out early to avoid that.
-    if ([[[self selectedString] _webkit_stringByTrimmingWhitespace] length] == 0)
-        return;
-
-    NSAttributedString *attrString = [self selectedAttributedString];
-
     Frame* coreFrame = core([self _frame]);
     if (!coreFrame)
         return;
 
-    NSRect rect = coreFrame->selection().selectionBounds();
+    RefPtr<Range> selectionRange = coreFrame->selection().selection().firstRange();
+    if (!selectionRange)
+        return;
 
-    NSDictionary *attributes = [attrString fontAttributesInRange:NSMakeRange(0, 1)];
-    NSFont *font = [attributes objectForKey:NSFontAttributeName];
-    if (font)
-        rect.origin.y += [font descender];
-
-    DictionaryPopupInfo info;
-    info.attributedString = attrString;
-    info.origin = coreFrame->view()->contentsToWindow(enclosingIntRect(rect)).location();
-    if (auto textIndicator = TextIndicator::createWithSelectionInFrame(*coreFrame, TextIndicatorOptionIncludeSnapshotWithSelectionHighlight, TextIndicatorPresentationTransition::BounceAndCrossfade))
-        info.textIndicator = textIndicator->data();
-    [[self _webView] _showDictionaryLookupPopup:info];
+    [[self _webView] _showDictionaryLookupPopup:[WebImmediateActionController _dictionaryPopupInfoForRange:*selectionRange inFrame:coreFrame withLookupOptions:nil indicatorOptions:TextIndicatorOptionIncludeSnapshotWithSelectionHighlight transition:TextIndicatorPresentationTransition::BounceAndCrossfade]];
 }
 
 - (void)quickLookWithEvent:(NSEvent *)event

@@ -114,6 +114,10 @@ public:
     double currentTime() const;
 #endif
 
+    typedef union {
+        double asDouble;
+    } RemoteCommandArgument;
+
     enum RemoteControlCommandType {
         NoCommand,
         PlayCommand,
@@ -124,9 +128,11 @@ public:
         EndSeekingBackwardCommand,
         BeginSeekingForwardCommand,
         EndSeekingForwardCommand,
+        SeekToPlaybackPositionCommand,
     };
     bool canReceiveRemoteControlCommands() const;
-    void didReceiveRemoteControlCommand(RemoteControlCommandType);
+    void didReceiveRemoteControlCommand(RemoteControlCommandType, const RemoteCommandArgument* argument = nullptr);
+    bool supportsSeeking() const;
 
     enum DisplayType {
         Normal,
@@ -139,6 +145,7 @@ public:
 
     bool shouldOverrideBackgroundLoadingRestriction() const;
 
+    virtual bool canControlControlsManager() const { return false; }
     virtual bool canPlayToWirelessPlaybackTarget() const { return false; }
     virtual bool isPlayingToWirelessPlaybackTarget() const { return m_isPlayingToWirelessPlaybackTarget; }
     void isPlayingToWirelessPlaybackTargetChanged(bool);
@@ -201,7 +208,8 @@ public:
 #endif
     
     virtual bool canReceiveRemoteControlCommands() const = 0;
-    virtual void didReceiveRemoteControlCommand(PlatformMediaSession::RemoteControlCommandType) = 0;
+    virtual void didReceiveRemoteControlCommand(PlatformMediaSession::RemoteControlCommandType, const PlatformMediaSession::RemoteCommandArgument*) = 0;
+    virtual bool supportsSeeking() const = 0;
 
     virtual void setShouldBufferData(bool) { }
     virtual bool elementIsHidden() const { return false; }

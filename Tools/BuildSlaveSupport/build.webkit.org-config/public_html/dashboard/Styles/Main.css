@@ -166,6 +166,8 @@ table.queue-grid td.logo img.logo {
     position: absolute;
     top: 29px;
     left: 26px;
+    -webkit-clip-path: circle(72px at center);
+    clip-path: circle(72px at center);
 }
 
 table.queue-grid tr.platform.ios-simulator-9 img.logo {
@@ -182,6 +184,10 @@ table.queue-grid tr.platform.ios-8 img.logo {
 
 table.queue-grid tr.platform.mac-os-x-elcapitan img.logo {
     content: -webkit-image-set(url(../Images/ElCapitan@2x.png) 2x, url(../Images/ElCapitan.png) 1x);
+}
+
+table.queue-grid tr.platform.macos-sierra img.logo {
+    content: -webkit-image-set(url(../Images/Sierra@2x.png) 2x, url(../Images/Sierra.png) 1x);
 }
 
 table.queue-grid tr.platform.mac-os-x-yosemite img.logo {

@@ -65,7 +65,6 @@
 #include <wtf/ThreadSafeRefCounted.h>
 #include <wtf/ThreadSpecific.h>
 #include <wtf/WTFThreadData.h>
-#include <wtf/WeakRandom.h>
 #include <wtf/text/SymbolRegistry.h>
 #include <wtf/text/WTFString.h>
 #if ENABLE(REGEXP_TRACING)
@@ -94,6 +93,7 @@ class JSObject;
 class LLIntOffsetsExtractor;
 class NativeExecutable;
 class RegExpCache;
+class Register;
 class RegisterAtOffsetList;
 #if ENABLE(SAMPLING_PROFILER)
 class SamplingProfiler;
@@ -107,6 +107,7 @@ class Structure;
 #if ENABLE(REGEXP_TRACING)
 class RegExp;
 #endif
+class Symbol;
 class UnlinkedCodeBlock;
 class UnlinkedEvalCodeBlock;
 class UnlinkedFunctionExecutable;
@@ -277,7 +278,11 @@ public:
     VMType vmType;
     ClientData* clientData;
     VMEntryFrame* topVMEntryFrame;
-    ExecState* topCallFrame;
+    // NOTE: When throwing an exception while rolling back the call frame, this may be equal to
+    // topVMEntryFrame.
+    // FIXME: This should be a void*, because it might not point to a CallFrame.
+    // https://bugs.webkit.org/show_bug.cgi?id=160441
+    ExecState* topCallFrame; 
     Strong<Structure> structureStructure;
     Strong<Structure> structureRareDataStructure;
     Strong<Structure> terminatedExecutionErrorStructure;
@@ -343,6 +348,8 @@ public:
 
     AtomicStringTable* atomicStringTable() const { return m_atomicStringTable; }
     WTF::SymbolRegistry& symbolRegistry() { return m_symbolRegistry; }
+
+    WeakGCMap<SymbolImpl*, Symbol, PtrHash<SymbolImpl*>> symbolImplToSymbolMap;
 
     enum class DeletePropertyMode {
         // Default behaviour of deleteProperty, matching the spec.
@@ -458,22 +465,24 @@ public:
     void* stackPointerAtVMEntry() const { return m_stackPointerAtVMEntry; }
     void setStackPointerAtVMEntry(void*);
 
-    size_t reservedZoneSize() const { return m_reservedZoneSize; }
-    size_t updateReservedZoneSize(size_t reservedZoneSize);
+    size_t softReservedZoneSize() const { return m_currentSoftReservedZoneSize; }
+    size_t updateSoftReservedZoneSize(size_t softReservedZoneSize);
 
-#if !ENABLE(JIT)
-    void* jsStackLimit() { return m_jsStackLimit; }
-    void setJSStackLimit(void* limit) { m_jsStackLimit = limit; }
-#endif
+    static size_t committedStackByteCount();
+    inline bool ensureStackCapacityFor(Register* newTopOfStack);
+
     void* stackLimit() { return m_stackLimit; }
-    void** addressOfStackLimit() { return &m_stackLimit; }
+    void* softStackLimit() { return m_softStackLimit; }
+    void** addressOfSoftStackLimit() { return &m_softStackLimit; }
+#if !ENABLE(JIT)
+    void* cloopStackLimit() { return m_cloopStackLimit; }
+    void setCLoopStackLimit(void* limit) { m_cloopStackLimit = limit; }
+#endif
 
-    bool isSafeToRecurse(size_t neededStackInBytes = 0) const
+    inline bool isSafeToRecurseSoft() const;
+    bool isSafeToRecurse() const
     {
-        ASSERT(wtfThreadData().stack().isGrowingDownward());
-        int8_t* curr = reinterpret_cast<int8_t*>(&curr);
-        int8_t* limit = reinterpret_cast<int8_t*>(m_stackLimit);
-        return curr >= limit && static_cast<size_t>(curr - limit) >= neededStackInBytes;
+        return isSafeToRecurse(m_stackLimit);
     }
 
     void* lastStackTop() { return m_lastStackTop; }
@@ -616,13 +625,19 @@ public:
 
 private:
     friend class LLIntOffsetsExtractor;
-    friend class ClearExceptionScope;
 
     VM(VMType, HeapType);
     static VM*& sharedInstanceInternal();
     void createNativeThunk();
 
-    void updateStackLimit();
+    void updateStackLimits();
+
+    bool isSafeToRecurse(void* stackLimit) const
+    {
+        ASSERT(wtfThreadData().stack().isGrowingDownward());
+        void* curr = reinterpret_cast<void*>(&curr);
+        return curr >= stackLimit;
+    }
 
     void setException(Exception* exception)
     {
@@ -642,20 +657,16 @@ private:
 #if ENABLE(GC_VALIDATION)
     const ClassInfo* m_initializingObjectClass;
 #endif
+
     void* m_stackPointerAtVMEntry;
-    size_t m_reservedZoneSize;
+    size_t m_currentSoftReservedZoneSize;
+    void* m_stackLimit { nullptr };
+    void* m_softStackLimit { nullptr };
 #if !ENABLE(JIT)
-    struct {
-        void* m_stackLimit;
-        void* m_jsStackLimit;
-    };
-#else
-    union {
-        void* m_stackLimit;
-        void* m_jsStackLimit;
-    };
+    void* m_cloopStackLimit { nullptr };
 #endif
     void* m_lastStackTop;
+
     Exception* m_exception { nullptr };
     Exception* m_lastException { nullptr };
     bool m_failNextNewCodeBlock { false };

@@ -358,13 +358,16 @@ RenderLayer* RenderObject::enclosingLayer() const
     return nullptr;
 }
 
-bool RenderObject::scrollRectToVisible(const LayoutRect& rect, const ScrollAlignment& alignX, const ScrollAlignment& alignY)
+bool RenderObject::scrollRectToVisible(SelectionRevealMode revealMode, const LayoutRect& rect, const ScrollAlignment& alignX, const ScrollAlignment& alignY)
 {
+    if (revealMode == SelectionRevealMode::DoNotReveal)
+        return false;
+
     RenderLayer* enclosingLayer = this->enclosingLayer();
     if (!enclosingLayer)
         return false;
 
-    enclosingLayer->scrollRectToVisible(rect, alignX, alignY);
+    enclosingLayer->scrollRectToVisible(revealMode, rect, alignX, alignY);
     return true;
 }
 
@@ -565,7 +568,7 @@ void RenderObject::setLayerNeedsFullRepaintForPositionedMovementLayout()
 
 RenderBlock* RenderObject::containingBlock() const
 {
-    auto containingBlockForRenderer = [](const RenderObject& renderer)
+    auto containingBlockForRenderer = [](const RenderElement& renderer)
     {
         auto& style = renderer.style();
         if (style.position() == AbsolutePosition)
@@ -579,42 +582,11 @@ RenderBlock* RenderObject::containingBlock() const
         return containingBlockForObjectInFlow();
 
     if (!parent() && is<RenderScrollbarPart>(*this)) {
-        if (auto* renderer = downcast<RenderScrollbarPart>(*this).rendererOwningScrollbar())
-            return containingBlockForRenderer(*renderer);
+        if (auto* scrollbarPart = downcast<RenderScrollbarPart>(*this).rendererOwningScrollbar())
+            return containingBlockForRenderer(*scrollbarPart);
         return nullptr;
     }
-    return containingBlockForRenderer(*this);
-}
-
-RenderBlock* RenderObject::containingBlockForFixedPosition() const
-{
-    auto* renderer = parent();
-    while (renderer && !renderer->canContainFixedPositionObjects())
-        renderer = renderer->parent();
-
-    ASSERT(!renderer || !renderer->isAnonymousBlock());
-    return downcast<RenderBlock>(renderer);
-}
-
-RenderBlock* RenderObject::containingBlockForAbsolutePosition() const
-{
-    // RenderInlines forward their absolute positioned descendants to the containing block, so
-    // we need to start searching from 'this' and not from 'parent()'.
-    auto* renderer = isRenderInline() ? const_cast<RenderElement*>(downcast<RenderElement>(this)) : parent();
-    while (renderer && !renderer->canContainAbsolutelyPositionedObjects())
-        renderer = renderer->parent();
-
-    // For a relatively positioned inline, return its nearest non-anonymous containing block,
-    // not the inline itself, to avoid having a positioned objects list in all RenderInlines
-    // and use RenderBlock* as RenderElement::containingBlock's return type.
-    // Use RenderBlock::container() to obtain the inline.
-    if (renderer && !is<RenderBlock>(*renderer))
-        renderer = renderer->containingBlock();
-
-    while (renderer && renderer->isAnonymousBlock())
-        renderer = renderer->containingBlock();
-
-    return downcast<RenderBlock>(renderer);
+    return containingBlockForRenderer(downcast<RenderElement>(*this));
 }
 
 RenderBlock* RenderObject::containingBlockForObjectInFlow() const
@@ -975,7 +947,7 @@ LayoutRect RenderObject::computeRectForRepaint(const LayoutRect& rect, const Ren
 
     LayoutRect adjustedRect = rect;
     if (parent->hasOverflowClip()) {
-        downcast<RenderBox>(*parent).applyCachedClipAndScrollOffsetForRepaint(adjustedRect);
+        downcast<RenderBox>(*parent).applyCachedClipAndScrollPositionForRepaint(adjustedRect);
         if (adjustedRect.isEmpty())
             return adjustedRect;
     }
@@ -1203,7 +1175,7 @@ SelectionSubtreeRoot& RenderObject::selectionRoot() const
     return view();
 }
 
-void RenderObject::selectionStartEnd(int& spos, int& epos) const
+void RenderObject::selectionStartEnd(unsigned& spos, unsigned& epos) const
 {
     selectionRoot().selectionData().selectionStartEndPositions(spos, epos);
 }
@@ -1374,7 +1346,7 @@ LayoutSize RenderObject::offsetFromAncestorContainer(RenderElement& container) c
     return offset;
 }
 
-LayoutRect RenderObject::localCaretRect(InlineBox*, int, LayoutUnit* extraWidthToEndOfLine)
+LayoutRect RenderObject::localCaretRect(InlineBox*, unsigned, LayoutUnit* extraWidthToEndOfLine)
 {
     if (extraWidthToEndOfLine)
         *extraWidthToEndOfLine = 0;
@@ -1824,8 +1796,7 @@ void RenderObject::addAnnotatedRegions(Vector<AnnotatedRegionValue>& regions)
                                    h - styleRegion.offset.top().value() - styleRegion.offset.bottom().value());
         region.type = styleRegion.type;
 
-        region.clip = region.bounds;
-        computeAbsoluteRepaintRect(region.clip);
+        region.clip = computeAbsoluteRepaintRect(region.bounds);
         if (region.clip.height() < 0) {
             region.clip.setHeight(0);
             region.clip.setWidth(0);

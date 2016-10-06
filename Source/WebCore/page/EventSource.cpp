@@ -34,9 +34,11 @@
 #include "EventSource.h"
 
 #include "ContentSecurityPolicy.h"
+#include "EventNames.h"
 #include "ExceptionCode.h"
 #include "MessageEvent.h"
 #include "ResourceError.h"
+#include "ResourceRequest.h"
 #include "ResourceResponse.h"
 #include "ScriptExecutionContext.h"
 #include "SecurityOrigin.h"
@@ -101,20 +103,16 @@ void EventSource::connect()
     if (!m_lastEventId.isEmpty())
         request.setHTTPHeaderField(HTTPHeaderName::LastEventID, m_lastEventId);
 
-    SecurityOrigin& origin = *scriptExecutionContext()->securityOrigin();
-
     ThreadableLoaderOptions options;
-    options.setSendLoadCallbacks(SendCallbacks);
-    options.setSniffContent(DoNotSniffContent);
-    options.setAllowCredentials((origin.canRequest(m_url) || m_withCredentials) ? AllowStoredCredentials : DoNotAllowStoredCredentials);
-    options.setCredentialRequest(m_withCredentials ? ClientRequestedCredentials : ClientDidNotRequestCredentials);
+    options.sendLoadCallbacks = SendCallbacks;
+    options.credentials = m_withCredentials ? FetchOptions::Credentials::Include : FetchOptions::Credentials::SameOrigin;
     options.preflightPolicy = PreventPreflight;
-    options.crossOriginRequestPolicy = UseAccessControl;
-    options.setDataBufferingPolicy(DoNotBufferData);
-    options.securityOrigin = &origin;
+    options.mode = FetchOptions::Mode::Cors;
+    options.dataBufferingPolicy = DoNotBufferData;
     options.contentSecurityPolicyEnforcement = scriptExecutionContext()->shouldBypassMainWorldContentSecurityPolicy() ? ContentSecurityPolicyEnforcement::DoNotEnforce : ContentSecurityPolicyEnforcement::EnforceConnectSrcDirective;
 
-    m_loader = ThreadableLoader::create(scriptExecutionContext(), this, request, options);
+    ASSERT(scriptExecutionContext());
+    m_loader = ThreadableLoader::create(*scriptExecutionContext(), *this, WTFMove(request), options);
 
     // FIXME: Can we just use m_loader for this, null it out when it's no longer in flight, and eliminate the m_requestInFlight member?
     if (m_loader)
@@ -241,6 +239,15 @@ void EventSource::didFinishLoading(unsigned long, double)
 void EventSource::didFail(const ResourceError& error)
 {
     ASSERT(m_state != CLOSED);
+
+    if (error.isAccessControl()) {
+        String message = makeString("EventSource cannot load ", error.failingURL().string(), ". ", error.localizedDescription());
+        scriptExecutionContext()->addConsoleMessage(MessageSource::JS, MessageLevel::Error, message);
+
+        abortConnectionAttempt();
+        return;
+    }
+
     ASSERT(m_requestInFlight);
 
     if (error.isCancellation())
@@ -249,19 +256,6 @@ void EventSource::didFail(const ResourceError& error)
     // FIXME: Why don't we need to clear data members here as in didFinishLoading?
 
     networkRequestEnded();
-}
-
-void EventSource::didFailAccessControlCheck(const ResourceError& error)
-{
-    String message = makeString("EventSource cannot load ", error.failingURL().string(), ". ", error.localizedDescription());
-    scriptExecutionContext()->addConsoleMessage(MessageSource::JS, MessageLevel::Error, message);
-
-    abortConnectionAttempt();
-}
-
-void EventSource::didFailRedirectCheck()
-{
-    abortConnectionAttempt();
 }
 
 void EventSource::abortConnectionAttempt()

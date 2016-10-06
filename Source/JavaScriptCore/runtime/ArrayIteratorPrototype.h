@@ -26,6 +26,7 @@
 #ifndef ArrayIteratorPrototype_h
 #define ArrayIteratorPrototype_h
 
+#include "IterationKind.h"
 #include "JSObject.h"
 
 namespace JSC {

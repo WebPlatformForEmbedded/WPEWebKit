@@ -64,7 +64,7 @@ bool HTMLLabelElement::isFocusable() const
 
 LabelableElement* HTMLLabelElement::control()
 {
-    const AtomicString& controlId = fastGetAttribute(forAttr);
+    const AtomicString& controlId = attributeWithoutSynchronization(forAttr);
     if (controlId.isNull()) {
         // Search the children and descendants of the label element for a form element.
         // per http://dev.w3.org/html5/spec/Overview.html#the-label-element
@@ -93,7 +93,7 @@ void HTMLLabelElement::setActive(bool down, bool pause)
     HTMLElement::setActive(down, pause);
 
     // Also update our corresponding control.
-    if (HTMLElement* element = control())
+    if (auto* element = control())
         element->setActive(down, pause);
 }
 
@@ -106,7 +106,7 @@ void HTMLLabelElement::setHovered(bool over)
     HTMLElement::setHovered(over);
 
     // Also update our corresponding control.
-    if (HTMLElement* element = control())
+    if (auto* element = control())
         element->setHovered(over);
 }
 
@@ -115,7 +115,7 @@ void HTMLLabelElement::defaultEventHandler(Event* evt)
     static bool processingClick = false;
 
     if (evt->type() == eventNames().clickEvent && !processingClick) {
-        RefPtr<HTMLElement> element = control();
+        RefPtr<LabelableElement> element = control();
 
         // If we can't find a control or if the control received the click
         // event, then there's no need for us to do anything.
@@ -141,19 +141,20 @@ void HTMLLabelElement::defaultEventHandler(Event* evt)
 
 bool HTMLLabelElement::willRespondToMouseClickEvents()
 {
-    return (control() && control()->willRespondToMouseClickEvents()) || HTMLElement::willRespondToMouseClickEvents();
+    auto* element = control();
+    return (element && element->willRespondToMouseClickEvents()) || HTMLElement::willRespondToMouseClickEvents();
 }
 
 void HTMLLabelElement::focus(bool, FocusDirection direction)
 {
     // to match other browsers, always restore previous selection
-    if (HTMLElement* element = control())
+    if (auto* element = control())
         element->focus(true, direction);
 }
 
 void HTMLLabelElement::accessKeyAction(bool sendMouseEvents)
 {
-    if (HTMLElement* element = control())
+    if (auto* element = control())
         element->accessKeyAction(sendMouseEvents);
     else
         HTMLElement::accessKeyAction(sendMouseEvents);

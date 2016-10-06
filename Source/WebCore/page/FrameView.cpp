@@ -38,6 +38,7 @@
 #include "DebugPageOverlays.h"
 #include "DocumentMarkerController.h"
 #include "EventHandler.h"
+#include "EventNames.h"
 #include "FloatRect.h"
 #include "FocusController.h"
 #include "FrameLoader.h"
@@ -173,9 +174,10 @@ public:
         if (m_layoutRoot) {
             RenderView& view = m_layoutRoot->view();
             view.pushLayoutState(*m_layoutRoot);
-            m_disableLayoutState = view.shouldDisableLayoutStateForSubtree(m_layoutRoot);
-            if (m_disableLayoutState)
+            if (shouldDisableLayoutStateForSubtree()) {
                 view.disableLayoutState();
+                m_didDisableLayoutState = true;
+            }
         }
     }
 
@@ -184,14 +186,23 @@ public:
         if (m_layoutRoot) {
             RenderView& view = m_layoutRoot->view();
             view.popLayoutState(*m_layoutRoot);
-            if (m_disableLayoutState)
+            if (m_didDisableLayoutState)
                 view.enableLayoutState();
         }
     }
 
+    bool shouldDisableLayoutStateForSubtree()
+    {
+        for (auto* renderer = m_layoutRoot; renderer; renderer = renderer->container()) {
+            if (renderer->hasTransform() || renderer->hasReflection())
+                return true;
+        }
+        return false;
+    }
+    
 private:
     RenderElement* m_layoutRoot { nullptr };
-    bool m_disableLayoutState { false };
+    bool m_didDisableLayoutState { false };
 };
 
 FrameView::FrameView(Frame& frame)
@@ -318,6 +329,7 @@ void FrameView::reset()
     m_isVisuallyNonEmpty = false;
     m_firstVisuallyNonEmptyLayoutCallbackPending = true;
     m_viewportIsStable = true;
+    m_needsDeferredScrollbarsUpdate = false;
     m_maintainScrollPositionAnchor = nullptr;
 }
 
@@ -1125,6 +1137,23 @@ void FrameView::topContentInsetDidChange(float newTopContentInset)
     if (TiledBacking* tiledBacking = this->tiledBacking())
         tiledBacking->setTopContentInset(newTopContentInset);
 }
+
+void FrameView::topContentDirectionDidChange()
+{
+    m_needsDeferredScrollbarsUpdate = true;
+}
+
+void FrameView::handleDeferredScrollbarsUpdateAfterDirectionChange()
+{
+    if (!m_needsDeferredScrollbarsUpdate)
+        return;
+
+    m_needsDeferredScrollbarsUpdate = false;
+
+    ASSERT(m_layoutPhase == InPostLayerPositionsUpdatedAfterLayout);
+    updateScrollbars(scrollPosition());
+    positionScrollbarLayers();
+}
     
 bool FrameView::hasCompositedContent() const
 {
@@ -1477,6 +1506,8 @@ void FrameView::layout(bool allowSubtree)
     updateCanBlitOnScrollRecursively();
 
     handleDeferredScrollUpdateAfterContentSizeChange();
+
+    handleDeferredScrollbarsUpdateAfterDirectionChange();
 
     if (document.hasListenerType(Document::OVERFLOWCHANGED_LISTENER))
         updateOverflowStatus(layoutWidth() < contentsWidth(), layoutHeight() < contentsHeight());
@@ -2084,7 +2115,7 @@ bool FrameView::scrollToAnchor(const String& name)
     document.setCSSTarget(anchorElement);
 
     if (is<SVGDocument>(document)) {
-        if (auto* rootElement = downcast<SVGDocument>(document).rootElement()) {
+        if (auto* rootElement = SVGDocument::rootElement(document)) {
             rootElement->scrollToAnchor(name, anchorElement);
             if (!anchorElement)
                 return true;
@@ -2221,9 +2252,9 @@ void FrameView::scrollOffsetChangedViaPlatformWidgetImpl(const ScrollOffset& old
 void FrameView::scrollPositionChanged(const ScrollPosition& oldPosition, const ScrollPosition& newPosition)
 {
     Page* page = frame().page();
-    auto throttlingDelay = page ? page->chrome().client().eventThrottlingDelay() : std::chrono::milliseconds::zero();
+    auto throttlingDelay = page ? page->chrome().client().eventThrottlingDelay() : 0ms;
 
-    if (throttlingDelay == std::chrono::milliseconds::zero()) {
+    if (throttlingDelay == 0ms) {
         m_delayedScrollEventTimer.stop();
         sendScrollEvent();
     } else if (!m_delayedScrollEventTimer.isActive())
@@ -2716,7 +2747,9 @@ void FrameView::scheduleRelayoutOfSubtree(RenderElement& newRelayoutRoot)
     ASSERT(!renderView.documentBeingDestroyed());
     ASSERT(frame().view() == this);
 
-    if (renderView.needsLayout()) {
+    // When m_layoutRoot is already set, ignore the renderView's needsLayout bit
+    // since we need to resolve the conflict between the m_layoutRoot and newRelayoutRoot layouts.
+    if (renderView.needsLayout() && !m_layoutRoot) {
         m_layoutRoot = &newRelayoutRoot;
         convertSubtreeLayoutToFullLayout();
         return;
@@ -2724,7 +2757,7 @@ void FrameView::scheduleRelayoutOfSubtree(RenderElement& newRelayoutRoot)
 
     if (!layoutPending() && m_layoutSchedulingEnabled) {
         std::chrono::milliseconds delay = renderView.document().minimumLayoutDelay();
-        ASSERT(!newRelayoutRoot.container() || !newRelayoutRoot.container()->needsLayout());
+        ASSERT(!newRelayoutRoot.container() || is<RenderView>(newRelayoutRoot.container()) || !newRelayoutRoot.container()->needsLayout());
         m_layoutRoot = &newRelayoutRoot;
         InspectorInstrumentation::didInvalidateLayout(frame());
         m_delayedLayout = delay.count();
@@ -2745,7 +2778,7 @@ void FrameView::scheduleRelayoutOfSubtree(RenderElement& newRelayoutRoot)
     if (isObjectAncestorContainerOf(m_layoutRoot, &newRelayoutRoot)) {
         // Keep the current root.
         newRelayoutRoot.markContainingBlocksForLayout(ScheduleRelayout::No, m_layoutRoot);
-        ASSERT(!m_layoutRoot->container() || !m_layoutRoot->container()->needsLayout());
+        ASSERT(!m_layoutRoot->container() || is<RenderView>(m_layoutRoot->container()) || !m_layoutRoot->container()->needsLayout());
         return;
     }
 
@@ -2753,7 +2786,7 @@ void FrameView::scheduleRelayoutOfSubtree(RenderElement& newRelayoutRoot)
         // Re-root at newRelayoutRoot.
         m_layoutRoot->markContainingBlocksForLayout(ScheduleRelayout::No, &newRelayoutRoot);
         m_layoutRoot = &newRelayoutRoot;
-        ASSERT(!m_layoutRoot->container() || !m_layoutRoot->container()->needsLayout());
+        ASSERT(!m_layoutRoot->container() || is<RenderView>(m_layoutRoot->container()) || !m_layoutRoot->container()->needsLayout());
         InspectorInstrumentation::didInvalidateLayout(frame());
         return;
     }
@@ -2828,19 +2861,23 @@ void FrameView::unscheduleRelayout()
 }
 
 #if ENABLE(REQUEST_ANIMATION_FRAME)
-void FrameView::serviceScriptedAnimations(double monotonicAnimationStartTime)
+void FrameView::serviceScriptedAnimations()
 {
     for (auto* frame = m_frame.ptr(); frame; frame = frame->tree().traverseNext()) {
         frame->view()->serviceScrollAnimations();
         frame->animation().serviceAnimations();
     }
 
+    if (!frame().document() || !frame().document()->domWindow())
+        return;
+
     Vector<RefPtr<Document>> documents;
     for (auto* frame = m_frame.ptr(); frame; frame = frame->tree().traverseNext())
         documents.append(frame->document());
 
+    double timestamp = frame().document()->domWindow()->nowTimestamp();
     for (auto& document : documents)
-        document->serviceScriptedAnimations(monotonicAnimationStartTime);
+        document->serviceScriptedAnimations(timestamp);
 }
 #endif
 
@@ -3049,11 +3086,11 @@ void FrameView::scrollToAnchor()
     // Scroll nested layers and frames to reveal the anchor.
     // Align to the top and to the closest side (this matches other browsers).
     if (anchorNode->renderer()->style().isHorizontalWritingMode())
-        anchorNode->renderer()->scrollRectToVisible(rect, ScrollAlignment::alignToEdgeIfNeeded, ScrollAlignment::alignTopAlways);
+        anchorNode->renderer()->scrollRectToVisible(SelectionRevealMode::Reveal, rect, ScrollAlignment::alignToEdgeIfNeeded, ScrollAlignment::alignTopAlways);
     else if (anchorNode->renderer()->style().isFlippedBlocksWritingMode())
-        anchorNode->renderer()->scrollRectToVisible(rect, ScrollAlignment::alignRightAlways, ScrollAlignment::alignToEdgeIfNeeded);
+        anchorNode->renderer()->scrollRectToVisible(SelectionRevealMode::Reveal, rect, ScrollAlignment::alignRightAlways, ScrollAlignment::alignToEdgeIfNeeded);
     else
-        anchorNode->renderer()->scrollRectToVisible(rect, ScrollAlignment::alignLeftAlways, ScrollAlignment::alignToEdgeIfNeeded);
+        anchorNode->renderer()->scrollRectToVisible(SelectionRevealMode::Reveal, rect, ScrollAlignment::alignLeftAlways, ScrollAlignment::alignToEdgeIfNeeded);
 
     if (AXObjectCache* cache = frame().document()->existingAXObjectCache())
         cache->handleScrolledToAnchor(anchorNode.get());
@@ -3089,7 +3126,7 @@ void FrameView::updateEmbeddedObject(RenderEmbeddedObject& embeddedObject)
             return;
         }
         if (pluginElement.needsWidgetUpdate())
-            pluginElement.updateWidget(CreateAnyWidgetType);
+            pluginElement.updateWidget(CreatePlugins::Yes);
     } else
         ASSERT_NOT_REACHED();
 
@@ -3140,7 +3177,7 @@ void FrameView::flushAnyPendingPostLayoutTasks()
         updateEmbeddedObjectsTimerFired();
 }
 
-void FrameView::queuePostLayoutCallback(NoncopyableFunction<void()>&& callback)
+void FrameView::queuePostLayoutCallback(Function<void()>&& callback)
 {
     m_postLayoutCallbackQueue.append(WTFMove(callback));
 }
@@ -3153,7 +3190,7 @@ void FrameView::flushPostLayoutTasksQueue()
     if (!m_postLayoutCallbackQueue.size())
         return;
 
-    Vector<NoncopyableFunction<void()>> queue = WTFMove(m_postLayoutCallbackQueue);
+    Vector<Function<void()>> queue = WTFMove(m_postLayoutCallbackQueue);
     for (auto& task : queue)
         task();
 }
@@ -4812,7 +4849,7 @@ void FrameView::fireLayoutRelatedMilestonesIfNeeded()
     }
 
     if (milestonesAchieved && frame().isMainFrame())
-        frame().loader().didLayout(milestonesAchieved);
+        frame().loader().didReachLayoutMilestone(milestonesAchieved);
 }
 
 void FrameView::firePaintRelatedMilestonesIfNeeded()
@@ -4837,7 +4874,7 @@ void FrameView::firePaintRelatedMilestonesIfNeeded()
     m_milestonesPendingPaint = 0;
 
     if (milestonesAchieved)
-        page->mainFrame().loader().didLayout(milestonesAchieved);
+        page->mainFrame().loader().didReachLayoutMilestone(milestonesAchieved);
 }
 
 void FrameView::setVisualUpdatesAllowedByClient(bool visualUpdatesAllowed)

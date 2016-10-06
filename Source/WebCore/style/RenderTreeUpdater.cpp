@@ -34,13 +34,32 @@
 #include "FlowThreadController.h"
 #include "HTMLSlotElement.h"
 #include "InspectorInstrumentation.h"
+#include "NodeRenderStyle.h"
 #include "PseudoElement.h"
 #include "RenderFullScreen.h"
 #include "RenderNamedFlowThread.h"
 #include "StyleResolver.h"
 #include "StyleTreeResolver.h"
 
+#if PLATFORM(IOS)
+#include "WKContentObservation.h"
+#endif
+
 namespace WebCore {
+
+#if PLATFORM(IOS)
+class CheckForVisibilityChange {
+public:
+    CheckForVisibilityChange(const Element&);
+    ~CheckForVisibilityChange();
+
+private:
+    const Element& m_element;
+    EDisplay m_previousDisplay;
+    EVisibility m_previousVisibility;
+    EVisibility m_previousImplicitVisibility;
+};
+#endif // PLATFORM(IOS)
 
 RenderTreeUpdater::Parent::Parent(ContainerNode& root)
     : element(is<Document>(root) ? nullptr : downcast<Element>(&root))
@@ -92,6 +111,8 @@ void RenderTreeUpdater::commit(std::unique_ptr<Style::Update> styleUpdate)
 
     if (!m_document.shouldCreateRenderers() || !m_document.renderView())
         return;
+
+    Style::PostResolutionCallbackDisabler callbackDisabler(m_document);
 
     m_styleUpdate = WTFMove(styleUpdate);
 
@@ -240,7 +261,11 @@ static bool pseudoStyleCacheIsInvalid(RenderElement* renderer, RenderStyle* newS
 
 void RenderTreeUpdater::updateElementRenderer(Element& element, Style::ElementUpdate& update)
 {
-    bool shouldTearDownRenderers = update.change == Style::Detach && (element.renderer() || element.isNamedFlowContentNode());
+#if PLATFORM(IOS)
+    CheckForVisibilityChange checkForVisibilityChange(element);
+#endif
+
+    bool shouldTearDownRenderers = update.change == Style::Detach && (element.renderer() || element.isNamedFlowContentElement());
     if (shouldTearDownRenderers)
         tearDownRenderers(element, TeardownType::KeepHoverAndActive);
 
@@ -518,16 +543,16 @@ void RenderTreeUpdater::tearDownRenderers(Element& root, TeardownType teardownTy
     auto push = [&] (Element& element) {
         if (element.hasCustomStyleResolveCallbacks())
             element.willDetachRenderers();
-        if (teardownType != TeardownType::KeepHoverAndActive)
-            element.clearHoverAndActiveStatusBeforeDetachingRenderer();
-        element.clearStyleDerivedDataBeforeDetachingRenderer();
-
         teardownStack.append(&element);
     };
 
     auto pop = [&] (unsigned depth) {
         while (teardownStack.size() > depth) {
             auto& element = *teardownStack.takeLast();
+
+            if (teardownType != TeardownType::KeepHoverAndActive)
+                element.clearHoverAndActiveStatusBeforeDetachingRenderer();
+            element.clearStyleDerivedDataBeforeDetachingRenderer();
 
             if (auto* renderer = element.renderer()) {
                 renderer->destroyAndCleanupAnonymousWrappers();
@@ -563,5 +588,52 @@ void RenderTreeUpdater::tearDownRenderer(Text& text)
     renderer->destroyAndCleanupAnonymousWrappers();
     text.setRenderer(nullptr);
 }
+
+#if PLATFORM(IOS)
+static EVisibility elementImplicitVisibility(const Element& element)
+{
+    auto* renderer = element.renderer();
+    if (!renderer)
+        return VISIBLE;
+
+    auto& style = renderer->style();
+
+    auto width = style.width();
+    auto height = style.height();
+    if ((width.isFixed() && width.value() <= 0) || (height.isFixed() && height.value() <= 0))
+        return HIDDEN;
+
+    auto top = style.top();
+    auto left = style.left();
+    if (left.isFixed() && width.isFixed() && -left.value() >= width.value())
+        return HIDDEN;
+
+    if (top.isFixed() && height.isFixed() && -top.value() >= height.value())
+        return HIDDEN;
+    return VISIBLE;
+}
+
+CheckForVisibilityChange::CheckForVisibilityChange(const Element& element)
+    : m_element(element)
+    , m_previousDisplay(element.renderStyle() ? element.renderStyle()->display() : NONE)
+    , m_previousVisibility(element.renderStyle() ? element.renderStyle()->visibility() : HIDDEN)
+    , m_previousImplicitVisibility(WKObservingContentChanges() && WKObservedContentChange() != WKContentVisibilityChange ? elementImplicitVisibility(element) : VISIBLE)
+{
+}
+
+CheckForVisibilityChange::~CheckForVisibilityChange()
+{
+    if (!WKObservingContentChanges())
+        return;
+    if (m_element.isInUserAgentShadowTree())
+        return;
+    auto* style = m_element.renderStyle();
+    if (!style)
+        return;
+    if ((m_previousDisplay == NONE && style->display() != NONE) || (m_previousVisibility == HIDDEN && style->visibility() != HIDDEN)
+        || (m_previousImplicitVisibility == HIDDEN && elementImplicitVisibility(m_element) == VISIBLE))
+        WKSetObservedContentChange(WKContentVisibilityChange);
+}
+#endif
 
 }

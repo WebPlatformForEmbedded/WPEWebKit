@@ -48,6 +48,22 @@ WebInspector.DOMTreeElement = class DOMTreeElement extends WebInspector.TreeElem
         node.addEventListener(WebInspector.DOMNode.Event.EnabledPseudoClassesChanged, this._nodePseudoClassesDidChange, this);
     }
 
+    // Static
+
+    static shadowRootTypeDisplayName(type)
+    {
+        switch (type) {
+        case WebInspector.DOMNode.ShadowRootType.UserAgent:
+            return WebInspector.UIString("User Agent");
+        case WebInspector.DOMNode.ShadowRootType.Open:
+            return WebInspector.UIString("Open");
+        case WebInspector.DOMNode.ShadowRootType.Closed:
+            return WebInspector.UIString("Closed");
+        }
+    }
+
+    // Public
+
     isCloseTag()
     {
         return this._elementCloseTag;
@@ -159,9 +175,11 @@ WebInspector.DOMTreeElement = class DOMTreeElement extends WebInspector.TreeElem
 
     get editable()
     {
-        var node = this.representedObject;
-        if (node.isInShadowTree())
+        let node = this.representedObject;
+
+        if (node.isShadowRoot() || node.isInUserAgentShadowTree())
             return false;
+
         if (node.isPseudoElement())
             return false;
 
@@ -599,7 +617,10 @@ WebInspector.DOMTreeElement = class DOMTreeElement extends WebInspector.TreeElem
         if (this.treeOutline.selectedDOMNode() !== this.representedObject)
             return false;
 
-        if (this.representedObject.isInShadowTree() || this.representedObject.isPseudoElement())
+        if (this.representedObject.isShadowRoot() || this.representedObject.isInUserAgentShadowTree())
+            return false;
+
+        if (this.representedObject.isPseudoElement())
             return false;
 
         if (this.representedObject.nodeType() !== Node.ELEMENT_NODE && this.representedObject.nodeType() !== Node.TEXT_NODE)
@@ -623,7 +644,7 @@ WebInspector.DOMTreeElement = class DOMTreeElement extends WebInspector.TreeElem
     _populateTagContextMenu(contextMenu, event)
     {
         var node = this.representedObject;
-        if (!node.isInShadowTree()) {
+        if (!node.isInUserAgentShadowTree()) {
             var attribute = event.target.enclosingNodeOrSelfWithClass("html-attribute");
 
             // Add attribute-related actions.
@@ -1195,8 +1216,8 @@ WebInspector.DOMTreeElement = class DOMTreeElement extends WebInspector.TreeElem
         switch (node.nodeType()) {
             case Node.DOCUMENT_FRAGMENT_NODE:
                 var fragmentElement = info.titleDOM.createChild("span", "html-fragment");
-                if (node.isInShadowTree()) {
-                    fragmentElement.textContent = WebInspector.UIString("Shadow Content");
+                if (node.shadowRootType()) {
+                    fragmentElement.textContent = WebInspector.UIString("Shadow Content (%s)").format(WebInspector.DOMTreeElement.shadowRootTypeDisplayName(node.shadowRootType()));
                     fragmentElement.classList.add("shadow");
                 } else if (node.parentNode && node.parentNode.templateContent() === node)
                     fragmentElement.textContent = WebInspector.UIString("Template Content");
@@ -1289,9 +1310,6 @@ WebInspector.DOMTreeElement = class DOMTreeElement extends WebInspector.TreeElem
                         docTypeElement.append(" \"" + node.systemId + "\"");
                 } else if (node.systemId)
                     docTypeElement.append(" SYSTEM \"" + node.systemId + "\"");
-
-                if (node.internalSubset)
-                    docTypeElement.append(" [" + node.internalSubset + "]");
 
                 docTypeElement.append(">");
                 break;

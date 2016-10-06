@@ -36,6 +36,7 @@
 #include "MessagePort.h"
 #include "NoEventDispatchAssertion.h"
 #include "PublicURLManager.h"
+#include "ResourceRequest.h"
 #include "ScriptState.h"
 #include "Settings.h"
 #include "WorkerGlobalScope.h"
@@ -175,7 +176,7 @@ void ScriptExecutionContext::destroyedMessagePort(MessagePort& messagePort)
     m_messagePorts.remove(&messagePort);
 }
 
-void ScriptExecutionContext::didLoadResourceSynchronously(const ResourceRequest&)
+void ScriptExecutionContext::didLoadResourceSynchronously()
 {
 }
 

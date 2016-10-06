@@ -31,7 +31,6 @@
 // #include "PlugInsResourcesData.cpp"
 // #include "UserAgentStyleSheetsData.cpp"
 
-#include "ExceptionCodeDescription.h"
 #include "HTMLElementFactory.cpp"
 #if ENABLE(WEBGL)
 #include "JSANGLEInstancedArrays.cpp"
@@ -99,7 +98,7 @@
 #include "JSWebGLRenderingContextBase.cpp"
 #include "JSWebGLSampler.cpp"
 #include "JSWebGLShader.cpp"
-#include "JSWebGLShaderPrecisionFormat.cpp" 
+#include "JSWebGLShaderPrecisionFormat.cpp"
 #include "JSWebGLSync.cpp"
 #include "JSWebGLTexture.cpp"
 #include "JSWebGLTransformFeedback.cpp"
@@ -138,6 +137,9 @@
 #include "JSCSSUnknownRule.cpp"
 #include "JSCSSValue.cpp"
 #include "JSCSSValueList.cpp"
+#if ENABLE(CUSTOM_ELEMENTS)
+#include "JSCustomElementRegistry.cpp"
+#endif
 #include "JSCustomEvent.cpp"
 #include "JSDatabase.cpp"
 #include "JSDatabaseCallback.cpp"
@@ -207,6 +209,7 @@
 #endif
 #include "JSGeolocation.cpp"
 #include "JSGeoposition.cpp"
+#include "JSGlobalCrypto.cpp"
 #include "JSGlobalEventHandlers.cpp"
 #include "JSHashChangeEvent.cpp"
 #include "JSHistory.cpp"
@@ -283,9 +286,7 @@
 #include "JSHTMLTableCaptionElement.cpp"
 #include "JSHTMLTableCellElement.cpp"
 #include "JSHTMLTableColElement.cpp"
-#include "JSHTMLTableDataCellElement.cpp"
 #include "JSHTMLTableElement.cpp"
-#include "JSHTMLTableHeaderCellElement.cpp"
 #include "JSHTMLTableRowElement.cpp"
 #include "JSHTMLTableSectionElement.cpp"
 #include "JSHTMLTemplateElement.cpp"
@@ -380,7 +381,6 @@
 #include "JSParentNode.cpp"
 #include "JSPerformance.cpp"
 #include "JSPerformanceEntry.cpp"
-#include "JSPerformanceEntryList.cpp"
 #include "JSPerformanceMark.cpp"
 #include "JSPerformanceMeasure.cpp"
 #include "JSPerformanceNavigation.cpp"
@@ -397,8 +397,8 @@
 #include "JSRange.cpp"
 #if ENABLE(STREAMS_API)
 #include "JSReadableStream.cpp"
-#include "JSReadableStreamController.cpp"
-#include "JSReadableStreamReader.cpp"
+#include "JSReadableStreamDefaultController.cpp"
+#include "JSReadableStreamDefaultReader.cpp"
 #include "JSWritableStream.cpp"
 #endif
 #include "JSRect.cpp"
@@ -421,9 +421,7 @@
 #include "JSRTCTrackEvent.cpp"
 #include "JSScreen.cpp"
 #include "JSScriptProcessorNode.cpp"
-#if ENABLE(CSP_NEXT)
 #include "JSSecurityPolicyViolationEvent.cpp"
-#endif
 #include "JSSourceBuffer.cpp"
 #include "JSSourceBufferList.cpp"
 #include "JSSourceInfo.cpp"
@@ -431,7 +429,6 @@
 #include "JSSpeechSynthesisEvent.cpp"
 #include "JSSpeechSynthesisUtterance.cpp"
 #include "JSSpeechSynthesisVoice.cpp"
-#include "JSSubtleCrypto.cpp"
 #include "JSSQLError.cpp"
 #include "JSSQLException.cpp"
 #include "JSSQLResultSet.cpp"
@@ -650,6 +647,7 @@
 #include "JSWebKitNamespace.cpp"
 #include "JSWebKitPlaybackTargetAvailabilityEvent.cpp"
 #include "JSWebKitPoint.cpp"
+#include "JSWebKitSubtleCrypto.cpp"
 #include "JSWebKitTransitionEvent.cpp"
 #include "JSWebSocket.cpp"
 #include "JSWheelEvent.cpp"

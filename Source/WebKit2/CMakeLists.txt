@@ -21,6 +21,7 @@ set(WebKit2_INCLUDE_DIRECTORIES
     "${WEBKIT2_DIR}/Shared/Databases"
     "${WEBKIT2_DIR}/Shared/Databases/IndexedDB"
     "${WEBKIT2_DIR}/Shared/FileAPI"
+    "${WEBKIT2_DIR}/Shared/Gamepad"
     "${WEBKIT2_DIR}/Shared/Plugins"
     "${WEBKIT2_DIR}/Shared/Plugins/Netscape"
     "${WEBKIT2_DIR}/Shared/Plugins/Netscape/x11"
@@ -29,10 +30,12 @@ set(WebKit2_INCLUDE_DIRECTORIES
     "${WEBKIT2_DIR}/UIProcess/API"
     "${WEBKIT2_DIR}/UIProcess/API/C"
     "${WEBKIT2_DIR}/UIProcess/API/cpp"
+    "${WEBKIT2_DIR}/UIProcess/ApplePay"
     "${WEBKIT2_DIR}/UIProcess/Authentication"
     "${WEBKIT2_DIR}/UIProcess/Automation"
     "${WEBKIT2_DIR}/UIProcess/Databases"
     "${WEBKIT2_DIR}/UIProcess/Downloads"
+    "${WEBKIT2_DIR}/UIProcess/Gamepad"
     "${WEBKIT2_DIR}/UIProcess/InspectorServer"
     "${WEBKIT2_DIR}/UIProcess/Launcher"
     "${WEBKIT2_DIR}/UIProcess/Network"
@@ -43,6 +46,7 @@ set(WebKit2_INCLUDE_DIRECTORIES
     "${WEBKIT2_DIR}/UIProcess/UserContent"
     "${WEBKIT2_DIR}/UIProcess/WebsiteData"
     "${WEBKIT2_DIR}/WebProcess"
+    "${WEBKIT2_DIR}/WebProcess/ApplePay"
     "${WEBKIT2_DIR}/WebProcess/ApplicationCache"
     "${WEBKIT2_DIR}/WebProcess/Automation"
     "${WEBKIT2_DIR}/WebProcess/Battery"
@@ -51,6 +55,7 @@ set(WebKit2_INCLUDE_DIRECTORIES
     "${WEBKIT2_DIR}/WebProcess/Databases/IndexedDB"
     "${WEBKIT2_DIR}/WebProcess/FileAPI"
     "${WEBKIT2_DIR}/WebProcess/FullScreen"
+    "${WEBKIT2_DIR}/WebProcess/Gamepad"
     "${WEBKIT2_DIR}/WebProcess/Geolocation"
     "${WEBKIT2_DIR}/WebProcess/IconDatabase"
     "${WEBKIT2_DIR}/WebProcess/InjectedBundle"
@@ -131,6 +136,7 @@ set(WebKit2_INCLUDE_DIRECTORIES
     "${WEBCORE_DIR}/svg"
     "${WEBCORE_DIR}/svg/graphics"
     "${WEBCORE_DIR}/svg/properties"
+    "${WEBCORE_DIR}/workers"
     "${JAVASCRIPTCORE_DIR}"
     "${JAVASCRIPTCORE_DIR}/ForwardingHeaders"
     "${JAVASCRIPTCORE_DIR}/API"
@@ -178,7 +184,6 @@ set(WebKit2_SOURCES
 
     NetworkProcess/NetworkConnectionToWebProcess.cpp
     NetworkProcess/NetworkLoad.cpp
-    NetworkProcess/NetworkLoadParameters.cpp
     NetworkProcess/NetworkProcess.cpp
     NetworkProcess/NetworkProcessPlatformStrategies.cpp
     NetworkProcess/NetworkResourceLoader.cpp
@@ -204,20 +209,17 @@ set(WebKit2_SOURCES
     NetworkProcess/NetworkResourceLoadParameters.cpp
 
     NetworkProcess/Downloads/Download.cpp
-    NetworkProcess/Downloads/DownloadAuthenticationClient.cpp
     NetworkProcess/Downloads/DownloadManager.cpp
 
     Platform/Logging.cpp
     Platform/Module.cpp
 
     Platform/IPC/ArgumentCoders.cpp
-    Platform/IPC/ArgumentDecoder.cpp
-    Platform/IPC/ArgumentEncoder.cpp
     Platform/IPC/Attachment.cpp
     Platform/IPC/Connection.cpp
     Platform/IPC/DataReference.cpp
-    Platform/IPC/MessageDecoder.cpp
-    Platform/IPC/MessageEncoder.cpp
+    Platform/IPC/Decoder.cpp
+    Platform/IPC/Encoder.cpp
     Platform/IPC/MessageReceiverMap.cpp
     Platform/IPC/MessageSender.cpp
     Platform/IPC/StringReference.cpp
@@ -236,6 +238,7 @@ set(WebKit2_SOURCES
     Shared/EditorState.cpp
     Shared/FontInfo.cpp
     Shared/LayerTreeContext.cpp
+    Shared/LoadParameters.cpp
     Shared/NavigationActionData.cpp
     Shared/PlatformPopupMenuData.cpp
     Shared/PrintInfo.cpp
@@ -321,6 +324,9 @@ set(WebKit2_SOURCES
     Shared/Databases/DatabaseProcessCreationParameters.cpp
 
     Shared/Databases/IndexedDB/IDBUtilities.cpp
+    Shared/Databases/IndexedDB/WebIDBResult.cpp
+
+    Shared/Gamepad/GamepadData.cpp
 
     Shared/Plugins/NPIdentifierData.cpp
     Shared/Plugins/NPObjectMessageReceiver.cpp
@@ -475,6 +481,9 @@ set(WebKit2_SOURCES
     UIProcess/Downloads/DownloadProxy.cpp
     UIProcess/Downloads/DownloadProxyMap.cpp
 
+    UIProcess/Gamepad/UIGamepad.cpp
+    UIProcess/Gamepad/UIGamepadProvider.cpp
+
     UIProcess/InspectorServer/HTTPRequest.cpp
     UIProcess/InspectorServer/WebInspectorServer.cpp
     UIProcess/InspectorServer/WebSocketServer.cpp
@@ -521,6 +530,9 @@ set(WebKit2_SOURCES
     WebProcess/FileAPI/BlobRegistryProxy.cpp
 
     WebProcess/FullScreen/WebFullScreenManager.cpp
+
+    WebProcess/Gamepad/WebGamepad.cpp
+    WebProcess/Gamepad/WebGamepadProvider.cpp
 
     WebProcess/Geolocation/GeolocationPermissionRequestManager.cpp
     WebProcess/Geolocation/WebGeolocationManager.cpp
@@ -570,6 +582,7 @@ set(WebKit2_SOURCES
     WebProcess/Network/NetworkProcessConnection.cpp
     WebProcess/Network/WebLoaderStrategy.cpp
     WebProcess/Network/WebResourceLoader.cpp
+    WebProcess/Network/WebSocketProvider.cpp
 
     WebProcess/Notifications/NotificationPermissionRequestManager.cpp
     WebProcess/Notifications/WebNotificationManager.cpp
@@ -579,6 +592,7 @@ set(WebKit2_SOURCES
     WebProcess/Plugins/PluginProcessConnectionManager.cpp
     WebProcess/Plugins/PluginProxy.cpp
     WebProcess/Plugins/PluginView.cpp
+    WebProcess/Plugins/WebPluginInfoProvider.cpp
 
     WebProcess/Plugins/Netscape/JSNPMethod.cpp
     WebProcess/Plugins/Netscape/JSNPObject.cpp

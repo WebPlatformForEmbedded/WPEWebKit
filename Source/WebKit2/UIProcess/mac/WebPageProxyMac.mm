@@ -55,7 +55,6 @@
 #import <WebCore/TextAlternativeWithRange.h>
 #import <WebCore/UserAgent.h>
 #import <mach-o/dyld.h>
-#import <wtf/NeverDestroyed.h>
 #import <wtf/text/StringConcatenate.h>
 
 #define MESSAGE_CHECK(assertion) MESSAGE_CHECK_BASE(assertion, process().connection())
@@ -271,8 +270,8 @@ void WebPageProxy::replaceSelectionWithPasteboardData(const Vector<String>& type
 #if ENABLE(DRAG_SUPPORT)
 void WebPageProxy::setDragImage(const WebCore::IntPoint& clientPosition, const ShareableBitmap::Handle& dragImageHandle, bool isLinkDrag)
 {
-    if (RefPtr<ShareableBitmap> dragImage = ShareableBitmap::create(dragImageHandle))
-        m_pageClient.setDragImage(clientPosition, dragImage.release(), isLinkDrag);
+    if (auto dragImage = ShareableBitmap::create(dragImageHandle))
+        m_pageClient.setDragImage(clientPosition, WTFMove(dragImage), isLinkDrag);
 
     process().send(Messages::WebPage::DidStartDrag(), m_pageID);
 }

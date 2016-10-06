@@ -47,6 +47,9 @@ TextureMapperPlatformLayerProxy::TextureMapperPlatformLayerProxy()
     , m_targetLayer(nullptr)
     , m_releaseUnusedBuffersTimer(RunLoop::current(), this, &TextureMapperPlatformLayerProxy::releaseUnusedBuffersTimerFired)
 {
+#if PLATFORM(WPE)
+    m_releaseUnusedBuffersTimer.setPriority(G_PRIORITY_HIGH + 30);
+#endif
 }
 
 TextureMapperPlatformLayerProxy::~TextureMapperPlatformLayerProxy()
@@ -82,6 +85,8 @@ void TextureMapperPlatformLayerProxy::invalidate()
     LockHolder locker(m_lock);
     m_compositor = nullptr;
     m_targetLayer = nullptr;
+    m_compositorThreadUpdateTimer = nullptr;
+    m_compositorThreadUpdateFunction = nullptr;
 }
 
 bool TextureMapperPlatformLayerProxy::isActive()
@@ -158,43 +163,45 @@ void TextureMapperPlatformLayerProxy::swapBuffer()
 
         m_currentBuffer = WTFMove(m_pendingBuffer);
         m_targetLayer->setContentsLayer(m_currentBuffer.get());
-    }
 
-    if (prevBuffer && prevBuffer->hasManagedTexture())
-        m_usedBuffers.append(WTFMove(prevBuffer));
+        if (prevBuffer && prevBuffer->hasManagedTexture())
+            m_usedBuffers.append(WTFMove(prevBuffer));
+    }
 }
 
 void TextureMapperPlatformLayerProxy::dropCurrentBufferWhilePreservingTexture()
 {
-    {
-        LockHolder locker(m_lock);
-        if (m_pendingBuffer) {
-            if (m_pendingBuffer->hasManagedTexture())
-                m_usedBuffers.append(WTFMove(m_pendingBuffer));
-            else
-                m_pendingBuffer.reset();
-        }
-    }
+    ASSERT(m_lock.isHeld());
 
-    scheduleUpdateOnCompositorThread([this, protectedThis = Ref<TextureMapperPlatformLayerProxy>(*this)] {
+    if (m_pendingBuffer && m_pendingBuffer->hasManagedTexture())
+        m_usedBuffers.append(WTFMove(m_pendingBuffer));
 
-        if (!m_compositor || !m_targetLayer)
-            return;
+    if (!m_compositorThreadUpdateTimer)
+        return;
 
-        TextureMapperGL* texmapGL = m_compositor->texmapGL();
-        if (!texmapGL || !m_currentBuffer)
-            return;
+    m_compositorThreadUpdateFunction =
+        [this] {
+            ASSERT(m_lock.isHeld());
 
-        {
-            LockHolder locker(m_lock);
+            if (!m_compositor || !m_targetLayer)
+                return;
+
+            TextureMapperGL* texmapGL = m_compositor->texmapGL();
+            if (!texmapGL || !m_currentBuffer)
+                return;
+
             m_pendingBuffer = m_currentBuffer->clone(*texmapGL);
-        }
+            auto prevBuffer = WTFMove(m_currentBuffer);
+            m_currentBuffer = WTFMove(m_pendingBuffer);
+            m_targetLayer->setContentsLayer(m_currentBuffer.get());
 
-        swapBuffer();
-    });
+            if (prevBuffer->hasManagedTexture())
+                m_usedBuffers.append(WTFMove(prevBuffer));
+        };
+    m_compositorThreadUpdateTimer->startOneShot(0);
 }
 
-bool TextureMapperPlatformLayerProxy::scheduleUpdateOnCompositorThread(NoncopyableFunction<void()>&& updateFunction)
+bool TextureMapperPlatformLayerProxy::scheduleUpdateOnCompositorThread(Function<void()>&& updateFunction)
 {
     LockHolder locker(m_lock);
     if (!m_compositorThreadUpdateTimer)
@@ -207,7 +214,7 @@ bool TextureMapperPlatformLayerProxy::scheduleUpdateOnCompositorThread(Noncopyab
 
 void TextureMapperPlatformLayerProxy::compositorThreadUpdateTimerFired()
 {
-    NoncopyableFunction<void()> updateFunction;
+    Function<void()> updateFunction;
     {
         LockHolder locker(m_lock);
         if (!m_compositorThreadUpdateFunction)

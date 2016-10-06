@@ -88,7 +88,7 @@ ALWAYS_INLINE JSValue JIT::getConstantOperand(int src)
     return m_codeBlock->getConstant(src);
 }
 
-ALWAYS_INLINE void JIT::emitPutIntToCallFrameHeader(RegisterID from, JSStack::CallFrameHeaderEntry entry)
+ALWAYS_INLINE void JIT::emitPutIntToCallFrameHeader(RegisterID from, int entry)
 {
 #if USE(JSVALUE32_64)
     store32(TrustedImm32(Int32Tag), intTagFor(entry, callFrameRegister));
@@ -142,7 +142,7 @@ ALWAYS_INLINE void JIT::updateTopCallFrame()
 #else
     uint32_t locationBits = CallSiteIndex(m_bytecodeOffset + 1).bits();
 #endif
-    store32(TrustedImm32(locationBits), intTagFor(JSStack::ArgumentCount));
+    store32(TrustedImm32(locationBits), intTagFor(CallFrameSlot::argumentCount));
     
     // FIXME: It's not clear that this is needed. JITOperations tend to update the top call frame on
     // the C++ side.
@@ -416,9 +416,33 @@ ALWAYS_INLINE MacroAssembler::Call JIT::callOperation(V_JITOperation_ECIZC opera
     return appendCallWithExceptionCheck(operation);
 }
 
-inline MacroAssembler::Call JIT::callOperation(J_JITOperation_EJJRp operation, JSValueRegs result, JSValueRegs arg1, JSValueRegs arg2, ResultProfile* resultProfile)
+ALWAYS_INLINE MacroAssembler::Call JIT::callOperation(J_JITOperation_EJJ operation, JSValueRegs result, JSValueRegs arg1, JSValueRegs arg2)
 {
-    setupArgumentsWithExecState(arg1, arg2, TrustedImmPtr(resultProfile));
+    setupArgumentsWithExecState(arg1, arg2);
+    Call call = appendCallWithExceptionCheck(operation);
+    setupResults(result);
+    return call;
+}
+
+ALWAYS_INLINE MacroAssembler::Call JIT::callOperation(J_JITOperation_EJJArp operation, JSValueRegs result, JSValueRegs arg1, JSValueRegs arg2, ArithProfile* arithProfile)
+{
+    setupArgumentsWithExecState(arg1, arg2, TrustedImmPtr(arithProfile));
+    Call call = appendCallWithExceptionCheck(operation);
+    setupResults(result);
+    return call;
+}
+
+ALWAYS_INLINE MacroAssembler::Call JIT::callOperation(J_JITOperation_EJJArpMic operation, JSValueRegs result, JSValueRegs arg1, JSValueRegs arg2, ArithProfile* arithProfile, TrustedImmPtr mathIC)
+{
+    setupArgumentsWithExecState(arg1, arg2, TrustedImmPtr(arithProfile), mathIC);
+    Call call = appendCallWithExceptionCheck(operation);
+    setupResults(result);
+    return call;
+}
+
+ALWAYS_INLINE MacroAssembler::Call JIT::callOperation(J_JITOperation_EJJMic operation, JSValueRegs result, JSValueRegs arg1, JSValueRegs arg2, TrustedImmPtr mathIC)
+{
+    setupArgumentsWithExecState(arg1, arg2, mathIC);
     Call call = appendCallWithExceptionCheck(operation);
     setupResults(result);
     return call;
@@ -917,27 +941,6 @@ ALWAYS_INLINE bool JIT::isOperandConstantChar(int src)
     return m_codeBlock->isConstantRegisterIndex(src) && getConstantOperand(src).isString() && asString(getConstantOperand(src).asCell())->length() == 1;
 }
 
-template<typename StructureType>
-inline void JIT::emitAllocateJSObject(RegisterID allocator, StructureType structure, RegisterID result, RegisterID scratch)
-{
-    if (Options::forceGCSlowPaths())
-        addSlowCase(jump());
-    else {
-        loadPtr(Address(allocator, MarkedAllocator::offsetOfFreeListHead()), result);
-        addSlowCase(branchTestPtr(Zero, result));
-    }
-
-    // remove the object from the free list
-    loadPtr(Address(result), scratch);
-    storePtr(scratch, Address(allocator, MarkedAllocator::offsetOfFreeListHead()));
-
-    // initialize the object's property storage pointer
-    storePtr(TrustedImmPtr(0), Address(result, JSObject::butterflyOffset()));
-
-    // initialize the object's structure
-    emitStoreStructureWithTypeInfo(structure, result, scratch);
-}
-
 inline void JIT::emitValueProfilingSite(ValueProfile* valueProfile)
 {
     ASSERT(shouldEmitProfiling());
@@ -1353,6 +1356,12 @@ ALWAYS_INLINE void JIT::emitJumpSlowCaseIfNotNumber(RegisterID reg)
 ALWAYS_INLINE void JIT::emitTagBool(RegisterID reg)
 {
     or32(TrustedImm32(static_cast<int32_t>(ValueFalse)), reg);
+}
+
+inline Instruction* JIT::copiedInstruction(Instruction* inst)
+{
+    ASSERT(inst >= m_codeBlock->instructions().begin() && inst < m_codeBlock->instructions().end());
+    return m_instructions.begin() + (inst - m_codeBlock->instructions().begin());
 }
 
 #endif // USE(JSVALUE32_64)

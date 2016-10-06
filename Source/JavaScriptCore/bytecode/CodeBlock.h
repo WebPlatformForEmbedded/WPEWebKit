@@ -51,6 +51,7 @@
 #include "HandlerInfo.h"
 #include "Instruction.h"
 #include "JITCode.h"
+#include "JITMathICForwards.h"
 #include "JITWriteBarrier.h"
 #include "JSCell.h"
 #include "JSGlobalObject.h"
@@ -79,6 +80,7 @@
 namespace JSC {
 
 class ExecState;
+class JITAddGenerator;
 class JSModuleEnvironment;
 class LLIntOffsetsExtractor;
 class PCToCodeOriginMap;
@@ -87,6 +89,8 @@ class StructureStubInfo;
 class TypeLocation;
 
 enum class AccessType : int8_t;
+
+struct ArithProfile;
 
 typedef HashMap<CodeOrigin, StructureStubInfo*, CodeOriginApproximateHash> StubInfoMap;
 
@@ -141,7 +145,7 @@ public:
     CString sourceCodeForTools() const; // Not quite the actual source we parsed; this will do things like prefix the source for a function with a reified signature.
     CString sourceCodeOnOneLine() const; // As sourceCodeForTools(), but replaces all whitespace runs with a single space.
     void dumpAssumingJITType(PrintStream&, JITCode::JITType) const;
-    void dump(PrintStream&) const;
+    JS_EXPORT_PRIVATE void dump(PrintStream&) const;
 
     int numParameters() const { return m_numParameters; }
     void setNumParameters(int newValue);
@@ -201,6 +205,8 @@ public:
     void printStructures(PrintStream&, const Instruction*);
     void printStructure(PrintStream&, const char* name, const Instruction*, int operand);
 
+    void dumpMathICStats();
+
     bool isStrictMode() const { return m_isStrictMode; }
     ECMAMode ecmaMode() const { return isStrictMode() ? StrictMode : NotStrictMode; }
 
@@ -245,6 +251,9 @@ public:
     
 #if ENABLE(JIT)
     StructureStubInfo* addStubInfo(AccessType);
+    JITAddIC* addJITAddIC();
+    JITMulIC* addJITMulIC();
+    JITSubIC* addJITSubIC();
     Bag<StructureStubInfo>::iterator stubInfoBegin() { return m_stubInfos.begin(); }
     Bag<StructureStubInfo>::iterator stubInfoEnd() { return m_stubInfos.end(); }
     
@@ -262,6 +271,13 @@ public:
     // that there had been inlining. Chances are if you want to use this, you're really
     // looking for a CallLinkInfoMap to amortize the cost of calling this.
     CallLinkInfo* getCallLinkInfoForBytecodeIndex(unsigned bytecodeIndex);
+    
+    // We call this when we want to reattempt compiling something with the baseline JIT. Ideally
+    // the baseline JIT would not add data to CodeBlock, but instead it would put its data into
+    // a newly created JITCode, which could be thrown away if we bail on JIT compilation. Then we
+    // would be able to get rid of this silly function.
+    // FIXME: https://bugs.webkit.org/show_bug.cgi?id=159061
+    void resetJITData();
 #endif // ENABLE(JIT)
 
     void unlinkIncomingCalls();
@@ -412,11 +428,7 @@ public:
         return valueProfile(index - numberOfArgumentValueProfiles());
     }
 
-    RareCaseProfile* addRareCaseProfile(int bytecodeOffset)
-    {
-        m_rareCaseProfiles.append(RareCaseProfile(bytecodeOffset));
-        return &m_rareCaseProfiles.last();
-    }
+    RareCaseProfile* addRareCaseProfile(int bytecodeOffset);
     unsigned numberOfRareCaseProfiles() { return m_rareCaseProfiles.size(); }
     RareCaseProfile* rareCaseProfileForBytecodeOffset(int bytecodeOffset);
     unsigned rareCaseProfileCountForBytecodeOffset(int bytecodeOffset);
@@ -437,36 +449,18 @@ public:
         return value >= Options::couldTakeSlowCaseMinimumCount();
     }
 
-    ResultProfile* ensureResultProfile(int bytecodeOffset);
-    ResultProfile* ensureResultProfile(const ConcurrentJITLocker&, int bytecodeOffset);
-    unsigned numberOfResultProfiles() { return m_resultProfiles.size(); }
-    ResultProfile* resultProfileForBytecodeOffset(int bytecodeOffset);
-    ResultProfile* resultProfileForBytecodeOffset(const ConcurrentJITLocker&, int bytecodeOffset);
+    ArithProfile* arithProfileForBytecodeOffset(int bytecodeOffset);
+    ArithProfile& arithProfileForPC(Instruction*);
 
-    unsigned specialFastCaseProfileCountForBytecodeOffset(int bytecodeOffset)
-    {
-        ResultProfile* profile = resultProfileForBytecodeOffset(bytecodeOffset);
-        if (!profile)
-            return 0;
-        return profile->specialFastPathCount();
-    }
-
-    bool couldTakeSpecialFastCase(int bytecodeOffset)
-    {
-        if (!hasBaselineJITProfiling())
-            return false;
-        unsigned specialFastCaseCount = specialFastCaseProfileCountForBytecodeOffset(bytecodeOffset);
-        return specialFastCaseCount >= Options::couldTakeSlowCaseMinimumCount();
-    }
+    bool couldTakeSpecialFastCase(int bytecodeOffset);
 
     unsigned numberOfArrayProfiles() const { return m_arrayProfiles.size(); }
     const ArrayProfileVector& arrayProfiles() { return m_arrayProfiles; }
-    ArrayProfile* addArrayProfile(unsigned bytecodeOffset)
-    {
-        m_arrayProfiles.append(ArrayProfile(bytecodeOffset));
-        return &m_arrayProfiles.last();
-    }
+    ArrayProfile* addArrayProfile(const ConcurrentJITLocker&, unsigned bytecodeOffset);
+    ArrayProfile* addArrayProfile(unsigned bytecodeOffset);
+    ArrayProfile* getArrayProfile(const ConcurrentJITLocker&, unsigned bytecodeOffset);
     ArrayProfile* getArrayProfile(unsigned bytecodeOffset);
+    ArrayProfile* getOrAddArrayProfile(const ConcurrentJITLocker&, unsigned bytecodeOffset);
     ArrayProfile* getOrAddArrayProfile(unsigned bytecodeOffset);
 
     // Exception handling support
@@ -664,15 +658,9 @@ public:
         m_llintExecuteCounter.deferIndefinitely();
     }
 
-    void jitAfterWarmUp()
-    {
-        m_llintExecuteCounter.setNewThreshold(Options::thresholdForJITAfterWarmUp(), this);
-    }
-
-    void jitSoon()
-    {
-        m_llintExecuteCounter.setNewThreshold(Options::thresholdForJITSoon(), this);
-    }
+    int32_t thresholdForJIT(int32_t threshold);
+    void jitAfterWarmUp();
+    void jitSoon();
 
     const BaselineExecutionCounter& llintExecuteCounter() const
     {
@@ -874,6 +862,7 @@ public:
 
     bool m_allTransitionsHaveBeenMarked : 1; // Initialized and used on every GC.
 
+    bool m_didFailJITCompilation : 1;
     bool m_didFailFTLCompilation : 1;
     bool m_hasBeenCompiledWithFTL : 1;
     bool m_isConstructor : 1;
@@ -972,7 +961,7 @@ private:
     void dumpValueProfiling(PrintStream&, const Instruction*&, bool& hasPrintedProfiling);
     void dumpArrayProfiling(PrintStream&, const Instruction*&, bool& hasPrintedProfiling);
     void dumpRareCaseProfile(PrintStream&, const char* name, RareCaseProfile*, bool& hasPrintedProfiling);
-    void dumpResultProfile(PrintStream&, ResultProfile*, bool& hasPrintedProfiling);
+    void dumpArithProfile(PrintStream&, ArithProfile*, bool& hasPrintedProfiling);
 
     bool shouldVisitStrongly();
     bool shouldJettisonDueToWeakReference();
@@ -1028,6 +1017,9 @@ private:
 #if ENABLE(JIT)
     std::unique_ptr<RegisterAtOffsetList> m_calleeSaveRegisters;
     Bag<StructureStubInfo> m_stubInfos;
+    Bag<JITAddIC> m_addICs;
+    Bag<JITMulIC> m_mulICs;
+    Bag<JITSubIC> m_subICs;
     Bag<ByValInfo> m_byValInfos;
     Bag<CallLinkInfo> m_callLinkInfos;
     SentinelLinkedList<CallLinkInfo, BasicRawSentinelNode<CallLinkInfo>> m_incomingCalls;
@@ -1044,9 +1036,6 @@ private:
     RefCountedArray<ValueProfile> m_argumentValueProfiles;
     RefCountedArray<ValueProfile> m_valueProfiles;
     SegmentedVector<RareCaseProfile, 8> m_rareCaseProfiles;
-    SegmentedVector<ResultProfile, 8> m_resultProfiles;
-    typedef HashMap<unsigned, unsigned, IntHash<unsigned>, WTF::UnsignedWithZeroKeyHashTraits<unsigned>> BytecodeOffsetToResultProfileIndexMap;
-    std::unique_ptr<BytecodeOffsetToResultProfileIndexMap> m_bytecodeOffsetToResultProfileIndexMap;
     RefCountedArray<ArrayAllocationProfile> m_arrayAllocationProfiles;
     ArrayProfileVector m_arrayProfiles;
     RefCountedArray<ObjectAllocationProfile> m_objectAllocationProfiles;

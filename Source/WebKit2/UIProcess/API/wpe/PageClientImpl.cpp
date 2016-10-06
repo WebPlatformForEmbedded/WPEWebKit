@@ -227,10 +227,6 @@ void PageClientImpl::updateAcceleratedCompositingMode(const LayerTreeContext&)
 {
 }
 
-void PageClientImpl::willEnterAcceleratedCompositingMode()
-{
-}
-
 void PageClientImpl::didFinishLoadingDataForCustomContentProvider(const String&, const IPC::DataReference&)
 {
 }
@@ -298,9 +294,9 @@ void PageClientImpl::didRestoreScrollPosition()
 {
 }
 
-UserInterfaceLayoutDirection PageClientImpl::userInterfaceLayoutDirection()
+WebCore::UserInterfaceLayoutDirection PageClientImpl::userInterfaceLayoutDirection()
 {
-    return UserInterfaceLayoutDirection::LTR;
+    return WebCore::UserInterfaceLayoutDirection::LTR;
 }
 
 #if ENABLE(FULLSCREEN_API)

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2015 Apple Inc. All rights reserved.
+ * Copyright (C) 2014-2016 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -45,18 +45,20 @@
 
 namespace WTF {
 
+using CharacterMatchFunction = bool (*)(UChar);
+
 // StringView is a non-owning reference to a string, similar to the proposed std::string_view.
-// Whether the string is 8-bit or 16-bit is encoded in the upper bit of the length member.
-// This means that strings longer than 2 gigacharacters cannot be represented.
 
 class StringView {
 public:
     StringView();
+#if CHECK_STRINGVIEW_LIFETIME
     ~StringView();
     StringView(StringView&&);
     StringView(const StringView&);
     StringView& operator=(StringView&&);
     StringView& operator=(const StringView&);
+#endif
 
     StringView(const String&);
     StringView(const StringImpl&);
@@ -80,12 +82,16 @@ public:
     class CodePoints;
     CodePoints codePoints() const;
 
+    class GraphemeClusters;
+    GraphemeClusters graphemeClusters() const;
+
     bool is8Bit() const;
     const LChar* characters8() const;
     const UChar* characters16() const;
 
     String toString() const;
     String toStringWithoutCopying() const;
+    AtomicString toAtomicString() const;
 
 #if USE(CF)
     // This function converts null strings to empty strings.
@@ -109,6 +115,7 @@ public:
     StringView substring(unsigned start, unsigned length = std::numeric_limits<unsigned>::max()) const;
 
     size_t find(UChar, unsigned start = 0) const;
+    size_t find(CharacterMatchFunction, unsigned start = 0) const;
 
     WTF_EXPORT_STRING_API size_t find(StringView, unsigned start) const;
 
@@ -149,11 +156,11 @@ private:
     void setUnderlyingString(const StringImpl*) { }
     void setUnderlyingString(const StringView&) { }
 #endif
-
-    static const unsigned is16BitStringFlag = 1u << 31;
+    void clear();
 
     const void* m_characters { nullptr };
     unsigned m_length { 0 };
+    bool m_is8Bit { true };
 
 #if CHECK_STRINGVIEW_LIFETIME
     void adoptUnderlyingString(UnderlyingString*);
@@ -195,6 +202,7 @@ inline StringView::StringView()
     // FIXME: It's peculiar that null strings are 16-bit and empty strings return 8-bit (according to the is8Bit function).
 }
 
+#if CHECK_STRINGVIEW_LIFETIME
 inline StringView::~StringView()
 {
     setUnderlyingString(nullptr);
@@ -203,11 +211,11 @@ inline StringView::~StringView()
 inline StringView::StringView(StringView&& other)
     : m_characters(other.m_characters)
     , m_length(other.m_length)
+    , m_is8Bit(other.m_is8Bit)
 {
     ASSERT(other.underlyingStringIsValid());
 
-    other.m_characters = nullptr;
-    other.m_length = 0;
+    other.clear();
 
     setUnderlyingString(other);
     other.setUnderlyingString(nullptr);
@@ -216,6 +224,7 @@ inline StringView::StringView(StringView&& other)
 inline StringView::StringView(const StringView& other)
     : m_characters(other.m_characters)
     , m_length(other.m_length)
+    , m_is8Bit(other.m_is8Bit)
 {
     ASSERT(other.underlyingStringIsValid());
 
@@ -228,9 +237,9 @@ inline StringView& StringView::operator=(StringView&& other)
 
     m_characters = other.m_characters;
     m_length = other.m_length;
+    m_is8Bit = other.m_is8Bit;
 
-    other.m_characters = nullptr;
-    other.m_length = 0;
+    other.clear();
 
     setUnderlyingString(other);
     other.setUnderlyingString(nullptr);
@@ -244,28 +253,26 @@ inline StringView& StringView::operator=(const StringView& other)
 
     m_characters = other.m_characters;
     m_length = other.m_length;
+    m_is8Bit = other.m_is8Bit;
 
     setUnderlyingString(other);
 
     return *this;
 }
+#endif // CHECK_STRINGVIEW_LIFETIME
 
 inline void StringView::initialize(const LChar* characters, unsigned length)
 {
-    // FIXME: We need a better solution here, because there is no guarantee that
-    // the length here won't be too long. Maybe at least a RELEASE_ASSERT?
-    ASSERT(!(length & is16BitStringFlag));
     m_characters = characters;
     m_length = length;
+    m_is8Bit = true;
 }
 
 inline void StringView::initialize(const UChar* characters, unsigned length)
 {
-    // FIXME: We need a better solution here, because there is no guarantee that
-    // the length here won't be too long. Maybe at least a RELEASE_ASSERT?
-    ASSERT(!(length & is16BitStringFlag));
     m_characters = characters;
-    m_length = is16BitStringFlag | length;
+    m_length = length;
+    m_is8Bit = false;
 }
 
 inline StringView::StringView(const LChar* characters, unsigned length)
@@ -303,8 +310,7 @@ inline StringView::StringView(const String& string)
 {
     setUnderlyingString(string.impl());
     if (!string.impl()) {
-        m_characters = nullptr;
-        m_length = 0;
+        clear();
         return;
     }
     if (string.is8Bit()) {
@@ -312,6 +318,13 @@ inline StringView::StringView(const String& string)
         return;
     }
     initialize(string.characters16(), string.length());
+}
+
+inline void StringView::clear()
+{
+    m_characters = nullptr;
+    m_length = 0;
+    m_is8Bit = true;
 }
 
 inline StringView StringView::empty()
@@ -360,7 +373,7 @@ inline bool StringView::isEmpty() const
 
 inline unsigned StringView::length() const
 {
-    return m_length & ~is16BitStringFlag;
+    return m_length;
 }
 
 inline StringView::operator bool() const
@@ -370,7 +383,7 @@ inline StringView::operator bool() const
 
 inline bool StringView::is8Bit() const
 {
-    return !(m_length & is16BitStringFlag);
+    return m_is8Bit;
 }
 
 inline StringView StringView::substring(unsigned start, unsigned length) const
@@ -425,8 +438,7 @@ inline void StringView::getCharactersWithUpconvert(UChar* destination) const
         return;
     }
     auto characters16 = this->characters16();
-    unsigned length = this->length();
-    for (unsigned i = 0; i < length; ++i)
+    for (unsigned i = 0; i < m_length; ++i)
         destination[i] = characters16[i];
 }
 
@@ -448,14 +460,21 @@ inline String StringView::toString() const
 {
     if (is8Bit())
         return String(characters8(), m_length);
-    return String(characters16(), length());
+    return String(characters16(), m_length);
+}
+
+inline AtomicString StringView::toAtomicString() const
+{
+    if (is8Bit())
+        return AtomicString(characters8(), m_length);
+    return AtomicString(characters16(), m_length);
 }
 
 inline float StringView::toFloat(bool& isValid) const
 {
     if (is8Bit())
         return charactersToFloat(characters8(), m_length, &isValid);
-    return charactersToFloat(characters16(), length(), &isValid);
+    return charactersToFloat(characters16(), m_length, &isValid);
 }
 
 inline int StringView::toInt() const
@@ -468,28 +487,35 @@ inline int StringView::toInt(bool& isValid) const
 {
     if (is8Bit())
         return charactersToInt(characters8(), m_length, &isValid);
-    return charactersToInt(characters16(), length(), &isValid);
+    return charactersToInt(characters16(), m_length, &isValid);
 }
 
 inline int StringView::toIntStrict(bool& isValid) const
 {
     if (is8Bit())
         return charactersToIntStrict(characters8(), m_length, &isValid);
-    return charactersToIntStrict(characters16(), length(), &isValid);
+    return charactersToIntStrict(characters16(), m_length, &isValid);
 }
 
 inline String StringView::toStringWithoutCopying() const
 {
     if (is8Bit())
         return StringImpl::createWithoutCopying(characters8(), m_length);
-    return StringImpl::createWithoutCopying(characters16(), length());
+    return StringImpl::createWithoutCopying(characters16(), m_length);
 }
 
 inline size_t StringView::find(UChar character, unsigned start) const
 {
     if (is8Bit())
         return WTF::find(characters8(), m_length, character, start);
-    return WTF::find(characters16(), length(), character, start);
+    return WTF::find(characters16(), m_length, character, start);
+}
+
+inline size_t StringView::find(CharacterMatchFunction matchFunction, unsigned start) const
+{
+    if (is8Bit())
+        return WTF::find(characters8(), m_length, matchFunction, start);
+    return WTF::find(characters16(), m_length, matchFunction, start);
 }
 
 #if !CHECK_STRINGVIEW_LIFETIME
@@ -562,6 +588,18 @@ inline bool equalIgnoringASCIICase(StringView a, const char* b)
     return equalIgnoringASCIICaseCommon(a, b);
 }
 
+class StringView::GraphemeClusters {
+public:
+    explicit GraphemeClusters(const StringView&);
+
+    class Iterator;
+    Iterator begin() const;
+    Iterator end() const;
+
+private:
+    StringView m_stringView;
+};
+
 class StringView::CodePoints {
 public:
     explicit CodePoints(const StringView&);
@@ -586,6 +624,29 @@ private:
     StringView m_stringView;
 };
 
+class StringView::GraphemeClusters::Iterator {
+public:
+    WTF_EXPORT_PRIVATE Iterator() = delete;
+    WTF_EXPORT_PRIVATE Iterator(const StringView&, unsigned index);
+    WTF_EXPORT_PRIVATE ~Iterator();
+
+    Iterator(const Iterator&) = delete;
+    WTF_EXPORT_PRIVATE Iterator(Iterator&&);
+    Iterator& operator=(const Iterator&) = delete;
+    Iterator& operator=(Iterator&&) = delete;
+
+    WTF_EXPORT_PRIVATE StringView operator*() const;
+    WTF_EXPORT_PRIVATE Iterator& operator++();
+
+    WTF_EXPORT_PRIVATE bool operator==(const Iterator&) const;
+    WTF_EXPORT_PRIVATE bool operator!=(const Iterator&) const;
+
+private:
+    class Impl;
+
+    std::unique_ptr<Impl> m_impl;
+};
+
 class StringView::CodePoints::Iterator {
 public:
     Iterator(const StringView&, unsigned index);
@@ -598,10 +659,8 @@ public:
 
 private:
     const StringView& m_stringView;
-    mutable unsigned m_index;
-#if !ASSERT_DISABLED
-    mutable bool m_alreadyIncremented { false };
-#endif
+    Optional<unsigned> m_nextCodePointOffset;
+    UChar32 m_codePoint;
 };
 
 class StringView::CodeUnits::Iterator {
@@ -619,6 +678,11 @@ private:
     unsigned m_index;
 };
 
+inline auto StringView::graphemeClusters() const -> GraphemeClusters
+{
+    return GraphemeClusters(*this);
+}
+
 inline auto StringView::codePoints() const -> CodePoints
 {
     return CodePoints(*this);
@@ -629,6 +693,21 @@ inline auto StringView::codeUnits() const -> CodeUnits
     return CodeUnits(*this);
 }
 
+inline StringView::GraphemeClusters::GraphemeClusters(const StringView& stringView)
+    : m_stringView(stringView)
+{
+}
+
+inline auto StringView::GraphemeClusters::begin() const -> Iterator
+{
+    return Iterator(m_stringView, 0);
+}
+
+inline auto StringView::GraphemeClusters::end() const -> Iterator
+{
+    return Iterator(m_stringView, m_stringView.length());
+}
+
 inline StringView::CodePoints::CodePoints(const StringView& stringView)
     : m_stringView(stringView)
 {
@@ -636,39 +715,36 @@ inline StringView::CodePoints::CodePoints(const StringView& stringView)
 
 inline StringView::CodePoints::Iterator::Iterator(const StringView& stringView, unsigned index)
     : m_stringView(stringView)
-    , m_index(index)
+    , m_nextCodePointOffset(index)
 {
+    operator++();
 }
 
 inline auto StringView::CodePoints::Iterator::operator++() -> Iterator&
 {
-#if !ASSERT_DISABLED
-    ASSERT(m_alreadyIncremented);
-    m_alreadyIncremented = false;
-#endif
+    ASSERT(m_nextCodePointOffset);
+    if (m_nextCodePointOffset.value() == m_stringView.length()) {
+        m_nextCodePointOffset = Nullopt;
+        return *this;
+    }
+    if (m_stringView.is8Bit())
+        m_codePoint = m_stringView.characters8()[m_nextCodePointOffset.value()++];
+    else
+        U16_NEXT(m_stringView.characters16(), m_nextCodePointOffset.value(), m_stringView.length(), m_codePoint);
+    ASSERT(m_nextCodePointOffset.value() <= m_stringView.length());
     return *this;
 }
 
 inline UChar32 StringView::CodePoints::Iterator::operator*() const
 {
-#if !ASSERT_DISABLED
-    ASSERT(!m_alreadyIncremented);
-    m_alreadyIncremented = true;
-#endif
-
-    if (m_stringView.is8Bit())
-        return m_stringView.characters8()[m_index++];
-
-    UChar32 codePoint;
-    U16_NEXT(m_stringView.characters16(), m_index, m_stringView.length(), codePoint);
-    return codePoint;
+    ASSERT(m_nextCodePointOffset);
+    return m_codePoint;
 }
 
 inline bool StringView::CodePoints::Iterator::operator==(const Iterator& other) const
 {
     ASSERT(&m_stringView == &other.m_stringView);
-    ASSERT(!m_alreadyIncremented);
-    return m_index == other.m_index;
+    return m_nextCodePointOffset == other.m_nextCodePointOffset;
 }
 
 inline bool StringView::CodePoints::Iterator::operator!=(const Iterator& other) const

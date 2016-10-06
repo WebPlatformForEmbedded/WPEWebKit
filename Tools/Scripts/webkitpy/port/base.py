@@ -82,6 +82,8 @@ class Port(object):
 
     DEFAULT_ARCHITECTURE = 'x86'
 
+    CUSTOM_DEVICE_CLASSES = []
+
     @classmethod
     def determine_full_port_name(cls, host, options, port_name):
         """Return a fully-specified port name that can be used to construct objects."""
@@ -656,7 +658,7 @@ class Port(object):
             return test_name + '/'
         return test_name
 
-    def driver_cmd_line(self):
+    def driver_cmd_line_for_logging(self):
         """Prints the DRT command line that will be used."""
         driver = self.create_driver(0)
         return driver.cmd_line(self.get_option('pixel_tests'), [])
@@ -803,7 +805,7 @@ class Port(object):
         # to have multiple copies of webkit checked out and built.
         return self._build_path('layout-test-results')
 
-    def setup_test_run(self):
+    def setup_test_run(self, device_class=None):
         """Perform port-specific work at the beginning of a test run."""
         pass
 
@@ -829,11 +831,12 @@ class Port(object):
         clean_env = {}
         variables_to_copy = [
             # For Linux:
-            'XAUTHORITY',
+            'ALSA_CARD',
+            'DBUS_SESSION_BUS_ADDRESS',
             'HOME',
             'LANG',
             'LD_LIBRARY_PATH',
-            'DBUS_SESSION_BUS_ADDRESS',
+            'XAUTHORITY',
             'XDG_DATA_DIRS',
             'XDG_RUNTIME_DIR',
 
@@ -1136,6 +1139,11 @@ class Port(object):
         _log.error("Could not find apache. Not installed or unknown path.")
         return None
 
+    def _is_debian_php_version_7(self):
+        if self._filesystem.exists("/usr/lib/apache2/modules/libphp7.0.so"):
+            return True
+        return False
+
     # FIXME: This belongs on some platform abstraction instead of Port.
     def _is_redhat_based(self):
         return self._filesystem.exists('/etc/redhat-release')
@@ -1150,6 +1158,11 @@ class Port(object):
         config = self._executive.run_command([self._path_to_apache(), '-v'])
         return re.sub(r'(?:.|\n)*Server version: Apache/(\d+\.\d+)(?:.|\n)*', r'\1', config)
 
+    def _debian_php_version(self):
+        if self._is_debian_php_version_7():
+            return "-php7"
+        return ""
+
     # We pass sys_platform into this method to make it easy to unit test.
     def _apache_config_file_name_for_platform(self, sys_platform):
         if sys_platform == 'cygwin' or sys_platform.startswith('win'):
@@ -1158,7 +1171,7 @@ class Port(object):
             if self._is_redhat_based():
                 return 'fedora-httpd-' + self._apache_version() + '.conf'
             if self._is_debian_based():
-                return 'debian-httpd-' + self._apache_version() + '.conf'
+                return 'debian-httpd-' + self._apache_version() + self._debian_php_version() + '.conf'
             if self._is_arch_based():
                 return 'archlinux-httpd.conf'
         # All platforms use apache2 except for CYGWIN (and Mac OS X Tiger and prior, which we no longer support).

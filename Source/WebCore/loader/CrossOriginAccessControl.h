@@ -29,12 +29,8 @@
 
 #include "ResourceHandleTypes.h"
 #include <wtf/Forward.h>
-#include <wtf/HashSet.h>
-#include <wtf/text/StringHash.h>
 
 namespace WebCore {
-
-typedef HashSet<String, ASCIICaseInsensitiveHash> HTTPHeaderSet;
 
 class HTTPHeaderMap;
 enum class HTTPHeaderName;
@@ -48,14 +44,13 @@ bool isOnAccessControlSimpleRequestMethodWhitelist(const String&);
 bool isOnAccessControlSimpleRequestHeaderWhitelist(HTTPHeaderName, const String& value);
 bool isOnAccessControlResponseHeaderWhitelist(const String&);
 
-void updateRequestForAccessControl(ResourceRequest&, SecurityOrigin*, StoredCredentials);
-ResourceRequest createAccessControlPreflightRequest(const ResourceRequest&, SecurityOrigin*);
+void updateRequestForAccessControl(ResourceRequest&, SecurityOrigin&, StoredCredentials);
+ResourceRequest createAccessControlPreflightRequest(const ResourceRequest&, SecurityOrigin&);
 
 bool isValidCrossOriginRedirectionURL(const URL&);
 void cleanRedirectedRequestForAccessControl(ResourceRequest&);
 
-bool passesAccessControlCheck(const ResourceResponse&, StoredCredentials, SecurityOrigin*, String& errorDescription);
-void parseAccessControlExposeHeadersAllowList(const String& headerValue, HTTPHeaderSet&);
+bool passesAccessControlCheck(const ResourceResponse&, StoredCredentials, SecurityOrigin&, String& errorDescription);
 
 } // namespace WebCore
 

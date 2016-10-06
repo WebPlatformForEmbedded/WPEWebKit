@@ -28,10 +28,12 @@
 
 #import "TestController.h"
 #import "TestRunnerWKWebView.h"
+#import <WebCore/QuartzCoreSPI.h>
 #import <WebKit/WKImageCG.h>
 #import <WebKit/WKPreferencesPrivate.h>
 #import <WebKit/WKWebViewConfiguration.h>
 #import <WebKit/WKWebViewPrivate.h>
+#import <wtf/BlockObjCExceptions.h>
 #import <wtf/RetainPtr.h>
 
 @interface WKWebView (Details)
@@ -94,25 +96,31 @@
 
 @end
 
-@interface UIWindow ()
-
-- (void)_setWindowResolution:(CGFloat)resolution displayIfChanged:(BOOL)displayIfChanged;
-
-@end
-
 namespace WTR {
+
+static CGRect viewRectForWindowRect(CGRect windowRect)
+{
+    CGFloat statusBarBottom = CGRectGetMaxY([[UIApplication sharedApplication] statusBarFrame]);
+    return CGRectMake(windowRect.origin.x, windowRect.origin.y + statusBarBottom, windowRect.size.width, windowRect.size.height);
+}
 
 PlatformWebView::PlatformWebView(WKWebViewConfiguration* configuration, const TestOptions& options)
     : m_windowIsKey(true)
     , m_options(options)
 {
     CGRect rect = CGRectMake(0, 0, TestController::viewWidth, TestController::viewHeight);
-    m_view = [[TestRunnerWKWebView alloc] initWithFrame:rect configuration:configuration];
 
     m_window = [[WebKitTestRunnerWindow alloc] initWithFrame:rect];
+    m_window.backgroundColor = [UIColor lightGrayColor];
     m_window.platformWebView = this;
 
-    [m_window addSubview:m_view];
+    UIViewController *viewController = [[UIViewController alloc] init];
+    [m_window setRootViewController:viewController];
+    [viewController release];
+
+    m_view = [[TestRunnerWKWebView alloc] initWithFrame:viewRectForWindowRect(rect) configuration:configuration];
+
+    [m_window.rootViewController.view addSubview:m_view];
     [m_window makeKeyAndVisible];
 }
 
@@ -164,7 +172,7 @@ WKRect PlatformWebView::windowFrame()
 void PlatformWebView::setWindowFrame(WKRect frame)
 {
     [m_window setFrame:CGRectMake(frame.origin.x, frame.origin.y, frame.size.width, frame.size.height)];
-    [platformView() setFrame:CGRectMake(0, 0, frame.size.width, frame.size.height)];
+    [platformView() setFrame:viewRectForWindowRect(CGRectMake(0, 0, frame.size.width, frame.size.height))];
 }
 
 void PlatformWebView::didInitializeClients()
@@ -206,8 +214,43 @@ void PlatformWebView::changeWindowScaleIfNeeded(float)
 
 WKRetainPtr<WKImageRef> PlatformWebView::windowSnapshotImage()
 {
-    // FIXME: Need an implementation of this, or we're depending on software paints!
+    BEGIN_BLOCK_OBJC_EXCEPTIONS;
+#if USE(IOSURFACE)
     return nullptr;
+#else
+    CGFloat deviceScaleFactor = 2; // FIXME: hardcode 2x for now. In future we could respect 1x and 3x as we do on Mac.
+    CATransform3D transform = CATransform3DMakeScale(deviceScaleFactor, deviceScaleFactor, 1);
+    
+    CGSize viewSize = m_view.bounds.size;
+    int bufferWidth = ceil(viewSize.width * deviceScaleFactor);
+    int bufferHeight = ceil(viewSize.height * deviceScaleFactor);
+    if (!bufferWidth || !bufferHeight) {
+        WTFLogAlways("Being asked for snapshot of view with width %d height %d\n", bufferWidth, bufferHeight);
+        return nullptr;
+    }
+
+    CARenderServerBufferRef buffer = CARenderServerCreateBuffer(bufferWidth, bufferHeight);
+    if (!buffer) {
+        WTFLogAlways("CARenderServerCreateBuffer failed for buffer with width %d height %d\n", bufferWidth, bufferHeight);
+        return nullptr;
+    }
+
+    CARenderServerRenderLayerWithTransform(MACH_PORT_NULL, m_view.layer.context.contextId, reinterpret_cast<uint64_t>(m_view.layer), buffer, 0, 0, &transform);
+
+    uint8_t* data = CARenderServerGetBufferData(buffer);
+    size_t rowBytes = CARenderServerGetBufferRowBytes(buffer);
+
+    static CGColorSpaceRef sRGBSpace = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+    RetainPtr<CGDataProviderRef> provider = adoptCF(CGDataProviderCreateWithData(0, data, CARenderServerGetBufferDataSize(buffer), nullptr));
+    
+    RetainPtr<CGImageRef> cgImage = adoptCF(CGImageCreate(bufferWidth, bufferHeight, 8, 32, rowBytes, sRGBSpace, kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Host, provider.get(), 0, false, kCGRenderingIntentDefault));
+    WKRetainPtr<WKImageRef> result = adoptWK(WKImageCreateFromCGImage(cgImage.get(), 0));
+
+    CARenderServerDestroyBuffer(buffer);
+
+    return result;
+#endif
+    END_BLOCK_OBJC_EXCEPTIONS;
 }
 
 bool PlatformWebView::viewSupportsOptions(const TestOptions& options) const

@@ -21,12 +21,12 @@
  *
  */
 
-#ifndef HTMLAnchorElement_h
-#define HTMLAnchorElement_h
+#pragma once
 
 #include "HTMLElement.h"
 #include "HTMLNames.h"
 #include "LinkHash.h"
+#include "URLUtils.h"
 
 namespace WebCore {
 
@@ -55,48 +55,21 @@ enum {
 //     RelationUp          = 0x00020000,
 };
 
-class HTMLAnchorElement : public HTMLElement {
+class HTMLAnchorElement : public HTMLElement, public URLUtils<HTMLAnchorElement> {
 public:
     static Ref<HTMLAnchorElement> create(Document&);
     static Ref<HTMLAnchorElement> create(const QualifiedName&, Document&);
 
     virtual ~HTMLAnchorElement();
 
-    URL href() const;
+    WEBCORE_EXPORT URL href() const;
     void setHref(const AtomicString&);
 
     const AtomicString& name() const;
 
-    String hash() const;
-    void setHash(const String&);
+    WEBCORE_EXPORT String origin() const;
 
-    String host() const;
-    void setHost(const String&);
-
-    String username() const;
-    void setUsername(const String&);
-
-    String password() const;
-    void setPassword(const String&);
-
-    String hostname() const;
-    void setHostname(const String&);
-
-    String pathname() const;
-    void setPathname(const String&);
-
-    String port() const;
-    void setPort(const String&);
-
-    String protocol() const;
-    void setProtocol(const String&);
-
-    String search() const;
-    void setSearch(const String&);
-
-    String origin() const;
-
-    String text();
+    WEBCORE_EXPORT String text();
     void setText(const String&, ExceptionCode&);
 
     String toString() const;
@@ -110,7 +83,7 @@ public:
     LinkHash visitedLinkHash() const;
     void invalidateCachedVisitedLinkHash() { m_cachedVisitedLinkHash = 0; }
 
-    DOMTokenList& relList();
+    WEBCORE_EXPORT DOMTokenList& relList();
 
 protected:
     HTMLAnchorElement(const QualifiedName&, Document&);
@@ -157,7 +130,7 @@ private:
 inline LinkHash HTMLAnchorElement::visitedLinkHash() const
 {
     if (!m_cachedVisitedLinkHash)
-        m_cachedVisitedLinkHash = WebCore::visitedLinkHash(document().baseURL(), fastGetAttribute(HTMLNames::hrefAttr));
+        m_cachedVisitedLinkHash = WebCore::visitedLinkHash(document().baseURL(), attributeWithoutSynchronization(HTMLNames::hrefAttr));
     return m_cachedVisitedLinkHash; 
 }
 
@@ -167,5 +140,3 @@ bool isEnterKeyKeydownEvent(Event*);
 bool shouldProhibitLinks(Element*);
 
 } // namespace WebCore
-
-#endif // HTMLAnchorElement_h

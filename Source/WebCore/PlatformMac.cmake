@@ -73,7 +73,6 @@ list(APPEND WebCore_INCLUDE_DIRECTORIES
     "${THIRDPARTY_DIR}/ANGLE"
     "${THIRDPARTY_DIR}/ANGLE/include/KHR"
     "${WEBCORE_DIR}/accessibility/mac"
-    "${WEBCORE_DIR}/bindings/objc"
     "${WEBCORE_DIR}/bridge/objc"
     "${WEBCORE_DIR}/editing/cocoa"
     "${WEBCORE_DIR}/editing/mac"
@@ -168,23 +167,8 @@ list(APPEND WebCore_SOURCES
 
     bindings/js/ScriptControllerMac.mm
 
-    bindings/objc/DOM.mm
-    bindings/objc/DOMAbstractView.mm
-    bindings/objc/DOMCSS.mm
-    bindings/objc/DOMCustomXPathNSResolver.mm
-    bindings/objc/DOMEvents.mm
-    bindings/objc/DOMHTML.mm
-    bindings/objc/DOMInternal.mm
-    bindings/objc/DOMObject.mm
-    bindings/objc/DOMUIKitExtensions.mm
-    bindings/objc/DOMUtility.mm
-    bindings/objc/DOMXPath.mm
-    bindings/objc/ExceptionHandlers.mm
-    bindings/objc/ObjCEventListener.mm
-    bindings/objc/ObjCNodeFilterCondition.mm
-    bindings/objc/WebScriptObject.mm
-
     bridge/objc/ObjCRuntimeObject.mm
+    bridge/objc/WebScriptObject.mm
     bridge/objc/objc_class.mm
     bridge/objc/objc_instance.mm
     bridge/objc/objc_runtime.mm
@@ -196,7 +180,7 @@ list(APPEND WebCore_SOURCES
     crypto/CryptoAlgorithmRegistry.cpp
     crypto/CryptoKey.cpp
     crypto/CryptoKeyPair.cpp
-    crypto/SubtleCrypto.cpp
+    crypto/WebKitSubtleCrypto.cpp
 
     crypto/algorithms/CryptoAlgorithmAES_CBC.cpp
     crypto/algorithms/CryptoAlgorithmAES_KW.cpp
@@ -307,6 +291,8 @@ list(APPEND WebCore_SOURCES
 
     platform/audio/AudioSession.cpp
 
+    platform/audio/cocoa/MediaSessionManagerCocoa.cpp
+
     platform/audio/mac/AudioBusMac.mm
     platform/audio/mac/AudioDestinationMac.cpp
     platform/audio/mac/AudioFileReaderMac.cpp
@@ -314,7 +300,7 @@ list(APPEND WebCore_SOURCES
     platform/audio/mac/AudioSessionMac.cpp
     platform/audio/mac/CARingBuffer.cpp
     platform/audio/mac/FFTFrameMac.cpp
-    platform/audio/mac/MediaSessionManagerMac.cpp
+    platform/audio/mac/MediaSessionManagerMac.mm
 
     platform/cf/CFURLExtras.cpp
     platform/cf/CoreMediaSoftLink.cpp
@@ -348,6 +334,9 @@ list(APPEND WebCore_SOURCES
 
     platform/crypto/commoncrypto/CryptoDigestCommonCrypto.cpp
 
+    platform/gamepad/mac/HIDGamepad.cpp
+    platform/gamepad/mac/HIDGamepadProvider.cpp
+
     platform/graphics/DisplayRefreshMonitor.cpp
     platform/graphics/DisplayRefreshMonitorManager.cpp
 
@@ -372,6 +361,7 @@ list(APPEND WebCore_SOURCES
     platform/graphics/avfoundation/objc/InbandTextTrackPrivateLegacyAVFObjC.mm
     platform/graphics/avfoundation/objc/MediaPlayerPrivateAVFoundationObjC.mm
     platform/graphics/avfoundation/objc/MediaPlayerPrivateMediaSourceAVFObjC.mm
+    platform/graphics/avfoundation/objc/MediaSampleAVFObjC.mm
     platform/graphics/avfoundation/objc/MediaSourcePrivateAVFObjC.mm
     platform/graphics/avfoundation/objc/SourceBufferPrivateAVFObjC.mm
     platform/graphics/avfoundation/objc/VideoTrackPrivateAVFObjC.cpp
@@ -464,17 +454,17 @@ list(APPEND WebCore_SOURCES
     platform/graphics/opentype/OpenTypeCG.cpp
     platform/graphics/opentype/OpenTypeMathData.cpp
 
+    platform/mac/BlacklistUpdater.mm
     platform/mac/CursorMac.mm
     platform/mac/DragDataMac.mm
     platform/mac/DragImageMac.mm
     platform/mac/EventLoopMac.mm
     platform/mac/FileSystemMac.mm
-    platform/mac/HIDGamepad.cpp
-    platform/mac/HIDGamepadProvider.cpp
     platform/mac/KeyEventMac.mm
     platform/mac/KillRingMac.mm
     platform/mac/LocalCurrentGraphicsContext.mm
     platform/mac/LoggingMac.mm
+    platform/mac/MediaRemoteSoftLink.cpp
     platform/mac/NSScrollerImpDetails.mm
     platform/mac/PasteboardMac.mm
     platform/mac/PlatformClockCA.cpp
@@ -483,9 +473,11 @@ list(APPEND WebCore_SOURCES
     platform/mac/PlatformPasteboardMac.mm
     platform/mac/PlatformScreenMac.mm
     platform/mac/PlatformSpeechSynthesizerMac.mm
+    platform/mac/PluginBlacklist.mm
     platform/mac/PowerObserverMac.cpp
     platform/mac/PublicSuffixMac.mm
-    platform/mac/SSLKeyGeneratorMac.cpp
+    platform/mac/RemoteCommandListenerMac.mm
+    platform/mac/SSLKeyGeneratorMac.mm
     platform/mac/ScrollAnimatorMac.mm
     platform/mac/ScrollViewMac.mm
     platform/mac/ScrollbarThemeMac.mm
@@ -505,6 +497,7 @@ list(APPEND WebCore_SOURCES
     platform/mac/WebCoreNSURLExtras.mm
     platform/mac/WebCoreObjCExtras.mm
     platform/mac/WebCoreSystemInterface.mm
+    platform/mac/WebGLBlacklist.mm
     platform/mac/WebNSAttributedStringExtras.mm
     platform/mac/WebVideoFullscreenController.mm
     platform/mac/WebVideoFullscreenHUDWindowController.mm
@@ -528,13 +521,13 @@ list(APPEND WebCore_SOURCES
     platform/network/cf/ResourceHandleCFURLConnectionDelegateWithOperationQueue.cpp
     platform/network/cf/ResourceRequestCFNet.cpp
     platform/network/cf/ResourceResponseCFNet.cpp
-    platform/network/cf/SocketStreamHandleCFNet.cpp
+    platform/network/cf/SocketStreamHandleImplCFNet.cpp
     platform/network/cf/SynchronousLoaderClientCFNet.cpp
     platform/network/cf/SynchronousResourceHandleCFURLConnectionDelegate.cpp
 
     platform/network/cocoa/CredentialCocoa.mm
+    platform/network/cocoa/NetworkLoadTiming.mm
     platform/network/cocoa/ProtectionSpaceCocoa.mm
-    platform/network/cocoa/ResourceLoadTiming.mm
     platform/network/cocoa/ResourceRequestCocoa.mm
     platform/network/cocoa/ResourceResponseCocoa.mm
     platform/network/cocoa/WebCoreNSURLSession.mm
@@ -562,7 +555,6 @@ list(APPEND WebCore_SOURCES
 
     platform/text/mac/LocaleMac.mm
     platform/text/mac/TextBoundaries.mm
-    platform/text/mac/TextBreakIteratorInternalICUMac.mm
     platform/text/mac/TextCodecMac.cpp
 
     rendering/RenderThemeMac.mm
@@ -592,11 +584,14 @@ set(WebCore_FORWARDING_HEADERS_DIRECTORIES
     storage
     style
     svg
+    workers
 
+    Modules/applepay
     Modules/geolocation
     Modules/indexeddb
     Modules/notifications
     Modules/webdatabase
+    Modules/websockets
 
     Modules/indexeddb/client
     Modules/indexeddb/shared
@@ -604,8 +599,8 @@ set(WebCore_FORWARDING_HEADERS_DIRECTORIES
 
     bindings/generic
     bindings/js
-    bindings/objc
 
+    bridge/objc
     bridge/jsc
 
     editing/cocoa
@@ -641,6 +636,10 @@ set(WebCore_FORWARDING_HEADERS_DIRECTORIES
     platform/sql
     platform/text
 
+    platform/audio/cocoa
+
+    platform/gamepad/mac
+
     platform/graphics/ca
     platform/graphics/cocoa
     platform/graphics/cg
@@ -665,6 +664,8 @@ set(WebCore_FORWARDING_HEADERS_DIRECTORIES
 
     svg/graphics
     svg/properties
+
+    xml
 )
 
 set(WebCore_FORWARDING_HEADERS_FILES
@@ -707,12 +708,12 @@ set(WebCore_FORWARDING_HEADERS_FILES
     platform/cf/RunLoopObserver.h
 
     platform/cocoa/MachSendRight.h
+    platform/cocoa/SoftLinking.h
 
     platform/graphics/cocoa/IOSurface.h
 
     platform/graphics/transforms/AffineTransform.h
 
-    platform/mac/SoftLinking.h
     platform/mac/WebCoreSystemInterface.h
 
     platform/network/cf/CertificateInfo.h
@@ -737,190 +738,6 @@ set(ADDITIONAL_BINDINGS_DEPENDENCIES
     ${WORKERGLOBALSCOPE_CONSTRUCTORS_FILE}
     ${DEDICATEDWORKERGLOBALSCOPE_CONSTRUCTORS_FILE}
 )
-
-set(ObjC_Bindings_IDL_FILES
-    css/CSSCharsetRule.idl
-    css/CSSFontFaceRule.idl
-    css/CSSImportRule.idl
-    css/CSSKeyframeRule.idl
-    css/CSSKeyframesRule.idl
-    css/CSSMediaRule.idl
-    css/CSSPageRule.idl
-    css/CSSPrimitiveValue.idl
-    css/CSSRule.idl
-    css/CSSRuleList.idl
-    css/CSSStyleDeclaration.idl
-    css/CSSStyleRule.idl
-    css/CSSStyleSheet.idl
-    css/CSSSupportsRule.idl
-    css/CSSUnknownRule.idl
-    css/CSSValue.idl
-    css/CSSValueList.idl
-    css/Counter.idl
-    css/MediaList.idl
-    css/RGBColor.idl
-    css/Rect.idl
-    css/StyleSheet.idl
-    css/StyleSheetList.idl
-    css/WebKitCSSFilterValue.idl
-    css/WebKitCSSRegionRule.idl
-    css/WebKitCSSTransformValue.idl
-
-    dom/Attr.idl
-    dom/BeforeLoadEvent.idl
-    dom/CDATASection.idl
-    dom/CharacterData.idl
-    dom/Comment.idl
-    dom/DOMImplementation.idl
-    dom/DOMNamedFlowCollection.idl
-    dom/Document.idl
-    dom/DocumentFragment.idl
-    dom/DocumentType.idl
-    dom/Element.idl
-    dom/Entity.idl
-    dom/EntityReference.idl
-    dom/Event.idl
-    dom/EventListener.idl
-    dom/EventTarget.idl
-    dom/KeyboardEvent.idl
-    dom/MessageEvent.idl
-    dom/MessagePort.idl
-    dom/MouseEvent.idl
-    dom/MutationEvent.idl
-    dom/NamedNodeMap.idl
-    dom/Node.idl
-    dom/NodeFilter.idl
-    dom/NodeIterator.idl
-    dom/NodeList.idl
-    dom/OverflowEvent.idl
-    dom/ProcessingInstruction.idl
-    dom/ProgressEvent.idl
-    dom/Range.idl
-    dom/Text.idl
-    dom/TextEvent.idl
-    dom/TreeWalker.idl
-    dom/UIEvent.idl
-    dom/WebKitNamedFlow.idl
-    dom/WheelEvent.idl
-
-    fileapi/Blob.idl
-    fileapi/File.idl
-    fileapi/FileList.idl
-
-    html/DOMTokenList.idl
-    html/HTMLAnchorElement.idl
-    html/HTMLAppletElement.idl
-    html/HTMLAreaElement.idl
-    html/HTMLBRElement.idl
-    html/HTMLBaseElement.idl
-    html/HTMLBaseFontElement.idl
-    html/HTMLBodyElement.idl
-    html/HTMLButtonElement.idl
-    html/HTMLCanvasElement.idl
-    html/HTMLCollection.idl
-    html/HTMLDListElement.idl
-    html/HTMLDirectoryElement.idl
-    html/HTMLDivElement.idl
-    html/HTMLDocument.idl
-    html/HTMLElement.idl
-    html/HTMLEmbedElement.idl
-    html/HTMLFieldSetElement.idl
-    html/HTMLFontElement.idl
-    html/HTMLFormElement.idl
-    html/HTMLFrameElement.idl
-    html/HTMLFrameSetElement.idl
-    html/HTMLHRElement.idl
-    html/HTMLHeadElement.idl
-    html/HTMLHeadingElement.idl
-    html/HTMLHtmlElement.idl
-    html/HTMLIFrameElement.idl
-    html/HTMLImageElement.idl
-    html/HTMLInputElement.idl
-    html/HTMLLIElement.idl
-    html/HTMLLabelElement.idl
-    html/HTMLLegendElement.idl
-    html/HTMLLinkElement.idl
-    html/HTMLMapElement.idl
-    html/HTMLMarqueeElement.idl
-    html/HTMLMenuElement.idl
-    html/HTMLMediaElement.idl
-    html/HTMLMetaElement.idl
-    html/HTMLModElement.idl
-    html/HTMLOListElement.idl
-    html/HTMLObjectElement.idl
-    html/HTMLOptGroupElement.idl
-    html/HTMLOptionElement.idl
-    html/HTMLOptionsCollection.idl
-    html/HTMLParagraphElement.idl
-    html/HTMLParamElement.idl
-    html/HTMLPreElement.idl
-    html/HTMLQuoteElement.idl
-    html/HTMLScriptElement.idl
-    html/HTMLSelectElement.idl
-    html/HTMLStyleElement.idl
-    html/HTMLTableCaptionElement.idl
-    html/HTMLTableCellElement.idl
-    html/HTMLTableColElement.idl
-    html/HTMLTableElement.idl
-    html/HTMLTableRowElement.idl
-    html/HTMLTableSectionElement.idl
-    html/HTMLTextAreaElement.idl
-    html/HTMLTitleElement.idl
-    html/HTMLUListElement.idl
-    html/HTMLVideoElement.idl
-    html/MediaError.idl
-    html/TimeRanges.idl
-    html/ValidityState.idl
-    page/AbstractView.idl
-
-    xml/XPathExpression.idl
-    xml/XPathNSResolver.idl
-    xml/XPathResult.idl
-)
-
-set(ObjC_BINDINGS_NO_MM
-    AbstractView
-    AbstractWorker
-    ChildNode
-    DOMURLMediaSource
-    DOMURLMediaStream
-    DOMWindowIndexedDatabase
-    DOMWindowNotifications
-    DOMWindowSpeechSynthesis
-    DOMWindowWebDatabase
-    EventListener
-    EventTarget
-    GlobalEventHandlers
-    HTMLMediaElementMediaSession
-    HTMLMediaElementMediaStream
-    NavigatorBattery
-    NavigatorContentUtils
-    NavigatorGamepad
-    NavigatorGeolocation
-    NavigatorMediaDevices
-    NavigatorUserMedia
-    NavigatorVibration
-    NodeFilter
-    NonDocumentTypeChildNode
-    NonElementParentNode
-    ParentNode
-    URLUtils
-    WindowEventHandlers
-    WindowOrWorkerGlobalScope
-    WorkerGlobalScopeIndexedDatabase
-    WorkerGlobalScopeNotifications
-    XPathNSResolver
-)
-
-GENERATE_BINDINGS(WebCore_DERIVED_SOURCES
-    "${ObjC_Bindings_IDL_FILES}"
-    "${WEBCORE_DIR}"
-    "${IDL_INCLUDES}"
-    "${FEATURE_DEFINES_OBJECTIVE_C}"
-    ${DERIVED_SOURCES_WEBCORE_DIR} DOM ObjC mm
-    ${IDL_ATTRIBUTES_FILE}
-    ${SUPPLEMENTAL_DEPENDENCY_FILE}
-    ${ADDITIONAL_BINDINGS_DEPENDENCIES})
 
 set(WebCoreTestSupport_LIBRARY_TYPE SHARED)
 list(APPEND WebCoreTestSupport_LIBRARIES PRIVATE WebCore)

@@ -21,8 +21,7 @@
  *
  */
 
-#ifndef HTMLLinkElement_h
-#define HTMLLinkElement_h
+#pragma once
 
 #include "CSSStyleSheet.h"
 #include "CachedStyleSheetClient.h"
@@ -50,7 +49,7 @@ public:
     URL href() const;
     const AtomicString& rel() const;
 
-    String target() const override;
+    String target() const final;
 
     const AtomicString& type() const;
 
@@ -67,48 +66,48 @@ public:
     bool isEnabledViaScript() const { return m_disabledState == EnabledViaScript; }
     DOMTokenList& sizes();
 
-    void setCrossOrigin(const AtomicString&);
-    String crossOrigin() const;
+    WEBCORE_EXPORT void setCrossOrigin(const AtomicString&);
+    WEBCORE_EXPORT String crossOrigin() const;
 
     void dispatchPendingEvent(LinkEventSender*);
     static void dispatchPendingLoadEvents();
 
-    DOMTokenList& relList();
+    WEBCORE_EXPORT DOMTokenList& relList();
 
 private:
-    void parseAttribute(const QualifiedName&, const AtomicString&) override;
+    void parseAttribute(const QualifiedName&, const AtomicString&) final;
 
-    bool shouldLoadLink() override;
+    bool shouldLoadLink() final;
     void process();
     static void processCallback(Node*);
     void clearSheet();
 
-    InsertionNotificationRequest insertedInto(ContainerNode&) override;
-    void removedFrom(ContainerNode&) override;
+    InsertionNotificationRequest insertedInto(ContainerNode&) final;
+    void removedFrom(ContainerNode&) final;
 
     // from CachedResourceClient
-    void setCSSStyleSheet(const String& href, const URL& baseURL, const String& charset, const CachedCSSStyleSheet* sheet) override;
-    bool sheetLoaded() override;
-    void notifyLoadedSheetAndAllCriticalSubresources(bool errorOccurred) override;
-    void startLoadingDynamicSheet() override;
+    void setCSSStyleSheet(const String& href, const URL& baseURL, const String& charset, const CachedCSSStyleSheet*) final;
+    bool sheetLoaded() final;
+    void notifyLoadedSheetAndAllCriticalSubresources(bool errorOccurred) final;
+    void startLoadingDynamicSheet() final;
 
-    void linkLoaded() override;
-    void linkLoadingErrored() override;
+    void linkLoaded() final;
+    void linkLoadingErrored() final;
 
     bool isAlternate() const { return m_disabledState == Unset && m_relAttribute.isAlternate; }
     
     void setDisabledState(bool);
 
-    bool isURLAttribute(const Attribute&) const override;
+    bool isURLAttribute(const Attribute&) const final;
 
-    void defaultEventHandler(Event*) override;
+    void defaultEventHandler(Event*) final;
     void handleClick(Event&);
 
     HTMLLinkElement(const QualifiedName&, Document&, bool createdByParser);
 
-    void addSubresourceAttributeURLs(ListHashSet<URL>&) const override;
+    void addSubresourceAttributeURLs(ListHashSet<URL>&) const final;
 
-    void finishParsingChildren() override;
+    void finishParsingChildren() final;
 
     enum PendingSheetType { Unknown, ActiveSheet, InactiveSheet };
     void addPendingSheet(PendingSheetType);
@@ -146,5 +145,3 @@ private:
 };
 
 } //namespace
-
-#endif

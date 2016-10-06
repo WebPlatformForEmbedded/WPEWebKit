@@ -29,6 +29,7 @@
 #if ENABLE(INDEXED_DATABASE)
 
 #include "IDBCursorInfo.h"
+#include "IDBGetRecordData.h"
 #include "IDBKeyRangeData.h"
 #include "IDBResultData.h"
 #include "IDBServer.h"
@@ -59,6 +60,7 @@ UniqueIDBDatabase::UniqueIDBDatabase(IDBServer& server, const IDBDatabaseIdentif
 UniqueIDBDatabase::~UniqueIDBDatabase()
 {
     LOG(IndexedDB, "UniqueIDBDatabase::~UniqueIDBDatabase() (%p) %s", this, m_identifier.debugString().utf8().data());
+    ASSERT(isMainThread());
     ASSERT(!hasAnyPendingCallbacks());
     ASSERT(!hasUnfinishedTransactions());
     ASSERT(m_pendingTransactions.isEmpty());
@@ -98,7 +100,7 @@ bool UniqueIDBDatabase::hasAnyPendingCallbacks() const
 
 bool UniqueIDBDatabase::isVersionChangeInProgress()
 {
-#ifndef NDEBUG
+#if !LOG_DISABLED
     if (m_versionChangeTransaction)
         ASSERT(m_versionChangeDatabaseConnection);
 #endif
@@ -296,6 +298,12 @@ void UniqueIDBDatabase::didDeleteBackingStore(uint64_t deletedVersion)
     }
 
     invokeOperationAndTransactionTimer();
+}
+
+void UniqueIDBDatabase::didPerformUnconditionalDeleteBackingStore()
+{
+    // This function is a placeholder so the database thread can message back to the main thread.
+    ASSERT(m_hardClosedForUserDelete);
 }
 
 void UniqueIDBDatabase::handleDatabaseOperations()
@@ -906,7 +914,7 @@ void UniqueIDBDatabase::didPerformPutOrAdd(uint64_t callbackIdentifier, const ID
     performKeyDataCallback(callbackIdentifier, error, resultKey);
 }
 
-void UniqueIDBDatabase::getRecord(const IDBRequestData& requestData, const IDBKeyRangeData& range, GetResultCallback callback)
+void UniqueIDBDatabase::getRecord(const IDBRequestData& requestData, const IDBGetRecordData& getRecordData, GetResultCallback callback)
 {
     ASSERT(isMainThread());
     LOG(IndexedDB, "(main) UniqueIDBDatabase::getRecord");
@@ -916,9 +924,9 @@ void UniqueIDBDatabase::getRecord(const IDBRequestData& requestData, const IDBKe
         return;
 
     if (uint64_t indexIdentifier = requestData.indexIdentifier())
-        postDatabaseTask(createCrossThreadTask(*this, &UniqueIDBDatabase::performGetIndexRecord, callbackID, requestData.transactionIdentifier(), requestData.objectStoreIdentifier(), indexIdentifier, requestData.indexRecordType(), range));
+        postDatabaseTask(createCrossThreadTask(*this, &UniqueIDBDatabase::performGetIndexRecord, callbackID, requestData.transactionIdentifier(), requestData.objectStoreIdentifier(), indexIdentifier, requestData.indexRecordType(), getRecordData.keyRangeData));
     else
-        postDatabaseTask(createCrossThreadTask(*this, &UniqueIDBDatabase::performGetRecord, callbackID, requestData.transactionIdentifier(), requestData.objectStoreIdentifier(), range));
+        postDatabaseTask(createCrossThreadTask(*this, &UniqueIDBDatabase::performGetRecord, callbackID, requestData.transactionIdentifier(), requestData.objectStoreIdentifier(), getRecordData.keyRangeData));
 }
 
 void UniqueIDBDatabase::performGetRecord(uint64_t callbackIdentifier, const IDBResourceIdentifier& transactionIdentifier, uint64_t objectStoreIdentifier, const IDBKeyRangeData& keyRangeData)
@@ -1169,6 +1177,11 @@ void UniqueIDBDatabase::didFinishHandlingVersionChange(UniqueIDBDatabaseConnecti
     m_versionChangeTransaction = nullptr;
     m_versionChangeDatabaseConnection = nullptr;
 
+    if (m_hardClosedForUserDelete) {
+        maybeFinishHardClose();
+        return;
+    }
+
     invokeOperationAndTransactionTimer();
 }
 
@@ -1255,6 +1268,11 @@ void UniqueIDBDatabase::connectionClosedFromClient(UniqueIDBDatabaseConnection& 
 
     if (connection.hasNonFinishedTransactions()) {
         m_clientClosePendingDatabaseConnections.add(WTFMove(protectedConnection));
+        return;
+    }
+
+    if (m_hardClosedForUserDelete) {
+        maybeFinishHardClose();
         return;
     }
 
@@ -1503,6 +1521,8 @@ void UniqueIDBDatabase::transactionCompleted(RefPtr<UniqueIDBDatabaseTransaction
     // Previously blocked operations might be runnable.
     if (!m_hardClosedForUserDelete)
         invokeOperationAndTransactionTimer();
+    else
+        maybeFinishHardClose();
 }
 
 void UniqueIDBDatabase::postDatabaseTask(CrossThreadTask&& task)
@@ -1536,6 +1556,10 @@ void UniqueIDBDatabase::executeNextDatabaseTask()
 
     task->performTask();
     --m_queuedTaskCount;
+
+    // Release the ref in the main thread to ensure it's deleted there as expected in case of being the last reference.
+    callOnMainThread([protectedThis = WTFMove(protectedThis)] {
+    });
 }
 
 void UniqueIDBDatabase::executeNextDatabaseTaskReply()
@@ -1554,11 +1578,20 @@ void UniqueIDBDatabase::executeNextDatabaseTaskReply()
 
     // If this database was force closed (e.g. for a user delete) and there are no more
     // cleanup tasks left, delete this.
-    if (m_hardCloseProtector && doneWithHardClose())
-        m_hardCloseProtector = nullptr;
+    maybeFinishHardClose();
 }
 
-bool UniqueIDBDatabase::doneWithHardClose()
+void UniqueIDBDatabase::maybeFinishHardClose()
+{
+    if (m_hardCloseProtector && isDoneWithHardClose()) {
+        callOnMainThread([this] {
+            ASSERT(isDoneWithHardClose());
+            m_hardCloseProtector = nullptr;
+        });
+    }
+}
+
+bool UniqueIDBDatabase::isDoneWithHardClose()
 {
     return !m_queuedTaskCount && m_clientClosePendingDatabaseConnections.isEmpty() && m_serverClosePendingDatabaseConnections.isEmpty();
 }

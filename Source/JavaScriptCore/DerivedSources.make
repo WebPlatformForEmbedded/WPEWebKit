@@ -76,6 +76,10 @@ BUILTINS_GENERATOR_SCRIPTS = \
     $(JavaScriptCore_SCRIPTS_DIR)/builtins/builtins_generate_combined_implementation.py \
     $(JavaScriptCore_SCRIPTS_DIR)/builtins/builtins_generate_separate_header.py \
     $(JavaScriptCore_SCRIPTS_DIR)/builtins/builtins_generate_separate_implementation.py \
+    ${JavaScriptCore_SCRIPTS_DIR}/builtins/builtins_generate_wrapper_header.py \
+    ${JavaScriptCore_SCRIPTS_DIR}/builtins/builtins_generate_wrapper_implementation.py \
+    ${JavaScriptCore_SCRIPTS_DIR}/builtins/builtins_generate_internals_wrapper_header.py \
+    ${JavaScriptCore_SCRIPTS_DIR}/builtins/builtins_generate_internals_wrapper_implementation.py \
     $(JavaScriptCore_SCRIPTS_DIR)/generate-js-builtins.py \
     $(JavaScriptCore_SCRIPTS_DIR)/lazywriter.py \
 #
@@ -88,11 +92,13 @@ JavaScriptCore_BUILTINS_SOURCES = \
     $(JavaScriptCore)/builtins/FunctionPrototype.js \
     $(JavaScriptCore)/builtins/GeneratorPrototype.js \
     $(JavaScriptCore)/builtins/GlobalObject.js \
+    $(JavaScriptCore)/builtins/GlobalOperations.js \
     $(JavaScriptCore)/builtins/InspectorInstrumentationObject.js \
     $(JavaScriptCore)/builtins/InternalPromiseConstructor.js \
     $(JavaScriptCore)/builtins/IteratorPrototype.js \
     $(JavaScriptCore)/builtins/MapPrototype.js \
-    $(JavaScriptCore)/builtins/ModuleLoaderObject.js \
+    $(JavaScriptCore)/builtins/ModuleLoaderPrototype.js \
+    $(JavaScriptCore)/builtins/NumberConstructor.js \
     $(JavaScriptCore)/builtins/NumberPrototype.js \
     $(JavaScriptCore)/builtins/ObjectConstructor.js \
     $(JavaScriptCore)/builtins/PromiseConstructor.js \
@@ -111,8 +117,7 @@ JavaScriptCore_BUILTINS_SOURCES = \
 # The combined output file depends on the contents of builtins and generator scripts, so
 # adding, modifying, or removing builtins or scripts will trigger regeneration of files.
 
-.PHONY: force
-JavaScriptCore_BUILTINS_DEPENDENCIES_LIST : $(JavaScriptCore_SCRIPTS_DIR)/UpdateContents.py force
+JavaScriptCore_BUILTINS_DEPENDENCIES_LIST : $(JavaScriptCore_SCRIPTS_DIR)/UpdateContents.py DerivedSources.make
 	$(PYTHON) $(JavaScriptCore_SCRIPTS_DIR)/UpdateContents.py '$(JavaScriptCore_BUILTINS_SOURCES) $(BUILTINS_GENERATOR_SCRIPTS)' $@
 
 JSCBuiltins.h: $(BUILTINS_GENERATOR_SCRIPTS) $(JavaScriptCore_BUILTINS_SOURCES) JavaScriptCore_BUILTINS_DEPENDENCIES_LIST
@@ -142,7 +147,7 @@ OBJECT_LUT_HEADERS = \
     JSPromisePrototype.lut.h \
     JSPromiseConstructor.lut.h \
     MapPrototype.lut.h \
-    ModuleLoaderObject.lut.h \
+    ModuleLoaderPrototype.lut.h \
     NumberConstructor.lut.h \
     NumberPrototype.lut.h \
     ObjectConstructor.lut.h \

@@ -34,6 +34,7 @@ list(APPEND WebKit2_SOURCES
 
     NetworkProcess/Downloads/soup/DownloadSoup.cpp
 
+    NetworkProcess/cache/NetworkCacheCodersSoup.cpp
     NetworkProcess/cache/NetworkCacheDataSoup.cpp
     NetworkProcess/cache/NetworkCacheIOChannelSoup.cpp
 
@@ -80,6 +81,7 @@ list(APPEND WebKit2_SOURCES
 
     Shared/unix/ChildProcessMain.cpp
 
+    UIProcess/AcceleratedDrawingAreaProxy.cpp
     UIProcess/BackingStore.cpp
     UIProcess/DefaultUndoController.cpp
     UIProcess/DrawingAreaProxyImpl.cpp
@@ -273,6 +275,8 @@ list(APPEND WebKit2_SOURCES
 
     UIProcess/Launcher/gtk/ProcessLauncherGtk.cpp
 
+    UIProcess/linux/MemoryPressureMonitor.cpp
+
     UIProcess/Network/CustomProtocols/soup/CustomProtocolManagerProxySoup.cpp
     UIProcess/Network/CustomProtocols/soup/WebSoupCustomProtocolRequestManager.cpp
     UIProcess/Network/CustomProtocols/soup/WebSoupCustomProtocolRequestManagerClient.cpp
@@ -296,8 +300,8 @@ list(APPEND WebKit2_SOURCES
     UIProcess/gtk/GestureController.cpp
     UIProcess/gtk/InputMethodFilter.cpp
     UIProcess/gtk/KeyBindingTranslator.cpp
-    UIProcess/gtk/RedirectedXCompositeWindow.cpp
     UIProcess/gtk/TextCheckerGtk.cpp
+    UIProcess/gtk/XDamageNotifier.cpp
     UIProcess/gtk/WebColorPickerGtk.cpp
     UIProcess/gtk/WebContextMenuProxyGtk.cpp
     UIProcess/gtk/WebFullScreenClientGtk.cpp
@@ -339,6 +343,7 @@ list(APPEND WebKit2_SOURCES
 
     WebProcess/WebCoreSupport/soup/WebFrameNetworkingContext.cpp
 
+    WebProcess/WebPage/AcceleratedDrawingArea.cpp
     WebProcess/WebPage/DrawingAreaImpl.cpp
 
     WebProcess/WebPage/atk/WebPageAccessibilityObjectAtk.cpp
@@ -346,6 +351,7 @@ list(APPEND WebKit2_SOURCES
     WebProcess/WebPage/gstreamer/WebPageGStreamer.cpp
 
     WebProcess/WebPage/gtk/PrinterListGtk.cpp
+    WebProcess/WebPage/gtk/RedirectedXCompositeWindow.cpp
     WebProcess/WebPage/gtk/WebInspectorUIGtk.cpp
     WebProcess/WebPage/gtk/WebPageGtk.cpp
     WebProcess/WebPage/gtk/WebPrintOperationGtk.cpp
@@ -512,6 +518,7 @@ list(APPEND WebKit2_INCLUDE_DIRECTORIES
     "${WEBKIT2_DIR}/UIProcess/Plugins/gtk"
     "${WEBKIT2_DIR}/UIProcess/gstreamer"
     "${WEBKIT2_DIR}/UIProcess/gtk"
+    "${WEBKIT2_DIR}/UIProcess/linux"
     "${WEBKIT2_DIR}/UIProcess/soup"
     "${WEBKIT2_DIR}/WebProcess/InjectedBundle/API/gtk"
     "${WEBKIT2_DIR}/WebProcess/Plugins/Netscape/unix"
@@ -687,13 +694,11 @@ if (ENABLE_PLUGIN_PROCESS_GTK2)
         Platform/Module.cpp
 
         Platform/IPC/ArgumentCoders.cpp
-        Platform/IPC/ArgumentDecoder.cpp
-        Platform/IPC/ArgumentEncoder.cpp
         Platform/IPC/Attachment.cpp
         Platform/IPC/Connection.cpp
         Platform/IPC/DataReference.cpp
-        Platform/IPC/MessageDecoder.cpp
-        Platform/IPC/MessageEncoder.cpp
+        Platform/IPC/Decoder.cpp
+        Platform/IPC/Encoder.cpp
         Platform/IPC/MessageReceiverMap.cpp
         Platform/IPC/MessageSender.cpp
         Platform/IPC/StringReference.cpp
@@ -826,7 +831,11 @@ if (ENABLE_THREADED_COMPOSITOR)
         Shared/CoordinatedGraphics/threadedcompositor/ThreadSafeCoordinatedSurface.cpp
         Shared/CoordinatedGraphics/threadedcompositor/ThreadedCompositor.cpp
 
+        WebProcess/WebPage/CoordinatedGraphics/AreaAllocator.cpp
+        WebProcess/WebPage/CoordinatedGraphics/CompositingCoordinator.cpp
+        WebProcess/WebPage/CoordinatedGraphics/CoordinatedLayerTreeHost.cpp
         WebProcess/WebPage/CoordinatedGraphics/ThreadedCoordinatedLayerTreeHost.cpp
+        WebProcess/WebPage/CoordinatedGraphics/UpdateAtlas.cpp
     )
     list(APPEND WebKit2_INCLUDE_DIRECTORIES
         "${WEBCORE_DIR}/platform/graphics/texmap/coordinated"

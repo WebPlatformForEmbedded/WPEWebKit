@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2013, 2015 Apple Inc. All rights reserved.
+ * Copyright (C) 2011-2013, 2015-2016 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -65,7 +65,6 @@ public:
 
     void append(ConservativeRoots&);
     
-    template<typename T> void append(JITWriteBarrier<T>*);
     template<typename T> void append(WriteBarrierBase<T>*);
     template<typename T> void appendHidden(WriteBarrierBase<T>*);
     template<typename Iterator> void append(Iterator begin , Iterator end);
@@ -109,6 +108,9 @@ public:
     void copyLater(JSCell*, CopyToken, void*, size_t);
     
     void reportExtraMemoryVisited(size_t);
+#if ENABLE(RESOURCE_USAGE)
+    void reportExternalMemoryVisited(size_t);
+#endif
     
     void addWeakReferenceHarvester(WeakReferenceHarvester*);
     void addUnconditionalFinalizer(UnconditionalFinalizer*);

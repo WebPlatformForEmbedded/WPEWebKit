@@ -65,7 +65,7 @@ class MediaSourcePrivateClient;
 class MediaPlayerPrivateGStreamer : public MediaPlayerPrivateGStreamerBase {
 public:
     explicit MediaPlayerPrivateGStreamer(MediaPlayer*);
-    ~MediaPlayerPrivateGStreamer();
+    virtual ~MediaPlayerPrivateGStreamer();
 
     static void registerMediaEngine(MediaEngineRegistrar);
     void handleMessage(GstMessage*);
@@ -76,7 +76,7 @@ public:
 
     void load(const String &url) override;
 #if ENABLE(MEDIA_SOURCE)
-    void load(const String& url, MediaSourcePrivateClient* mediaSource) override;
+    void load(const String& url, MediaSourcePrivateClient*) override;
 #endif
 
 #if ENABLE(MEDIA_STREAM)
@@ -87,13 +87,13 @@ public:
 
     void prepareToPlay() override;
     void play() override;
-    virtual void pause() override;
+    void pause() override;
 
     bool paused() const override;
     bool seeking() const override;
 
-    double durationDouble() const override;
-    double currentTimeDouble() const override;
+    MediaTime durationMediaTime() const override;
+    MediaTime currentMediaTime() const override;
     virtual void seekDouble(double) override;
 
     void setRateDouble(double) override;
@@ -105,8 +105,8 @@ public:
 
     std::unique_ptr<PlatformTimeRanges> buffered() const override;
     virtual MediaTime maxMediaTimeSeekable() const override;
-    virtual bool didLoadingProgress() const override;
-    virtual unsigned long long totalBytes() const override;
+    bool didLoadingProgress() const override;
+    unsigned long long totalBytes() const override;
     double maxTimeLoaded() const override;
 
     void loadStateChanged();
@@ -119,7 +119,7 @@ public:
     virtual void sourceChanged();
 
     GstElement* audioSink() const override;
-    virtual void configurePlaySink() { };
+    virtual void configurePlaySink() { }
 
     void simulateAudioInterruption() override;
 
@@ -131,8 +131,6 @@ public:
 
     bool isLiveStream() const override { return m_isStreaming; }
 
-    bool handleSyncMessage(GstMessage*) override;
-
 private:
     static void getSupportedTypes(HashSet<String, ASCIICaseInsensitiveHash>&);
     static MediaPlayer::SupportsType supportsType(const MediaEngineSupportParameters&);
@@ -143,7 +141,7 @@ private:
 
     GstElement* createAudioSink() override;
 
-    double playbackPositionDouble() const;
+    double playbackPosition() const;
 
     virtual void updateStates();
     virtual void asyncStateChangeDone();
@@ -170,20 +168,23 @@ private:
     bool canSaveMediaData() const override;
 
 protected:
-    void cacheDuration();
-
     bool m_buffering;
     int m_bufferingPercentage;
     mutable double m_cachedPosition;
+    bool m_canFallBackToLastFinishedSeekPosition;
+    bool m_changingRate;
     bool m_downloadFinished;
     bool m_errorOccured;
-    mutable gdouble m_mediaDuration;
+    mutable bool m_isStreaming;
+    mutable gdouble m_durationAtEOS;
     bool m_paused;
     double m_playbackRate;
     GstState m_requestedState;
     bool m_resetPipeline;
     bool m_seeking;
     bool m_seekIsPending;
+    double m_seekTime;
+    GRefPtr<GstElement> m_source;
     bool m_volumeAndMuteInitialized;
 
     void readyTimerFired();
@@ -213,26 +214,19 @@ protected:
 
     WeakPtrFactory<MediaPlayerPrivateGStreamer> m_weakPtrFactory;
 
-    GRefPtr<GstElement> m_source;
 #if ENABLE(VIDEO_TRACK)
     GRefPtr<GstElement> m_textAppSink;
     GRefPtr<GstPad> m_textAppSinkPad;
 #endif
-    double m_seekTime;
-    bool m_changingRate;
-    mutable bool m_isEndReached;
-    mutable bool m_isStreaming;
     GstStructure* m_mediaLocations;
     int m_mediaLocationCurrentIndex;
     bool m_playbackRatePause;
     double m_timeOfOverlappingSeek;
-    bool m_canFallBackToLastFinishedSeekPosition;
     double m_lastPlaybackRate;
     Timer m_fillTimer;
     double m_maxTimeLoaded;
     MediaPlayer::Preload m_preload;
     bool m_delayingLoad;
-    bool m_mediaDurationKnown;
     mutable double m_maxTimeLoadedAtLastDidLoadingProgress;
     bool m_hasVideo;
     bool m_hasAudio;

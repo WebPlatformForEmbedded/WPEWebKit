@@ -57,6 +57,20 @@ public:
     void keyDownUsingHardwareKeyboard(JSStringRef character, JSValueRef callback);
     void keyUpUsingHardwareKeyboard(JSStringRef character, JSValueRef callback);
 
+    void keyboardAccessoryBarNext();
+    void keyboardAccessoryBarPrevious();
+    
+    void dismissFormAccessoryView();
+    void selectFormAccessoryPickerRow(long);
+    
+    void scrollToOffset(long x, long y);
+
+    void setDidStartFormControlInteractionCallback(JSValueRef);
+    JSValueRef didStartFormControlInteractionCallback() const;
+
+    void setDidEndFormControlInteractionCallback(JSValueRef);
+    JSValueRef didEndFormControlInteractionCallback() const;
+
     void setWillBeginZoomingCallback(JSValueRef);
     JSValueRef willBeginZoomingCallback() const;
 
@@ -77,12 +91,14 @@ public:
     double maximumZoomScale() const;
 
     JSObjectRef contentVisibleRect() const;
-
+    
     void uiScriptComplete(JSStringRef result);
 
 private:
     UIScriptController(UIScriptContext&);
-    
+
+    void platformSetDidStartFormControlInteractionCallback();
+    void platformSetDidEndFormControlInteractionCallback();
     void platformSetWillBeginZoomingCallback();
     void platformSetDidEndZoomingCallback();
     void platformSetDidShowKeyboardCallback();

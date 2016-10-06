@@ -22,8 +22,7 @@
  *
  */
 
-#ifndef Node_h
-#define Node_h
+#pragma once
 
 #include "EventTarget.h"
 #include "URLHash.h"
@@ -51,7 +50,6 @@ class MathMLQualifiedName;
 class NamedNodeMap;
 class NodeList;
 class NodeListsNodeData;
-class NodeOrString;
 class NodeRareData;
 class QualifiedName;
 class RenderBox;
@@ -124,7 +122,7 @@ public:
     };
 
     // Only used by ObjC / GObject bindings.
-    static bool isSupportedForBindings(const String& feature, const String& version);
+    WEBCORE_EXPORT static bool isSupportedForBindings(const String& feature, const String& version);
 
     WEBCORE_EXPORT static void startIgnoringLeaks();
     WEBCORE_EXPORT static void stopIgnoringLeaks();
@@ -151,7 +149,7 @@ public:
     static ptrdiff_t previousSiblingMemoryOffset() { return OBJECT_OFFSETOF(Node, m_previous); }
     Node* nextSibling() const { return m_next; }
     static ptrdiff_t nextSiblingMemoryOffset() { return OBJECT_OFFSETOF(Node, m_next); }
-    RefPtr<NodeList> childNodes();
+    WEBCORE_EXPORT RefPtr<NodeList> childNodes();
     Node* firstChild() const;
     Node* lastChild() const;
     bool hasAttributes() const;
@@ -161,7 +159,7 @@ public:
     Node* pseudoAwareFirstChild() const;
     Node* pseudoAwareLastChild() const;
 
-    URL baseURI() const;
+    WEBCORE_EXPORT const URL& baseURI() const;
     
     void getSubresourceURLs(ListHashSet<URL>&) const;
 
@@ -169,7 +167,7 @@ public:
     // which will already know and hold a ref on the right node to return. Returning bool allows
     // these methods to be more efficient since they don't need to return a ref
     WEBCORE_EXPORT bool insertBefore(Node& newChild, Node* refChild, ExceptionCode&);
-    bool replaceChild(Node& newChild, Node& oldChild, ExceptionCode&);
+    WEBCORE_EXPORT bool replaceChild(Node& newChild, Node& oldChild, ExceptionCode&);
     WEBCORE_EXPORT bool removeChild(Node& child, ExceptionCode&);
     WEBCORE_EXPORT bool appendChild(Node& newChild, ExceptionCode&);
 
@@ -182,21 +180,20 @@ public:
     };
     virtual Ref<Node> cloneNodeInternal(Document&, CloningOperation) = 0;
     Ref<Node> cloneNode(bool deep) { return cloneNodeInternal(document(), deep ? CloningOperation::Everything : CloningOperation::OnlySelf); }
-    RefPtr<Node> cloneNodeForBindings(bool deep, ExceptionCode&);
+    WEBCORE_EXPORT RefPtr<Node> cloneNodeForBindings(bool deep, ExceptionCode&);
 
     virtual const AtomicString& localName() const;
     virtual const AtomicString& namespaceURI() const;
     virtual const AtomicString& prefix() const;
     virtual void setPrefix(const AtomicString&, ExceptionCode&);
-    void normalize();
+    WEBCORE_EXPORT void normalize();
 
     bool isSameNode(Node* other) const { return this == other; }
-    bool isEqualNode(Node*) const;
-    bool isDefaultNamespace(const AtomicString& namespaceURI) const;
-    String lookupPrefix(const AtomicString& namespaceURI) const;
-    String lookupNamespaceURI(const String& prefix) const;
-    String lookupNamespacePrefix(const AtomicString& namespaceURI, const Element* originalElement) const;
-    
+    WEBCORE_EXPORT bool isEqualNode(Node*) const;
+    WEBCORE_EXPORT bool isDefaultNamespace(const AtomicString& namespaceURI) const;
+    WEBCORE_EXPORT const AtomicString& lookupPrefix(const AtomicString& namespaceURI) const;
+    WEBCORE_EXPORT const AtomicString& lookupNamespaceURI(const AtomicString& prefix) const;
+
     WEBCORE_EXPORT String textContent(bool convertBRsToNewlines = false) const;
     WEBCORE_EXPORT void setTextContent(const String&, ExceptionCode&);
     
@@ -204,13 +201,13 @@ public:
     Node* firstDescendant() const;
 
     // From the NonDocumentTypeChildNode - https://dom.spec.whatwg.org/#nondocumenttypechildnode
-    Element* previousElementSibling() const;
-    Element* nextElementSibling() const;
+    WEBCORE_EXPORT Element* previousElementSibling() const;
+    WEBCORE_EXPORT Element* nextElementSibling() const;
 
     // From the ChildNode - https://dom.spec.whatwg.org/#childnode
-    void before(Vector<NodeOrString>&&, ExceptionCode&);
-    void after(Vector<NodeOrString>&&, ExceptionCode&);
-    void replaceWith(Vector<NodeOrString>&&, ExceptionCode&);
+    void before(Vector<std::experimental::variant<Ref<Node>, String>>&&, ExceptionCode&);
+    void after(Vector<std::experimental::variant<Ref<Node>, String>>&&, ExceptionCode&);
+    void replaceWith(Vector<std::experimental::variant<Ref<Node>, String>>&&, ExceptionCode&);
     WEBCORE_EXPORT void remove(ExceptionCode&);
 
     // Other methods (not part of DOM)
@@ -247,7 +244,6 @@ public:
     bool isDocumentFragment() const { return getFlag(IsDocumentFragmentFlag); }
     bool isShadowRoot() const { return isDocumentFragment() && isTreeScope(); }
 
-    bool isNamedFlowContentNode() const { return getFlag(IsNamedFlowContentNodeFlag); }
     bool hasCustomStyleResolveCallbacks() const { return getFlag(HasCustomStyleResolveCallbacksFlag); }
 
     bool hasSyntheticAttrChildNodes() const { return getFlag(HasSyntheticAttrChildNodesFlag); }
@@ -337,9 +333,6 @@ public:
     bool isLink() const { return getFlag(IsLinkFlag); }
     void setIsLink(bool flag) { setFlag(flag, IsLinkFlag); }
 
-    void setIsNamedFlowContentNode() { setFlag(IsNamedFlowContentNodeFlag); }
-    void clearIsNamedFlowContentNode() { clearFlag(IsNamedFlowContentNodeFlag); }
-
     bool hasEventTargetData() const { return getFlag(HasEventTargetDataFlag); }
     void setHasEventTargetData(bool flag) { setFlag(flag, HasEventTargetDataFlag); }
 
@@ -408,7 +401,7 @@ public:
 
     WEBCORE_EXPORT bool isDescendantOf(const Node*) const;
     bool isDescendantOrShadowDescendantOf(const Node*) const;
-    bool contains(const Node*) const;
+    WEBCORE_EXPORT bool contains(const Node*) const;
     bool containsIncludingShadowDOM(const Node*) const;
     bool containsIncludingHostElements(const Node*) const;
 
@@ -498,7 +491,7 @@ public:
     virtual bool willRespondToMouseClickEvents();
     virtual bool willRespondToMouseWheelEvents();
 
-    WEBCORE_EXPORT unsigned short compareDocumentPosition(Node*);
+    WEBCORE_EXPORT unsigned short compareDocumentPosition(Node&);
 
     Node* toNode() override;
 
@@ -572,6 +565,7 @@ public:
     static int32_t flagIsElement() { return IsElementFlag; }
     static int32_t flagIsHTML() { return IsHTMLFlag; }
     static int32_t flagIsLink() { return IsLinkFlag; }
+    static int32_t flagHasFocusWithin() { return HasFocusWithin; }
     static int32_t flagHasRareData() { return HasRareDataFlag; }
     static int32_t flagIsParsingChildrenFinished() { return IsParsingChildrenFinishedFlag; }
     static int32_t flagChildrenAffectedByFirstChildRulesFlag() { return ChildrenAffectedByFirstChildRulesFlag; }
@@ -602,7 +596,7 @@ protected:
 
         StyleChangeMask = 1 << nodeStyleChangeShift | 1 << (nodeStyleChangeShift + 1) | 1 << (nodeStyleChangeShift + 2),
         IsEditingTextOrUnresolvedCustomElementFlag = 1 << 17,
-        IsNamedFlowContentNodeFlag = 1 << 18,
+        HasFocusWithin = 1 << 18,
         HasSyntheticAttrChildNodesFlag = 1 << 19,
         HasCustomStyleResolveCallbacksFlag = 1 << 20,
         HasEventTargetDataFlag = 1 << 21,
@@ -663,6 +657,8 @@ protected:
 
     void setStyleChange(StyleChangeType changeType) { m_nodeFlags = (m_nodeFlags & ~StyleChangeMask) | changeType; }
     void updateAncestorsForStyleRecalc();
+
+    RefPtr<Node> convertNodesOrStringsIntoNode(Vector<std::experimental::variant<Ref<Node>, String>>&&, ExceptionCode&);
 
 private:
     virtual PseudoId customPseudoId() const
@@ -789,6 +785,4 @@ inline void Node::setCustomElementIsResolved()
 // Outside the WebCore namespace for ease of invocation from gdb.
 void showTree(const WebCore::Node*);
 void showNodePath(const WebCore::Node*);
-#endif
-
 #endif

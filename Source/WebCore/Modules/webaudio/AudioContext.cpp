@@ -63,7 +63,6 @@
 #include "ScriptProcessorNode.h"
 #include "WaveShaperNode.h"
 #include <inspector/ScriptCallStack.h>
-#include <wtf/NeverDestroyed.h>
 
 #if ENABLE(MEDIA_STREAM)
 #include "MediaStream.h"
@@ -797,7 +796,7 @@ void AudioContext::scheduleNodeDeletion()
 
         m_isDeletionScheduled = true;
 
-        callOnMainThread([protectedThis = Ref<AudioContext>(*this)]() mutable {
+        callOnMainThread([protectedThis = makeRef(*this)]() mutable {
             protectedThis->deleteMarkedNodes();
         });
     }
@@ -1001,7 +1000,7 @@ void AudioContext::isPlayingAudioDidChange()
 {
     // Make sure to call Document::updateIsPlayingMedia() on the main thread, since
     // we could be on the audio I/O thread here and the call into WebCore could block.
-    callOnMainThread([protectedThis = Ref<AudioContext>(*this)] {
+    callOnMainThread([protectedThis = makeRef(*this)] {
         if (protectedThis->document())
             protectedThis->document()->updateIsPlayingMedia();
     });
@@ -1061,7 +1060,7 @@ void AudioContext::suspend(Promise&& promise)
 
     lazyInitialize();
 
-    m_destinationNode->suspend([this, protectedThis = Ref<AudioContext>(*this)] {
+    m_destinationNode->suspend([this, protectedThis = makeRef(*this)] {
         setState(State::Suspended);
     });
 }
@@ -1090,7 +1089,7 @@ void AudioContext::resume(Promise&& promise)
 
     lazyInitialize();
 
-    m_destinationNode->resume([this, protectedThis = Ref<AudioContext>(*this)] {
+    m_destinationNode->resume([this, protectedThis = makeRef(*this)] {
         setState(State::Running);
     });
 }
@@ -1111,7 +1110,7 @@ void AudioContext::close(Promise&& promise)
 
     lazyInitialize();
 
-    m_destinationNode->close([this, protectedThis = Ref<AudioContext>(*this)] {
+    m_destinationNode->close([this, protectedThis = makeRef(*this)] {
         setState(State::Closed);
         uninitialize();
     });
@@ -1131,7 +1130,7 @@ void AudioContext::suspendPlayback()
 
     lazyInitialize();
 
-    m_destinationNode->suspend([this, protectedThis = Ref<AudioContext>(*this)] {
+    m_destinationNode->suspend([this, protectedThis = makeRef(*this)] {
         bool interrupted = m_mediaSession->state() == PlatformMediaSession::Interrupted;
         setState(interrupted ? State::Interrupted : State::Suspended);
     });
@@ -1152,7 +1151,7 @@ void AudioContext::mayResumePlayback(bool shouldResume)
 
     lazyInitialize();
 
-    m_destinationNode->resume([this, protectedThis = Ref<AudioContext>(*this)] {
+    m_destinationNode->resume([this, protectedThis = makeRef(*this)] {
         setState(State::Running);
     });
 }

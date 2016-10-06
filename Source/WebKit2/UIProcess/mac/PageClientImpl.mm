@@ -480,10 +480,6 @@ void PageClientImpl::updateAcceleratedCompositingMode(const LayerTreeContext& la
     m_impl->setAcceleratedCompositingRootLayer(renderLayer);
 }
 
-void PageClientImpl::willEnterAcceleratedCompositingMode()
-{
-}
-
 void PageClientImpl::setAcceleratedCompositingRootLayer(CALayer *rootLayer)
 {
     m_impl->setAcceleratedCompositingRootLayer(rootLayer);
@@ -620,6 +616,11 @@ Vector<String> PageClientImpl::dictationAlternatives(uint64_t dictationContext)
     return m_alternativeTextUIController->alternativesForContext(dictationContext);
 }
 #endif
+
+void PageClientImpl::setEditableElementIsFocused(bool editableElementIsFocused)
+{
+    m_impl->setEditableElementIsFocused(editableElementIsFocused);
+}
 
 #if ENABLE(FULLSCREEN_API)
 
@@ -840,11 +841,11 @@ bool PageClientImpl::windowIsFrontWindowUnderMouse(const NativeWebMouseEvent& ev
     return m_impl->windowIsFrontWindowUnderMouse(event.nativeEvent());
 }
 
-UserInterfaceLayoutDirection PageClientImpl::userInterfaceLayoutDirection()
+WebCore::UserInterfaceLayoutDirection PageClientImpl::userInterfaceLayoutDirection()
 {
     if (!m_view)
-        return UserInterfaceLayoutDirection::LTR;
-    return (m_view.userInterfaceLayoutDirection == NSUserInterfaceLayoutDirectionLeftToRight) ? UserInterfaceLayoutDirection::LTR : UserInterfaceLayoutDirection::RTL;
+        return WebCore::UserInterfaceLayoutDirection::LTR;
+    return (m_view.userInterfaceLayoutDirection == NSUserInterfaceLayoutDirectionLeftToRight) ? WebCore::UserInterfaceLayoutDirection::LTR : WebCore::UserInterfaceLayoutDirection::RTL;
 }
 
 } // namespace WebKit

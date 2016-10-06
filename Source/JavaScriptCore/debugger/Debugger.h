@@ -78,6 +78,7 @@ public:
     void clearBreakpoints();
     void activateBreakpoints() { setBreakpointsActivated(true); }
     void deactivateBreakpoints() { setBreakpointsActivated(false); }
+    bool breakpointsActive() const { return m_breakpointsActivated; }
 
     enum PauseOnExceptionsState {
         DontPauseOnExceptions,
@@ -143,7 +144,6 @@ public:
     void didEvaluateScript(double startTime, ProfilingReason);
 
 protected:
-    virtual bool needPauseHandling(JSGlobalObject*) { return false; }
     virtual void handleBreakpointHit(JSGlobalObject*, const Breakpoint&) { }
     virtual void handleExceptionInBreakpointCondition(ExecState*, Exception*) const { }
     virtual void handlePause(JSGlobalObject*, ReasonForPause) { }

@@ -26,14 +26,12 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-
-#ifndef ReadableStreamSource_h
-#define ReadableStreamSource_h
+#pragma once
 
 #if ENABLE(STREAMS_API)
 
 #include "JSDOMPromise.h"
-#include "ReadableStreamController.h"
+#include "ReadableStreamDefaultController.h"
 #include <wtf/Optional.h>
 
 namespace WebCore {
@@ -46,14 +44,15 @@ public:
 
     typedef DOMPromise<std::nullptr_t> Promise;
 
-    void start(ReadableStreamController&&, Promise&&);
+    virtual void firstReadCallback() { }
+    void start(ReadableStreamDefaultController&&, Promise&&);
     void cancel(JSC::JSValue);
 
     bool isStarting() const { return !!m_startPromise; }
 
 protected:
-    ReadableStreamController& controller() { return m_controller.value(); }
-    const ReadableStreamController& controller() const { return m_controller.value(); }
+    ReadableStreamDefaultController& controller() { return m_controller.value(); }
+    const ReadableStreamDefaultController& controller() const { return m_controller.value(); }
 
     void startFinished();
     void cancelFinished();
@@ -67,10 +66,10 @@ protected:
 
 private:
     Optional<Promise> m_startPromise;
-    Optional<ReadableStreamController> m_controller;
+    Optional<ReadableStreamDefaultController> m_controller;
 };
 
-inline void ReadableStreamSource::start(ReadableStreamController&& controller, Promise&& promise)
+inline void ReadableStreamSource::start(ReadableStreamDefaultController&& controller, Promise&& promise)
 {
     m_startPromise = WTFMove(promise);
     m_controller = WTFMove(controller);
@@ -103,5 +102,3 @@ inline void ReadableStreamSource::clean()
 } // namespace WebCore
 
 #endif // ENABLE(STREAMS_API)
-
-#endif // ReadableStreamSource_h

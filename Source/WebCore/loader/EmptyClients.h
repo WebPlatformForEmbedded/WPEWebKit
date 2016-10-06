@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2006 Eric Seidel (eric@webkit.org)
- * Copyright (C) 2008-2012, 2015 Apple Inc. All rights reserved.
+ * Copyright (C) 2008-2016 Apple Inc. All rights reserved.
  * Copyright (C) 2010 Nokia Corporation and/or its subsidiary(-ies).
  * Copyright (C) 2012 Samsung Electronics. All rights reserved.
  *
@@ -33,6 +33,7 @@
 #include "DeviceMotionClient.h"
 #include "DeviceOrientationClient.h"
 #include "DiagnosticLoggingClient.h"
+#include "DocumentFragment.h"
 #include "DragClient.h"
 #include "EditorClient.h"
 #include "FloatRect.h"
@@ -266,7 +267,6 @@ public:
     bool shouldUseCredentialStorage(DocumentLoader*, unsigned long) override { return false; }
     void dispatchWillSendRequest(DocumentLoader*, unsigned long, ResourceRequest&, const ResourceResponse&) override { }
     void dispatchDidReceiveAuthenticationChallenge(DocumentLoader*, unsigned long, const AuthenticationChallenge&) override { }
-    void dispatchDidCancelAuthenticationChallenge(DocumentLoader*, unsigned long, const AuthenticationChallenge&) override { }
 #if USE(PROTECTION_SPACE_AUTH_CALLBACK)
     bool canAuthenticateAgainstProtectionSpace(DocumentLoader*, unsigned long, const ProtectionSpace&) override { return false; }
 #endif
@@ -301,7 +301,7 @@ public:
     void dispatchDidFailLoad(const ResourceError&) override { }
     void dispatchDidFinishDocumentLoad() override { }
     void dispatchDidFinishLoad() override { }
-    void dispatchDidLayout(LayoutMilestones) override { }
+    void dispatchDidReachLayoutMilestone(LayoutMilestones) override { }
 
     Frame* dispatchCreatePage(const NavigationAction&) override { return nullptr; }
     void dispatchShow() override { }
@@ -337,6 +337,9 @@ public:
     ResourceError blockedByContentBlockerError(const ResourceRequest&) override { return { }; }
     ResourceError cannotShowURLError(const ResourceRequest&) override { return { }; }
     ResourceError interruptedForPolicyChangeError(const ResourceRequest&) override { return { }; }
+#if ENABLE(CONTENT_FILTERING)
+    ResourceError blockedByContentFilterError(const ResourceRequest&) override { return { }; }
+#endif
 
     ResourceError cannotShowMIMETypeError(const ResourceResponse&) override { return { }; }
     ResourceError fileDoesNotExistError(const ResourceResponse&) override { return { }; }
@@ -348,7 +351,7 @@ public:
     bool canShowMIMEType(const String&) const override { return false; }
     bool canShowMIMETypeAsHTML(const String&) const override { return false; }
     bool representationExistsForURLScheme(const String&) const override { return false; }
-    String generatedMIMETypeForURLScheme(const String&) const override { return ""; }
+    String generatedMIMETypeForURLScheme(const String&) const override { return emptyString(); }
 
     void frameLoadCompleted() override { }
     void restoreViewState() override { }
@@ -360,7 +363,7 @@ public:
     void updateCachedDocumentLoader(DocumentLoader&) override { }
     void setTitle(const StringWithDirection&, const URL&) override { }
 
-    String userAgent(const URL&) override { return ""; }
+    String userAgent(const URL&) override { return emptyString(); }
 
     void savePlatformDataToCachedFrame(CachedFrame*) override { }
     void transitionToCommittedFromCachedFrame(CachedFrame*) override { }
@@ -388,7 +391,7 @@ public:
     void recreatePlugin(Widget*) override;
     PassRefPtr<Widget> createJavaAppletWidget(const IntSize&, HTMLAppletElement*, const URL&, const Vector<String>&, const Vector<String>&) override;
 
-    ObjectContentType objectContentType(const URL&, const String&) override { return ObjectContentType(); }
+    ObjectContentType objectContentType(const URL&, const String&) override { return ObjectContentType::None; }
     String overrideMediaType() const override { return String(); }
 
     void redirectDataToPlugin(Widget*) override { }
@@ -502,17 +505,16 @@ public:
     NSArray* readDataFromPasteboard(NSString*, int) override { return nullptr; }
     bool hasRichlyEditableSelection() override { return false; }
     int getPasteboardItemsCount() override { return 0; }
-    DocumentFragment* documentFragmentFromDelegate(int) override { return nullptr; }
+    RefPtr<DocumentFragment> documentFragmentFromDelegate(int) override { return nullptr; }
     bool performsTwoStepPaste(DocumentFragment*) override { return false; }
     int pasteboardChangeCount() override { return 0; }
 #endif
 
 #if PLATFORM(COCOA)
-    NSString* userVisibleString(NSURL*) override { return nullptr; }
-    DocumentFragment* documentFragmentFromAttributedString(NSAttributedString*, Vector<RefPtr<ArchiveResource>>&) override { return nullptr; };
+    NSString *userVisibleString(NSURL *) override { return nullptr; }
     void setInsertionPasteboard(const String&) override { };
-    NSURL *canonicalizeURL(NSURL*) override { return nullptr; }
-    NSURL *canonicalizeURLString(NSString*) override { return nullptr; }
+    NSURL *canonicalizeURL(NSURL *) override { return nullptr; }
+    NSURL *canonicalizeURLString(NSString *) override { return nullptr; }
 #endif
 
 #if USE(APPKIT)
@@ -644,9 +646,6 @@ class EmptyDiagnosticLoggingClient final : public DiagnosticLoggingClient {
     void logDiagnosticMessageWithValue(const String&, const String&, const String&, ShouldSample) override { }
 };
 
-class EmptySocketProvider final : public SocketProvider {
-};
-    
 void fillWithEmptyClients(PageConfiguration&);
 
 }

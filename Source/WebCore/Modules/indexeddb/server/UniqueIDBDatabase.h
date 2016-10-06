@@ -43,7 +43,6 @@
 #include <wtf/HashCountedSet.h>
 #include <wtf/HashSet.h>
 #include <wtf/ListHashSet.h>
-#include <wtf/MessageQueue.h>
 #include <wtf/Ref.h>
 #include <wtf/ThreadSafeRefCounted.h>
 
@@ -92,7 +91,7 @@ public:
     void createIndex(UniqueIDBDatabaseTransaction&, const IDBIndexInfo&, ErrorCallback);
     void deleteIndex(UniqueIDBDatabaseTransaction&, uint64_t objectStoreIdentifier, const String& indexName, ErrorCallback);
     void putOrAdd(const IDBRequestData&, const IDBKeyData&, const IDBValue&, IndexedDB::ObjectStoreOverwriteMode, KeyDataCallback);
-    void getRecord(const IDBRequestData&, const IDBKeyRangeData&, GetResultCallback);
+    void getRecord(const IDBRequestData&, const IDBGetRecordData&, GetResultCallback);
     void getCount(const IDBRequestData&, const IDBKeyRangeData&, CountCallback);
     void deleteRecord(const IDBRequestData&, const IDBKeyRangeData&, ErrorCallback);
     void openCursor(const IDBRequestData&, const IDBCursorInfo&, GetResultCallback);
@@ -114,6 +113,8 @@ public:
 
     static JSC::VM& databaseThreadVM();
     static JSC::ExecState& databaseThreadExecState();
+
+    bool hardClosedForUserDelete() const { return m_hardClosedForUserDelete; }
 
 private:
     UniqueIDBDatabase(IDBServer&, const IDBDatabaseIdentifier&);
@@ -173,6 +174,7 @@ private:
     void didPerformCommitTransaction(uint64_t callbackIdentifier, const IDBError&, const IDBResourceIdentifier& transactionIdentifier);
     void didPerformAbortTransaction(uint64_t callbackIdentifier, const IDBError&, const IDBResourceIdentifier& transactionIdentifier);
     void didPerformActivateTransactionInBackingStore(uint64_t callbackIdentifier, const IDBError&);
+    void didPerformUnconditionalDeleteBackingStore();
 
     uint64_t storeCallbackOrFireError(ErrorCallback);
     uint64_t storeCallbackOrFireError(KeyDataCallback);
@@ -201,7 +203,8 @@ private:
     void executeNextDatabaseTask();
     void executeNextDatabaseTaskReply();
 
-    bool doneWithHardClose();
+    void maybeFinishHardClose();
+    bool isDoneWithHardClose();
 
     IDBServer& m_server;
     IDBDatabaseIdentifier m_identifier;

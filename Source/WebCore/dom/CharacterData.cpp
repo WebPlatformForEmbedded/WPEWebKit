@@ -23,6 +23,7 @@
 #include "CharacterData.h"
 
 #include "ElementTraversal.h"
+#include "EventNames.h"
 #include "ExceptionCode.h"
 #include "FrameSelection.h"
 #include "InspectorInstrumentation.h"
@@ -32,20 +33,31 @@
 #include "ProcessingInstruction.h"
 #include "RenderText.h"
 #include "StyleInheritedData.h"
-#include "TextBreakIterator.h"
 #include <wtf/Ref.h>
+#include <wtf/text/TextBreakIterator.h>
 
 namespace WebCore {
+
+static bool canUseSetDataOptimization(const CharacterData& node)
+{
+    auto& document = node.document();
+    return !document.hasListenerType(Document::DOMCHARACTERDATAMODIFIED_LISTENER) && !document.hasMutationObserversOfType(MutationObserver::CharacterData)
+        && !document.hasListenerType(Document::DOMSUBTREEMODIFIED_LISTENER);
+}
 
 void CharacterData::setData(const String& data)
 {
     const String& nonNullData = !data.isNull() ? data : emptyString();
-    if (m_data == nonNullData)
+    unsigned oldLength = length();
+
+    if (m_data == nonNullData && canUseSetDataOptimization(*this)) {
+        document().textRemoved(this, 0, oldLength);
+        if (document().frame())
+            document().frame()->selection().textWasReplaced(this, 0, oldLength, oldLength);
         return;
+    }
 
     Ref<CharacterData> protectedThis(*this);
-
-    unsigned oldLength = length();
 
     setDataAndUpdate(nonNullData, 0, oldLength, nonNullData.length());
     document().textRemoved(this, 0, oldLength);

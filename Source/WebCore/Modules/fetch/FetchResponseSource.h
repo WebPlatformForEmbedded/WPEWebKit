@@ -26,12 +26,15 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef FetchResponseSource_h
-#define FetchResponseSource_h
+#pragma once
 
 #if ENABLE(FETCH_API) && ENABLE(STREAMS_API)
 
 #include "ReadableStreamSource.h"
+
+namespace JSC {
+class ArrayBuffer;
+};
 
 namespace WebCore {
 
@@ -41,7 +44,7 @@ class FetchResponseSource final : public ReadableStreamSource {
 public:
     FetchResponseSource(FetchResponse&);
 
-    template<typename T> void enqueue(const T& t) { controller().enqueue(t); }
+    bool enqueue(RefPtr<JSC::ArrayBuffer>&& chunk) { return controller().enqueue(WTFMove(chunk)); }
     void close();
     void error(const String&);
 
@@ -49,6 +52,7 @@ public:
     bool isReadableStreamLocked() const;
 
 private:
+    void firstReadCallback() final;
     void doStart() final;
     void doCancel() final;
     void setActive() final;
@@ -61,5 +65,3 @@ private:
 } // namespace WebCore
 
 #endif // ENABLE(FETCH_API) && ENABLE(STREAMS_API)
-
-#endif // FetchResponseSource_h

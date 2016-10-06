@@ -23,11 +23,10 @@
 #ifndef Parser_h
 #define Parser_h
 
-#include "Debugger.h"
 #include "ExceptionHelpers.h"
 #include "Executable.h"
-#include "JSGlobalObject.h"
 #include "Lexer.h"
+#include "ModuleScopeData.h"
 #include "Nodes.h"
 #include "ParserArena.h"
 #include "ParserError.h"
@@ -128,27 +127,6 @@ ALWAYS_INLINE static bool isIdentifierOrKeyword(const JSToken& token)
     return token.m_type == IDENT || token.m_type & KeywordTokenFlag;
 }
 
-class ModuleScopeData : public RefCounted<ModuleScopeData> {
-public:
-    static Ref<ModuleScopeData> create() { return adoptRef(*new ModuleScopeData); }
-
-    const IdentifierSet& exportedBindings() const { return m_exportedBindings; }
-
-    bool exportName(const Identifier& exportedName)
-    {
-        return m_exportedNames.add(exportedName.impl()).isNewEntry;
-    }
-
-    void exportBinding(const Identifier& localName)
-    {
-        m_exportedBindings.add(localName.impl());
-    }
-
-private:
-    IdentifierSet m_exportedNames { };
-    IdentifierSet m_exportedBindings { };
-};
-
 struct Scope {
     WTF_MAKE_NONCOPYABLE(Scope);
 
@@ -173,6 +151,7 @@ public:
         , m_isValidStrictMode(true)
         , m_hasArguments(false)
         , m_isEvalContext(false)
+        , m_hasNonSimpleParameterList(false)
         , m_evalContextType(EvalContextType::None)
         , m_constructorKind(static_cast<unsigned>(ConstructorKind::None))
         , m_expectedSuperBinding(static_cast<unsigned>(SuperBinding::NotNeeded))
@@ -203,6 +182,7 @@ public:
         , m_isValidStrictMode(other.m_isValidStrictMode)
         , m_hasArguments(other.m_hasArguments)
         , m_isEvalContext(other.m_isEvalContext)
+        , m_hasNonSimpleParameterList(other.m_hasNonSimpleParameterList)
         , m_constructorKind(other.m_constructorKind)
         , m_expectedSuperBinding(other.m_expectedSuperBinding)
         , m_loopDepth(other.m_loopDepth)
@@ -214,7 +194,6 @@ public:
         , m_lexicalVariables(WTFMove(other.m_lexicalVariables))
         , m_usedVariables(WTFMove(other.m_usedVariables))
         , m_closedVariableCandidates(WTFMove(other.m_closedVariableCandidates))
-        , m_moduleScopeData(WTFMove(other.m_moduleScopeData))
         , m_functionDeclarations(WTFMove(other.m_functionDeclarations))
     {
     }
@@ -275,11 +254,8 @@ public:
             break;
 
         case SourceParseMode::ProgramMode:
-            break;
-
         case SourceParseMode::ModuleAnalyzeMode:
         case SourceParseMode::ModuleEvaluateMode:
-            setIsModule();
             break;
         }
     }
@@ -309,12 +285,6 @@ public:
             computeLexicallyCapturedVariablesAndPurgeCandidates();
 
         return m_lexicalVariables;
-    }
-
-    ModuleScopeData& moduleScopeData() const
-    {
-        ASSERT(m_moduleScopeData);
-        return *m_moduleScopeData;
     }
 
     void computeLexicallyCapturedVariablesAndPurgeCandidates()
@@ -567,6 +537,11 @@ public:
         if (usedVariablesContains(m_vm->propertyNames->arguments.impl()))
             setInnerArrowFunctionUsesArguments();
     }
+
+    void addClosedVariableCandidateUnconditionally(UniquedStringImpl* impl)
+    {
+        m_closedVariableCandidates.add(impl);
+    }
     
     void collectFreeVariables(Scope* nestedScope, bool shouldTrackClosedVariables)
     {
@@ -644,6 +619,12 @@ public:
     bool strictMode() const { return m_strictMode; }
     bool isValidStrictMode() const { return m_isValidStrictMode; }
     bool shadowsArguments() const { return m_shadowsArguments; }
+    void setHasNonSimpleParameterList()
+    {
+        m_isValidStrictMode = false;
+        m_hasNonSimpleParameterList = true;
+    }
+    bool hasNonSimpleParameterList() const { return m_hasNonSimpleParameterList; }
 
     void copyCapturedVariablesToVector(const UniquedStringImplPtrSet& usedVariables, Vector<UniquedStringImpl*, 8>& vector)
     {
@@ -689,6 +670,8 @@ public:
             destSet.add(info->usedVariables()[i]);
     }
 
+    class MaybeParseAsGeneratorForScope;
+
 private:
     void setIsFunction()
     {
@@ -723,11 +706,6 @@ private:
         m_isArrowFunction = true;
     }
 
-    void setIsModule()
-    {
-        m_moduleScopeData = ModuleScopeData::create();
-    }
-
     const VM* m_vm;
     bool m_shadowsArguments;
     bool m_usesEval;
@@ -747,6 +725,7 @@ private:
     bool m_isValidStrictMode;
     bool m_hasArguments;
     bool m_isEvalContext;
+    bool m_hasNonSimpleParameterList;
     EvalContextType m_evalContextType;
     unsigned m_constructorKind;
     unsigned m_expectedSuperBinding;
@@ -762,7 +741,6 @@ private:
     Vector<UniquedStringImplPtrSet, 6> m_usedVariables;
     UniquedStringImplPtrSet m_sloppyModeHoistableFunctionCandidates;
     HashSet<UniquedStringImpl*> m_closedVariableCandidates;
-    RefPtr<ModuleScopeData> m_moduleScopeData;
     DeclarationStacks::FunctionStack m_functionDeclarations;
 };
 
@@ -815,7 +793,7 @@ class Parser {
     WTF_MAKE_FAST_ALLOCATED;
 
 public:
-    Parser(VM*, const SourceCode&, JSParserBuiltinMode, JSParserStrictMode, SourceParseMode, SuperBinding, ConstructorKind defaultConstructorKind = ConstructorKind::None, DerivedContextType = DerivedContextType::None, bool isEvalContext = false, EvalContextType = EvalContextType::None);
+    Parser(VM*, const SourceCode&, JSParserBuiltinMode, JSParserStrictMode, JSParserCommentMode, SourceParseMode, SuperBinding, ConstructorKind defaultConstructorKind = ConstructorKind::None, DerivedContextType = DerivedContextType::None, bool isEvalContext = false, EvalContextType = EvalContextType::None);
     ~Parser();
 
     template <class ParsedNode>
@@ -1167,7 +1145,8 @@ private:
     bool exportName(const Identifier& ident)
     {
         ASSERT(currentScope().index() == 0);
-        return currentScope()->moduleScopeData().exportName(ident);
+        ASSERT(m_moduleScopeData);
+        return m_moduleScopeData->exportName(ident);
     }
 
     ScopeStack m_scopeStack;
@@ -1433,7 +1412,7 @@ private:
     template <class TreeBuilder> typename TreeBuilder::ImportSpecifier parseImportClauseItem(TreeBuilder&, ImportSpecifierType);
     template <class TreeBuilder> typename TreeBuilder::ModuleName parseModuleName(TreeBuilder&);
     template <class TreeBuilder> TreeStatement parseImportDeclaration(TreeBuilder&);
-    template <class TreeBuilder> typename TreeBuilder::ExportSpecifier parseExportSpecifier(TreeBuilder& context, Vector<const Identifier*>& maybeLocalNames, bool& hasKeywordForLocalBindings);
+    template <class TreeBuilder> typename TreeBuilder::ExportSpecifier parseExportSpecifier(TreeBuilder& context, Vector<std::pair<const Identifier*, const Identifier*>>& maybeExportedLocalNames, bool& hasKeywordForLocalBindings);
     template <class TreeBuilder> TreeStatement parseExportDeclaration(TreeBuilder&);
 
     enum class FunctionDefinitionType { Expression, Declaration, Method };
@@ -1518,6 +1497,7 @@ private:
         result.oldLineStartOffset = m_token.m_location.lineStartOffset;
         result.oldLastLineNumber = m_lexer->lastLineNumber();
         result.oldLineNumber = m_lexer->lineNumber();
+        ASSERT(static_cast<unsigned>(result.startOffset) >= result.oldLineStartOffset);
         return result;
     }
 
@@ -1525,9 +1505,9 @@ private:
     {
         // setOffset clears lexer errors.
         m_lexer->setOffset(lexerState.startOffset, lexerState.oldLineStartOffset);
+        m_lexer->setLineNumber(lexerState.oldLineNumber);
         next();
         m_lexer->setLastLineNumber(lexerState.oldLastLineNumber);
-        m_lexer->setLineNumber(lexerState.oldLineNumber);
     }
 
     struct SavePoint {
@@ -1603,6 +1583,7 @@ private:
     RefPtr<SourceProviderCache> m_functionCache;
     SourceElements* m_sourceElements;
     bool m_parsingBuiltin;
+    JSParserCommentMode m_commentMode;
     SuperBinding m_superBinding;
     ConstructorKind m_defaultConstructorKind;
     VariableEnvironment m_varDeclarations;
@@ -1613,6 +1594,7 @@ private:
     ExpressionErrorClassifier* m_expressionErrorClassifier;
     bool m_isEvalContext;
     bool m_immediateParentAllowsFunctionDeclarationInStatement;
+    RefPtr<ModuleScopeData> m_moduleScopeData;
     
     struct DepthManager {
         DepthManager(int* depth)
@@ -1687,7 +1669,8 @@ std::unique_ptr<ParsedNode> Parser<LexerType>::parse(ParserError& error, const I
                                     *m_source,
                                     m_features,
                                     currentScope()->innerArrowFunctionFeatures(),
-                                    m_numConstants);
+                                    m_numConstants,
+                                    WTFMove(m_moduleScopeData));
         result->setLoc(m_source->firstLine(), m_lexer->lineNumber(), m_lexer->currentOffset(), m_lexer->currentLineStartOffset());
         result->setEndOffset(m_lexer->currentOffset());
 
@@ -1730,13 +1713,13 @@ template <class ParsedNode>
 std::unique_ptr<ParsedNode> parse(
     VM* vm, const SourceCode& source,
     const Identifier& name, JSParserBuiltinMode builtinMode,
-    JSParserStrictMode strictMode, SourceParseMode parseMode, SuperBinding superBinding,
+    JSParserStrictMode strictMode, JSParserCommentMode commentMode, SourceParseMode parseMode, SuperBinding superBinding,
     ParserError& error, JSTextPosition* positionBeforeLastNewline = nullptr,
     ConstructorKind defaultConstructorKind = ConstructorKind::None, DerivedContextType derivedContextType = DerivedContextType::None, EvalContextType evalContextType = EvalContextType::None)
 {
     ASSERT(!source.provider()->source().isNull());
     if (source.provider()->source().is8Bit()) {
-        Parser<Lexer<LChar>> parser(vm, source, builtinMode, strictMode, parseMode, superBinding, defaultConstructorKind, derivedContextType, isEvalNode<ParsedNode>(), evalContextType);
+        Parser<Lexer<LChar>> parser(vm, source, builtinMode, strictMode, commentMode, parseMode, superBinding, defaultConstructorKind, derivedContextType, isEvalNode<ParsedNode>(), evalContextType);
         std::unique_ptr<ParsedNode> result = parser.parse<ParsedNode>(error, name, parseMode);
         if (positionBeforeLastNewline)
             *positionBeforeLastNewline = parser.positionBeforeLastNewline();
@@ -1747,7 +1730,7 @@ std::unique_ptr<ParsedNode> parse(
         return result;
     }
     ASSERT_WITH_MESSAGE(defaultConstructorKind == ConstructorKind::None, "BuiltinExecutables::createDefaultConstructor should always use a 8-bit string");
-    Parser<Lexer<UChar>> parser(vm, source, builtinMode, strictMode, parseMode, superBinding, defaultConstructorKind, derivedContextType, isEvalNode<ParsedNode>(), evalContextType);
+    Parser<Lexer<UChar>> parser(vm, source, builtinMode, strictMode, commentMode, parseMode, superBinding, defaultConstructorKind, derivedContextType, isEvalNode<ParsedNode>(), evalContextType);
     std::unique_ptr<ParsedNode> result = parser.parse<ParsedNode>(error, name, parseMode);
     if (positionBeforeLastNewline)
         *positionBeforeLastNewline = parser.positionBeforeLastNewline();

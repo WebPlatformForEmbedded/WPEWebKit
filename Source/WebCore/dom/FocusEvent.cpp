@@ -40,7 +40,7 @@ bool FocusEvent::isFocusEvent() const
     return true;
 }
 
-FocusEvent::FocusEvent(const AtomicString& type, bool canBubble, bool cancelable, AbstractView* view, int detail, RefPtr<EventTarget>&& relatedTarget)
+FocusEvent::FocusEvent(const AtomicString& type, bool canBubble, bool cancelable, DOMWindow* view, int detail, RefPtr<EventTarget>&& relatedTarget)
     : UIEvent(type, canBubble, cancelable, view, detail)
     , m_relatedTarget(WTFMove(relatedTarget))
 {
@@ -50,11 +50,6 @@ FocusEvent::FocusEvent(const AtomicString& type, const FocusEventInit& initializ
     : UIEvent(type, initializer)
     , m_relatedTarget(initializer.relatedTarget)
 {
-}
-
-bool FocusEvent::relatedTargetScoped() const
-{
-    return (isTrusted() && m_relatedTarget) || UIEvent::relatedTargetScoped();
 }
 
 } // namespace WebCore

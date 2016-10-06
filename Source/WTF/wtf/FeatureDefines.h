@@ -66,10 +66,6 @@
 #define ENABLE_CONTEXT_MENUS 0
 #endif
 
-#if !defined(ENABLE_CSS_IMAGE_SET)
-#define ENABLE_CSS_IMAGE_SET 1
-#endif
-
 #if !defined(ENABLE_CURSOR_SUPPORT)
 #define ENABLE_CURSOR_SUPPORT 0
 #endif
@@ -157,7 +153,7 @@ the public iOS SDK. We will also need to update the FeatureDefines.xcconfig file
 #endif
 
 #if !defined(ENABLE_WEBASSEMBLY)
-#define ENABLE_WEBASSEMBLY 0
+#define ENABLE_WEBASSEMBLY (defined(ENABLE_B3_JIT) && ENABLE_B3_JIT)
 #endif
 
 #if !defined(ENABLE_WEBGL)
@@ -175,10 +171,6 @@ the public iOS SDK. We will also need to update the FeatureDefines.xcconfig file
 
 #if !defined(ENABLE_CONTENT_EXTENSIONS)
 #define ENABLE_CONTENT_EXTENSIONS 1
-#endif
-
-#if !defined(ENABLE_CSS_IMAGE_SET)
-#define ENABLE_CSS_IMAGE_SET 1
 #endif
 
 #if !defined(ENABLE_DASHBOARD_SUPPORT)
@@ -222,6 +214,10 @@ the public iOS SDK. We will also need to update the FeatureDefines.xcconfig file
 #define ENABLE_VIEW_MODE_CSS_MEDIA 0
 #endif
 
+#if !defined(ENABLE_WEBASSEMBLY)
+#define ENABLE_WEBASSEMBLY (defined(ENABLE_B3_JIT) && ENABLE_B3_JIT)
+#endif
+
 #if !defined(ENABLE_WEB_ARCHIVE)
 #define ENABLE_WEB_ARCHIVE 1
 #endif
@@ -263,6 +259,15 @@ the public iOS SDK. We will also need to update the FeatureDefines.xcconfig file
 #endif
 
 #endif /* PLATFORM(COCOA) */
+
+#if !PLATFORM(COCOA)
+
+#if !defined(JSC_OBJC_API_ENABLED)
+#define JSC_OBJC_API_ENABLED 0
+#endif
+
+#endif /* !PLATFORM(COCOA) */
+
 
 /* --------- Apple Windows port --------- */
 #if PLATFORM(WIN) && !PLATFORM(WIN_CAIRO)
@@ -389,10 +394,6 @@ the public iOS SDK. We will also need to update the FeatureDefines.xcconfig file
 
 #if !defined(ENABLE_CSS_IMAGE_RESOLUTION)
 #define ENABLE_CSS_IMAGE_RESOLUTION 0
-#endif
-
-#if !defined(ENABLE_CSS_IMAGE_SET)
-#define ENABLE_CSS_IMAGE_SET 0
 #endif
 
 #if !defined(ENABLE_CURSOR_SUPPORT)

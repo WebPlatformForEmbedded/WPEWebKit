@@ -94,9 +94,9 @@ WebInspector.DOMNodeDetailsSidebarPanel = class DOMNodeDetailsSidebarPanel exten
         }
     }
 
-    // Public
+    // Protected
 
-    refresh()
+    layout()
     {
         var domNode = this.domNode;
         if (!domNode)
@@ -207,7 +207,7 @@ WebInspector.DOMNodeDetailsSidebarPanel = class DOMNodeDetailsSidebarPanel exten
                 objectTree.showOnlyProperties();
 
                 var detailsSection = new WebInspector.DetailsSection(prototype.description.hash + "-prototype-properties", title, null, null, true);
-                detailsSection.groups[0].rows = [new WebInspector.DetailsSectionPropertiesRow(objectTree)];
+                detailsSection.groups[0].rows = [new WebInspector.ObjectPropertiesDetailSectionRow(objectTree, detailsSection)];
 
                 element.appendChild(detailsSection.element);
             }

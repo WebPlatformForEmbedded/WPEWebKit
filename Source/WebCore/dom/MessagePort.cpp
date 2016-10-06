@@ -28,6 +28,7 @@
 #include "MessagePort.h"
 
 #include "Document.h"
+#include "EventNames.h"
 #include "ExceptionCode.h"
 #include "MessageEvent.h"
 #include "SecurityOrigin.h"
@@ -50,14 +51,6 @@ MessagePort::~MessagePort()
     close();
     if (m_scriptExecutionContext)
         m_scriptExecutionContext->destroyedMessagePort(*this);
-}
-
-void MessagePort::postMessage(RefPtr<SerializedScriptValue>&& message, MessagePort* port, ExceptionCode& ec)
-{
-    MessagePortArray ports;
-    if (port)
-        ports.append(port);
-    postMessage(WTFMove(message), &ports, ec);
 }
 
 void MessagePort::postMessage(RefPtr<SerializedScriptValue>&& message, const MessagePortArray* ports, ExceptionCode& ec)

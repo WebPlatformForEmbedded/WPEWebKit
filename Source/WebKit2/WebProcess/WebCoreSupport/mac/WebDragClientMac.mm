@@ -34,8 +34,6 @@
 #import "WebPage.h"
 #import "WebPageProxyMessages.h"
 #import <WebCore/CachedImage.h>
-#import <WebCore/DOMElementInternal.h>
-#import <WebCore/DOMPrivate.h>
 #import <WebCore/DragController.h>
 #import <WebCore/Frame.h>
 #import <WebCore/FrameView.h>
@@ -56,7 +54,7 @@ namespace WebKit {
 
 static PassRefPtr<ShareableBitmap> convertImageToBitmap(NSImage *image, const IntSize& size)
 {
-    RefPtr<ShareableBitmap> bitmap = ShareableBitmap::createShareable(size, ShareableBitmap::SupportsAlpha);
+    auto bitmap = ShareableBitmap::createShareable(size, ShareableBitmap::SupportsAlpha);
     if (!bitmap)
         return nullptr;
 
@@ -72,7 +70,7 @@ static PassRefPtr<ShareableBitmap> convertImageToBitmap(NSImage *image, const In
 
     [NSGraphicsContext setCurrentContext:savedContext.get()];
 
-    return bitmap.release();
+    return WTFMove(bitmap);
 }
 
 void WebDragClient::startDrag(RetainPtr<NSImage> image, const IntPoint& point, const IntPoint&, DataTransfer&, Frame& frame, bool linkDrag)

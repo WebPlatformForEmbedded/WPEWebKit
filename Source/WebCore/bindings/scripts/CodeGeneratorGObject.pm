@@ -46,8 +46,8 @@ my $className = "";
 my %baseTypeHash = ("Object" => 1, "Node" => 1, "NodeList" => 1, "NamedNodeMap" => 1, "DOMImplementation" => 1,
                     "Event" => 1, "CSSRule" => 1, "CSSValue" => 1, "StyleSheet" => 1, "MediaList" => 1,
                     "Counter" => 1, "Rect" => 1, "RGBColor" => 1, "XPathExpression" => 1, "XPathResult" => 1,
-                    "NodeIterator" => 1, "TreeWalker" => 1, "AbstractView" => 1, "Blob" => 1, "DOMTokenList" => 1,
-                    "HTMLCollection" => 1, "TextTrackCue" => 1, "AnimationTimeline" => 1);
+                    "NodeIterator" => 1, "TreeWalker" => 1, "Blob" => 1, "DOMTokenList" => 1,
+                    "HTMLCollection" => 1, "TextTrackCue" => 1, "AnimationTimeline" => 1, "AnimationEffect" => 1);
 
 # Only objects derived from Node are released by the DOM object cache and can be
 # transfer none. Ideally we could use GetBaseClass with the parent type to check
@@ -63,9 +63,9 @@ my %transferFullTypeHash = ("AudioTrack" => 1, "AudioTrackList" => 1, "BarProp" 
     "DOMWindow" => 1, "DOMWindowCSS" => 1, "EventTarget" => 1,
     "File" => 1, "FileList" => 1, "Gamepad" => 1, "GamepadList" => 1,
     "Geolocation" => 1, "HTMLOptionsCollection" => 1, "History" => 1,
-    "KeyboardEvent" => 1, "MediaError" => 1, "MediaController" => 1,
+    "KeyboardEvent" => 1, "KeyframeEffect" => 1, "MediaError" => 1, "MediaController" => 1,
     "MouseEvent" => 1, "MediaQueryList" => 1, "Navigator" => 1, "NodeFilter" => 1,
-    "Performance" => 1, "PerformanceEntry" => 1, "PerformanceEntryList" => 1, "PerformanceNavigation" => 1, "PerformanceTiming" => 1,
+    "Performance" => 1, "PerformanceEntry" => 1, "PerformanceNavigation" => 1, "PerformanceTiming" => 1,
     "Range" => 1, "Screen" => 1, "SpeechSynthesis" => 1, "SpeechSynthesisVoice" => 1,
     "Storage" => 1, "StyleMedia" => 1, "TextTrack" => 1, "TextTrackCueList" => 1,
     "TimeRanges" => 1, "Touch" => 1, "UIEvent" => 1, "UserMessageHandler" => 1, "UserMessageHandlersNamespace" => 1,
@@ -244,12 +244,7 @@ sub SkipAttribute {
 
     return 1 if $attribute->isStatic;
     return 1 if $codeGenerator->IsTypedArrayType($propType);
-
-    $codeGenerator->AssertNotSequenceType($propType);
-
-    if ($codeGenerator->GetArrayType($propType)) {
-        return 1;
-    }
+    return 1 if $codeGenerator->IsSequenceOrFrozenArrayType($propType);
 
     if ($codeGenerator->IsEnumType($propType)) {
         return 1;
@@ -320,14 +315,12 @@ sub SkipFunction {
     # how to auto-generate callbacks.  Skip functions that have "MediaQueryListListener" or
     # sequence<T> parameters, because this code generator doesn't know how to auto-generate
     # MediaQueryListListener or sequence<T>. Skip EventListeners because they are handled elsewhere.
-    # Skip functions that have variadic parameters because not supported yet.
     foreach my $param (@{$function->parameters}) {
         return 1 if $codeGenerator->IsFunctionOnlyCallbackInterface($param->type);
         return 1 if $param->extendedAttributes->{"Clamp"};
         return 1 if $param->type eq "MediaQueryListListener";
         return 1 if $param->type eq "EventListener";
-        return 1 if $codeGenerator->GetSequenceType($param->type);
-        return 1 if $param->isVariadic;
+        return 1 if $codeGenerator->IsSequenceOrFrozenArrayType($param->type);
     }
 
     # This is for DataTransferItemList.idl add(File) method
@@ -340,7 +333,7 @@ sub SkipFunction {
         return 1;
     }
 
-    if ($codeGenerator->IsTypedArrayType($function->signature->type) || $codeGenerator->GetArrayType($function->signature->type)) {
+    if ($codeGenerator->IsTypedArrayType($function->signature->type)) {
         return 1;
     }
 
@@ -368,7 +361,7 @@ sub SkipFunction {
         return 1;
     }
 
-    if ($codeGenerator->GetSequenceType($functionReturnType)) {
+    if ($codeGenerator->IsSequenceOrFrozenArrayType($functionReturnType)) {
         return 1;
     }
 
@@ -384,8 +377,7 @@ sub SkipFunction {
 
     return 1 if $function->signature->extendedAttributes->{"JSBuiltin"};
 
-    return 1 if $function->signature->extendedAttributes->{"Private"};
-
+    return 1 if $function->signature->extendedAttributes->{"PrivateIdentifier"} and not $function->signature->extendedAttributes->{"PublicIdentifier"};
     return 0;
 }
 
@@ -394,6 +386,7 @@ sub GetGValueTypeName {
     my $type = shift;
 
     my %types = ("DOMString", "string",
+                 "USVString", "string",
                  "DOMTimeStamp", "uint",
                  "float", "float",
                  "unrestricted float", "float",
@@ -423,6 +416,7 @@ sub GetGlibTypeName {
     my $name = GetClassName($type);
 
     my %types = ("DOMString", "gchar*",
+                 "USVString", "gchar*",
                  "DOMTimeStamp", "guint32",
                  "SerializedScriptValue", "gchar*",
                  "float", "gfloat",
@@ -562,13 +556,19 @@ sub GenerateProperty {
         $mutableString = "read-write";
     }
 
-    my $getterFunctionName = "webkit_dom_${decamelizeInterfaceName}_get_" . $propFunctionName;
+    my $getterFunctionName = GetEffectiveFunctionName("webkit_dom_${decamelizeInterfaceName}_get_" . $propFunctionName);
+    if (FunctionUsedToNotRaiseException($getterFunctionName)) {
+        $getterFunctionName = $getterFunctionName . "_with_error";
+    }
     my @getterArguments = ();
     push(@getterArguments, "self");
     push(@getterArguments, "nullptr") if $hasGetterException || FunctionUsedToRaiseException($getterFunctionName);
 
     if (grep {$_ eq $attribute} @writeableProperties) {
-        my $setterFunctionName = "webkit_dom_${decamelizeInterfaceName}_set_" . $propFunctionName;
+        my $setterFunctionName = GetEffectiveFunctionName("webkit_dom_${decamelizeInterfaceName}_set_" . $propFunctionName);
+        if (FunctionUsedToNotRaiseException($setterFunctionName)) {
+            $setterFunctionName = $setterFunctionName . "_with_error";
+        }
         my @setterArguments = ();
         push(@setterArguments, "self, g_value_get_$gtype(value)");
         push(@setterArguments, "nullptr") if $hasSetterException || FunctionUsedToRaiseException($setterFunctionName);
@@ -1022,6 +1022,12 @@ sub GetEffectiveFunctionName {
         return $functionName . "_as_html_collection";
     }
 
+    # Rename webkit_dom_html_input_element_get_capture as webkit_dom_html_input_element_get_capture_type since
+    # it changed the return value in r204312.
+    if ($functionName eq "webkit_dom_html_input_element_get_capture") {
+        return $functionName . "_type";
+    }
+
     return $functionName;
 }
 
@@ -1051,7 +1057,9 @@ sub FunctionUsedToRaiseException {
 sub FunctionUsedToNotRaiseException {
     my $functionName = shift;
 
-    return $functionName eq "webkit_dom_node_clone_node";
+    return $functionName eq "webkit_dom_document_set_title"
+        || $functionName eq "webkit_dom_html_title_element_set_text"
+        || $functionName eq "webkit_dom_node_clone_node";
 }
 
 sub GenerateFunction {
@@ -1091,17 +1099,22 @@ sub GenerateFunction {
     my $functionSig = "${className}* self";
     my $symbolSig = "${className}*";
 
+    my $hasVariadic = 0;
     my @callImplParams;
     foreach my $param (@{$function->parameters}) {
         my $paramIDLType = $param->type;
-        my $arrayOrSequenceType = $codeGenerator->GetArrayOrSequenceType($paramIDLType);
-        $paramIDLType = $arrayOrSequenceType if $arrayOrSequenceType ne "";
+        my $sequenceType = $codeGenerator->GetSequenceInnerType($paramIDLType);
+        $paramIDLType = $sequenceType if $sequenceType ne "";
         my $paramType = GetGlibTypeName($paramIDLType);
         my $const = $paramType eq "gchar*" ? "const " : "";
         my $paramName = $param->name;
 
-        $functionSig .= ", ${const}$paramType $paramName";
-        $symbolSig .= ", ${const}$paramType";
+        if ($param->isVariadic) {
+            $hasVariadic = 1;
+        } else {
+            $functionSig .= ", ${const}$paramType $paramName";
+            $symbolSig .= ", ${const}$paramType";
+        }
 
         my $paramIsGDOMType = IsGDOMClassType($paramIDLType);
         if ($paramIsGDOMType) {
@@ -1109,9 +1122,10 @@ sub GenerateFunction {
                 $implIncludes{"WebKitDOM${paramIDLType}Private.h"} = 1;
             }
         }
-        if ($paramIsGDOMType || ($paramIDLType eq "DOMString")) {
+        if ($paramIsGDOMType || $codeGenerator->IsStringType($paramIDLType) || $param->isVariadic) {
             $paramName = "converted" . $codeGenerator->WK_ucfirst($paramName);
             $paramName = "*$paramName" if $codeGenerator->ShouldPassWrapperByReference($param, $parentNode);
+            $paramName = "WTFMove($paramName)" if $param->isVariadic;
         }
         if ($paramIDLType eq "NodeFilter" || $paramIDLType eq "XPathNSResolver") {
             $paramName = "WTF::getPtr(" . $paramName . ")";
@@ -1130,6 +1144,17 @@ sub GenerateFunction {
     $functionSig .= ", GError** error" if $raisesException || $usedToRaiseException;
     $symbolSig .= ", GError**" if $raisesException || $usedToRaiseException;
 
+    if ($hasVariadic) {
+        my $param = @{$function->parameters}[-1];
+        if ($codeGenerator->IsNonPointerType($param->type)) {
+            my $paramName = $param->name;
+            $functionSig .= ", guint n_$paramName";
+            $symbolSig .= ", guint";
+        }
+        $functionSig .= ", ...";
+        $symbolSig .= ", ...";
+    }
+
     my $symbol = "$returnType $functionName($symbolSig)";
     my $isStableClass = scalar(@stableSymbols);
     my ($stableSymbol) = grep {$_ =~ /^\Q$symbol/} @stableSymbols;
@@ -1146,9 +1171,12 @@ sub GenerateFunction {
     push(@functionHeader, " * \@self: A #${className}");
 
     foreach my $param (@{$function->parameters}) {
+        if ($param->isVariadic) {
+            last;
+        }
         my $paramIDLType = $param->type;
-        my $arrayOrSequenceType = $codeGenerator->GetArrayOrSequenceType($paramIDLType);
-        $paramIDLType = $arrayOrSequenceType if $arrayOrSequenceType ne "";
+        my $sequenceType = $codeGenerator->GetSequenceInnerType($paramIDLType);
+        $paramIDLType = $sequenceType if $sequenceType ne "";
         my $paramType = GetGlibTypeName($paramIDLType);
         # $paramType can have a trailing * in some cases
         $paramType =~ s/\*$//;
@@ -1160,6 +1188,18 @@ sub GenerateFunction {
         push(@functionHeader, " * \@${paramName}:${paramAnnotations} A #${paramType}");
     }
     push(@functionHeader, " * \@error: #GError") if $raisesException || $usedToRaiseException;
+    if ($hasVariadic) {
+        my $param = @{$function->parameters}[-1];
+        my $paramName = $param->name;
+        my $paramType = GetGlibTypeName($param->type);
+        $paramType =~ s/\*$//;
+        if ($codeGenerator->IsNonPointerType($param->type)) {
+            push(@functionHeader, " * \@n_${paramName}: number of ${paramName} that will be passed");
+            push(@functionHeader, " * \@...: list of #${paramType}");
+        } else {
+            push(@functionHeader, " * \@...: list of #${paramType} ended by %NULL.");
+        }
+    }
     push(@functionHeader, " *");
     my $returnTypeName = $returnType;
     my $hasReturnTag = 0;
@@ -1207,7 +1247,7 @@ sub GenerateFunction {
         my $paramName = $param->name;
         my $paramIDLType = $param->type;
         my $paramTypeIsPointer = !$codeGenerator->IsNonPointerType($paramIDLType);
-        if ($paramTypeIsPointer) {
+        if ($paramTypeIsPointer && !$param->isVariadic) {
             $gReturnMacro = GetGReturnMacro($paramName, $paramIDLType, $returnType, $functionName);
             push(@cBody, $gReturnMacro);
         }
@@ -1224,20 +1264,54 @@ sub GenerateFunction {
     push(@cBody, "    WebCore::${interfaceName}* item = WebKit::core(self);\n");
 
     $returnParamName = "";
+    my $currentParameterIndex = 0;
     foreach my $param (@{$function->parameters}) {
         my $paramIDLType = $param->type;
         my $paramName = $param->name;
-
+        my $paramType = GetGlibTypeName($paramIDLType);
         my $paramIsGDOMType = IsGDOMClassType($paramIDLType);
-        $convertedParamName = "converted" . $codeGenerator->WK_ucfirst($paramName);
-        if ($paramIDLType eq "DOMString") {
-            push(@cBody, "    WTF::String ${convertedParamName} = WTF::String::fromUTF8($paramName);\n");
+        my $paramTypeIsPointer = !$codeGenerator->IsNonPointerType($paramIDLType);
+        my $convertedParamName = "converted" . $codeGenerator->WK_ucfirst($paramName);
+
+        my $paramCoreType = $paramType;
+        my $paramConversionFunction = "";
+        if ($codeGenerator->IsStringType($paramIDLType)) {
+            $paramCoreType = "WTF::String";
+            $paramConversionFunction = "WTF::String::fromUTF8";
         } elsif ($paramIDLType eq "NodeFilter" || $paramIDLType eq "XPathNSResolver") {
-            push(@cBody, "    RefPtr<WebCore::$paramIDLType> ${convertedParamName} = WebKit::core($paramName);\n");
+            $paramCoreType = "RefPtr<WebCore::$paramIDLType>";
+            $paramConversionFunction = "WebKit::core"
         } elsif ($paramIsGDOMType) {
-            push(@cBody, "    WebCore::${paramIDLType}* ${convertedParamName} = WebKit::core($paramName);\n");
+            $paramCoreType = "WebCore::${paramIDLType}*";
+            $paramConversionFunction = "WebKit::core"
+        }
+
+        if ($param->isVariadic) {
+            my $previousParamName;
+            if ($raisesException) {
+                $previousParamName = "error";
+            } elsif ($currentParameterIndex == 0) {
+                $previousParamName = "self";
+            } else {
+                $previousParamName = @{$function->parameters}[$currentParameterIndex - 1]->name;
+            }
+            push(@cBody, "    va_list variadicParameterList;\n");
+            push(@cBody, "    Vector<$paramCoreType> $convertedParamName;\n");
+            push(@cBody, "    va_start(variadicParameterList, $previousParamName);\n");
+            if ($paramTypeIsPointer) {
+                push(@cBody, "    while ($paramType variadicParameter = va_arg(variadicParameterList, $paramType))\n");
+                push(@cBody, "        ${convertedParamName}.append(${paramConversionFunction}(variadicParameter));\n");
+            } else {
+                push(@cBody, "    ${convertedParamName}.reserveInitialCapacity(n_$paramName);\n");
+                push(@cBody, "    for (unsigned i = 0; i < n_$paramName; ++i) {\n");
+                push(@cBody, "        ${convertedParamName}.uncheckedAppend(va_arg(variadicParameterList, $paramType));\n");
+            }
+            push(@cBody, "    va_end(variadicParameterList);\n");
+        } elsif ($paramCoreType ne $paramType) {
+            push(@cBody, "    $paramCoreType $convertedParamName = ${paramConversionFunction}($paramName);\n");
         }
         $returnParamName = $convertedParamName if $param->extendedAttributes->{"CustomReturn"};
+        $currentParameterIndex++;
     }
 
     my $assign = "";
@@ -1299,7 +1373,7 @@ EOF
         push(@cBody, "    return 0;\n");
         push(@cBody, "}\n\n");
         return;
-    } elsif ($functionSigType eq "DOMString") {
+    } elsif ($codeGenerator->IsStringType($functionSigType)) {
         my $getterContentHead;
         if ($prefix) {
             my ($functionName, @arguments) = $codeGenerator->GetterExpression(\%implIncludes, $interfaceName, $function);
@@ -1636,9 +1710,11 @@ sub GenerateEventTargetIface {
     push(@cBodyProperties, "static gboolean webkit_dom_${decamelize}_dispatch_event(WebKitDOMEventTarget* target, WebKitDOMEvent* event, GError** error)\n{\n");
     push(@cBodyProperties, "#if ${conditionalString}\n") if $conditionalString;
     push(@cBodyProperties, "    WebCore::Event* coreEvent = WebKit::core(event);\n");
+    push(@cBodyProperties, "    if (!coreEvent)\n");
+    push(@cBodyProperties, "        return false;\n");
     push(@cBodyProperties, "    WebCore::${interfaceName}* coreTarget = static_cast<WebCore::${interfaceName}*>(WEBKIT_DOM_OBJECT(target)->coreObject);\n\n");
     push(@cBodyProperties, "    WebCore::ExceptionCode ec = 0;\n");
-    push(@cBodyProperties, "    gboolean result = coreTarget->dispatchEventForBindings(coreEvent, ec);\n");
+    push(@cBodyProperties, "    gboolean result = coreTarget->dispatchEventForBindings(*coreEvent, ec);\n");
     push(@cBodyProperties, "    if (ec) {\n        WebCore::ExceptionCodeDescription description(ec);\n");
     push(@cBodyProperties, "        g_set_error_literal(error, g_quark_from_string(\"WEBKIT_DOM\"), description.code, description.name);\n    }\n");
     push(@cBodyProperties, "    return result;\n");

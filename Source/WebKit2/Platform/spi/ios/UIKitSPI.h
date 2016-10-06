@@ -88,6 +88,7 @@ typedef NS_ENUM(NSInteger, UIPreviewItemType) {
     UIPreviewItemTypeLink,
     UIPreviewItemTypeImage,
     UIPreviewItemTypeText,
+    UIPreviewItemTypeAttachment,
 };
 
 @class UIPreviewItemController;
@@ -315,6 +316,7 @@ typedef enum {
 @end
 
 @interface UITapGestureRecognizer ()
+@property (nonatomic, getter=_allowableSeparation, setter=_setAllowableSeparation:) CGFloat allowableSeparation; 
 @property (nonatomic, readonly) CGPoint location;
 @property (nonatomic) CGFloat allowableMovement;
 @property (nonatomic, readonly) CGPoint centroid;
@@ -368,6 +370,14 @@ typedef enum {
 - (void)setGestureRecognizers;
 - (void)willStartScrollingOverflow;
 @end
+
+#if __IPHONE_OS_VERSION_MIN_REQUIRED >= 100000
+@class UITextSuggestion;
+
+@protocol UITextInputSuggestionDelegate <UITextInputDelegate>
+- (void)setSuggestions:(NSArray <UITextSuggestion*> *)suggestions;
+@end
+#endif
 
 @interface UIViewController ()
 + (UIViewController *)_viewControllerForFullScreenPresentationFromView:(UIView *)view;
@@ -851,5 +861,10 @@ extern NSString *const UIKeyInputPageDown;
 extern const NSString *UIPreviewDataLink;
 extern const NSString *UIPreviewDataDDResult;
 extern const NSString *UIPreviewDataDDContext;
+
+#if __IPHONE_OS_VERSION_MIN_REQUIRED >= 100000
+extern const NSString *UIPreviewDataAttachmentList;
+extern const NSString *UIPreviewDataAttachmentIndex;
+#endif
 
 WTF_EXTERN_C_END

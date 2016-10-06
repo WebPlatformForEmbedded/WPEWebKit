@@ -38,13 +38,12 @@
 #include "RemoteNetworkingContext.h"
 #include "SessionTracker.h"
 #include "WebCoreArgumentCoders.h"
-#include <WebCore/NotImplemented.h>
+#include <WebCore/NetworkStorageSession.h>
 #include <WebCore/PingHandle.h>
 #include <WebCore/PlatformCookieJar.h>
 #include <WebCore/ResourceLoaderOptions.h>
 #include <WebCore/ResourceRequest.h>
 #include <WebCore/SessionID.h>
-#include <wtf/RunLoop.h>
 
 #if USE(NETWORK_SESSION)
 #include "PingLoad.h"
@@ -60,8 +59,8 @@ Ref<NetworkConnectionToWebProcess> NetworkConnectionToWebProcess::create(IPC::Co
 }
 
 NetworkConnectionToWebProcess::NetworkConnectionToWebProcess(IPC::Connection::Identifier connectionIdentifier)
+    : m_connection(IPC::Connection::createServerConnection(connectionIdentifier, *this))
 {
-    m_connection = IPC::Connection::createServerConnection(connectionIdentifier, *this);
     m_connection->open();
 }
 
@@ -76,7 +75,7 @@ void NetworkConnectionToWebProcess::didCleanupResourceLoader(NetworkResourceLoad
     m_networkResourceLoaders.remove(loader.identifier());
 }
     
-void NetworkConnectionToWebProcess::didReceiveMessage(IPC::Connection& connection, IPC::MessageDecoder& decoder)
+void NetworkConnectionToWebProcess::didReceiveMessage(IPC::Connection& connection, IPC::Decoder& decoder)
 {
     if (decoder.messageReceiverName() == Messages::NetworkConnectionToWebProcess::messageReceiverName()) {
         didReceiveNetworkConnectionToWebProcessMessage(connection, decoder);
@@ -93,7 +92,7 @@ void NetworkConnectionToWebProcess::didReceiveMessage(IPC::Connection& connectio
     ASSERT_NOT_REACHED();
 }
 
-void NetworkConnectionToWebProcess::didReceiveSyncMessage(IPC::Connection& connection, IPC::MessageDecoder& decoder, std::unique_ptr<IPC::MessageEncoder>& reply)
+void NetworkConnectionToWebProcess::didReceiveSyncMessage(IPC::Connection& connection, IPC::Decoder& decoder, std::unique_ptr<IPC::Encoder>& reply)
 {
     if (decoder.messageReceiverName() == Messages::NetworkConnectionToWebProcess::messageReceiverName()) {
         didReceiveSyncNetworkConnectionToWebProcessMessage(connection, decoder, reply);
@@ -179,8 +178,7 @@ void NetworkConnectionToWebProcess::prefetchDNS(const String& hostname)
 static NetworkStorageSession& storageSession(SessionID sessionID)
 {
     if (sessionID.isEphemeral()) {
-        NetworkStorageSession* privateStorageSession = SessionTracker::storageSession(sessionID);
-        if (privateStorageSession)
+        if (auto* privateStorageSession = NetworkStorageSession::storageSession(sessionID))
             return *privateStorageSession;
         // Some requests with private browsing mode requested may still be coming shortly after NetworkProcess was told to destroy its session.
         // FIXME: Find a way to track private browsing sessions more rigorously.
@@ -209,7 +207,7 @@ void NetworkConnectionToWebProcess::convertMainResourceLoadToDownload(SessionID 
     }
 
 #if USE(NETWORK_SESSION)
-    loader->networkLoad()->convertTaskToDownload(downloadID, request);
+    loader->networkLoad()->convertTaskToDownload(downloadID, request, response);
 #else
     networkProcess.downloadManager().convertHandleToDownload(downloadID, loader->networkLoad()->handle(), request, response);
 
@@ -274,10 +272,15 @@ void NetworkConnectionToWebProcess::registerBlobURLFromURL(const URL& url, const
 
 void NetworkConnectionToWebProcess::preregisterSandboxExtensionsForOptionallyFileBackedBlob(const Vector<String>& filePaths, const SandboxExtension::HandleArray& handles)
 {
+#if ENABLE(SANDBOX_EXTENSIONS)
     ASSERT(filePaths.size() == handles.size());
 
     for (size_t i = 0; i < filePaths.size(); ++i)
         m_blobDataFileReferences.add(filePaths[i], BlobDataFileReferenceWithSandboxExtension::create(filePaths[i], SandboxExtension::create(handles[i])));
+#else
+    for (size_t i = 0; i < filePaths.size(); ++i)
+        m_blobDataFileReferences.add(filePaths[i], BlobDataFileReferenceWithSandboxExtension::create(filePaths[i], nullptr));
+#endif
 }
 
 RefPtr<WebCore::BlobDataFileReference> NetworkConnectionToWebProcess::getBlobDataFileReferenceForPath(const String& path)
@@ -286,9 +289,9 @@ RefPtr<WebCore::BlobDataFileReference> NetworkConnectionToWebProcess::getBlobDat
     return m_blobDataFileReferences.get(path);
 }
 
-void NetworkConnectionToWebProcess::registerBlobURLOptionallyFileBacked(const URL& url, const URL& srcURL, const String& fileBackedPath)
+void NetworkConnectionToWebProcess::registerBlobURLOptionallyFileBacked(const URL& url, const URL& srcURL, const String& fileBackedPath, const String& contentType)
 {
-    NetworkBlobRegistry::singleton().registerBlobURLOptionallyFileBacked(this, url, srcURL, fileBackedPath);
+    NetworkBlobRegistry::singleton().registerBlobURLOptionallyFileBacked(this, url, srcURL, fileBackedPath, contentType);
 }
 
 void NetworkConnectionToWebProcess::registerBlobURLForSlice(const URL& url, const URL& srcURL, int64_t start, int64_t end)
@@ -315,12 +318,12 @@ void NetworkConnectionToWebProcess::writeBlobsToTemporaryFiles(const Vector<Stri
     for (auto& file : fileReferences)
         file->prepareForFileAccess();
 
-    NetworkBlobRegistry::singleton().writeBlobsToTemporaryFiles(blobURLs, [this, protectedThis = Ref<NetworkConnectionToWebProcess>(*this), requestIdentifier, fileReferences = WTFMove(fileReferences)](auto& fileNames) mutable {
+    NetworkBlobRegistry::singleton().writeBlobsToTemporaryFiles(blobURLs, [this, protectedThis = makeRef(*this), requestIdentifier, fileReferences = WTFMove(fileReferences)](auto& fileNames) mutable {
         for (auto& file : fileReferences)
             file->revokeFileAccess();
 
         NetworkProcess::singleton().grantSandboxExtensionsToDatabaseProcessForBlobs(fileNames, [this, protectedThis = WTFMove(protectedThis), requestIdentifier, fileNames]() {
-            if (!m_connection || !m_connection->isValid())
+            if (!m_connection->isValid())
                 return;
 
             m_connection->send(Messages::NetworkProcessConnection::DidWriteBlobsToTemporaryFiles(requestIdentifier, fileNames), 0);

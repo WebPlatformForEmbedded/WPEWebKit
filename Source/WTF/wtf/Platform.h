@@ -748,7 +748,11 @@
 #define USE_ARMV7_DISASSEMBLER 1
 #endif
 
-#if !defined(ENABLE_DISASSEMBLER) && (USE(UDIS86) || USE(ARMV7_DISASSEMBLER) || USE(ARM64_DISASSEMBLER))
+#if !defined(USE_ARM_LLVM_DISASSEMBLER) && ENABLE(JIT) && CPU(ARM_TRADITIONAL) && HAVE(LLVM)
+#define USE_ARM_LLVM_DISASSEMBLER 1
+#endif
+
+#if !defined(ENABLE_DISASSEMBLER) && (USE(UDIS86) || USE(ARMV7_DISASSEMBLER) || USE(ARM64_DISASSEMBLER) || USE(ARM_LLVM_DISASSEMBLER))
 #define ENABLE_DISASSEMBLER 1
 #endif
 
@@ -835,6 +839,38 @@
 #define JSC_HOST_CALL __attribute__ ((fastcall))
 #else
 #define JSC_HOST_CALL
+#endif
+
+#if CPU(X86) && OS(WINDOWS)
+#define CALLING_CONVENTION_IS_STDCALL 1
+#ifndef CDECL
+#if COMPILER(MSVC)
+#define CDECL __cdecl
+#else
+#define CDECL __attribute__ ((__cdecl))
+#endif
+#endif
+#else
+#define CALLING_CONVENTION_IS_STDCALL 0
+#endif
+
+#if CPU(X86)
+#define WTF_COMPILER_SUPPORTS_FASTCALL_CALLING_CONVENTION 1
+#ifndef FASTCALL
+#if COMPILER(MSVC)
+#define FASTCALL __fastcall
+#else
+#define FASTCALL  __attribute__ ((fastcall))
+#endif
+#endif
+#else
+#define WTF_COMPILER_SUPPORTS_FASTCALL_CALLING_CONVENTION 0
+#endif
+
+#if ENABLE(JIT) && CALLING_CONVENTION_IS_STDCALL
+#define JIT_OPERATION CDECL
+#else
+#define JIT_OPERATION
 #endif
 
 /* Configure the interpreter */
@@ -1159,7 +1195,8 @@
 #define HAVE_COREANIMATION_FENCES 1
 #endif
 
-#if (PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101200) || (PLATFORM(IOS) && __IPHONE_OS_VERSION_MIN_REQUIRED >= 100000)
+/* FIXME: Enable USE_OS_LOG when building with the public iOS 10 SDK once we fix <rdar://problem/27758343>. */
+#if (PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101200) || (PLATFORM(IOS) && __IPHONE_OS_VERSION_MIN_REQUIRED >= 100000 && USE(APPLE_INTERNAL_SDK))
 #define USE_OS_LOG 1
 #if USE(APPLE_INTERNAL_SDK)
 #define USE_OS_STATE 1
@@ -1197,6 +1234,10 @@
 #else
 #define USE_GENERIC_EVENT_LOOP 1
 #endif
+#endif
+
+#if PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101200
+#define USE_MEDIAREMOTE 1
 #endif
 
 #endif /* WTF_Platform_h */

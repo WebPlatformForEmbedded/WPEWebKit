@@ -29,13 +29,9 @@
 #include "CacheValidation.h"
 #include "CertificateInfo.h"
 #include "HTTPHeaderMap.h"
+#include "NetworkLoadTiming.h"
 #include "ParsedContentRange.h"
-#include "ResourceLoadTiming.h"
 #include "URL.h"
-
-#if OS(SOLARIS)
-#include <sys/time.h> // For time_t structure.
-#endif
 
 namespace WebCore {
 
@@ -61,15 +57,20 @@ public:
         String httpStatusText;
         String httpVersion;
         HTTPHeaderMap httpHeaderFields;
-        ResourceLoadTiming resourceLoadTiming;
+        NetworkLoadTiming networkLoadTiming;
         Type type;
+        bool isRedirected;
     };
 
     CrossThreadData crossThreadData() const;
     static ResourceResponse fromCrossThreadData(CrossThreadData&&);
 
+    enum class Tainting { Basic, Cors, Opaque };
+    static ResourceResponse filterResponse(const ResourceResponse&, Tainting);
+
     bool isNull() const { return m_isNull; }
     WEBCORE_EXPORT bool isHTTP() const;
+    bool isSuccessful() const;
 
     WEBCORE_EXPORT const URL& url() const;
     WEBCORE_EXPORT void setURL(const URL&);
@@ -85,7 +86,7 @@ public:
 
     WEBCORE_EXPORT int httpStatusCode() const;
     WEBCORE_EXPORT void setHTTPStatusCode(int);
-    
+
     WEBCORE_EXPORT const String& httpStatusText() const;
     WEBCORE_EXPORT void setHTTPStatusText(const String&);
 
@@ -134,7 +135,7 @@ public:
     WEBCORE_EXPORT Source source() const;
     WEBCORE_EXPORT void setSource(Source);
 
-    ResourceLoadTiming& resourceLoadTiming() const { return m_resourceLoadTiming; }
+    NetworkLoadTiming& networkLoadTiming() const { return m_networkLoadTiming; }
 
     // The ResourceResponse subclass may "shadow" this method to provide platform-specific memory usage information
     unsigned memoryUsage() const
@@ -174,7 +175,6 @@ protected:
     static bool platformCompare(const ResourceResponse&, const ResourceResponse&) { return true; }
 
 private:
-    const ResourceResponse& asResourceResponse() const;
     void parseCacheControlDirectives() const;
     void updateHeaderParsedState(HTTPHeaderName);
 
@@ -187,9 +187,8 @@ protected:
     AtomicString m_httpStatusText;
     AtomicString m_httpVersion;
     HTTPHeaderMap m_httpHeaderFields;
-    mutable ResourceLoadTiming m_resourceLoadTiming;
+    mutable NetworkLoadTiming m_networkLoadTiming;
 
-#define RESOURCE_RESPONSE_BASE_CERT_INFO_OPTIONAL
     mutable Optional<CertificateInfo> m_certificateInfo;
 
     int m_httpStatusCode;
@@ -233,7 +232,7 @@ void ResourceResponseBase::encode(Encoder& encoder) const
     encoder << m_httpStatusText;
     encoder << m_httpVersion;
     encoder << m_httpHeaderFields;
-    encoder << m_resourceLoadTiming;
+    encoder << m_networkLoadTiming;
     encoder << m_httpStatusCode;
     encoder << m_certificateInfo;
     encoder.encodeEnum(m_source);
@@ -267,7 +266,7 @@ bool ResourceResponseBase::decode(Decoder& decoder, ResourceResponseBase& respon
         return false;
     if (!decoder.decode(response.m_httpHeaderFields))
         return false;
-    if (!decoder.decode(response.m_resourceLoadTiming))
+    if (!decoder.decode(response.m_networkLoadTiming))
         return false;
     if (!decoder.decode(response.m_httpStatusCode))
         return false;

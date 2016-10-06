@@ -132,8 +132,7 @@ public:
     static JSString* create(VM& vm, PassRefPtr<StringImpl> value)
     {
         ASSERT(value);
-        int32_t length = value->length();
-        RELEASE_ASSERT(length >= 0);
+        unsigned length = value->length();
         size_t cost = value->cost();
         JSString* newString = new (NotNull, allocateCell<JSString>(vm.heap)) JSString(vm, value);
         newString->finishCreation(vm, length, cost);
@@ -156,6 +155,7 @@ public:
     SafeView view(ExecState*) const;
     StringViewWithUnderlyingString viewWithUnderlyingString(ExecState&) const;
 
+    inline bool equal(ExecState*, JSString* other) const;
     const String& value(ExecState*) const;
     const String& tryGetValue() const;
     const StringImpl* tryGetValueImpl() const;
@@ -193,6 +193,7 @@ public:
 protected:
     friend class JSValue;
 
+    JS_EXPORT_PRIVATE bool equalSlowCase(ExecState*, JSString* other) const;
     bool isRope() const { return m_value.isNull(); }
     bool isSubstring() const;
     bool is8Bit() const { return m_flags & Is8Bit; }
@@ -298,8 +299,8 @@ private:
     void finishCreation(VM& vm, ExecState* exec, JSString* base, unsigned offset, unsigned length)
     {
         Base::finishCreation(vm);
-        ASSERT(!sumOverflows<int32_t>(offset, length));
-        ASSERT(offset + length <= base->length());
+        RELEASE_ASSERT(!sumOverflows<int32_t>(offset, length));
+        RELEASE_ASSERT(offset + length <= base->length());
         m_length = length;
         setIs8Bit(base->is8Bit());
         setIsSubstring(true);
@@ -322,8 +323,8 @@ private:
     ALWAYS_INLINE void finishCreationSubstringOfResolved(VM& vm, JSString* base, unsigned offset, unsigned length)
     {
         Base::finishCreation(vm);
-        ASSERT(!sumOverflows<int32_t>(offset, length));
-        ASSERT(offset + length <= base->length());
+        RELEASE_ASSERT(!sumOverflows<int32_t>(offset, length));
+        RELEASE_ASSERT(offset + length <= base->length());
         m_length = length;
         setIs8Bit(base->is8Bit());
         setIsSubstring(true);

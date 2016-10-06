@@ -30,6 +30,7 @@
 #include "CachedSVGDocument.h"
 #include "ElementIterator.h"
 #include "Event.h"
+#include "EventNames.h"
 #include "RenderSVGResource.h"
 #include "RenderSVGTransformableContainer.h"
 #include "ShadowRoot.h"
@@ -568,7 +569,7 @@ void SVGUseElement::updateExternalDocument()
         m_externalDocument = nullptr;
     else {
         ResourceLoaderOptions options = CachedResourceLoader::defaultCachedResourceOptions();
-        options.setContentSecurityPolicyImposition(isInUserAgentShadowTree() ? ContentSecurityPolicyImposition::SkipPolicyCheck : ContentSecurityPolicyImposition::DoPolicyCheck);
+        options.contentSecurityPolicyImposition = isInUserAgentShadowTree() ? ContentSecurityPolicyImposition::SkipPolicyCheck : ContentSecurityPolicyImposition::DoPolicyCheck;
 
         CachedResourceRequest request { ResourceRequest { externalDocumentURL }, options };
         request.setInitiator(this);

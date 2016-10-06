@@ -113,7 +113,6 @@ public:
 
     virtual bool shouldUseCredentialStorage();
     virtual void didReceiveAuthenticationChallenge(const AuthenticationChallenge&);
-    WEBCORE_EXPORT void didCancelAuthenticationChallenge(const AuthenticationChallenge&);
 #if USE(PROTECTION_SPACE_AUTH_CALLBACK)
     virtual bool canAuthenticateAgainstProtectionSpace(const ProtectionSpace&);
 #endif
@@ -126,11 +125,11 @@ public:
 
     const URL& url() const { return m_request.url(); }
     ResourceHandle* handle() const { return m_handle.get(); }
-    bool shouldSendResourceLoadCallbacks() const { return m_options.sendLoadCallbacks() == SendCallbacks; }
-    void setSendCallbackPolicy(SendCallbackPolicy sendLoadCallbacks) { m_options.setSendLoadCallbacks(sendLoadCallbacks); }
-    bool shouldSniffContent() const { return m_options.sniffContent() == SniffContent; }
+    bool shouldSendResourceLoadCallbacks() const { return m_options.sendLoadCallbacks == SendCallbacks; }
+    void setSendCallbackPolicy(SendCallbackPolicy sendLoadCallbacks) { m_options.sendLoadCallbacks = sendLoadCallbacks; }
+    bool shouldSniffContent() const { return m_options.sniffContent == SniffContent; }
     WEBCORE_EXPORT bool isAllowedToAskUserForCredentials() const;
-    bool shouldIncludeCertificateInfo() const { return m_options.certificateInfoPolicy() == IncludeCertificateInfo; }
+    bool shouldIncludeCertificateInfo() const { return m_options.certificateInfoPolicy == IncludeCertificateInfo; }
 
     bool reachedTerminalState() const { return m_reachedTerminalState; }
 
@@ -197,7 +196,6 @@ private:
 #endif
     bool shouldUseCredentialStorage(ResourceHandle*) override { return shouldUseCredentialStorage(); }
     void didReceiveAuthenticationChallenge(ResourceHandle*, const AuthenticationChallenge& challenge) override { didReceiveAuthenticationChallenge(challenge); } 
-    void didCancelAuthenticationChallenge(ResourceHandle*, const AuthenticationChallenge& challenge) override { didCancelAuthenticationChallenge(challenge); } 
 #if USE(PROTECTION_SPACE_AUTH_CALLBACK)
     bool canAuthenticateAgainstProtectionSpace(ResourceHandle*, const ProtectionSpace& protectionSpace) override { return canAuthenticateAgainstProtectionSpace(protectionSpace); }
 #endif

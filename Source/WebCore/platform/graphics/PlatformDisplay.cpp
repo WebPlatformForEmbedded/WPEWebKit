@@ -26,8 +26,8 @@
 #include "config.h"
 #include "PlatformDisplay.h"
 
+#include <cstdlib>
 #include <mutex>
-#include <wtf/NeverDestroyed.h>
 
 #if PLATFORM(X11)
 #include "PlatformDisplayX11.h"

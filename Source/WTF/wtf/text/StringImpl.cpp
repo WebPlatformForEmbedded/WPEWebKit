@@ -30,7 +30,6 @@
 #include "StringHash.h"
 #include <wtf/ProcessID.h>
 #include <wtf/StdLibExtras.h>
-#include <wtf/WTFThreadData.h>
 #include <wtf/text/CString.h>
 #include <wtf/text/StringView.h>
 #include <wtf/text/SymbolImpl.h>
@@ -1262,13 +1261,6 @@ size_t StringImpl::findIgnoringASCIICase(const StringImpl* matchString, unsigned
     if (!matchString)
         return notFound;
     return ::WTF::findIgnoringASCIICase(*this, *matchString, startOffset);
-}
-
-size_t StringImpl::findNextLineStart(unsigned index)
-{
-    if (is8Bit())
-        return WTF::findNextLineStart(characters8(), m_length, index);
-    return WTF::findNextLineStart(characters16(), m_length, index);
 }
 
 size_t StringImpl::reverseFind(UChar c, unsigned index)

@@ -25,9 +25,16 @@ GType webkit_dom_dom_window_get_type(void)
 gboolean webkit_dom_dom_window_webkit_message_handlers_post_message(WebKitDOMDOMWindow*, const gchar*, const gchar*)@2.8
 GType webkit_dom_document_get_type(void)
 WebKitDOMDocumentType* webkit_dom_document_get_doctype(WebKitDOMDocument*)
+gchar* webkit_dom_document_get_design_mode(WebKitDOMDocument*)@2.14
+void webkit_dom_document_set_design_mode(WebKitDOMDocument*, const gchar*)@2.14
+gchar* webkit_dom_document_get_compat_mode(WebKitDOMDocument*)@2.14
+WebKitDOMHTMLCollection* webkit_dom_document_get_embeds(WebKitDOMDocument*)@2.14
+WebKitDOMHTMLCollection* webkit_dom_document_get_plugins(WebKitDOMDocument*)@2.14
+WebKitDOMHTMLCollection* webkit_dom_document_get_scripts(WebKitDOMDocument*)@2.14
 WebKitDOMHTMLCollection* webkit_dom_document_get_images(WebKitDOMDocument*)
 gchar* webkit_dom_document_get_title(WebKitDOMDocument*)
 void webkit_dom_document_set_title(WebKitDOMDocument*, const gchar*)
+void webkit_dom_document_set_title_with_error(WebKitDOMDocument*, const gchar*, GError**)@2.14
 gchar* webkit_dom_document_get_charset(WebKitDOMDocument*)
 void webkit_dom_document_set_charset(WebKitDOMDocument*, const gchar*)
 gchar* webkit_dom_document_get_default_charset(WebKitDOMDocument*)
@@ -585,6 +592,7 @@ gchar* webkit_dom_html_input_element_get_align(WebKitDOMHTMLInputElement*)
 gchar* webkit_dom_html_input_element_get_alt(WebKitDOMHTMLInputElement*)
 gboolean webkit_dom_html_input_element_get_autofocus(WebKitDOMHTMLInputElement*)
 gboolean webkit_dom_html_input_element_get_capture(WebKitDOMHTMLInputElement*)
+gchar* webkit_dom_html_input_element_get_capture_type(WebKitDOMHTMLInputElement*)@2.14
 gboolean webkit_dom_html_input_element_get_checked(WebKitDOMHTMLInputElement*)
 gboolean webkit_dom_html_input_element_get_default_checked(WebKitDOMHTMLInputElement*)
 gchar* webkit_dom_html_input_element_get_default_value(WebKitDOMHTMLInputElement*)
@@ -950,6 +958,7 @@ gboolean webkit_dom_html_text_area_element_is_edited(WebKitDOMHTMLTextAreaElemen
 GType webkit_dom_html_title_element_get_type(void)
 gchar* webkit_dom_html_title_element_get_text(WebKitDOMHTMLTitleElement*)
 void webkit_dom_html_title_element_set_text(WebKitDOMHTMLTitleElement*, const gchar*)
+void webkit_dom_html_title_element_set_text_with_error(WebKitDOMHTMLTitleElement*, const gchar*, GError**)@2.14
 GType webkit_dom_html_u_list_element_get_type(void)
 gchar* webkit_dom_html_u_list_element_get_type_attr(WebKitDOMHTMLUListElement*)
 void webkit_dom_html_u_list_element_set_type_attr(WebKitDOMHTMLUListElement*, const gchar*)

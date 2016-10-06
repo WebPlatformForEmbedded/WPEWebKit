@@ -53,6 +53,7 @@
                 "WindowNotFound",
                 "FrameNotFound",
                 "NodeNotFound",
+                "InvalidElementState",
                 "NoJavaScriptDialog",
                 "NotImplemented",
                 "MissingParameter",
@@ -297,7 +298,8 @@
             "name": "inspectBrowsingContext",
             "description": "Inspect the specified browsing context using Web Inspector.",
             "parameters": [
-                { "name": "handle", "$ref": "BrowsingContextHandle", "description": "The handle for the browsing context that should be inspected." }
+                { "name": "handle", "$ref": "BrowsingContextHandle", "description": "The handle for the browsing context that should be inspected." },
+                { "name": "enableAutoCapturing", "type": "boolean", "optional": true, "description": "If this option is present and set to true, the Web Inspector will automatically start a timeline recording of the specified browsing context once it is attached. Note that this disables the debugger for the duration of the recording." }
             ],
             "async": true
         },
@@ -337,7 +339,8 @@
             "parameters": [
                 { "name": "handle", "$ref": "BrowsingContextHandle", "description": "The handle for the browsing context which should receive key." },
                 { "name": "interactions", "type": "array", "items": { "$ref": "KeyboardInteraction" }, "description": "An ordered list of key sequences to be delivered using native key events." }
-            ]
+            ],
+            "async": true
         },
         {
             "name": "takeScreenshot",
@@ -468,8 +471,7 @@
             "description": "Delete all cookies that are visible to the specified browsing context.",
             "parameters": [
                 { "name": "browsingContextHandle", "$ref": "BrowsingContextHandle", "description": "The handle for the browsing context." }
-            ],
-            "async": true
+            ]
         }
     ]
 }

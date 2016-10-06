@@ -122,15 +122,9 @@ public:
         dispose();
     }
 
-    void didFail(const ResourceError&) override
+    void didFail(const ResourceError& error) override
     {
-        m_callback->sendFailure(ASCIILiteral("Loading resource for inspector failed"));
-        dispose();
-    }
-
-    void didFailRedirectCheck() override
-    {
-        m_callback->sendFailure(ASCIILiteral("Loading resource for inspector failed redirect check"));
+        m_callback->sendFailure(error.isAccessControl() ? ASCIILiteral("Loading resource for inspector failed access control check") : ASCIILiteral("Loading resource for inspector failed"));
         dispose();
     }
 
@@ -190,10 +184,10 @@ static Ref<InspectorObject> buildObjectForHeaders(const HTTPHeaderMap& headers)
     return headersObject;
 }
 
-static Ref<Inspector::Protocol::Network::ResourceTiming> buildObjectForTiming(const ResourceLoadTiming& timing, DocumentLoader* loader)
+static Ref<Inspector::Protocol::Network::ResourceTiming> buildObjectForTiming(const NetworkLoadTiming& timing, DocumentLoader* loader)
 {
     return Inspector::Protocol::Network::ResourceTiming::create()
-        .setNavigationStart(loader->timing().navigationStart())
+        .setNavigationStart(loader->timing().startTime())
         .setDomainLookupStart(timing.domainLookupStart)
         .setDomainLookupEnd(timing.domainLookupEnd)
         .setConnectStart(timing.connectStart)
@@ -211,8 +205,11 @@ static Ref<Inspector::Protocol::Network::Request> buildObjectForResourceRequest(
         .setMethod(request.httpMethod())
         .setHeaders(buildObjectForHeaders(request.httpHeaderFields()))
         .release();
-    if (request.httpBody() && !request.httpBody()->isEmpty())
-        requestObject->setPostData(request.httpBody()->flattenToString());
+    if (request.httpBody() && !request.httpBody()->isEmpty()) {
+        Vector<char> bytes;
+        request.httpBody()->flatten(bytes);
+        requestObject->setPostData(String::fromUTF8WithLatin1Fallback(bytes.data(), bytes.size()));
+    }
     return requestObject;
 }
 
@@ -233,7 +230,7 @@ static RefPtr<Inspector::Protocol::Network::Response> buildObjectForResourceResp
         .release();
 
     responseObject->setFromDiskCache(response.source() == ResourceResponse::Source::DiskCache || response.source() == ResourceResponse::Source::DiskCacheAfterValidation);
-    responseObject->setTiming(buildObjectForTiming(response.resourceLoadTiming(), loader));
+    responseObject->setTiming(buildObjectForTiming(response.networkLoadTiming(), loader));
 
     return WTFMove(responseObject);
 }
@@ -673,16 +670,16 @@ void InspectorNetworkAgent::loadResource(ErrorString& errorString, const String&
     request.setHiddenFromInspector(true);
 
     ThreadableLoaderOptions options;
-    options.setSendLoadCallbacks(SendCallbacks); // So we remove this from m_hiddenRequestIdentifiers on completion.
-    options.setAllowCredentials(AllowStoredCredentials);
-    options.setDefersLoadingPolicy(DefersLoadingPolicy::DisallowDefersLoading); // So the request is never deferred.
-    options.crossOriginRequestPolicy = AllowCrossOriginRequests;
+    options.sendLoadCallbacks = SendCallbacks; // So we remove this from m_hiddenRequestIdentifiers on completion.
+    options.defersLoadingPolicy = DefersLoadingPolicy::DisallowDefersLoading; // So the request is never deferred.
+    options.mode = FetchOptions::Mode::NoCors;
+    options.credentials = FetchOptions::Credentials::SameOrigin;
     options.contentSecurityPolicyEnforcement = ContentSecurityPolicyEnforcement::DoNotEnforce;
 
     // InspectorThreadableLoaderClient deletes itself when the load completes.
     InspectorThreadableLoaderClient* inspectorThreadableLoaderClient = new InspectorThreadableLoaderClient(callback.copyRef());
 
-    RefPtr<DocumentThreadableLoader> loader = DocumentThreadableLoader::create(*document, *inspectorThreadableLoaderClient, request, options);
+    auto loader = DocumentThreadableLoader::create(*document, *inspectorThreadableLoaderClient, WTFMove(request), options);
     if (!loader) {
         inspectorThreadableLoaderClient->didFailLoaderCreation();
         return;
@@ -692,7 +689,7 @@ void InspectorNetworkAgent::loadResource(ErrorString& errorString, const String&
     if (!callback->isActive())
         return;
 
-    inspectorThreadableLoaderClient->setLoader(loader.release());
+    inspectorThreadableLoaderClient->setLoader(WTFMove(loader));
 }
 
 static Ref<Inspector::Protocol::Page::SearchResult> buildObjectForSearchResult(const String& requestId, const String& frameId, const String& url, int matchesCount)

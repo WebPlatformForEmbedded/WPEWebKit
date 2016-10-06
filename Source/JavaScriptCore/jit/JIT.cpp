@@ -45,6 +45,7 @@
 #include "ResultType.h"
 #include "SlowPathCall.h"
 #include "StackAlignment.h"
+#include "SuperSampler.h"
 #include "TypeProfilerLog.h"
 #include <wtf/CryptographicallyRandomNumber.h>
 
@@ -108,8 +109,10 @@ void JIT::emitEnterOptimizationCheck()
 
 void JIT::emitNotifyWrite(WatchpointSet* set)
 {
-    if (!set || set->state() == IsInvalidated)
+    if (!set || set->state() == IsInvalidated) {
+        addSlowCase(Jump());
         return;
+    }
     
     addSlowCase(branch8(NotEqual, AbsoluteAddress(set->addressOfState()), TrustedImm32(IsInvalidated)));
 }
@@ -155,11 +158,14 @@ void JIT::assertStackPointerOffset()
 
 void JIT::privateCompileMainPass()
 {
+    if (false)
+        dataLog("Compiling ", *m_codeBlock, "\n");
+    
     jitAssertTagsInPlace();
     jitAssertArgumentCountSane();
     
     Instruction* instructionsBegin = m_codeBlock->instructions().begin();
-    unsigned instructionCount = m_codeBlock->instructions().size();
+    unsigned instructionCount = m_instructions.size();
 
     m_callLinkInfoIndex = 0;
 
@@ -225,7 +231,7 @@ void JIT::privateCompileMainPass()
         DEFINE_OP(op_create_scoped_arguments)
         DEFINE_OP(op_create_cloned_arguments)
         DEFINE_OP(op_argument_count)
-        DEFINE_OP(op_copy_rest)
+        DEFINE_OP(op_create_rest)
         DEFINE_OP(op_get_rest_length)
         DEFINE_OP(op_check_tdz)
         DEFINE_OP(op_assert)
@@ -256,6 +262,7 @@ void JIT::privateCompileMainPass()
         DEFINE_OP(op_is_boolean)
         DEFINE_OP(op_is_number)
         DEFINE_OP(op_is_string)
+        DEFINE_OP(op_is_jsarray)
         DEFINE_OP(op_is_object)
         DEFINE_OP(op_jeq_null)
         DEFINE_OP(op_jfalse)
@@ -293,6 +300,7 @@ void JIT::privateCompileMainPass()
         DEFINE_OP(op_nstricteq)
         DEFINE_OP(op_dec)
         DEFINE_OP(op_inc)
+        DEFINE_OP(op_pow)
         DEFINE_OP(op_profile_type)
         DEFINE_OP(op_profile_control_flow)
         DEFINE_OP(op_push_with_scope)
@@ -500,11 +508,16 @@ void JIT::privateCompileSlowCases()
 #endif
 }
 
-CompilationResult JIT::privateCompile(JITCompilationEffort effort)
+void JIT::compileWithoutLinking(JITCompilationEffort effort)
 {
     double before = 0;
     if (UNLIKELY(computeCompileTimes()))
         before = monotonicallyIncreasingTimeMS();
+    
+    {
+        ConcurrentJITLocker locker(m_codeBlock->m_lock);
+        m_instructions = m_codeBlock->instructions().clone();
+    }
 
     DFG::CapabilityLevel level = m_codeBlock->capabilityLevel();
     switch (level) {
@@ -537,12 +550,6 @@ CompilationResult JIT::privateCompile(JITCompilationEffort effort)
         break;
     }
 
-    m_codeBlock->setCalleeSaveRegisters(RegisterSet::llintBaselineCalleeSaveRegisters()); // Might be able to remove as this is probably already set to this value.
-
-    // This ensures that we have the most up to date type information when performing typecheck optimizations for op_profile_type.
-    if (m_vm->typeProfiler())
-        m_vm->typeProfilerLog()->processLogEntries(ASCIILiteral("Preparing for JIT compilation."));
-    
     if (Options::dumpDisassembly() || (m_vm->m_perBytecodeProfiler && Options::disassembleBaselineForProfiler()))
         m_disassembler = std::make_unique<JITDisassembler>(m_codeBlock);
     if (m_vm->m_perBytecodeProfiler) {
@@ -563,7 +570,7 @@ CompilationResult JIT::privateCompile(JITCompilationEffort effort)
         nop();
 
     emitFunctionPrologue();
-    emitPutToCallFrameHeader(m_codeBlock, JSStack::CodeBlock);
+    emitPutToCallFrameHeader(m_codeBlock, CallFrameSlot::codeBlock);
 
     Label beginLabel(this);
 
@@ -593,13 +600,15 @@ CompilationResult JIT::privateCompile(JITCompilationEffort effort)
     }
 
     addPtr(TrustedImm32(stackPointerOffsetFor(m_codeBlock) * sizeof(Register)), callFrameRegister, regT1);
-    Jump stackOverflow = branchPtr(Above, AbsoluteAddress(m_vm->addressOfStackLimit()), regT1);
+    Jump stackOverflow = branchPtr(Above, AbsoluteAddress(m_vm->addressOfSoftStackLimit()), regT1);
 
     move(regT1, stackPointerRegister);
     checkStackPointerAlignment();
 
     emitSaveCalleeSaves();
     emitMaterializeTagCheckRegisters();
+    
+    RELEASE_ASSERT(!JITCode::isJIT(m_codeBlock->jitType()));
 
     privateCompileMainPass();
     privateCompileLinkPass();
@@ -615,14 +624,13 @@ CompilationResult JIT::privateCompile(JITCompilationEffort effort)
         addPtr(TrustedImm32(-maxFrameExtentForSlowPathCall), stackPointerRegister);
     callOperationWithCallFrameRollbackOnException(operationThrowStackOverflowError, m_codeBlock);
 
-    Label arityCheck;
     if (m_codeBlock->codeType() == FunctionCode) {
-        arityCheck = label();
+        m_arityCheck = label();
         store8(TrustedImm32(0), &m_codeBlock->m_shouldAlwaysBeInlined);
         emitFunctionPrologue();
-        emitPutToCallFrameHeader(m_codeBlock, JSStack::CodeBlock);
+        emitPutToCallFrameHeader(m_codeBlock, CallFrameSlot::codeBlock);
 
-        load32(payloadFor(JSStack::ArgumentCount), regT1);
+        load32(payloadFor(CallFrameSlot::argumentCount), regT1);
         branch32(AboveOrEqual, regT1, TrustedImm32(m_codeBlock->m_numParameters)).linkTo(beginLabel, this);
 
         m_bytecodeOffset = 0;
@@ -651,8 +659,26 @@ CompilationResult JIT::privateCompile(JITCompilationEffort effort)
         m_disassembler->setEndOfCode(label());
     m_pcToCodeOriginMapBuilder.appendItem(label(), PCToCodeOriginMapBuilder::defaultCodeOrigin());
 
+    m_linkBuffer = std::unique_ptr<LinkBuffer>(new LinkBuffer(*m_vm, *this, m_codeBlock, effort));
 
-    LinkBuffer patchBuffer(*m_vm, *this, m_codeBlock, effort);
+    double after = 0;
+    if (UNLIKELY(computeCompileTimes())) {
+        after = monotonicallyIncreasingTimeMS();
+
+        if (Options::reportTotalCompileTimes())
+            totalBaselineCompileTime += after - before;
+    }
+    if (UNLIKELY(reportCompileTimes())) {
+        CString codeBlockName = toCString(*m_codeBlock);
+        
+        dataLog("Optimized ", codeBlockName, " with Baseline JIT into ", m_linkBuffer->size(), " bytes in ", after - before, " ms.\n");
+    }
+}
+
+CompilationResult JIT::link()
+{
+    LinkBuffer& patchBuffer = *m_linkBuffer;
+    
     if (patchBuffer.didFailToAllocate())
         return CompilationFailed;
 
@@ -699,27 +725,33 @@ CompilationResult JIT::privateCompile(JITCompilationEffort effort)
     for (unsigned i = m_putByIds.size(); i--;)
         m_putByIds[i].finalize(patchBuffer);
 
-    for (const auto& byValCompilationInfo : m_byValCompilationInfo) {
-        PatchableJump patchableNotIndexJump = byValCompilationInfo.notIndexJump;
-        CodeLocationJump notIndexJump = CodeLocationJump();
-        if (Jump(patchableNotIndexJump).isSet())
-            notIndexJump = CodeLocationJump(patchBuffer.locationOf(patchableNotIndexJump));
-        CodeLocationJump badTypeJump = CodeLocationJump(patchBuffer.locationOf(byValCompilationInfo.badTypeJump));
-        CodeLocationLabel doneTarget = patchBuffer.locationOf(byValCompilationInfo.doneTarget);
-        CodeLocationLabel nextHotPathTarget = patchBuffer.locationOf(byValCompilationInfo.nextHotPathTarget);
-        CodeLocationLabel slowPathTarget = patchBuffer.locationOf(byValCompilationInfo.slowPathTarget);
-        CodeLocationCall returnAddress = patchBuffer.locationOf(byValCompilationInfo.returnAddress);
+    if (m_byValCompilationInfo.size()) {
+        CodeLocationLabel exceptionHandler = patchBuffer.locationOf(m_exceptionHandler);
 
-        *byValCompilationInfo.byValInfo = ByValInfo(
-            byValCompilationInfo.bytecodeIndex,
-            notIndexJump,
-            badTypeJump,
-            byValCompilationInfo.arrayMode,
-            byValCompilationInfo.arrayProfile,
-            differenceBetweenCodePtr(badTypeJump, doneTarget),
-            differenceBetweenCodePtr(badTypeJump, nextHotPathTarget),
-            differenceBetweenCodePtr(returnAddress, slowPathTarget));
+        for (const auto& byValCompilationInfo : m_byValCompilationInfo) {
+            PatchableJump patchableNotIndexJump = byValCompilationInfo.notIndexJump;
+            CodeLocationJump notIndexJump = CodeLocationJump();
+            if (Jump(patchableNotIndexJump).isSet())
+                notIndexJump = CodeLocationJump(patchBuffer.locationOf(patchableNotIndexJump));
+            CodeLocationJump badTypeJump = CodeLocationJump(patchBuffer.locationOf(byValCompilationInfo.badTypeJump));
+            CodeLocationLabel doneTarget = patchBuffer.locationOf(byValCompilationInfo.doneTarget);
+            CodeLocationLabel nextHotPathTarget = patchBuffer.locationOf(byValCompilationInfo.nextHotPathTarget);
+            CodeLocationLabel slowPathTarget = patchBuffer.locationOf(byValCompilationInfo.slowPathTarget);
+            CodeLocationCall returnAddress = patchBuffer.locationOf(byValCompilationInfo.returnAddress);
+
+            *byValCompilationInfo.byValInfo = ByValInfo(
+                byValCompilationInfo.bytecodeIndex,
+                notIndexJump,
+                badTypeJump,
+                exceptionHandler,
+                byValCompilationInfo.arrayMode,
+                byValCompilationInfo.arrayProfile,
+                differenceBetweenCodePtr(badTypeJump, doneTarget),
+                differenceBetweenCodePtr(badTypeJump, nextHotPathTarget),
+                differenceBetweenCodePtr(returnAddress, slowPathTarget));
+        }
     }
+
     for (unsigned i = 0; i < m_callCompilationInfo.size(); ++i) {
         CallCompilationInfo& compilationInfo = m_callCompilationInfo[i];
         CallLinkInfo& info = *compilationInfo.callLinkInfo;
@@ -737,7 +769,7 @@ CompilationResult JIT::privateCompile(JITCompilationEffort effort)
 
     MacroAssemblerCodePtr withArityCheck;
     if (m_codeBlock->codeType() == FunctionCode)
-        withArityCheck = patchBuffer.locationOf(arityCheck);
+        withArityCheck = patchBuffer.locationOf(m_arityCheck);
 
     if (Options::dumpDisassembly()) {
         m_disassembler->dump(patchBuffer);
@@ -758,30 +790,24 @@ CompilationResult JIT::privateCompile(JITCompilationEffort effort)
     
     m_vm->machineCodeBytesPerBytecodeWordForBaselineJIT.add(
         static_cast<double>(result.size()) /
-        static_cast<double>(m_codeBlock->instructions().size()));
+        static_cast<double>(m_instructions.size()));
 
     m_codeBlock->shrinkToFit(CodeBlock::LateShrink);
     m_codeBlock->setJITCode(
         adoptRef(new DirectJITCode(result, withArityCheck, JITCode::BaselineJIT)));
-
-    double after;
-    if (UNLIKELY(computeCompileTimes())) {
-        after = monotonicallyIncreasingTimeMS();
-
-        if (Options::reportTotalCompileTimes())
-            totalBaselineCompileTime += after - before;
-    }
-    if (UNLIKELY(reportCompileTimes())) {
-        CString codeBlockName = toCString(*m_codeBlock);
-        
-        dataLog("Optimized ", codeBlockName, " with Baseline JIT into ", patchBuffer.size(), " bytes in ", after - before, " ms.\n");
-    }
 
 #if ENABLE(JIT_VERBOSE)
     dataLogF("JIT generated code for %p at [%p, %p).\n", m_codeBlock, result.executableMemory()->start(), result.executableMemory()->end());
 #endif
     
     return CompilationSuccessful;
+}
+
+CompilationResult JIT::privateCompile(JITCompilationEffort effort)
+{
+    doMainThreadPreparationBeforeCompile();
+    compileWithoutLinking(effort);
+    return link();
 }
 
 void JIT::privateCompileExceptionHandlers()
@@ -805,7 +831,8 @@ void JIT::privateCompileExceptionHandlers()
         jumpToExceptionHandler();
     }
 
-    if (!m_exceptionChecks.empty()) {
+    if (!m_exceptionChecks.empty() || m_byValCompilationInfo.size()) {
+        m_exceptionHandler = label();
         m_exceptionChecks.link(this);
 
         copyCalleeSavesToVMEntryFrameCalleeSavesBuffer();
@@ -822,6 +849,13 @@ void JIT::privateCompileExceptionHandlers()
         m_calls.append(CallRecord(call(), std::numeric_limits<unsigned>::max(), FunctionPtr(lookupExceptionHandler).value()));
         jumpToExceptionHandler();
     }
+}
+
+void JIT::doMainThreadPreparationBeforeCompile()
+{
+    // This ensures that we have the most up to date type information when performing typecheck optimizations for op_profile_type.
+    if (m_vm->typeProfiler())
+        m_vm->typeProfilerLog()->processLogEntries(ASCIILiteral("Preparing for JIT compilation."));
 }
 
 unsigned JIT::frameRegisterCountFor(CodeBlock* codeBlock)

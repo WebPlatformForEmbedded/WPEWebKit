@@ -38,6 +38,7 @@
 #include "ContentExtensionActions.h"
 #include "ContentExtensionRule.h"
 #include "Crypto.h"
+#include "CustomElementRegistry.h"
 #include "DOMApplicationCache.h"
 #include "DOMSelection.h"
 #include "DOMStringList.h"
@@ -150,7 +151,7 @@ public:
         , m_channels(WTFMove(channels))
         , m_targetOrigin(WTFMove(targetOrigin))
         , m_stackTrace(stackTrace)
-        , m_wasProcessingUserGesture(UserGestureIndicator::processingUserGesture())
+        , m_userGestureToForward(UserGestureIndicator::currentUserGesture())
     {
     }
 
@@ -168,7 +169,7 @@ private:
         // This object gets deleted when std::unique_ptr falls out of scope..
         std::unique_ptr<PostMessageTimer> timer(this);
         
-        UserGestureIndicator userGestureIndicator(m_wasProcessingUserGesture ? DefinitelyProcessingUserGesture : DefinitelyNotProcessingUserGesture);
+        UserGestureIndicator userGestureIndicator(m_userGestureToForward);
         m_window->postMessageTimerFired(*timer);
     }
 
@@ -179,7 +180,7 @@ private:
     std::unique_ptr<MessagePortChannelArray> m_channels;
     RefPtr<SecurityOrigin> m_targetOrigin;
     RefPtr<ScriptCallStack> m_stackTrace;
-    bool m_wasProcessingUserGesture;
+    RefPtr<UserGestureToken> m_userGestureToForward;
 };
 
 typedef HashCountedSet<DOMWindow*> DOMWindowSet;
@@ -358,11 +359,13 @@ FloatRect DOMWindow::adjustWindowRect(Page* page, const FloatRect& pendingChange
 bool DOMWindow::allowPopUp(Frame* firstFrame)
 {
     ASSERT(firstFrame);
+    
+    auto& settings = firstFrame->settings();
 
-    if (ScriptController::processingUserGesture())
+    if (ScriptController::processingUserGesture() || settings.allowWindowOpenWithoutUserGesture())
         return true;
 
-    return firstFrame->settings().javaScriptCanOpenWindowsAutomatically();
+    return settings.javaScriptCanOpenWindowsAutomatically();
 }
 
 bool DOMWindow::allowPopUp()
@@ -478,6 +481,8 @@ Page* DOMWindow::page()
 
 void DOMWindow::frameDestroyed()
 {
+    Ref<DOMWindow> protectedThis(*this);
+
     willDestroyDocumentInFrame();
     FrameDestructionObserver::frameDestroyed();
     resetDOMWindowProperties();
@@ -615,6 +620,15 @@ bool DOMWindow::isCurrentlyDisplayedInFrame() const
     return m_frame && m_frame->document()->domWindow() == this;
 }
 
+#if ENABLE(CUSTOM_ELEMENTS)
+CustomElementRegistry& DOMWindow::ensureCustomElementRegistry()
+{
+    if (!m_customElementRegistry)
+        m_customElementRegistry = CustomElementRegistry::create();
+    return *m_customElementRegistry;
+}
+#endif
+
 #if ENABLE(ORIENTATION_EVENTS)
 int DOMWindow::orientation() const
 {
@@ -743,6 +757,15 @@ Performance* DOMWindow::performance() const
 }
 #endif
 
+double DOMWindow::nowTimestamp() const
+{
+#if ENABLE(WEB_TIMING)
+    return performance() ? performance()->now() / 1000 : 0;
+#else
+    return document() ? document()->monotonicTimestamp() : 0;
+#endif
+}
+
 Location* DOMWindow::location() const
 {
     if (!isCurrentlyDisplayedInFrame())
@@ -812,13 +835,13 @@ Storage* DOMWindow::sessionStorage(ExceptionCode& ec) const
     if (!page)
         return 0;
 
-    RefPtr<StorageArea> storageArea = page->sessionStorage()->storageArea(document->securityOrigin());
+    auto storageArea = page->sessionStorage()->storageArea(document->securityOrigin());
     if (!storageArea->canAccessStorage(m_frame)) {
         ec = SECURITY_ERR;
         return 0;
     }
 
-    m_sessionStorage = Storage::create(m_frame, storageArea.release());
+    m_sessionStorage = Storage::create(m_frame, WTFMove(storageArea));
     return m_sessionStorage.get();
 }
 
@@ -858,23 +881,15 @@ Storage* DOMWindow::localStorage(ExceptionCode& ec) const
     if (!page->settings().localStorageEnabled())
         return nullptr;
 
-    RefPtr<StorageArea> storageArea = page->storageNamespaceProvider().localStorageArea(*document);
+    auto storageArea = page->storageNamespaceProvider().localStorageArea(*document);
 
     if (!storageArea->canAccessStorage(m_frame)) {
         ec = SECURITY_ERR;
         return nullptr;
     }
 
-    m_localStorage = Storage::create(m_frame, storageArea.release());
+    m_localStorage = Storage::create(m_frame, WTFMove(storageArea));
     return m_localStorage.get();
-}
-
-void DOMWindow::postMessage(PassRefPtr<SerializedScriptValue> message, MessagePort* port, const String& targetOrigin, DOMWindow& source, ExceptionCode& ec)
-{
-    MessagePortArray ports;
-    if (port)
-        ports.append(port);
-    postMessage(message, &ports, targetOrigin, source, ec);
 }
 
 void DOMWindow::postMessage(PassRefPtr<SerializedScriptValue> message, const MessagePortArray* ports, const String& targetOrigin, DOMWindow& source, ExceptionCode& ec)
@@ -961,9 +976,9 @@ Element* DOMWindow::frameElement() const
     return m_frame->ownerElement();
 }
 
-void DOMWindow::focus(Document& document)
+void DOMWindow::focus(DOMWindow& callerWindow)
 {
-    focus(opener() && opener() != this && document.domWindow() == opener());
+    focus(opener() && opener() != this && &callerWindow == opener());
 }
 
 void DOMWindow::focus(bool allowFocus)
@@ -1385,11 +1400,8 @@ RefPtr<StyleMedia> DOMWindow::styleMedia() const
     return m_media;
 }
 
-RefPtr<CSSStyleDeclaration> DOMWindow::getComputedStyle(Element* element, const String& pseudoElt) const
+RefPtr<CSSStyleDeclaration> DOMWindow::getComputedStyle(Element& element, const String& pseudoElt) const
 {
-    if (!element)
-        return nullptr;
-
     return CSSComputedStyleDeclaration::create(element, false, pseudoElt);
 }
 
@@ -1858,10 +1870,10 @@ void DOMWindow::dispatchLoadEvent()
 {
     Ref<Event> loadEvent = Event::create(eventNames().loadEvent, false, false);
     if (m_frame && m_frame->loader().documentLoader() && !m_frame->loader().documentLoader()->timing().loadEventStart()) {
-        // The DocumentLoader (and thus its DocumentLoadTiming) might get destroyed while dispatching
+        // The DocumentLoader (and thus its LoadTiming) might get destroyed while dispatching
         // the event, so protect it to prevent writing the end time into freed memory.
         RefPtr<DocumentLoader> documentLoader = m_frame->loader().documentLoader();
-        DocumentLoadTiming& timing = documentLoader->timing();
+        LoadTiming& timing = documentLoader->timing();
         timing.markLoadEventStart();
         dispatchEvent(loadEvent, document());
         timing.markLoadEventEnd();

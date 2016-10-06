@@ -44,7 +44,6 @@
 #include "ProcessThrottler.h"
 #include "SandboxExtension.h"
 #include "ShareableBitmap.h"
-#include "UserInterfaceLayoutDirection.h"
 #include "UserMediaPermissionRequestManagerProxy.h"
 #include "VisibleContentRectUpdateInfo.h"
 #include "WKBase.h"
@@ -56,6 +55,7 @@
 #include "WebPageCreationParameters.h"
 #include "WebPageDiagnosticLoggingClient.h"
 #include "WebPageInjectedBundleClient.h"
+#include "WebPaymentCoordinatorProxy.h"
 #include "WebPreferences.h"
 #include <WebCore/AlternativeTextClient.h> // FIXME: Needed by WebPageProxyMessages.h for DICTATION_ALTERNATIVES.
 #include "WebPageProxyMessages.h"
@@ -73,6 +73,7 @@
 #include <WebCore/SearchPopupMenu.h>
 #include <WebCore/TextChecking.h>
 #include <WebCore/TextGranularity.h>
+#include <WebCore/UserInterfaceLayoutDirection.h>
 #include <WebCore/ViewState.h>
 #include <WebCore/VisibleSelection.h>
 #include <WebCore/Proxy.h>
@@ -117,10 +118,6 @@ OBJC_CLASS _WKRemoteObjectRegistry;
 #include <WebCore/WebMediaSessionManagerClient.h>
 #endif
 
-#if USE(APPLE_INTERNAL_SDK)
-#include <WebKitAdditions/WebPageProxyIncludes.h>
-#endif
-
 #if ENABLE(MEDIA_SESSION)
 namespace WebCore {
 class MediaSessionMetadata;
@@ -142,7 +139,7 @@ class URLRequest;
 }
 
 namespace IPC {
-class ArgumentDecoder;
+class Decoder;
 class Connection;
 }
 
@@ -209,6 +206,8 @@ struct AttributedString;
 struct ColorSpaceData;
 struct EditingRange;
 struct EditorState;
+struct GamepadData;
+struct LoadParameters;
 struct PlatformPopupMenuData;
 struct PrintInfo;
 struct WebPopupItem;
@@ -371,6 +370,7 @@ public:
 
     void closePage(bool stopResponsivenessTimer);
 
+    void addPlatformLoadParameters(LoadParameters&);
     RefPtr<API::Navigation> loadRequest(const WebCore::ResourceRequest&, WebCore::ShouldOpenExternalURLsPolicy = WebCore::ShouldOpenExternalURLsPolicy::ShouldAllowExternalSchemes, API::Object* userData = nullptr);
     RefPtr<API::Navigation> loadFile(const String& fileURL, const String& resourceDirectoryURL, API::Object* userData = nullptr);
     RefPtr<API::Navigation> loadData(API::Data*, const String& MIMEType, const String& encoding, const String& baseURL, API::Object* userData = nullptr);
@@ -512,6 +512,7 @@ public:
     void setAssistedNodeValueAsNumber(double);
     void setAssistedNodeSelectedIndex(uint32_t index, bool allowMultipleSelection = false);
     void applicationDidEnterBackground();
+    void applicationDidFinishSnapshottingAfterEnteringBackground();
     void applicationWillEnterForeground();
     void applicationWillResignActive();
     void applicationDidBecomeActive();
@@ -521,8 +522,8 @@ public:
     void disableDoubleTapGesturesDuringTapIfNecessary(uint64_t requestID);
     void contentSizeCategoryDidChange(const String& contentSizeCategory);
     void getSelectionContext(std::function<void(const String&, const String&, const String&, CallbackBase::Error)>);
-    void handleTwoFingerTapAtPoint(const WebCore::IntPoint&, std::function<void(const String&, CallbackBase::Error)>);
-    void updateForceAlwaysUserScalable();
+    void handleTwoFingerTapAtPoint(const WebCore::IntPoint&, uint64_t requestID);
+    void setForceAlwaysUserScalable(bool);
 #endif
 #if ENABLE(DATA_DETECTION)
     void setDataDetectionResult(const DataDetectionResult&);
@@ -827,7 +828,6 @@ public:
     virtual void enterAcceleratedCompositingMode(const LayerTreeContext&);
     virtual void exitAcceleratedCompositingMode();
     virtual void updateAcceleratedCompositingMode(const LayerTreeContext&);
-    void willEnterAcceleratedCompositingMode();
 
     enum UndoOrRedo { Undo, Redo };
     void addEditCommand(WebEditCommandProxy*);
@@ -1104,7 +1104,7 @@ public:
     void clearWheelEventTestTrigger();
     void callAfterNextPresentationUpdate(std::function<void (CallbackBase::Error)>);
 
-    void didLayout(uint32_t layoutMilestones);
+    void didReachLayoutMilestone(uint32_t layoutMilestones);
 
     void didRestoreScrollPosition();
 
@@ -1115,9 +1115,18 @@ public:
     bool isResourceCachingDisabled() const { return m_isResourceCachingDisabled; }
     void setResourceCachingDisabled(bool);
 
-    UserInterfaceLayoutDirection userInterfaceLayoutDirection();
+    WebCore::UserInterfaceLayoutDirection userInterfaceLayoutDirection();
+    void setUserInterfaceLayoutDirection(WebCore::UserInterfaceLayoutDirection);
 
     bool hasHadSelectionChangesFromUserInteraction() const { return m_hasHadSelectionChangesFromUserInteraction; }
+
+    bool isAlwaysOnLoggingAllowed() const;
+
+    void canAuthenticateAgainstProtectionSpace(uint64_t loaderID, uint64_t frameID, const WebCore::ProtectionSpace&);
+
+#if ENABLE(GAMEPAD)
+    void gamepadActivity(const Vector<GamepadData>&);
+#endif
 
 private:
     WebPageProxy(PageClient&, WebProcessProxy&, uint64_t pageID, Ref<API::PageConfiguration>&&);
@@ -1139,11 +1148,11 @@ private:
 
     // IPC::MessageReceiver
     // Implemented in generated WebPageProxyMessageReceiver.cpp
-    void didReceiveMessage(IPC::Connection&, IPC::MessageDecoder&) override;
-    void didReceiveSyncMessage(IPC::Connection&, IPC::MessageDecoder&, std::unique_ptr<IPC::MessageEncoder>&) override;
+    void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
+    void didReceiveSyncMessage(IPC::Connection&, IPC::Decoder&, std::unique_ptr<IPC::Encoder>&) override;
 
     // IPC::MessageSender
-    bool sendMessage(std::unique_ptr<IPC::MessageEncoder>, unsigned messageSendFlags) override;
+    bool sendMessage(std::unique_ptr<IPC::Encoder>, unsigned messageSendFlags) override;
     IPC::Connection* messageSenderConnection() override;
     uint64_t messageSenderDestinationID() override;
 
@@ -1395,7 +1404,6 @@ private:
     void focusedFrameChanged(uint64_t frameID);
     void frameSetLargestFrameChanged(uint64_t frameID);
 
-    void canAuthenticateAgainstProtectionSpaceInFrame(uint64_t frameID, const WebCore::ProtectionSpace&, bool& canAuthenticate);
     void didReceiveAuthenticationChallenge(uint64_t frameID, const WebCore::AuthenticationChallenge&, uint64_t challengeID);
 
     void didFinishLoadingDataForCustomContentProvider(const String& suggestedFilename, const IPC::DataReference&);
@@ -1419,6 +1427,8 @@ private:
     void removeDictationAlternatives(uint64_t dictationContext);
     void dictationAlternatives(uint64_t dictationContext, Vector<String>& result);
 #endif
+
+    void setEditableElementIsFocused(bool);
 #endif // PLATFORM(MAC)
 
 #if PLATFORM(IOS)
@@ -1468,6 +1478,7 @@ private:
     void sendWheelEvent(const WebWheelEvent&);
 
 #if ENABLE(TOUCH_EVENTS)
+    void updateTouchEventTracking(const WebTouchEvent&);
     WebCore::TrackingType touchEventTrackingType(const WebTouchEvent&) const;
 #endif
 
@@ -1588,8 +1599,8 @@ private:
     RefPtr<WebVibrationProxy> m_vibration;
 #endif
 
-#if USE(APPLE_INTERNAL_SDK)
-#include <WebKitAdditions/WebPageProxyMembers.h>
+#if ENABLE(APPLE_PAY)
+    std::unique_ptr<WebPaymentCoordinatorProxy> m_paymentCoordinator;
 #endif
 
     CallbackMap m_callbacks;
@@ -1621,7 +1632,7 @@ private:
     bool m_alwaysRunsAtForegroundPriority;
     ProcessThrottler::ForegroundActivityToken m_activityToken;
 #endif
-        
+    bool m_initialCapitalizationEnabled;
     Ref<WebBackForwardList> m_backForwardList;
         
     bool m_maintainsInactiveSelection;
@@ -1697,7 +1708,29 @@ private:
     std::unique_ptr<NativeWebMouseEvent> m_currentlyProcessedMouseDownEvent;
 
 #if ENABLE(TOUCH_EVENTS)
-    WebCore::TrackingType m_touchEventsTrackingType { WebCore::TrackingType::NotTracking };
+    struct TouchEventTracking {
+        WebCore::TrackingType touchForceChangedTracking { WebCore::TrackingType::NotTracking };
+        WebCore::TrackingType touchStartTracking { WebCore::TrackingType::NotTracking };
+        WebCore::TrackingType touchMoveTracking { WebCore::TrackingType::NotTracking };
+        WebCore::TrackingType touchEndTracking { WebCore::TrackingType::NotTracking };
+
+        bool isTrackingAnything() const
+        {
+            return touchForceChangedTracking != WebCore::TrackingType::NotTracking
+                || touchStartTracking != WebCore::TrackingType::NotTracking
+                || touchMoveTracking != WebCore::TrackingType::NotTracking
+                || touchEndTracking != WebCore::TrackingType::NotTracking;
+        }
+
+        void reset()
+        {
+            touchForceChangedTracking = WebCore::TrackingType::NotTracking;
+            touchStartTracking = WebCore::TrackingType::NotTracking;
+            touchMoveTracking = WebCore::TrackingType::NotTracking;
+            touchEndTracking = WebCore::TrackingType::NotTracking;
+        }
+    };
+    TouchEventTracking m_touchEventTracking;
 #endif
 #if ENABLE(TOUCH_EVENTS) && !ENABLE(IOS_TOUCH_EVENTS)
     Deque<QueuedTouchEvents> m_touchEventQueue;
@@ -1834,6 +1867,7 @@ private:
 #if PLATFORM(IOS)
     bool m_hasDeferredStartAssistingNode { false };
     std::unique_ptr<NodeAssistanceArguments> m_deferredNodeAssistanceArguments;
+    bool m_forceAlwaysUserScalable { false };
 #endif
 
 #if ENABLE(DOWNLOAD_ATTRIBUTE)

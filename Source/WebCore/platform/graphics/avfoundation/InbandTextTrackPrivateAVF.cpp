@@ -37,7 +37,6 @@
 #include <runtime/DataView.h>
 #include <runtime/Int8Array.h>
 #include <wtf/MediaTime.h>
-#include <wtf/NeverDestroyed.h>
 #include <wtf/text/CString.h>
 #include <wtf/text/StringBuilder.h>
 #include <wtf/text/WTFString.h>
@@ -405,7 +404,7 @@ void InbandTextTrackPrivateAVF::processAttributedStrings(CFArrayRef attributedSt
         
         LOG(Media, "InbandTextTrackPrivateAVF::processCue(%p) - adding cue \"%s\" for time = %.2f, end = %.2f, position =  %.2f, line =  %.2f", this, cueData->content().utf8().data(), cueData->startTime().toDouble(), cueData->endTime().toDouble(), cueData->position(), cueData->line());
 
-        client()->addGenericCue(this, cueData.release());
+        client()->addGenericCue(this, WTFMove(cueData));
     }
 
     m_pendingCueStatus = seeking() ? DeliveredDuringSeek : Valid;

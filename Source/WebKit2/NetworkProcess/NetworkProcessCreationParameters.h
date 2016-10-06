@@ -23,9 +23,9 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef NetworkProcessCreationParameters_h
-#define NetworkProcessCreationParameters_h
+#pragma once
 
+#include "Attachment.h"
 #include "CacheModel.h"
 #include "SandboxExtension.h"
 #include <wtf/Vector.h>
@@ -36,8 +36,8 @@
 #endif
 
 namespace IPC {
-class ArgumentDecoder;
-class ArgumentEncoder;
+class Decoder;
+class Encoder;
 }
 
 namespace WebKit {
@@ -45,8 +45,8 @@ namespace WebKit {
 struct NetworkProcessCreationParameters {
     NetworkProcessCreationParameters();
 
-    void encode(IPC::ArgumentEncoder&) const;
-    static bool decode(IPC::ArgumentDecoder&, NetworkProcessCreationParameters&);
+    void encode(IPC::Encoder&) const;
+    static bool decode(IPC::Decoder&, NetworkProcessCreationParameters&);
 
     bool privateBrowsingEnabled;
     CacheModel cacheModel;
@@ -86,6 +86,7 @@ struct NetworkProcessCreationParameters {
 #if TARGET_OS_IPHONE || (PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101100)
     RetainPtr<CFDataRef> networkATSContext;
 #endif
+    bool cookieStoragePartitioningEnabled;
 #endif
 
 #if USE(SOUP)
@@ -95,8 +96,10 @@ struct NetworkProcessCreationParameters {
     bool ignoreTLSErrors;
     Vector<String> languages;
 #endif
+
+#if OS(LINUX)
+    IPC::Attachment memoryPressureMonitorHandle;
+#endif
 };
 
 } // namespace WebKit
-
-#endif // NetworkProcessCreationParameters_h

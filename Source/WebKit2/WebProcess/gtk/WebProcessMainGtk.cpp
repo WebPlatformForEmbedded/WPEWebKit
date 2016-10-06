@@ -49,7 +49,7 @@ public:
     {
 #ifndef NDEBUG
         if (g_getenv("WEBKIT2_PAUSE_WEB_PROCESS_ON_LAUNCH"))
-            WTF::sleep(30);
+            g_usleep(30 * G_USEC_PER_SEC);
 #endif
 
 #if (USE(COORDINATED_GRAPHICS_THREADED) || USE(GSTREAMER_GL)) && PLATFORM(X11)
@@ -60,16 +60,7 @@ public:
         bindtextdomain(GETTEXT_PACKAGE, LOCALEDIR);
         bind_textdomain_codeset(GETTEXT_PACKAGE, "UTF-8");
 
-        SoupNetworkSession::defaultSession().setSSLPolicy(SoupNetworkSession::SSLUseSystemCAFile);
         return true;
-    }
-
-    void platformFinalize() override
-    {
-        if (SoupCache* soupCache = SoupNetworkSession::defaultSession().cache()) {
-            soup_cache_flush(soupCache);
-            soup_cache_dump(soupCache);
-        }
     }
 };
 

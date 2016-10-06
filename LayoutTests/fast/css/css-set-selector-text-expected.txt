@@ -38,6 +38,10 @@ PASS setThenReadSelectorText('*|*') is '*|*'
 PASS setThenReadSelectorText('n|*') is 'n|*'
 PASS setThenReadSelectorText('[*|a]') is '[*|a]'
 PASS setThenReadSelectorText('[n|a]') is '[n|a]'
+PASS setThenReadSelectorText('|*') is '|*'
+PASS setThenReadSelectorText('[*|a]') is '[*|a]'
+PASS setThenReadSelectorText('[n|a]') is '[n|a]'
+PASS setThenReadSelectorText('[|a]') is '[a]'
 
 PASS setThenReadSelectorText('a:active') is 'a:active'
 PASS setThenReadSelectorText('a b') is 'a b'
@@ -218,6 +222,26 @@ PASS setThenReadSelectorText('a.b::-webkit-input-placeholder') is 'a.b::-webkit-
 PASS setThenReadSelectorText('a#b::-webkit-input-placeholder') is 'a#b::-webkit-input-placeholder'
 PASS setThenReadSelectorText('a[b].c#d::-webkit-input-placeholder') is 'a[b].c#d::-webkit-input-placeholder'
 
+PASS setThenReadSelectorText('a[b]:default') is 'a[b]:default'
+PASS setThenReadSelectorText('a.b:default') is 'a.b:default'
+PASS setThenReadSelectorText('a#b:default') is 'a#b:default'
+PASS setThenReadSelectorText('a[b].c#d:default') is 'a[b].c#d:default'
+
+PASS setThenReadSelectorText('a[b]:in-range') is 'a[b]:in-range'
+PASS setThenReadSelectorText('a.b:in-range') is 'a.b:in-range'
+PASS setThenReadSelectorText('a#b:in-range') is 'a#b:in-range'
+PASS setThenReadSelectorText('a[b].c#d:in-range') is 'a[b].c#d:in-range'
+
+PASS setThenReadSelectorText('a[b]:out-of-range') is 'a[b]:out-of-range'
+PASS setThenReadSelectorText('a.b:out-of-range') is 'a.b:out-of-range'
+PASS setThenReadSelectorText('a#b:out-of-range') is 'a#b:out-of-range'
+PASS setThenReadSelectorText('a[b].c#d:out-of-range') is 'a[b].c#d:out-of-range'
+
+PASS setThenReadSelectorText('a[b]:focus-within') is 'a[b]:focus-within'
+PASS setThenReadSelectorText('a.b:focus-within') is 'a.b:focus-within'
+PASS setThenReadSelectorText('a#b:focus-within') is 'a#b:focus-within'
+PASS setThenReadSelectorText('a[b].c#d:focus-within') is 'a[b].c#d:focus-within'
+
 PASS setThenReadSelectorText('input:not([type="file"]):focus') is 'input:not([type="file"]):focus'
 PASS setThenReadSelectorText(':-webkit-any([type="file"])') is ':-webkit-any([type="file"])'
 PASS setThenReadSelectorText(':-webkit-any(:hover)') is ':-webkit-any(:hover)'
@@ -228,7 +252,6 @@ PASS setThenReadSelectorText(':-webkit-any(.class1:hover)') is ':-webkit-any(.cl
 PASS setThenReadSelectorText(':-webkit-any(a.class1.class2.class3:hover)') is ':-webkit-any(a.class1.class2.class3:hover)'
 
 PASS setThenReadSelectorText('*:active') is ':active'
-PASS setThenReadSelectorText('|a') is 'a'
 
 PASS setThenReadSelectorText('input[type=file]:focus') is 'input[type="file"]:focus'
 

@@ -33,6 +33,7 @@
 #include "ScrollTypes.h"
 #include "SessionID.h"
 #include "Supplementable.h"
+#include "UserInterfaceLayoutDirection.h"
 #include "ViewState.h"
 #include "ViewportArguments.h"
 #include "WheelEventTestTrigger.h"
@@ -41,7 +42,6 @@
 #include <wtf/HashMap.h>
 #include <wtf/HashSet.h>
 #include <wtf/Noncopyable.h>
-#include <wtf/Optional.h>
 #include <wtf/Ref.h>
 #include <wtf/RefCounted.h>
 #include <wtf/UniqueRef.h>
@@ -107,6 +107,7 @@ class PageGroup;
 class PageThrottler;
 class PlugInClient;
 class PluginData;
+class PluginInfoProvider;
 class PluginViewBase;
 class PointerLockController;
 class ProgressTracker;
@@ -154,7 +155,7 @@ public:
     WEBCORE_EXPORT ViewportArguments viewportArguments() const;
 
     static void refreshPlugins(bool reload);
-    WEBCORE_EXPORT PluginData& pluginData() const;
+    WEBCORE_EXPORT PluginData& pluginData();
 
     WEBCORE_EXPORT void setCanStartMedia(bool);
     bool canStartMedia() const { return m_canStartMedia; }
@@ -280,6 +281,9 @@ public:
 
     WEBCORE_EXPORT void setPageScaleFactor(float scale, const IntPoint& origin, bool inStableState = true);
     float pageScaleFactor() const { return m_pageScaleFactor; }
+
+    UserInterfaceLayoutDirection userInterfaceLayoutDirection() const { return m_userInterfaceLayoutDirection; }
+    WEBCORE_EXPORT void setUserInterfaceLayoutDirection(UserInterfaceLayoutDirection);
 
     // The view scale factor is multiplied into the page scale factor by all
     // callers of setPageScaleFactor.
@@ -462,6 +466,8 @@ public:
     StorageNamespaceProvider& storageNamespaceProvider() { return m_storageNamespaceProvider.get(); }
     void setStorageNamespaceProvider(Ref<StorageNamespaceProvider>&&);
 
+    PluginInfoProvider& pluginInfoProvider();
+
     UserContentProvider& userContentProvider();
     WEBCORE_EXPORT void setUserContentProvider(Ref<UserContentProvider>&&);
 
@@ -581,7 +587,7 @@ private:
     const std::unique_ptr<BackForwardController> m_backForwardController;
     Ref<MainFrame> m_mainFrame;
 
-    mutable RefPtr<PluginData> m_pluginData;
+    RefPtr<PluginData> m_pluginData;
 
     RefPtr<RenderTheme> m_theme;
 
@@ -692,9 +698,10 @@ private:
     unsigned m_lastSpatialNavigationCandidatesCount;
     unsigned m_forbidPromptsDepth;
 
-    UniqueRef<SocketProvider> m_socketProvider;
+    Ref<SocketProvider> m_socketProvider;
     Ref<ApplicationCacheStorage> m_applicationCacheStorage;
     Ref<DatabaseProvider> m_databaseProvider;
+    Ref<PluginInfoProvider> m_pluginInfoProvider;
     Ref<StorageNamespaceProvider> m_storageNamespaceProvider;
     Ref<UserContentProvider> m_userContentProvider;
     Ref<VisitedLinkStore> m_visitedLinkStore;
@@ -716,6 +723,7 @@ private:
     bool m_showAllPlugins { false };
     bool m_controlledByAutomation { false };
     bool m_resourceCachingDisabled { false };
+    UserInterfaceLayoutDirection m_userInterfaceLayoutDirection { UserInterfaceLayoutDirection::LTR };
 };
 
 inline PageGroup& Page::group()

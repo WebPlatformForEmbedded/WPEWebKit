@@ -21,6 +21,8 @@
 #ifndef CoordinatedGraphicsLayer_h
 #define CoordinatedGraphicsLayer_h
 
+#if USE(COORDINATED_GRAPHICS)
+
 #include "CoordinatedGraphicsState.h"
 #include "CoordinatedImageBacking.h"
 #include "FloatPoint3D.h"
@@ -38,8 +40,6 @@
 #endif
 #include <wtf/text/StringHash.h>
 
-#if USE(COORDINATED_GRAPHICS)
-
 namespace WebCore {
 class CoordinatedGraphicsLayer;
 class TextureMapperAnimations;
@@ -49,9 +49,9 @@ class CoordinatedGraphicsLayerClient {
 public:
     virtual bool isFlushingLayerChanges() const = 0;
     virtual FloatRect visibleContentsRect() const = 0;
-    virtual PassRefPtr<CoordinatedImageBacking> createImageBackingIfNeeded(Image*) = 0;
+    virtual Ref<CoordinatedImageBacking> createImageBackingIfNeeded(Image*) = 0;
     virtual void detachLayer(CoordinatedGraphicsLayer*) = 0;
-    virtual bool paintToSurface(const IntSize&, CoordinatedSurface::Flags, uint32_t& atlasID, IntPoint&, CoordinatedSurface::Client*) = 0;
+    virtual bool paintToSurface(const IntSize&, CoordinatedSurface::Flags, uint32_t& atlasID, IntPoint&, CoordinatedSurface::Client&) = 0;
 
     virtual void syncLayerState(CoordinatedLayerID, CoordinatedGraphicsLayerState&) = 0;
 };
@@ -139,7 +139,7 @@ public:
     void createTile(uint32_t tileID, float) override;
     void updateTile(uint32_t tileID, const SurfaceUpdateInfo&, const IntRect&) override;
     void removeTile(uint32_t tileID) override;
-    bool paintToSurface(const IntSize&, uint32_t& /* atlasID */, IntPoint&, CoordinatedSurface::Client*) override;
+    bool paintToSurface(const IntSize&, uint32_t& /* atlasID */, IntPoint&, CoordinatedSurface::Client&) override;
 
     void setCoordinator(CoordinatedGraphicsLayerClient*);
 
@@ -149,6 +149,8 @@ public:
     CoordinatedGraphicsLayer* findFirstDescendantWithContentsRecursively();
 
 private:
+    bool isCoordinatedGraphicsLayer() const override { return true; }
+
 #if USE(GRAPHICS_SURFACE)
     enum PendingPlatformLayerOperation {
         None = 0x00,
@@ -192,7 +194,7 @@ private:
     void createBackingStore();
     void releaseImageBackingIfNeeded();
 
-    bool notifyFlushRequired();
+    void notifyFlushRequired();
 
     // CoordinatedImageBacking::Host
     bool imageBackingVisible() override;
@@ -257,9 +259,10 @@ private:
     ScrollableArea* m_scrollableArea;
 };
 
-CoordinatedGraphicsLayer* toCoordinatedGraphicsLayer(GraphicsLayer*);
-
 } // namespace WebCore
+
+SPECIALIZE_TYPE_TRAITS_GRAPHICSLAYER(WebCore::CoordinatedGraphicsLayer, isCoordinatedGraphicsLayer())
+
 #endif // USE(COORDINATED_GRAPHICS)
 
 #endif // CoordinatedGraphicsLayer_h

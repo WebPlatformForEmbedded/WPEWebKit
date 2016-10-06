@@ -35,9 +35,9 @@
 #include "ScrollView.h"
 #include <memory>
 #include <wtf/Forward.h>
+#include <wtf/Function.h>
 #include <wtf/HashSet.h>
 #include <wtf/ListHashSet.h>
-#include <wtf/NoncopyableFunction.h>
 #include <wtf/text/WTFString.h>
 
 namespace WebCore {
@@ -111,7 +111,7 @@ public:
     void scheduleRelayout();
     void scheduleRelayoutOfSubtree(RenderElement&);
     void unscheduleRelayout();
-    void queuePostLayoutCallback(NoncopyableFunction<void()>&&);
+    void queuePostLayoutCallback(WTF::Function<void ()>&&);
     bool layoutPending() const;
     bool isInLayout() const { return m_layoutPhase != OutsideLayout; }
     bool isInRenderTreeLayout() const { return m_layoutPhase == InRenderTreeLayout; }
@@ -149,7 +149,7 @@ public:
 #endif
 
 #if ENABLE(REQUEST_ANIMATION_FRAME)
-    WEBCORE_EXPORT void serviceScriptedAnimations(double monotonicAnimationStartTime);
+    WEBCORE_EXPORT void serviceScriptedAnimations();
 #endif
 
     void willRecalcStyle();
@@ -363,9 +363,9 @@ public:
 
     bool isInChildFrameWithFrameFlattening() const;
 
-    void startDisallowingLayout() { ++m_layoutDisallowed; }
-    void endDisallowingLayout() { ASSERT(m_layoutDisallowed > 0); --m_layoutDisallowed; }
-    bool layoutDisallowed() const { return m_layoutDisallowed; }
+    void startDisallowingLayout() { ++m_layoutDisallowedCount; }
+    void endDisallowingLayout() { ASSERT(m_layoutDisallowedCount > 0); --m_layoutDisallowedCount; }
+    bool layoutDisallowed() const { return m_layoutDisallowedCount; }
 
     static double currentPaintTimeStamp() { return sCurrentPaintTimeStamp; } // returns 0 if not painting
     
@@ -503,6 +503,8 @@ public:
 
     WEBCORE_EXPORT float topContentInset(TopContentInsetType = TopContentInsetType::WebCoreContentInset) const override;
     void topContentInsetDidChange(float newTopContentInset);
+
+    void topContentDirectionDidChange();
 
     WEBCORE_EXPORT void willStartLiveResize() override;
     WEBCORE_EXPORT void willEndLiveResize() override;
@@ -657,6 +659,8 @@ private:
     IntSize sizeForResizeEvent() const;
     void sendResizeEventIfNeeded();
 
+    void handleDeferredScrollbarsUpdateAfterDirectionChange();
+
     void updateScrollableAreaSet();
 
     void notifyPageThatContentAreaWillPaint() const override;
@@ -759,7 +763,7 @@ private:
 
     unsigned m_deferSetNeedsLayoutCount;
     bool m_setNeedsLayoutWasDeferred;
-    int m_layoutDisallowed { 0 };
+    int m_layoutDisallowedCount { 0 };
 
     RefPtr<Node> m_nodeToDraw;
     PaintBehavior m_paintBehavior;
@@ -771,6 +775,8 @@ private:
     bool m_firstVisuallyNonEmptyLayoutCallbackPending;
 
     bool m_viewportIsStable { true };
+
+    bool m_needsDeferredScrollbarsUpdate { false };
 
     RefPtr<ContainerNode> m_maintainScrollPositionAnchor;
 
@@ -828,7 +834,7 @@ private:
     ScrollPinningBehavior m_scrollPinningBehavior;
 
     IntRect* m_cachedWindowClipRect { nullptr };
-    Vector<NoncopyableFunction<void()>> m_postLayoutCallbackQueue;
+    Vector<WTF::Function<void ()>> m_postLayoutCallbackQueue;
 };
 
 inline void FrameView::incrementVisuallyNonEmptyCharacterCount(unsigned count)

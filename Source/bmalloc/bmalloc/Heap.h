@@ -26,6 +26,7 @@
 #ifndef Heap_h
 #define Heap_h
 
+#include "AsyncTask.h"
 #include "BumpRange.h"
 #include "Environment.h"
 #include "LineMetadata.h"
@@ -76,7 +77,6 @@ private:
     };
 
     ~Heap() = delete;
-    static void heapDestructor() __attribute__((destructor));
     
     void initializeLineMetadata();
     void initializePageMetadata();

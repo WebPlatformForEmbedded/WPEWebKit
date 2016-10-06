@@ -42,6 +42,7 @@ WebInspector.CSSStyleDeclarationSection = class CSSStyleDeclarationSection exten
         this._element.classList.add("style-declaration-section");
 
         new WebInspector.KeyboardShortcut(WebInspector.KeyboardShortcut.Modifier.CommandOrControl, "S", this._save.bind(this), this._element);
+        new WebInspector.KeyboardShortcut(WebInspector.KeyboardShortcut.Modifier.CommandOrControl | WebInspector.KeyboardShortcut.Modifier.Shift, "S", this._save.bind(this), this._element);
 
         this._headerElement = document.createElement("div");
         this._headerElement.classList.add("header");
@@ -216,11 +217,16 @@ WebInspector.CSSStyleDeclarationSection = class CSSStyleDeclarationSection exten
             var matchedSelectorIndices = this._style.ownerRule.matchedSelectorIndices;
             var alwaysMatch = !matchedSelectorIndices.length;
             if (selectors.length) {
+                var hasMatchingPseudoElementSelector = false;
                 for (var i = 0; i < selectors.length; ++i) {
                     appendSelector.call(this, selectors[i], alwaysMatch || matchedSelectorIndices.includes(i));
                     if (i < selectors.length - 1)
                         this._selectorElement.append(", ");
+
+                    if (matchedSelectorIndices.includes(i) && selectors[i].isPseudoElementSelector())
+                        hasMatchingPseudoElementSelector = true;
                 }
+                this._element.classList.toggle(WebInspector.CSSStyleDeclarationSection.PseudoElementSelectorStyleClassName, hasMatchingPseudoElementSelector);
             } else
                 appendSelectorTextKnownToMatch.call(this, this._style.ownerRule.selectorText);
 
@@ -669,6 +675,7 @@ WebInspector.CSSStyleDeclarationSection.LockedStyleClassName = "locked";
 WebInspector.CSSStyleDeclarationSection.SelectorLockedStyleClassName = "selector-locked";
 WebInspector.CSSStyleDeclarationSection.LastInGroupStyleClassName = "last-in-group";
 WebInspector.CSSStyleDeclarationSection.MatchedSelectorElementStyleClassName = "matched";
+WebInspector.CSSStyleDeclarationSection.PseudoElementSelectorStyleClassName = "pseudo-element-selector";
 
 WebInspector.CSSStyleDeclarationSection.AuthorStyleRuleIconStyleClassName = "author-style-rule-icon";
 WebInspector.CSSStyleDeclarationSection.UserStyleRuleIconStyleClassName = "user-style-rule-icon";

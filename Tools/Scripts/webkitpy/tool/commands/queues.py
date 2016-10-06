@@ -66,7 +66,7 @@ class AbstractQueue(Command, QueueEngineDelegate):
     _fail_status = "Fail"
     _error_status = "Error"
 
-    def __init__(self, options=None): # Default values should never be collections (like []) as default values are shared between invocations
+    def __init__(self, options=None):  # Default values should never be collections (like []) as default values are shared between invocations
         options_list = (options or []) + [
             make_option("--no-confirm", action="store_false", dest="confirm", default=True, help="Do not ask the user for confirmation before running the queue.  Dangerous!"),
             make_option("--exit-after-iteration", action="store", type="int", dest="iterations", default=None, help="Stop running the queue after iterating this number of times."),
@@ -148,7 +148,7 @@ class AbstractQueue(Command, QueueEngineDelegate):
     # Command methods
 
     def execute(self, options, args, tool, engine=QueueEngine):
-        self._options = options # FIXME: This code is wrong.  Command.options is a list, this assumes an Options element!
+        self._options = options  # FIXME: This code is wrong.  Command.options is a list, this assumes an Options element!
         self._tool = tool  # FIXME: This code is wrong too!  Command.bind_to_tool handles this!
         return engine(self.name, self, self._tool.wakeup_event, self._options.seconds_to_sleep).run()
 
@@ -339,8 +339,8 @@ class CommitQueue(PatchProcessingQueue, StepSequenceErrorHandler, CommitQueueTas
                 return True
             self._unlock_patch(patch)
             return False
-        except PatchIsNotValid:
-            self._did_error(patch, "%s did not process patch." % self.name)
+        except PatchIsNotValid as error:
+            self._did_error(patch, "%s did not process patch. Reason: %s" % (self.name, error.failure_message))
             return False
         except ScriptError, e:
             validator = CommitterValidator(self._tool)
@@ -477,8 +477,8 @@ class StyleQueue(AbstractReviewQueue, StyleQueueTaskDelegate):
         except UnableToApplyPatch, e:
             self._did_error(patch, "%s unable to apply patch." % self.name)
             return False
-        except PatchIsNotValid:
-            self._did_error(patch, "%s did not process patch." % self.name)
+        except PatchIsNotValid as error:
+            self._did_error(patch, "%s did not process patch. Reason: %s" % (self.name, error.failure_message))
             return False
         except ScriptError, e:
             output = re.sub(r'Failed to run .+ exit_code: 1', '', e.output)

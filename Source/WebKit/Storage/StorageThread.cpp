@@ -26,6 +26,7 @@
 #include "StorageThread.h"
 
 #include <wtf/AutodrainedPool.h>
+#include <wtf/HashSet.h>
 #include <wtf/MainThread.h>
 #include <wtf/NeverDestroyed.h>
 
@@ -74,11 +75,11 @@ void StorageThread::threadEntryPoint()
     }
 }
 
-void StorageThread::dispatch(NoncopyableFunction<void ()>&& function)
+void StorageThread::dispatch(Function<void ()>&& function)
 {
     ASSERT(isMainThread());
     ASSERT(!m_queue.killed() && m_threadID);
-    m_queue.append(std::make_unique<NoncopyableFunction<void ()>>(WTFMove(function)));
+    m_queue.append(std::make_unique<Function<void ()>>(WTFMove(function)));
 }
 
 void StorageThread::terminate()
@@ -90,7 +91,7 @@ void StorageThread::terminate()
     if (!m_threadID)
         return;
 
-    m_queue.append(std::make_unique<NoncopyableFunction<void ()>>([this] {
+    m_queue.append(std::make_unique<Function<void ()>>([this] {
         performTerminate();
     }));
     waitForThreadCompletion(m_threadID);

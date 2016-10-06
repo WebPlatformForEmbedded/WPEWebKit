@@ -2,7 +2,7 @@
  * Copyright (C) 1999 Lars Knoll (knoll@kde.org)
  *           (C) 1999 Antti Koivisto (koivisto@kde.org)
  *           (C) 2000 Dirk Mueller (mueller@kde.org)
- * Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009, 2010 Apple Inc. All rights reserved.
+ * Copyright (C) 2004-2016 Apple Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -21,8 +21,7 @@
  *
  */
 
-#ifndef HTMLFormElement_h
-#define HTMLFormElement_h
+#pragma once
 
 #include "FormState.h"
 #include "FormSubmission.h"
@@ -52,30 +51,27 @@ public:
     virtual ~HTMLFormElement();
 
     Ref<HTMLFormControlsCollection> elements();
-    Ref<HTMLCollection> elementsForNativeBindings();
+    WEBCORE_EXPORT Ref<HTMLCollection> elementsForNativeBindings();
     Vector<Ref<Element>> namedElements(const AtomicString&);
 
-    unsigned length() const;
+    WEBCORE_EXPORT unsigned length() const;
     HTMLElement* item(unsigned index);
 
     String enctype() const { return m_attributes.encodingType(); }
-    void setEnctype(const String&);
-
-    String encoding() const { return m_attributes.encodingType(); }
-    void setEncoding(const String& value) { setEnctype(value); }
+    WEBCORE_EXPORT void setEnctype(const String&);
 
     bool shouldAutocomplete() const;
 
-    void setAutocomplete(const AtomicString&);
-    const AtomicString& autocomplete() const;
+    WEBCORE_EXPORT void setAutocomplete(const AtomicString&);
+    WEBCORE_EXPORT const AtomicString& autocomplete() const;
 
 #if ENABLE(IOS_AUTOCORRECT_AND_AUTOCAPITALIZE)
     WEBCORE_EXPORT bool autocorrect() const;
-    void setAutocorrect(bool);
+    WEBCORE_EXPORT void setAutocorrect(bool);
 
     WEBCORE_EXPORT WebAutocapitalizeType autocapitalizeType() const;
-    const AtomicString& autocapitalize() const;
-    void setAutocapitalize(const AtomicString&);
+    WEBCORE_EXPORT const AtomicString& autocapitalize() const;
+    WEBCORE_EXPORT void setAutocapitalize(const AtomicString&);
 #endif
 
     // FIXME: Should rename these two functions to say "form control" or "form-associated element" instead of "form element".
@@ -89,9 +85,9 @@ public:
     void removeImgElement(HTMLImageElement*);
 
     void prepareForSubmission(Event*); // FIXME: This function doesn't only prepare, it sometimes calls submit() itself.
-    void submit();
+    WEBCORE_EXPORT void submit();
     void submitFromJavaScript();
-    void reset();
+    WEBCORE_EXPORT void reset();
 
     void setDemoted(bool demoted) { m_wasDemoted = demoted; }
 
@@ -108,16 +104,17 @@ public:
     String action() const;
     void setAction(const String&);
 
-    String method() const;
-    void setMethod(const String&);
+    WEBCORE_EXPORT String method() const;
+    WEBCORE_EXPORT void setMethod(const String&);
 
-    String target() const override;
+    String target() const final;
 
     bool wasUserSubmitted() const;
 
     HTMLFormControlElement* defaultButton() const;
+    void resetDefaultButton();
 
-    bool checkValidity();
+    WEBCORE_EXPORT bool checkValidity();
 
 #if ENABLE(REQUEST_AUTOCOMPLETE)
     enum class AutocompleteResult {
@@ -143,21 +140,21 @@ public:
 private:
     HTMLFormElement(const QualifiedName&, Document&);
 
-    bool rendererIsNeeded(const RenderStyle&) override;
-    InsertionNotificationRequest insertedInto(ContainerNode&) override;
-    void removedFrom(ContainerNode&) override;
-    void finishParsingChildren() override;
+    bool rendererIsNeeded(const RenderStyle&) final;
+    InsertionNotificationRequest insertedInto(ContainerNode&) final;
+    void removedFrom(ContainerNode&) final;
+    void finishParsingChildren() final;
 
-    void handleLocalEvents(Event&) override;
+    void handleLocalEvents(Event&) final;
 
-    void parseAttribute(const QualifiedName&, const AtomicString&) override;
-    bool isURLAttribute(const Attribute&) const override;
+    void parseAttribute(const QualifiedName&, const AtomicString&) final;
+    bool isURLAttribute(const Attribute&) const final;
 
-    void resumeFromDocumentSuspension() override;
+    void resumeFromDocumentSuspension() final;
 
-    void didMoveToNewDocument(Document* oldDocument) override;
+    void didMoveToNewDocument(Document* oldDocument) final;
 
-    void copyNonAttributePropertiesFromElement(const Element&) override;
+    void copyNonAttributePropertiesFromElement(const Element&) final;
 
     void submit(Event*, bool activateSubmitButton, bool processingUserGesture, FormSubmissionTrigger);
 
@@ -177,8 +174,8 @@ private:
     void assertItemCanBeInPastNamesMap(FormNamedItem*) const;
     void removeFromPastNamesMap(FormNamedItem*);
 
-    bool matchesValidPseudoClass() const override;
-    bool matchesInvalidPseudoClass() const override;
+    bool matchesValidPseudoClass() const final;
+    bool matchesInvalidPseudoClass() const final;
 
     typedef HashMap<RefPtr<AtomicStringImpl>, FormNamedItem*> PastNamesMap;
 
@@ -186,6 +183,7 @@ private:
     std::unique_ptr<PastNamesMap> m_pastNamesMap;
 
     RadioButtonGroups m_radioButtonGroups;
+    mutable HTMLFormControlElement* m_defaultButton { nullptr };
 
     unsigned m_associatedElementsBeforeIndex;
     unsigned m_associatedElementsAfterIndex;
@@ -210,5 +208,3 @@ private:
 };
 
 } // namespace WebCore
-
-#endif // HTMLFormElement_h

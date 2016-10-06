@@ -85,6 +85,9 @@ class MacTest(port_testcase.PortTestCase):
         self.assert_name('mac', 'elcapitan', 'mac-elcapitan')
         self.assert_name('mac-elcapitan', 'mavericks', 'mac-elcapitan')
         self.assert_name('mac-elcapitan', 'yosemite', 'mac-elcapitan')
+        self.assert_name('mac', 'sierra', 'mac-sierra')
+        self.assert_name('mac-sierra', 'yosemite', 'mac-sierra')
+        self.assert_name('mac-sierra', 'elcapitan', 'mac-sierra')
         self.assert_name('mac', 'future', 'mac-future')
         self.assert_name('mac-future', 'future', 'mac-future')
         self.assertRaises(AssertionError, self.assert_name, 'mac-tiger', 'leopard', 'mac-leopard')
@@ -104,19 +107,21 @@ class MacTest(port_testcase.PortTestCase):
 
     def test_baseline_search_path(self):
         # Note that we don't need total coverage here, just path coverage, since this is all data driven.
-        self._assert_search_path('mac-snowleopard', 'mac-snowleopard', ['mac-snowleopard', 'mac-lion', 'mac-mountainlion', 'mac-mavericks', 'mac-yosemite', 'mac-wk1', 'mac'])
-        self._assert_search_path('mac-lion', 'mac-lion', ['mac-lion', 'mac-mountainlion', 'mac-mavericks', 'mac-yosemite', 'mac-wk1', 'mac'])
-        self._assert_search_path('mac-mountainlion', 'mac-mountainlion', ['mac-mountainlion', 'mac-mavericks', 'mac-yosemite', 'mac-wk1', 'mac'])
-        self._assert_search_path('mac-mavericks', 'mac-mavericks', ['mac-mavericks', 'mac-yosemite', 'mac-wk1', 'mac'])
-        self._assert_search_path('mac-yosemite', 'mac-yosemite', ['mac-yosemite', 'mac-wk1', 'mac'])
-        self._assert_search_path('mac-elcapitan', 'mac-wk1', ['mac-wk1', 'mac'])
+        self._assert_search_path('mac-snowleopard', 'mac-snowleopard', ['mac-snowleopard', 'mac-lion', 'mac-mountainlion', 'mac-mavericks', 'mac-yosemite', 'mac-elcapitan', 'mac-wk1', 'mac'])
+        self._assert_search_path('mac-lion', 'mac-lion', ['mac-lion', 'mac-mountainlion', 'mac-mavericks', 'mac-yosemite', 'mac-elcapitan', 'mac-wk1', 'mac'])
+        self._assert_search_path('mac-mountainlion', 'mac-mountainlion', ['mac-mountainlion', 'mac-mavericks', 'mac-yosemite', 'mac-elcapitan', 'mac-wk1', 'mac'])
+        self._assert_search_path('mac-mavericks', 'mac-mavericks', ['mac-mavericks', 'mac-yosemite', 'mac-elcapitan', 'mac-wk1', 'mac'])
+        self._assert_search_path('mac-yosemite', 'mac-yosemite', ['mac-yosemite', 'mac-elcapitan', 'mac-wk1', 'mac'])
+        self._assert_search_path('mac-elcapitan', 'mac-elcapitan', ['mac-elcapitan', 'mac-wk1', 'mac'])
+        self._assert_search_path('mac-sierra', 'mac-wk1', ['mac-wk1', 'mac'])
         self._assert_search_path('mac-future', 'mac-wk1', ['mac-wk1', 'mac'])
-        self._assert_search_path('mac-snowleopard', 'mac-wk2', ['mac-wk2', 'wk2', 'mac-snowleopard', 'mac-lion', 'mac-mountainlion', 'mac-mavericks', 'mac-yosemite', 'mac'], use_webkit2=True)
-        self._assert_search_path('mac-lion', 'mac-wk2', ['mac-wk2', 'wk2', 'mac-lion', 'mac-mountainlion', 'mac-mavericks', 'mac-yosemite', 'mac'], use_webkit2=True)
-        self._assert_search_path('mac-mountainlion', 'mac-wk2', ['mac-wk2', 'wk2', 'mac-mountainlion', 'mac-mavericks', 'mac-yosemite', 'mac'], use_webkit2=True)
-        self._assert_search_path('mac-mavericks', 'mac-wk2', ['mac-wk2', 'wk2', 'mac-mavericks', 'mac-yosemite', 'mac'], use_webkit2=True)
-        self._assert_search_path('mac-yosemite', 'mac-wk2', ['mac-wk2', 'wk2', 'mac-yosemite', 'mac'], use_webkit2=True)
-        self._assert_search_path('mac-elcapitan', 'mac-wk2', ['mac-wk2', 'wk2', 'mac'], use_webkit2=True)
+        self._assert_search_path('mac-snowleopard', 'mac-wk2', ['mac-wk2', 'wk2', 'mac-snowleopard', 'mac-lion', 'mac-mountainlion', 'mac-mavericks', 'mac-yosemite', 'mac-elcapitan', 'mac'], use_webkit2=True)
+        self._assert_search_path('mac-lion', 'mac-wk2', ['mac-wk2', 'wk2', 'mac-lion', 'mac-mountainlion', 'mac-mavericks', 'mac-yosemite', 'mac-elcapitan', 'mac'], use_webkit2=True)
+        self._assert_search_path('mac-mountainlion', 'mac-wk2', ['mac-wk2', 'wk2', 'mac-mountainlion', 'mac-mavericks', 'mac-yosemite', 'mac-elcapitan', 'mac'], use_webkit2=True)
+        self._assert_search_path('mac-mavericks', 'mac-wk2', ['mac-wk2', 'wk2', 'mac-mavericks', 'mac-yosemite', 'mac-elcapitan', 'mac'], use_webkit2=True)
+        self._assert_search_path('mac-yosemite', 'mac-wk2', ['mac-wk2', 'wk2', 'mac-yosemite', 'mac-elcapitan', 'mac'], use_webkit2=True)
+        self._assert_search_path('mac-elcapitan', 'mac-wk2', ['mac-wk2', 'wk2', 'mac-elcapitan', 'mac'], use_webkit2=True)
+        self._assert_search_path('mac-sierra', 'mac-wk2', ['mac-wk2', 'wk2', 'mac'], use_webkit2=True)
         self._assert_search_path('mac-future', 'mac-wk2', ['mac-wk2', 'wk2', 'mac'], use_webkit2=True)
 
     def test_show_results_html_file(self):
@@ -143,12 +148,6 @@ class MacTest(port_testcase.PortTestCase):
         # Make sure that we always use one process, even if we don't have the memory for it.
         port.host.platform.total_bytes_memory = lambda: bytes_for_drt - 1
         expected_logs = "This machine could support 2 child processes, but only has enough memory for 1.\n"
-        child_processes = OutputCapture().assert_outputs(self, port.default_child_processes, (), expected_logs=expected_logs)
-        self.assertEqual(child_processes, 1)
-
-        # SnowLeopard has a CFNetwork bug which causes crashes if we execute more than one copy of DRT at once.
-        port = self.make_port(port_name='mac-snowleopard')
-        expected_logs = "Cannot run tests in parallel on Snow Leopard due to rdar://problem/10621525.\n"
         child_processes = OutputCapture().assert_outputs(self, port.default_child_processes, (), expected_logs=expected_logs)
         self.assertEqual(child_processes, 1)
 
@@ -198,19 +197,33 @@ class MacTest(port_testcase.PortTestCase):
         port.stop_helper()
         oc.restore_output()
 
-    def test_sample_process(self):
+    def test_spindump(self):
 
         def logging_run_command(args):
             print args
 
         port = self.make_port()
         port._executive = MockExecutive2(run_command_fn=logging_run_command)
+        expected_stdout = "['/usr/bin/sudo', '-n', '/usr/sbin/spindump', 42, 10, 10, '-file', '/mock-build/layout-test-results/test-42-sample.txt']\n"
+        OutputCapture().assert_outputs(self, port.sample_process, args=['test', 42], expected_stdout=expected_stdout)
+
+    def test_sample_process(self):
+
+        def logging_run_command(args):
+            if args[0] == '/usr/bin/sudo':
+                return 1
+            print args
+            return 0
+
+        port = self.make_port()
+        port._executive = MockExecutive2(run_command_fn=logging_run_command)
         expected_stdout = "['/usr/bin/sample', 42, 10, 10, '-file', '/mock-build/layout-test-results/test-42-sample.txt']\n"
         OutputCapture().assert_outputs(self, port.sample_process, args=['test', 42], expected_stdout=expected_stdout)
 
-    def test_sample_process_throws_exception(self):
-
+    def test_sample_process_exception(self):
         def throwing_run_command(args):
+            if args[0] == '/usr/bin/sudo':
+                return 1
             raise ScriptError("MOCK script error")
 
         port = self.make_port()

@@ -92,7 +92,6 @@ private:
     virtual void enterAcceleratedCompositingMode(const LayerTreeContext&) override;
     virtual void exitAcceleratedCompositingMode() override;
     virtual void updateAcceleratedCompositingMode(const LayerTreeContext&) override;
-    virtual void willEnterAcceleratedCompositingMode() override;
 
     virtual void didFinishLoadingDataForCustomContentProvider(const String&, const IPC::DataReference&) override;
 
@@ -119,7 +118,7 @@ private:
 
     virtual void didRestoreScrollPosition() override;
 
-    virtual UserInterfaceLayoutDirection userInterfaceLayoutDirection() override;
+    virtual WebCore::UserInterfaceLayoutDirection userInterfaceLayoutDirection() override;
 
 #if ENABLE(FULLSCREEN_API)
     virtual WebFullScreenManagerProxyClient& fullScreenManagerProxyClient() final;

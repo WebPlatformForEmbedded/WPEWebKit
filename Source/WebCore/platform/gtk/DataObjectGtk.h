@@ -16,11 +16,11 @@
  *  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-#ifndef DataObjectGtk_h
-#define DataObjectGtk_h
+#pragma once
 
 #include "FileList.h"
 #include "URL.h"
+#include <wtf/HashMap.h>
 #include <wtf/RefCounted.h>
 #include <wtf/glib/GRefPtr.h>
 #include <wtf/text/StringHash.h>
@@ -47,7 +47,7 @@ public:
     bool hasURL() const { return !m_url.isEmpty() && m_url.isValid(); }
     bool hasFilenames() const { return !m_filenames.isEmpty(); }
     bool hasImage() const { return m_image; }
-    void clearURIList() { m_uriList = ""; }
+    void clearURIList() { m_uriList = emptyString(); }
     void clearURL() { m_url = URL(); }
     void clearImage() { m_image = nullptr; }
 
@@ -79,5 +79,3 @@ private:
 };
 
 }
-
-#endif // DataObjectGtk_h

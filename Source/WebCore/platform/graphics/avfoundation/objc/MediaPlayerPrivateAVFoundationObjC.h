@@ -176,6 +176,10 @@ private:
     void platformPause() override;
     MediaTime currentMediaTime() const override;
     void setVolume(float) override;
+#if PLATFORM(IOS)
+    bool supportsMuting() const override { return true; }
+#endif
+    void setMuted(bool) override;
     void setClosedCaptionsVisible(bool) override;
     void paint(GraphicsContext&, const FloatRect&) override;
     void paintCurrentFrameInContext(GraphicsContext&, const FloatRect&) override;
@@ -338,7 +342,6 @@ private:
     RetainPtr<AVPlayer> m_avPlayer;
     RetainPtr<AVPlayerItem> m_avPlayerItem;
     RetainPtr<AVPlayerLayer> m_videoLayer;
-    RetainPtr<AVPlayerLayer> m_secondaryVideoLayer;
 #if PLATFORM(IOS) || (PLATFORM(MAC) && ENABLE(VIDEO_PRESENTATION_MODE))
     std::unique_ptr<VideoFullscreenLayerManager> m_videoFullscreenLayerManager;
     MediaPlayer::VideoGravity m_videoFullscreenGravity;
@@ -424,6 +427,7 @@ private:
     bool m_haveBeenAskedToCreateLayer;
     bool m_cachedCanPlayFastForward;
     bool m_cachedCanPlayFastReverse;
+    bool m_muted { false };
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
     mutable bool m_allowsWirelessVideoPlayback;
     bool m_shouldPlayToPlaybackTarget { false };

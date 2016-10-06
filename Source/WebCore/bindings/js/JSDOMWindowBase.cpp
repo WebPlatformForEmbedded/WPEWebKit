@@ -318,34 +318,34 @@ void JSDOMWindowBase::fireFrameClearedWatchpointsForWindow(DOMWindow* window)
         if (!wrapper)
             continue;
         JSDOMWindowBase* jsWindow = JSC::jsCast<JSDOMWindowBase*>(wrapper);
-        jsWindow->m_windowCloseWatchpoints.fireAll("Frame cleared");
+        jsWindow->m_windowCloseWatchpoints.fireAll(vm, "Frame cleared");
     }
 }
 
 
-JSC::JSInternalPromise* JSDOMWindowBase::moduleLoaderResolve(JSC::JSGlobalObject* globalObject, JSC::ExecState* exec, JSC::JSValue moduleName, JSC::JSValue importerModuleKey)
+JSC::JSInternalPromise* JSDOMWindowBase::moduleLoaderResolve(JSC::JSGlobalObject* globalObject, JSC::ExecState* exec, JSC::JSModuleLoader* moduleLoader, JSC::JSValue moduleName, JSC::JSValue importerModuleKey)
 {
     JSDOMWindowBase* thisObject = JSC::jsCast<JSDOMWindowBase*>(globalObject);
     if (RefPtr<Document> document = thisObject->wrapped().document())
-        return document->moduleLoader()->resolve(globalObject, exec, moduleName, importerModuleKey);
+        return document->moduleLoader()->resolve(globalObject, exec, moduleLoader, moduleName, importerModuleKey);
     JSC::JSInternalPromiseDeferred* deferred = JSC::JSInternalPromiseDeferred::create(exec, globalObject);
     return deferred->reject(exec, jsUndefined());
 }
 
-JSC::JSInternalPromise* JSDOMWindowBase::moduleLoaderFetch(JSC::JSGlobalObject* globalObject, JSC::ExecState* exec, JSC::JSValue moduleKey)
+JSC::JSInternalPromise* JSDOMWindowBase::moduleLoaderFetch(JSC::JSGlobalObject* globalObject, JSC::ExecState* exec, JSC::JSModuleLoader* moduleLoader, JSC::JSValue moduleKey)
 {
     JSDOMWindowBase* thisObject = JSC::jsCast<JSDOMWindowBase*>(globalObject);
     if (RefPtr<Document> document = thisObject->wrapped().document())
-        return document->moduleLoader()->fetch(globalObject, exec, moduleKey);
+        return document->moduleLoader()->fetch(globalObject, exec, moduleLoader, moduleKey);
     JSC::JSInternalPromiseDeferred* deferred = JSC::JSInternalPromiseDeferred::create(exec, globalObject);
     return deferred->reject(exec, jsUndefined());
 }
 
-JSC::JSValue JSDOMWindowBase::moduleLoaderEvaluate(JSC::JSGlobalObject* globalObject, JSC::ExecState* exec, JSC::JSValue moduleKey, JSC::JSValue moduleRecord)
+JSC::JSValue JSDOMWindowBase::moduleLoaderEvaluate(JSC::JSGlobalObject* globalObject, JSC::ExecState* exec, JSC::JSModuleLoader* moduleLoader, JSC::JSValue moduleKey, JSC::JSValue moduleRecord)
 {
     JSDOMWindowBase* thisObject = JSC::jsCast<JSDOMWindowBase*>(globalObject);
     if (RefPtr<Document> document = thisObject->wrapped().document())
-        return document->moduleLoader()->evaluate(globalObject, exec, moduleKey, moduleRecord);
+        return document->moduleLoader()->evaluate(globalObject, exec, moduleLoader, moduleKey, moduleRecord);
     return JSC::jsUndefined();
 }
 

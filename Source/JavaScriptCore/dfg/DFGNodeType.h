@@ -159,7 +159,7 @@ namespace JSC { namespace DFG {
     macro(ArithFloor, NodeResultNumber) \
     macro(ArithCeil, NodeResultNumber) \
     macro(ArithTrunc, NodeResultNumber) \
-    macro(ArithSqrt, NodeResultNumber) \
+    macro(ArithSqrt, NodeResultDouble) \
     macro(ArithSin, NodeResultNumber) \
     macro(ArithCos, NodeResultNumber) \
     macro(ArithLog, NodeResultNumber) \
@@ -232,7 +232,6 @@ namespace JSC { namespace DFG {
     macro(GetDynamicVar, NodeResultJS | NodeMustGenerate) \
     macro(PutDynamicVar, NodeMustGenerate) \
     macro(NotifyWrite, NodeMustGenerate) \
-    macro(VarInjectionWatchpoint, NodeMustGenerate) \
     macro(GetRegExpObjectLastIndex, NodeResultJS) \
     macro(SetRegExpObjectLastIndex, NodeMustGenerate) \
     macro(RecordRegExpCachedResult, NodeMustGenerate | NodeHasVarArgs) \
@@ -240,7 +239,7 @@ namespace JSC { namespace DFG {
     macro(CheckNotEmpty, NodeMustGenerate) \
     macro(CheckBadCell, NodeMustGenerate) \
     macro(CheckInBounds, NodeMustGenerate) \
-    macro(CheckIdent, NodeMustGenerate) \
+    macro(CheckStringIdent, NodeMustGenerate) \
     macro(CheckTypeInfoFlags, NodeMustGenerate) /* Takes an OpInfo with the flags you want to test are set */\
     \
     /* Optimizations for array mutation. */\
@@ -265,6 +264,7 @@ namespace JSC { namespace DFG {
     macro(CompareGreaterEq, NodeResultBoolean | NodeMustGenerate) \
     macro(CompareEq, NodeResultBoolean | NodeMustGenerate) \
     macro(CompareStrictEq, NodeResultBoolean) \
+    macro(CompareEqPtr, NodeResultBoolean) \
     \
     /* Calls. */\
     macro(Call, NodeResultJS | NodeMustGenerate | NodeHasVarArgs) \
@@ -276,6 +276,7 @@ namespace JSC { namespace DFG {
     macro(TailCallInlinedCaller, NodeResultJS | NodeMustGenerate | NodeHasVarArgs) \
     macro(TailCallVarargsInlinedCaller, NodeResultJS | NodeMustGenerate) \
     macro(TailCallForwardVarargsInlinedCaller, NodeResultJS | NodeMustGenerate) \
+    macro(CallEval, NodeResultJS | NodeMustGenerate | NodeHasVarArgs) \
     \
     /* Shadow Chicken */\
     macro(LogShadowChickenPrologue, NodeMustGenerate) \
@@ -290,7 +291,7 @@ namespace JSC { namespace DFG {
     macro(NewRegexp, NodeResultJS) \
     /* Rest Parameter */\
     macro(GetRestLength, NodeResultInt32) \
-    macro(CopyRest, NodeMustGenerate) \
+    macro(CreateRest, NodeResultJS | NodeMustGenerate) \
     \
     /* Support for allocation sinking. */\
     macro(PhantomNewObject, NodeResultJS | NodeMustGenerate) \
@@ -306,6 +307,8 @@ namespace JSC { namespace DFG {
     macro(OverridesHasInstance, NodeMustGenerate | NodeResultBoolean) \
     macro(InstanceOf, NodeResultBoolean) \
     macro(InstanceOfCustom, NodeMustGenerate | NodeResultBoolean) \
+    \
+    macro(IsJSArray, NodeResultBoolean) \
     macro(IsEmpty, NodeResultBoolean) \
     macro(IsUndefined, NodeResultBoolean) \
     macro(IsBoolean, NodeResultBoolean) \
@@ -315,10 +318,13 @@ namespace JSC { namespace DFG {
     macro(IsObjectOrNull, NodeResultBoolean) \
     macro(IsFunction, NodeResultBoolean) \
     macro(IsRegExpObject, NodeResultBoolean) \
+    macro(IsTypedArrayView, NodeResultBoolean) \
     macro(TypeOf, NodeResultJS) \
     macro(LogicalNot, NodeResultBoolean) \
     macro(ToPrimitive, NodeResultJS | NodeMustGenerate) \
     macro(ToString, NodeResultJS | NodeMustGenerate) \
+    macro(ToNumber, NodeResultJS | NodeMustGenerate) \
+    macro(CallObjectConstructor, NodeResultJS) \
     macro(CallStringConstructor, NodeResultJS | NodeMustGenerate) \
     macro(NewStringObject, NodeResultJS) \
     macro(MakeRope, NodeResultJS) \

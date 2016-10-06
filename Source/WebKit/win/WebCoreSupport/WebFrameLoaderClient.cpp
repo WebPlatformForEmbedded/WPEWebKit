@@ -222,17 +222,6 @@ void WebFrameLoaderClient::dispatchDidReceiveAuthenticationChallenge(DocumentLoa
     challenge.authenticationClient()->receivedRequestToContinueWithoutCredential(challenge);
 }
 
-void WebFrameLoaderClient::dispatchDidCancelAuthenticationChallenge(DocumentLoader* loader, unsigned long identifier, const AuthenticationChallenge& challenge)
-{
-    WebView* webView = m_webFrame->webView();
-    COMPtr<IWebResourceLoadDelegate> resourceLoadDelegate;
-    if (FAILED(webView->resourceLoadDelegate(&resourceLoadDelegate)))
-        return;
-
-    COMPtr<WebURLAuthenticationChallenge> webChallenge(AdoptCOM, WebURLAuthenticationChallenge::createInstance(challenge));
-    resourceLoadDelegate->didCancelAuthenticationChallenge(webView, identifier, webChallenge.get(), getWebDataSource(loader));
-}
-
 void WebFrameLoaderClient::dispatchWillSendRequest(DocumentLoader* loader, unsigned long identifier, ResourceRequest& request, const ResourceResponse& redirectResponse)
 {
     WebView* webView = m_webFrame->webView();
@@ -480,7 +469,7 @@ void WebFrameLoaderClient::dispatchDidFinishLoad()
         frameLoadDelegate->didFinishLoadForFrame(webView, m_webFrame);
 }
 
-void WebFrameLoaderClient::dispatchDidLayout(LayoutMilestones milestones)
+void WebFrameLoaderClient::dispatchDidReachLayoutMilestone(LayoutMilestones milestones)
 {
     WebView* webView = m_webFrame->webView();
 
@@ -1081,20 +1070,20 @@ ObjectContentType WebFrameLoaderClient::objectContentType(const URL& url, const 
     }
 
     if (mimeType.isEmpty())
-        return ObjectContentFrame; // Go ahead and hope that we can display the content.
+        return ObjectContentType::Frame; // Go ahead and hope that we can display the content.
 
     bool plugInSupportsMIMEType = PluginDatabase::installedPlugins()->isMIMETypeRegistered(mimeType);
 
     if (MIMETypeRegistry::isSupportedImageMIMEType(mimeType))
-        return WebCore::ObjectContentImage;
+        return WebCore::ObjectContentType::Image;
 
     if (plugInSupportsMIMEType)
-        return WebCore::ObjectContentNetscapePlugin;
+        return WebCore::ObjectContentType::PlugIn;
 
     if (MIMETypeRegistry::isSupportedNonImageMIMEType(mimeType))
-        return WebCore::ObjectContentFrame;
+        return WebCore::ObjectContentType::Frame;
 
-    return WebCore::ObjectContentNone;
+    return WebCore::ObjectContentType::None;
 }
 
 void WebFrameLoaderClient::dispatchDidFailToStartPlugin(const PluginView* pluginView) const

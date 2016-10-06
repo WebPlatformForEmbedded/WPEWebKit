@@ -23,8 +23,7 @@
  *
  */
 
-#ifndef RenderObject_h
-#define RenderObject_h
+#pragma once
 
 #include "CachedImageClient.h"
 #include "Element.h"
@@ -32,6 +31,7 @@
 #include "Frame.h"
 #include "LayoutRect.h"
 #include "PaintPhase.h"
+#include "RenderObjectEnums.h"
 #include "RenderStyle.h"
 #include "ScrollBehavior.h"
 #include "StyleImage.h"
@@ -72,48 +72,6 @@ class SelectionRect;
 #endif
 
 struct PaintInfo;
-
-enum CursorDirective {
-    SetCursorBasedOnStyle,
-    SetCursor,
-    DoNotSetCursor
-};
-
-enum HitTestFilter {
-    HitTestAll,
-    HitTestSelf,
-    HitTestDescendants
-};
-
-enum HitTestAction {
-    HitTestBlockBackground,
-    HitTestChildBlockBackground,
-    HitTestChildBlockBackgrounds,
-    HitTestFloat,
-    HitTestForeground
-};
-
-// Sides used when drawing borders and outlines. The values should run clockwise from top.
-enum BoxSide {
-    BSTop,
-    BSRight,
-    BSBottom,
-    BSLeft
-};
-
-enum MarkingBehavior {
-    MarkOnlyThis,
-    MarkContainingBlockChain,
-};
-
-enum class ScheduleRelayout { No, Yes };
-
-enum MapCoordinatesMode {
-    IsFixed             = 1 << 0,
-    UseTransforms       = 1 << 1,
-    ApplyContainerFlip  = 1 << 2
-};
-typedef unsigned MapCoordinatesFlags;
 
 #if PLATFORM(IOS)
 const int caretWidth = 2; // This value should be kept in sync with UIKit. See <rdar://problem/15580601>.
@@ -196,10 +154,10 @@ public:
     WEBCORE_EXPORT RenderLayer* enclosingLayer() const;
 
     // Scrolling is a RenderBox concept, however some code just cares about recursively scrolling our enclosing ScrollableArea(s).
-    WEBCORE_EXPORT bool scrollRectToVisible(const LayoutRect&, const ScrollAlignment& alignX = ScrollAlignment::alignCenterIfNeeded, const ScrollAlignment& alignY = ScrollAlignment::alignCenterIfNeeded);
+    WEBCORE_EXPORT bool scrollRectToVisible(SelectionRevealMode, const LayoutRect&, const ScrollAlignment& alignX = ScrollAlignment::alignCenterIfNeeded, const ScrollAlignment& alignY = ScrollAlignment::alignCenterIfNeeded);
 
     // Convenience function for getting to the nearest enclosing box of a RenderObject.
-    RenderBox& enclosingBox() const;
+    WEBCORE_EXPORT RenderBox& enclosingBox() const;
     RenderBoxModelObject& enclosingBoxModelObject() const;
 
     bool fixedPositionedWithNamedFlowContainingBlock() const;
@@ -215,9 +173,6 @@ public:
     }
 
     RenderNamedFlowFragment* currentRenderNamedFlowFragment() const;
-
-    // FIXME: The meaning of this function is unclear.
-    virtual bool isEmpty() const { return !firstChildSlow(); }
 
 #ifndef NDEBUG
     void setHasAXObject(bool flag) { m_hasAXObject = flag; }
@@ -378,18 +333,17 @@ public:
     virtual bool isRenderMathMLBlock() const { return false; }
     virtual bool isRenderMathMLTable() const { return false; }
     virtual bool isRenderMathMLOperator() const { return false; }
-    virtual bool isRenderMathMLRadicalOperator() const { return false; }
     virtual bool isRenderMathMLRow() const { return false; }
     virtual bool isRenderMathMLMath() const { return false; }
     virtual bool isRenderMathMLMenclose() const { return false; }
     virtual bool isRenderMathMLFenced() const { return false; }
+    virtual bool isRenderMathMLFencedOperator() const { return false; }
     virtual bool isRenderMathMLFraction() const { return false; }
+    virtual bool isRenderMathMLPadded() const { return false; }
     virtual bool isRenderMathMLRoot() const { return false; }
-    virtual bool isRenderMathMLRootWrapper() const { return false; }
     virtual bool isRenderMathMLSpace() const { return false; }
     virtual bool isRenderMathMLSquareRoot() const { return false; }
     virtual bool isRenderMathMLScripts() const { return false; }
-    virtual bool isRenderMathMLScriptsWrapper() const { return false; }
     virtual bool isRenderMathMLToken() const { return false; }
     virtual bool isRenderMathMLUnderOver() const { return false; }
 #endif // ENABLE(MATHML)
@@ -644,9 +598,7 @@ public:
     VisiblePosition createVisiblePosition(const Position&) const;
 
     // returns the containing block level element for this element.
-    RenderBlock* containingBlock() const;
-    RenderBlock* containingBlockForFixedPosition() const;
-    RenderBlock* containingBlockForAbsolutePosition() const;
+    WEBCORE_EXPORT RenderBlock* containingBlock() const;
     RenderBlock* containingBlockForObjectInFlow() const;
 
     // Convert the given local point to absolute coordinates. If MapCoordinatesFlags includes UseTransforms, take transforms into account.
@@ -794,7 +746,7 @@ public:
      * @param extraWidthToEndOfLine optional out arg to give extra width to end of line -
      * useful for character range rect computations
      */
-    virtual LayoutRect localCaretRect(InlineBox*, int caretOffset, LayoutUnit* extraWidthToEndOfLine = nullptr);
+    virtual LayoutRect localCaretRect(InlineBox*, unsigned caretOffset, LayoutUnit* extraWidthToEndOfLine = nullptr);
 
     // When performing a global document tear-down, the renderer of the document is cleared.  We use this
     // as a hook to detect the case of document destruction and don't waste time doing unnecessary work.
@@ -827,7 +779,7 @@ public:
     virtual void imageChanged(WrappedImagePtr, const IntRect* = nullptr) { }
 
     SelectionSubtreeRoot& selectionRoot() const;
-    void selectionStartEnd(int& spos, int& epos) const;
+    void selectionStartEnd(unsigned& spos, unsigned& epos) const;
     
     void removeFromParent();
 
@@ -1177,5 +1129,3 @@ void showNodeTree(const WebCore::RenderObject*);
 void showLineTree(const WebCore::RenderObject*);
 void showRenderTree(const WebCore::RenderObject*);
 #endif
-
-#endif // RenderObject_h

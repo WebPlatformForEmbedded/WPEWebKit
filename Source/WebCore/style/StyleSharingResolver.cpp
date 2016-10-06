@@ -97,7 +97,7 @@ std::unique_ptr<RenderStyle> SharingResolver::resolve(const Element& searchEleme
         return nullptr;
     if (elementHasDirectionAuto(element))
         return nullptr;
-    if (element.shadowRoot() && !element.shadowRoot()->styleResolver().ruleSets().authorStyle()->hostPseudoClassRules().isEmpty())
+    if (element.shadowRoot() && !element.shadowRoot()->styleResolver().ruleSets().authorStyle().hostPseudoClassRules().isEmpty())
         return nullptr;
 
     Context context {
@@ -179,15 +179,10 @@ static bool canShareStyleWithControl(const HTMLFormControlElement& element, cons
         return false;
     if (thisInputElement.shouldAppearChecked() != otherInputElement.shouldAppearChecked())
         return false;
-    if (thisInputElement.shouldAppearIndeterminate() != otherInputElement.shouldAppearIndeterminate())
-        return false;
     if (thisInputElement.isRequired() != otherInputElement.isRequired())
         return false;
 
     if (formElement.isDisabledFormControl() != element.isDisabledFormControl())
-        return false;
-
-    if (formElement.isDefaultButtonForForm() != element.isDefaultButtonForForm())
         return false;
 
     if (formElement.isInRange() != element.isInRange())
@@ -235,6 +230,8 @@ bool SharingResolver::canShareStyleWithElement(const Context& context, const Sty
         return false;
     if (candidateElement.affectsNextSiblingElementStyle() || candidateElement.styleIsAffectedByPreviousSibling())
         return false;
+    if (candidateElement.styleAffectedByFocusWithin() || element.styleAffectedByFocusWithin())
+        return false;
 
     auto& candidateElementId = candidateElement.idForStyleResolution();
     if (!candidateElementId.isNull() && m_ruleSets.features().idsInRules.contains(candidateElementId.impl()))
@@ -266,13 +263,13 @@ bool SharingResolver::canShareStyleWithElement(const Context& context, const Sty
         return false;
 
     if (candidateElement.elementData() != element.elementData()) {
-        if (candidateElement.fastGetAttribute(HTMLNames::readonlyAttr) != element.fastGetAttribute(HTMLNames::readonlyAttr))
+        if (candidateElement.attributeWithoutSynchronization(HTMLNames::readonlyAttr) != element.attributeWithoutSynchronization(HTMLNames::readonlyAttr))
             return false;
         if (candidateElement.isSVGElement()) {
             if (candidateElement.getAttribute(HTMLNames::typeAttr) != element.getAttribute(HTMLNames::typeAttr))
                 return false;
         } else {
-            if (candidateElement.fastGetAttribute(HTMLNames::typeAttr) != element.fastGetAttribute(HTMLNames::typeAttr))
+            if (candidateElement.attributeWithoutSynchronization(HTMLNames::typeAttr) != element.attributeWithoutSynchronization(HTMLNames::typeAttr))
                 return false;
         }
     }
@@ -283,7 +280,13 @@ bool SharingResolver::canShareStyleWithElement(const Context& context, const Sty
     if (element.matchesInvalidPseudoClass() != element.matchesValidPseudoClass())
         return false;
 
-    if (element.shadowRoot() && !element.shadowRoot()->styleResolver().ruleSets().authorStyle()->hostPseudoClassRules().isEmpty())
+    if (candidateElement.matchesIndeterminatePseudoClass() != element.matchesIndeterminatePseudoClass())
+        return false;
+
+    if (candidateElement.matchesDefaultPseudoClass() != element.matchesDefaultPseudoClass())
+        return false;
+
+    if (element.shadowRoot() && !element.shadowRoot()->styleResolver().ruleSets().authorStyle().hostPseudoClassRules().isEmpty())
         return false;
 
 #if ENABLE(FULLSCREEN_API)
@@ -307,9 +310,9 @@ bool SharingResolver::sharingCandidateHasIdenticalStyleAffectingAttributes(const
     auto& element = context.element;
     if (element.elementData() == sharingCandidate.elementData())
         return true;
-    if (element.fastGetAttribute(XMLNames::langAttr) != sharingCandidate.fastGetAttribute(XMLNames::langAttr))
+    if (element.attributeWithoutSynchronization(XMLNames::langAttr) != sharingCandidate.attributeWithoutSynchronization(XMLNames::langAttr))
         return false;
-    if (element.fastGetAttribute(HTMLNames::langAttr) != sharingCandidate.fastGetAttribute(HTMLNames::langAttr))
+    if (element.attributeWithoutSynchronization(HTMLNames::langAttr) != sharingCandidate.attributeWithoutSynchronization(HTMLNames::langAttr))
         return false;
 
     if (context.elementAffectedByClassRules) {
@@ -328,11 +331,6 @@ bool SharingResolver::sharingCandidateHasIdenticalStyleAffectingAttributes(const
 
     if (const_cast<StyledElement&>(element).presentationAttributeStyle() != const_cast<StyledElement&>(sharingCandidate).presentationAttributeStyle())
         return false;
-
-    if (element.hasTagName(HTMLNames::progressTag)) {
-        if (element.shouldAppearIndeterminate() != sharingCandidate.shouldAppearIndeterminate())
-            return false;
-    }
 
     return true;
 }

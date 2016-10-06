@@ -28,6 +28,8 @@
 
 #if ENABLE(RESOURCE_USAGE)
 
+#include <CoreText/CoreText.h>
+
 #include "JSDOMWindow.h"
 #include "PlatformCALayer.h"
 #include "ResourceUsageThread.h"
@@ -138,6 +140,7 @@ struct HistoricMemoryCategoryInfo {
     RetainPtr<CGColorRef> color;
     RingBuffer<size_t> dirtySize;
     RingBuffer<size_t> reclaimableSize;
+    RingBuffer<size_t> externalSize;
     bool isSubcategory { false };
     unsigned type { MemoryCategory::NumberOfCategories };
 };
@@ -147,6 +150,7 @@ struct HistoricResourceUsageData {
 
     RingBuffer<float> cpu;
     RingBuffer<size_t> totalDirtySize;
+    RingBuffer<size_t> totalExternalSize;
     RingBuffer<size_t> gcHeapSize;
     std::array<HistoricMemoryCategoryInfo, MemoryCategory::NumberOfCategories> categories;
     double timeOfNextEdenCollection { 0 };
@@ -189,9 +193,11 @@ static void appendDataToHistory(const ResourceUsageData& data)
     auto& historicData = historicUsageData();
     historicData.cpu.append(data.cpu);
     historicData.totalDirtySize.append(data.totalDirtySize);
+    historicData.totalExternalSize.append(data.totalExternalSize);
     for (auto& category : historicData.categories) {
         category.dirtySize.append(data.categories[category.type].dirtySize);
         category.reclaimableSize.append(data.categories[category.type].reclaimableSize);
+        category.externalSize.append(data.categories[category.type].externalSize);
     }
     historicData.timeOfNextEdenCollection = data.timeOfNextEdenCollection;
     historicData.timeOfNextFullCollection = data.timeOfNextFullCollection;
@@ -248,21 +254,24 @@ static void showText(CGContextRef context, float x, float y, CGColorRef color, c
     CGContextSetTextDrawingMode(context, kCGTextFill);
     CGContextSetFillColorWithColor(context, color);
 
-    CGContextSetTextMatrix(context, CGAffineTransformMakeScale(1, -1));
-
-    // FIXME: Don't use deprecated APIs.
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-
+    auto matrix = CGAffineTransformMakeScale(1, -1);
 #if PLATFORM(IOS)
-    CGContextSelectFont(context, "Courier", 10, kCGEncodingMacRoman);
+    CFStringRef fontName = CFSTR("Courier");
+    CGFloat fontSize = 10;
 #else
-    CGContextSelectFont(context, "Menlo", 11, kCGEncodingMacRoman);
+    CFStringRef fontName = CFSTR("Menlo");
+    CGFloat fontSize = 11;
 #endif
-
+    auto font = adoptCF(CTFontCreateWithName(fontName, fontSize, &matrix));
+    CFTypeRef keys[] = { kCTFontAttributeName, kCTForegroundColorFromContextAttributeName };
+    CFTypeRef values[] = { font.get(), kCFBooleanTrue };
+    auto attributes = adoptCF(CFDictionaryCreate(kCFAllocatorDefault, keys, values, WTF_ARRAY_LENGTH(keys), &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks));
     CString cstr = text.ascii();
-    CGContextShowTextAtPoint(context, x, y, cstr.data(), cstr.length());
-#pragma clang diagnostic pop
+    auto string = adoptCF(CFStringCreateWithBytesNoCopy(kCFAllocatorDefault, reinterpret_cast<const UInt8*>(cstr.data()), cstr.length(), kCFStringEncodingASCII, false, kCFAllocatorNull));
+    auto attributedString = adoptCF(CFAttributedStringCreate(kCFAllocatorDefault, string.get(), attributes.get()));
+    auto line = adoptCF(CTLineCreateWithAttributedString(attributedString.get()));
+    CGContextSetTextPosition(context, x, y);
+    CTLineDraw(line.get(), context);
 
     CGContextRestoreGState(context);
 }
@@ -448,11 +457,17 @@ void ResourceUsageOverlay::platformDraw(CGContextRef context)
     static CGColorRef colorForLabels = createColor(0.9, 0.9, 0.9, 1);
     showText(context, 10, 20, colorForLabels, String::format("        CPU: %g", data.cpu.last()));
     showText(context, 10, 30, colorForLabels, "  Footprint: " + formatByteNumber(data.totalDirtySize.last()));
+    showText(context, 10, 40, colorForLabels, "   External: " + formatByteNumber(data.totalExternalSize.last()));
 
-    float y = 50;
+    float y = 55;
     for (auto& category : data.categories) {
-        String label = String::format("% 11s: %s", category.name.ascii().data(), formatByteNumber(category.dirtySize.last()).ascii().data());
+        size_t dirty = category.dirtySize.last();
         size_t reclaimable = category.reclaimableSize.last();
+        size_t external = category.externalSize.last();
+        
+        String label = String::format("% 11s: %s", category.name.ascii().data(), formatByteNumber(dirty).ascii().data());
+        if (external)
+            label = label + String::format(" + %s", formatByteNumber(external).ascii().data());
         if (reclaimable)
             label = label + String::format(" [%s]", formatByteNumber(reclaimable).ascii().data());
 
@@ -460,6 +475,7 @@ void ResourceUsageOverlay::platformDraw(CGContextRef context)
         showText(context, 10, y, category.color.get(), label);
         y += 10;
     }
+    y -= 5;
 
     double now = WTF::currentTime();
     showText(context, 10, y + 10, colorForLabels, String::format("    Eden GC: %s", gcTimerString(data.timeOfNextEdenCollection, now).ascii().data()));

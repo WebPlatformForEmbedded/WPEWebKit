@@ -26,9 +26,8 @@
 #include "config.h"
 #include "SharedMemory.h"
 
-#include "ArgumentDecoder.h"
-#include "ArgumentEncoder.h"
-#include "Arguments.h"
+#include "Decoder.h"
+#include "Encoder.h"
 #include "MachPort.h"
 #include <WebCore/MachSendRight.h>
 #include <WebCore/MachVMSPI.h>
@@ -64,14 +63,14 @@ void SharedMemory::Handle::clear()
     m_size = 0;
 }
 
-void SharedMemory::Handle::encode(IPC::ArgumentEncoder& encoder) const
+void SharedMemory::Handle::encode(IPC::Encoder& encoder) const
 {
     encoder << static_cast<uint64_t>(m_size);
     encoder << IPC::MachPort(m_port, MACH_MSG_TYPE_MOVE_SEND);
     m_port = MACH_PORT_NULL;
 }
 
-bool SharedMemory::Handle::decode(IPC::ArgumentDecoder& decoder, Handle& handle)
+bool SharedMemory::Handle::decode(IPC::Decoder& decoder, Handle& handle)
 {
     ASSERT(!handle.m_port);
     ASSERT(!handle.m_size);
@@ -110,13 +109,13 @@ RefPtr<SharedMemory> SharedMemory::allocate(size_t size)
         return nullptr;
     }
 
-    RefPtr<SharedMemory> sharedMemory = adoptRef(*new SharedMemory);
+    auto sharedMemory = adoptRef(*new SharedMemory);
     sharedMemory->m_size = size;
     sharedMemory->m_data = toPointer(address);
     sharedMemory->m_port = MACH_PORT_NULL;
     sharedMemory->m_protection = Protection::ReadWrite;
 
-    return sharedMemory;
+    return WTFMove(sharedMemory);
 }
 
 static inline vm_prot_t machProtection(SharedMemory::Protection protection)
@@ -156,13 +155,13 @@ RefPtr<SharedMemory> SharedMemory::create(void* data, size_t size, Protection pr
     if (!sendRight)
         return nullptr;
 
-    RefPtr<SharedMemory> sharedMemory(adoptRef(new SharedMemory));
+    auto sharedMemory(adoptRef(*new SharedMemory));
     sharedMemory->m_size = size;
     sharedMemory->m_data = nullptr;
     sharedMemory->m_port = sendRight.leakSendRight();
     sharedMemory->m_protection = protection;
 
-    return sharedMemory.release();
+    return WTFMove(sharedMemory);
 }
 
 RefPtr<SharedMemory> SharedMemory::map(const Handle& handle, Protection protection)
@@ -178,13 +177,13 @@ RefPtr<SharedMemory> SharedMemory::map(const Handle& handle, Protection protecti
     if (kr != KERN_SUCCESS)
         return nullptr;
 
-    RefPtr<SharedMemory> sharedMemory(adoptRef(new SharedMemory));
+    auto sharedMemory(adoptRef(*new SharedMemory));
     sharedMemory->m_size = handle.m_size;
     sharedMemory->m_data = toPointer(mappedAddress);
     sharedMemory->m_port = MACH_PORT_NULL;
     sharedMemory->m_protection = protection;
 
-    return sharedMemory;
+    return WTFMove(sharedMemory);
 }
 
 SharedMemory::~SharedMemory()

@@ -41,6 +41,7 @@ JSCell* JIT_OPERATION operationStringFromCharCode(ExecState*, int32_t)  WTF_INTE
 EncodedJSValue JIT_OPERATION operationStringFromCharCodeUntyped(ExecState*, EncodedJSValue)  WTF_INTERNAL;
 
 // These routines are provide callbacks out to C++ implementations of operations too complex to JIT.
+JSCell* JIT_OPERATION operationObjectConstructor(ExecState*, JSGlobalObject*, EncodedJSValue encodedTarget) WTF_INTERNAL;
 JSCell* JIT_OPERATION operationCreateThis(ExecState*, JSObject* constructor, int32_t inlineCapacity) WTF_INTERNAL;
 EncodedJSValue JIT_OPERATION operationToThis(ExecState*, EncodedJSValue encodedOp1) WTF_INTERNAL;
 EncodedJSValue JIT_OPERATION operationToThisStrict(ExecState*, EncodedJSValue encodedOp1) WTF_INTERNAL;
@@ -52,11 +53,13 @@ EncodedJSValue JIT_OPERATION operationValueBitRShift(ExecState*, EncodedJSValue 
 EncodedJSValue JIT_OPERATION operationValueBitURShift(ExecState*, EncodedJSValue encodedOp1, EncodedJSValue encodedOp2) WTF_INTERNAL;
 EncodedJSValue JIT_OPERATION operationValueAddNotNumber(ExecState*, EncodedJSValue encodedOp1, EncodedJSValue encodedOp2) WTF_INTERNAL;
 EncodedJSValue JIT_OPERATION operationValueDiv(ExecState*, EncodedJSValue encodedOp1, EncodedJSValue encodedOp2) WTF_INTERNAL;
+double JIT_OPERATION operationArithSqrt(ExecState*, EncodedJSValue encodedOp1) WTF_INTERNAL;
 EncodedJSValue JIT_OPERATION operationGetByVal(ExecState*, EncodedJSValue encodedBase, EncodedJSValue encodedProperty) WTF_INTERNAL;
 EncodedJSValue JIT_OPERATION operationGetByValCell(ExecState*, JSCell*, EncodedJSValue encodedProperty) WTF_INTERNAL;
 EncodedJSValue JIT_OPERATION operationGetByValArrayInt(ExecState*, JSArray*, int32_t) WTF_INTERNAL;
 EncodedJSValue JIT_OPERATION operationGetByValStringInt(ExecState*, JSString*, int32_t) WTF_INTERNAL;
 EncodedJSValue JIT_OPERATION operationToPrimitive(ExecState*, EncodedJSValue) WTF_INTERNAL;
+EncodedJSValue JIT_OPERATION operationToNumber(ExecState*, EncodedJSValue) WTF_INTERNAL;
 EncodedJSValue JIT_OPERATION operationGetByIdWithThis(ExecState*, EncodedJSValue, EncodedJSValue, UniquedStringImpl*) WTF_INTERNAL;
 EncodedJSValue JIT_OPERATION operationGetByValWithThis(ExecState*, EncodedJSValue, EncodedJSValue, EncodedJSValue) WTF_INTERNAL;
 char* JIT_OPERATION operationNewArray(ExecState*, Structure*, void*, size_t) WTF_INTERNAL;
@@ -119,7 +122,7 @@ JSCell* JIT_OPERATION operationCreateDirectArgumentsDuringExit(ExecState*, Inlin
 JSCell* JIT_OPERATION operationCreateScopedArguments(ExecState*, Structure*, Register* argumentStart, int32_t length, JSFunction* callee, JSLexicalEnvironment*);
 JSCell* JIT_OPERATION operationCreateClonedArgumentsDuringExit(ExecState*, InlineCallFrame*, JSFunction*, int32_t argumentCount);
 JSCell* JIT_OPERATION operationCreateClonedArguments(ExecState*, Structure*, Register* argumentStart, int32_t length, JSFunction* callee);
-void JIT_OPERATION operationCopyRest(ExecState*, JSCell*, Register* argumentStart, unsigned numberOfParamsToSkip, unsigned arraySize);
+JSCell* JIT_OPERATION operationCreateRest(ExecState*, Register* argumentStart, unsigned numberOfArgumentsToSkip, unsigned arraySize);
 double JIT_OPERATION operationFModOnInts(int32_t, int32_t) WTF_INTERNAL;
 size_t JIT_OPERATION operationObjectIsObject(ExecState*, JSGlobalObject*, JSCell*) WTF_INTERNAL;
 size_t JIT_OPERATION operationObjectIsFunction(ExecState*, JSGlobalObject*, JSCell*) WTF_INTERNAL;

@@ -279,7 +279,7 @@ JIT::JumpList JIT::emitArrayStorageLoad(Instruction*, PatchableJump& badType)
     return slowCases;
 }
 
-JITGetByIdGenerator JIT::emitGetByValWithCachedId(Instruction* currentInstruction, const Identifier& propertyName, Jump& fastDoneCase, Jump& slowDoneCase, JumpList& slowCases)
+JITGetByIdGenerator JIT::emitGetByValWithCachedId(ByValInfo* byValInfo, Instruction* currentInstruction, const Identifier& propertyName, Jump& fastDoneCase, Jump& slowDoneCase, JumpList& slowCases)
 {
     int dst = currentInstruction[1].u.operand;
 
@@ -288,11 +288,11 @@ JITGetByIdGenerator JIT::emitGetByValWithCachedId(Instruction* currentInstructio
     // scratch: regT4
 
     slowCases.append(branch32(NotEqual, regT3, TrustedImm32(JSValue::CellTag)));
-    emitIdentifierCheck(regT2, regT4, propertyName, slowCases);
+    emitByValIdentifierCheck(byValInfo, regT2, regT4, propertyName, slowCases);
 
     JITGetByIdGenerator gen(
         m_codeBlock, CodeOrigin(m_bytecodeOffset), CallSiteIndex(currentInstruction), RegisterSet::stubUnavailableRegisters(),
-        JSValueRegs::payloadOnly(regT0), JSValueRegs(regT1, regT0), AccessType::Get);
+        propertyName.impl(), JSValueRegs::payloadOnly(regT0), JSValueRegs(regT1, regT0), AccessType::Get);
     gen.generateFastPath(*this);
 
     fastDoneCase = jump();
@@ -485,7 +485,7 @@ JIT::JumpList JIT::emitArrayStoragePutByVal(Instruction* currentInstruction, Pat
     return slowCases;
 }
 
-JITPutByIdGenerator JIT::emitPutByValWithCachedId(Instruction* currentInstruction, PutKind putKind, const Identifier& propertyName, JumpList& doneCases, JumpList& slowCases)
+JITPutByIdGenerator JIT::emitPutByValWithCachedId(ByValInfo* byValInfo, Instruction* currentInstruction, PutKind putKind, const Identifier& propertyName, JumpList& doneCases, JumpList& slowCases)
 {
     // base: tag(regT1), payload(regT0)
     // property: tag(regT3), payload(regT2)
@@ -494,7 +494,7 @@ JITPutByIdGenerator JIT::emitPutByValWithCachedId(Instruction* currentInstructio
     int value = currentInstruction[3].u.operand;
 
     slowCases.append(branch32(NotEqual, regT3, TrustedImm32(JSValue::CellTag)));
-    emitIdentifierCheck(regT2, regT2, propertyName, slowCases);
+    emitByValIdentifierCheck(byValInfo, regT2, regT2, propertyName, slowCases);
 
     // Write barrier breaks the registers. So after issuing the write barrier,
     // reload the registers.
@@ -587,13 +587,14 @@ void JIT::emit_op_try_get_by_id(Instruction* currentInstruction)
 {
     int dst = currentInstruction[1].u.operand;
     int base = currentInstruction[2].u.operand;
+    const Identifier* ident = &(m_codeBlock->identifier(currentInstruction[3].u.operand));
 
     emitLoad(base, regT1, regT0);
     emitJumpSlowCaseIfNotJSCell(base, regT1);
 
     JITGetByIdGenerator gen(
         m_codeBlock, CodeOrigin(m_bytecodeOffset), CallSiteIndex(currentInstruction), RegisterSet::stubUnavailableRegisters(),
-        JSValueRegs::payloadOnly(regT0), JSValueRegs(regT1, regT0), AccessType::GetPure);
+        ident->impl(), JSValueRegs::payloadOnly(regT0), JSValueRegs(regT1, regT0), AccessType::GetPure);
     gen.generateFastPath(*this);
     addSlowCase(gen.slowPathJump());
     m_getByIds.append(gen);
@@ -634,7 +635,7 @@ void JIT::emit_op_get_by_id(Instruction* currentInstruction)
 
     JITGetByIdGenerator gen(
         m_codeBlock, CodeOrigin(m_bytecodeOffset), CallSiteIndex(currentInstruction), RegisterSet::stubUnavailableRegisters(),
-        JSValueRegs::payloadOnly(regT0), JSValueRegs(regT1, regT0), AccessType::Get);
+        ident->impl(), JSValueRegs::payloadOnly(regT0), JSValueRegs(regT1, regT0), AccessType::Get);
     gen.generateFastPath(*this);
     addSlowCase(gen.slowPathJump());
     m_getByIds.append(gen);
@@ -1102,9 +1103,10 @@ void JIT::emitSlow_op_put_to_scope(Instruction* currentInstruction, Vector<SlowC
     unsigned linkCount = 0;
     if (resolveType != GlobalVar && resolveType != ClosureVar && resolveType != LocalClosureVar && resolveType != GlobalLexicalVar)
         linkCount++;
-    if ((resolveType == GlobalVar || resolveType == GlobalVarWithVarInjectionChecks || resolveType == LocalClosureVar
-        || resolveType == GlobalLexicalVar || resolveType == GlobalLexicalVarWithVarInjectionChecks)
-        && currentInstruction[5].u.watchpointSet->state() != IsInvalidated)
+    if (resolveType == GlobalVar || resolveType == GlobalVarWithVarInjectionChecks 
+        || resolveType == GlobalLexicalVar || resolveType == GlobalLexicalVarWithVarInjectionChecks 
+        || resolveType == ClosureVar || resolveType == ClosureVarWithVarInjectionChecks
+        || resolveType == LocalClosureVar)
         linkCount++;
     if (!isInitialization(getPutInfo.initializationMode()) && (resolveType == GlobalLexicalVar || resolveType == GlobalLexicalVarWithVarInjectionChecks)) // TDZ check.
         linkCount++;

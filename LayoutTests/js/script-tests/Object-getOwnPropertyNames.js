@@ -50,7 +50,7 @@ var expectedPropertyNamesSet = {
     "encodeURI": "['length', 'name']",
     "encodeURIComponent": "['length', 'name']",
 // Built-in ECMA objects
-    "Object": "['assign', 'create', 'defineProperties', 'defineProperty', 'freeze', 'getOwnPropertyDescriptor', 'getOwnPropertyDescriptors', 'getOwnPropertyNames', 'getOwnPropertySymbols', 'getPrototypeOf', 'is', 'isExtensible', 'isFrozen', 'isSealed', 'keys', 'length', 'name', 'preventExtensions', 'prototype', 'seal', 'setPrototypeOf']",
+    "Object": "['assign', 'create', 'defineProperties', 'defineProperty', 'entries', 'freeze', 'getOwnPropertyDescriptor', 'getOwnPropertyDescriptors', 'getOwnPropertyNames', 'getOwnPropertySymbols', 'getPrototypeOf', 'is', 'isExtensible', 'isFrozen', 'isSealed', 'keys', 'length', 'name', 'preventExtensions', 'prototype', 'seal', 'setPrototypeOf', 'values']",
     "Object.prototype": "['__defineGetter__', '__defineSetter__', '__lookupGetter__', '__lookupSetter__', '__proto__', 'constructor', 'hasOwnProperty', 'isPrototypeOf', 'propertyIsEnumerable', 'toLocaleString', 'toString', 'valueOf']",
     "Function": "['length', 'name', 'prototype']",
     "Function.prototype": "['apply', 'bind', 'call', 'constructor', 'length', 'name', 'toString']",
@@ -70,7 +70,7 @@ var expectedPropertyNamesSet = {
     "Error.prototype": "['constructor', 'message', 'name', 'toString']",
     "Math": "['E','LN10','LN2','LOG10E','LOG2E','PI','SQRT1_2','SQRT2','abs','acos','acosh','asin','asinh','atan','atan2','atanh','cbrt','ceil','clz32','cos','cosh','exp','expm1','floor','fround','hypot','imul','log','log10','log1p','log2','max','min','pow','random','round','sign','sin','sinh','sqrt','tan','tanh','trunc']",
     "JSON": "['parse', 'stringify']",
-    "Symbol": "['for', 'hasInstance', 'iterator', 'keyFor', 'length', 'match', 'name', 'prototype', 'replace', 'search', 'species', 'split', 'toPrimitive', 'toStringTag', 'unscopables']",
+    "Symbol": "['for', 'hasInstance', 'isConcatSpreadable', 'iterator', 'keyFor', 'length', 'match', 'name', 'prototype', 'replace', 'search', 'species', 'split', 'toPrimitive', 'toStringTag', 'unscopables']",
     "Symbol.prototype": "['constructor', 'toString', 'valueOf']",
     "Map": "['length', 'name', 'prototype']",
     "Map.prototype": "['clear', 'constructor', 'delete', 'entries', 'forEach', 'get', 'has', 'keys', 'set', 'size', 'values']",

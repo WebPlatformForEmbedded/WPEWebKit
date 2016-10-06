@@ -1837,7 +1837,7 @@ WebPageProxy* webkitWebViewCreateNewPage(WebKitWebView* webView, const WindowFea
     webkitWindowPropertiesUpdateFromWebWindowFeatures(newWebView->priv->windowProperties.get(), windowFeatures);
 
     RefPtr<WebPageProxy> newPage = getPage(newWebView);
-    return newPage.release().leakRef();
+    return newPage.leakRef();
 }
 
 void webkitWebViewReadyToShowPage(WebKitWebView* webView)
@@ -1925,7 +1925,7 @@ void webkitWebViewMouseTargetChanged(WebKitWebView* webView, const WebHitTestRes
 
 void webkitWebViewPrintFrame(WebKitWebView* webView, WebFrameProxy* frame)
 {
-    GRefPtr<WebKitPrintOperation> printOperation = adoptGRef(webkit_print_operation_new(webView));
+    auto printOperation = adoptGRef(webkit_print_operation_new(webView));
     webkitPrintOperationSetPrintMode(printOperation.get(), PrintInfo::PrintModeSync);
     gboolean returnValue;
     g_signal_emit(webView, signals[PRINT], 0, printOperation.get(), &returnValue);
@@ -3204,7 +3204,7 @@ static void fileReplaceContentsCallback(GObject* object, GAsyncResult* result, g
 
 static void getContentsAsMHTMLDataCallback(API::Data* wkData, GTask* taskPtr)
 {
-    GRefPtr<GTask> task = adoptGRef(taskPtr);
+    auto task = adoptGRef(taskPtr);
     if (g_task_return_error_if_cancelled(task.get()))
         return;
 
@@ -3515,25 +3515,22 @@ void webkitWebViewWebProcessCrashed(WebKitWebView* webView)
  * the actual contents are rendered. Note that if the web page loaded in @web_view
  * specifies a background color, it will take precedence over the @rgba color.
  * By default the @web_view background color is opaque white.
- * If the @rgba color is not fully opaque, the parent window must have a RGBA visual and
- * #GtkWidget:app-paintable property set to %TRUE, for the transparencies to work.
+ * Note that the parent window must have a RGBA visual and
+ * #GtkWidget:app-paintable property set to %TRUE for backgrounds colors to work.
  *
  * <informalexample><programlisting>
  * static void browser_window_set_background_color (BrowserWindow *window,
  *                                                  const GdkRGBA *rgba)
  * {
  *     WebKitWebView *web_view;
+ *     GdkScreen *screen = gtk_window_get_screen (GTK_WINDOW (window));
+ *     GdkVisual *rgba_visual = gdk_screen_get_rgba_visual (screen);
  *
- *     if (rgba->alpha < 1) {
- *         GdkScreen *screen = gtk_window_get_screen (GTK_WINDOW (window));
- *         GdkVisual *rgba_visual = gdk_screen_get_rgba_visual (screen);
+ *     if (!rgba_visual)
+ *          return;
  *
- *         if (!rgba_visual)
- *              return;
- *
- *         gtk_widget_set_visual (GTK_WIDGET (window), rgba_visual);
- *         gtk_widget_set_app_paintable (GTK_WIDGET (window), TRUE);
- *     }
+ *     gtk_widget_set_visual (GTK_WIDGET (window), rgba_visual);
+ *     gtk_widget_set_app_paintable (GTK_WIDGET (window), TRUE);
  *
  *     web_view = browser_window_get_web_view (window);
  *     webkit_web_view_set_background_color (web_view, rgba);

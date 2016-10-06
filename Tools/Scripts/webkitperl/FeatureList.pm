@@ -61,7 +61,6 @@ my (
     $templateLiteralSyntax,
     $cspNextSupport,
     $css3TextSupport,
-    $css3TextLineBreakSupport,
     $css4ImagesSupport,
     $cssBoxDecorationBreakSupport,
     $cssDeviceAdaptation,
@@ -80,6 +79,7 @@ my (
     $deviceOrientationSupport,
     $directoryUploadSupport,
     $dom4EventsConstructor,
+    $domIterator,
     $downloadAttributeSupport,
     $fetchAPISupport,
     $fontLoadEventsSupport,
@@ -207,9 +207,6 @@ my @features = (
 
     { option => "css3-text", desc => "Toggle CSS3 Text support",
       define => "ENABLE_CSS3_TEXT", default => (isEfl() || isGtk()), value => \$css3TextSupport },
-
-    { option => "css3-text-line-break", desc => "Toggle CSS3 Text Line Break support",
-      define => "ENABLE_CSS3_TEXT_LINE_BREAK", default => 0, value => \$css3TextLineBreakSupport },
 
     { option => "css-box-decoration-break", desc => "Toggle CSS box-decoration-break support",
       define => "ENABLE_CSS_BOX_DECORATION_BREAK", default => 1, value => \$cssBoxDecorationBreakSupport },
@@ -404,7 +401,7 @@ my @features = (
       define => "USE_SYSTEM_MALLOC", default => 0, value => \$systemMallocSupport },
 
     { option => "threaded-compositor", desc => "Toggle threaded compositor support",
-      define => "ENABLE_THREADED_COMPOSITOR", default => isWPE(), value => \$threadedCompositorSupport },
+      define => "ENABLE_THREADED_COMPOSITOR", default => (isGtk() || isWPE()), value => \$threadedCompositorSupport },
 
     { option => "text-autosizing", desc => "Toggle Text Autosizing support",
       define => "ENABLE_TEXT_AUTOSIZING", default => 0, value => \$textAutosizingSupport },
@@ -455,7 +452,7 @@ my @features = (
       define => "ENABLE_XSLT", default => 1, value => \$xsltSupport },
 
     { option => "ftl-jit", desc => "Toggle FTLJIT support",
-      define => "ENABLE_FTL_JIT", default => (isX86_64() && (isGtk() || isEfl())) , value => \$ftlJITSupport },
+      define => "ENABLE_FTL_JIT", default => (isX86_64() && (isGtk() || isEfl() || isWPE())) , value => \$ftlJITSupport },
 );
 
 sub getFeatureOptionList()

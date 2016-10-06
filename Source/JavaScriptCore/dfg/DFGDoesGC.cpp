@@ -127,10 +127,9 @@ bool doesGC(Graph& graph, Node* node)
     case GetGlobalVar:
     case GetGlobalLexicalVariable:
     case PutGlobalVariable:
-    case VarInjectionWatchpoint:
     case CheckCell:
     case CheckNotEmpty:
-    case CheckIdent:
+    case CheckStringIdent:
     case RegExpExec:
     case RegExpTest:
     case CompareLess:
@@ -139,10 +138,12 @@ bool doesGC(Graph& graph, Node* node)
     case CompareGreaterEq:
     case CompareEq:
     case CompareStrictEq:
+    case CompareEqPtr:
     case Call:
     case TailCallInlinedCaller:
     case Construct:
     case CallVarargs:
+    case CallEval:
     case TailCallVarargsInlinedCaller:
     case ConstructVarargs:
     case LoadVarargs:
@@ -155,6 +156,7 @@ bool doesGC(Graph& graph, Node* node)
     case OverridesHasInstance:
     case InstanceOf:
     case InstanceOfCustom:
+    case IsJSArray:
     case IsEmpty:
     case IsUndefined:
     case IsBoolean:
@@ -164,9 +166,11 @@ bool doesGC(Graph& graph, Node* node)
     case IsObjectOrNull:
     case IsFunction:
     case IsRegExpObject:
+    case IsTypedArrayView:
     case TypeOf:
     case LogicalNot:
     case ToPrimitive:
+    case ToNumber:
     case ToString:
     case CallStringConstructor:
     case In:
@@ -241,7 +245,6 @@ bool doesGC(Graph& graph, Node* node)
     case GetStack:
     case GetFromArguments:
     case PutToArguments:
-    case CopyRest:
     case LogShadowChickenPrologue:
     case LogShadowChickenTail:
     case GetDynamicVar:
@@ -253,6 +256,7 @@ bool doesGC(Graph& graph, Node* node)
     case CreateDirectArguments:
     case CreateScopedArguments:
     case CreateClonedArguments:
+    case CallObjectConstructor:
     case ToThis:
     case CreateThis:
     case AllocatePropertyStorage:
@@ -280,6 +284,7 @@ bool doesGC(Graph& graph, Node* node)
     case StrCat:
     case StringReplace:
     case StringReplaceRegExp:
+    case CreateRest:
         return true;
         
     case MultiPutByOffset:

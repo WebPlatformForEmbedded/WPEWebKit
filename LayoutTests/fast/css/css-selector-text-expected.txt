@@ -26,8 +26,11 @@ PASS parseThenSerializeRule('*|a { }') is '*|a { }'
 PASS parseThenSerializeRule('n|a { }') is 'n|a { }'
 PASS parseThenSerializeRule('*|* { }') is '*|* { }'
 PASS parseThenSerializeRule('n|* { }') is 'n|* { }'
+PASS parseThenSerializeRule('|a { }') is '|a { }'
+PASS parseThenSerializeRule('|* { }') is '|* { }'
 PASS parseThenSerializeRule('[*|a] { }') is '[*|a] { }'
 PASS parseThenSerializeRule('[n|a] { }') is '[n|a] { }'
+PASS parseThenSerializeRule('[|a] { }') is '[a] { }'
 
 PASS parseThenSerializeRule('a:active { }') is 'a:active { }'
 PASS parseThenSerializeRule('a b { }') is 'a b { }'
@@ -216,6 +219,26 @@ PASS parseThenSerializeRule('a.b::-webkit-input-placeholder { }') is 'a.b::-webk
 PASS parseThenSerializeRule('a#b::-webkit-input-placeholder { }') is 'a#b::-webkit-input-placeholder { }'
 PASS parseThenSerializeRule('a[b].c#d::-webkit-input-placeholder { }') is 'a[b].c#d::-webkit-input-placeholder { }'
 
+PASS parseThenSerializeRule('a[b]:default { }') is 'a[b]:default { }'
+PASS parseThenSerializeRule('a.b:default { }') is 'a.b:default { }'
+PASS parseThenSerializeRule('a#b:default { }') is 'a#b:default { }'
+PASS parseThenSerializeRule('a[b].c#d:default { }') is 'a[b].c#d:default { }'
+
+PASS parseThenSerializeRule('a[b]:in-range { }') is 'a[b]:in-range { }'
+PASS parseThenSerializeRule('a.b:in-range { }') is 'a.b:in-range { }'
+PASS parseThenSerializeRule('a#b:in-range { }') is 'a#b:in-range { }'
+PASS parseThenSerializeRule('a[b].c#d:in-range { }') is 'a[b].c#d:in-range { }'
+
+PASS parseThenSerializeRule('a[b]:out-of-range { }') is 'a[b]:out-of-range { }'
+PASS parseThenSerializeRule('a.b:out-of-range { }') is 'a.b:out-of-range { }'
+PASS parseThenSerializeRule('a#b:out-of-range { }') is 'a#b:out-of-range { }'
+PASS parseThenSerializeRule('a[b].c#d:out-of-range { }') is 'a[b].c#d:out-of-range { }'
+
+PASS parseThenSerializeRule('a[b]:focus-within { }') is 'a[b]:focus-within { }'
+PASS parseThenSerializeRule('a.b:focus-within { }') is 'a.b:focus-within { }'
+PASS parseThenSerializeRule('a#b:focus-within { }') is 'a#b:focus-within { }'
+PASS parseThenSerializeRule('a[b].c#d:focus-within { }') is 'a[b].c#d:focus-within { }'
+
 PASS parseThenSerializeRule('input:not([type="file"]):focus { }') is 'input:not([type="file"]):focus { }'
 PASS parseThenSerializeRule(':-webkit-any([type="file"]) { }') is ':-webkit-any([type="file"]) { }'
 PASS parseThenSerializeRule(':-webkit-any(:hover) { }') is ':-webkit-any(:hover) { }'
@@ -233,7 +256,6 @@ PASS parseThenSerializeRule(':any-link + div { }') is ':any-link + div { }'
 PASS parseThenSerializeRule(':not(:any-link) { }') is ':not(:any-link) { }'
 
 PASS parseThenSerializeRule('*:active { }') is ':active { }'
-PASS parseThenSerializeRule('|a { }') is 'a { }'
 
 PASS parseThenSerializeRule('input[type=file]:focus { }') is 'input[type="file"]:focus { }'
 

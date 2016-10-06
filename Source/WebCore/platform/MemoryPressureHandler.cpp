@@ -46,6 +46,7 @@
 #include "StyledElement.h"
 #include "WorkerThread.h"
 #include <JavaScriptCore/IncrementalSweeper.h>
+#include <chrono>
 #include <wtf/CurrentTime.h>
 #include <wtf/FastMalloc.h>
 #include <wtf/StdLibExtras.h>
@@ -72,10 +73,7 @@ MemoryPressureHandler::MemoryPressureHandler()
     , m_releaseMemoryBlock(0)
     , m_observer(0)
 #elif OS(LINUX)
-    , m_eventFD(0)
-    , m_pressureLevelFD(0)
-    , m_threadID(0)
-    , m_holdOffTimer(*this, &MemoryPressureHandler::holdOffTimerFired)
+    , m_holdOffTimer(RunLoop::main(), this, &MemoryPressureHandler::holdOffTimerFired)
 #endif
 {
     platformInitialize();
@@ -164,6 +162,37 @@ void MemoryPressureHandler::releaseCriticalMemory(Synchronous synchronous)
     });
 }
 
+void MemoryPressureHandler::jettisonExpensiveObjectsOnTopLevelNavigation()
+{
+#if PLATFORM(IOS)
+    // Protect against doing excessive jettisoning during repeated navigations.
+    const auto minimumTimeSinceNavigation = 2s;
+
+    static auto timeOfLastNavigation = std::chrono::steady_clock::now();
+    auto now = std::chrono::steady_clock::now();
+    bool shouldJettison = now - timeOfLastNavigation >= minimumTimeSinceNavigation;
+    timeOfLastNavigation = now;
+
+    if (!shouldJettison)
+        return;
+
+    // Throw away linked JS code. Linked code is tied to a global object and is not reusable.
+    // The immediate memory savings outweigh the cost of recompilation in case we go back again.
+    GCController::singleton().deleteAllLinkedCode();
+#endif
+}
+
+void MemoryPressureHandler::beginSimulatedMemoryPressure()
+{
+    m_isSimulatingMemoryPressure = true;
+    MemoryPressureHandler::singleton().respondToMemoryPressure(Critical::Yes, Synchronous::Yes);
+}
+
+void MemoryPressureHandler::endSimulatedMemoryPressure()
+{
+    m_isSimulatingMemoryPressure = false;
+}
+
 void MemoryPressureHandler::releaseMemory(Critical critical, Synchronous synchronous)
 {
     if (critical == Critical::Yes)
@@ -197,9 +226,9 @@ void MemoryPressureHandler::ReliefLogger::logMemoryUsageChange()
 #if PLATFORM(WPE)
 #define STRING_SPECIFICATION "%s"
 #define MEMORYPRESSURE_LOG(...) LOG(MemoryPressure, __VA_ARGS__)
-#elif !LOG_ALWAYS_DISABLED
+#elif !RELEASE_LOG_DISABLED
 #define STRING_SPECIFICATION "%{public}s"
-#define MEMORYPRESSURE_LOG(...) LOG_ALWAYS(true, __VA_ARGS__)
+#define MEMORYPRESSURE_LOG(...) RELEASE_LOG(__VA_ARGS__)
 #else
 #define STRING_SPECIFICATION "%s"
 #define MEMORYPRESSURE_LOG(...) WTFLogAlways(__VA_ARGS__)

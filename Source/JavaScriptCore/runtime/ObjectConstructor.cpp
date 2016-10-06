@@ -21,6 +21,7 @@
 #include "config.h"
 #include "ObjectConstructor.h"
 
+#include "BuiltinNames.h"
 #include "ButterflyInlines.h"
 #include "CopiedSpaceInlines.h"
 #include "Error.h"
@@ -83,6 +84,8 @@ const ClassInfo ObjectConstructor::s_info = { "Function", &InternalFunction::s_i
   isExtensible              objectConstructorIsExtensible               DontEnum|Function 1
   is                        objectConstructorIs                         DontEnum|Function 2
   assign                    JSBuiltin                                   DontEnum|Function 2
+  values                    JSBuiltin                                   DontEnum|Function 1
+  entries                   JSBuiltin                                   DontEnum|Function 1
 @end
 */
 
@@ -99,10 +102,10 @@ void ObjectConstructor::finishCreation(VM& vm, JSGlobalObject* globalObject, Obj
     // no. of arguments for constructor
     putDirectWithoutTransition(vm, vm.propertyNames->length, jsNumber(1), ReadOnly | DontEnum | DontDelete);
 
-    JSC_NATIVE_FUNCTION_WITHOUT_TRANSITION(vm.propertyNames->createPrivateName, objectConstructorCreate, DontEnum, 2);
-    JSC_NATIVE_FUNCTION_WITHOUT_TRANSITION(vm.propertyNames->definePropertyPrivateName, objectConstructorDefineProperty, DontEnum, 3);
-    JSC_NATIVE_FUNCTION_WITHOUT_TRANSITION(vm.propertyNames->getPrototypeOfPrivateName, objectConstructorGetPrototypeOf, DontEnum, 1);
-    JSC_NATIVE_FUNCTION_WITHOUT_TRANSITION(vm.propertyNames->getOwnPropertyNamesPrivateName, objectConstructorGetOwnPropertyNames, DontEnum, 1);
+    JSC_NATIVE_FUNCTION_WITHOUT_TRANSITION(vm.propertyNames->builtinNames().createPrivateName(), objectConstructorCreate, DontEnum, 2);
+    JSC_NATIVE_FUNCTION_WITHOUT_TRANSITION(vm.propertyNames->builtinNames().definePropertyPrivateName(), objectConstructorDefineProperty, DontEnum, 3);
+    JSC_NATIVE_FUNCTION_WITHOUT_TRANSITION(vm.propertyNames->builtinNames().getPrototypeOfPrivateName(), objectConstructorGetPrototypeOf, DontEnum, 1);
+    JSC_NATIVE_FUNCTION_WITHOUT_TRANSITION(vm.propertyNames->builtinNames().getOwnPropertyNamesPrivateName(), objectConstructorGetOwnPropertyNames, DontEnum, 1);
 }
 
 JSFunction* ObjectConstructor::addDefineProperty(ExecState* exec, JSGlobalObject* globalObject)
@@ -262,8 +265,16 @@ JSValue objectConstructorGetOwnPropertyDescriptors(ExecState* exec, JSObject* ob
         return jsUndefined();
 
     for (auto& propertyName : properties) {
-        JSValue fromDescriptor = objectConstructorGetOwnPropertyDescriptor(exec, object, propertyName);
+        PropertyDescriptor descriptor;
+        bool didGetDescriptor = object->getOwnPropertyDescriptor(exec, propertyName, descriptor);
         if (exec->hadException())
+            return jsUndefined();
+
+        if (!didGetDescriptor)
+            continue;
+
+        JSObject* fromDescriptor = constructObjectFromPropertyDescriptor(exec, descriptor);
+        if (!fromDescriptor)
             return jsUndefined();
 
         PutPropertySlot slot(descriptors);
@@ -334,7 +345,7 @@ bool toPropertyDescriptor(ExecState* exec, JSValue in, PropertyDescriptor& desc)
 {
     VM& vm = exec->vm();
     if (!in.isObject()) {
-        vm.throwException(exec, createTypeError(exec, ASCIILiteral("Property description must be an object.")));
+        throwTypeError(exec, ASCIILiteral("Property description must be an object."));
         return false;
     }
     JSObject* description = asObject(in);
@@ -379,7 +390,7 @@ bool toPropertyDescriptor(ExecState* exec, JSValue in, PropertyDescriptor& desc)
         if (!get.isUndefined()) {
             CallData callData;
             if (getCallData(get, callData) == CallType::None) {
-                vm.throwException(exec, createTypeError(exec, ASCIILiteral("Getter must be a function.")));
+                throwTypeError(exec, ASCIILiteral("Getter must be a function."));
                 return false;
             }
         }
@@ -394,7 +405,7 @@ bool toPropertyDescriptor(ExecState* exec, JSValue in, PropertyDescriptor& desc)
         if (!set.isUndefined()) {
             CallData callData;
             if (getCallData(set, callData) == CallType::None) {
-                vm.throwException(exec, createTypeError(exec, ASCIILiteral("Setter must be a function.")));
+                throwTypeError(exec, ASCIILiteral("Setter must be a function."));
                 return false;
             }
         }
@@ -406,12 +417,12 @@ bool toPropertyDescriptor(ExecState* exec, JSValue in, PropertyDescriptor& desc)
         return true;
 
     if (desc.value()) {
-        vm.throwException(exec, createTypeError(exec, ASCIILiteral("Invalid property.  'value' present on property with getter or setter.")));
+        throwTypeError(exec, ASCIILiteral("Invalid property.  'value' present on property with getter or setter."));
         return false;
     }
 
     if (desc.writablePresent()) {
-        vm.throwException(exec, createTypeError(exec, ASCIILiteral("Invalid property.  'writable' present on property with getter or setter.")));
+        throwTypeError(exec, ASCIILiteral("Invalid property.  'writable' present on property with getter or setter."));
         return false;
     }
     return true;
@@ -420,7 +431,7 @@ bool toPropertyDescriptor(ExecState* exec, JSValue in, PropertyDescriptor& desc)
 EncodedJSValue JSC_HOST_CALL objectConstructorDefineProperty(ExecState* exec)
 {
     if (!exec->argument(0).isObject())
-        return throwVMError(exec, createTypeError(exec, ASCIILiteral("Properties can only be defined on Objects.")));
+        return throwVMTypeError(exec, ASCIILiteral("Properties can only be defined on Objects."));
     JSObject* O = asObject(exec->argument(0));
     auto propertyName = exec->argument(1).toPropertyKey(exec);
     if (exec->hadException())
@@ -475,7 +486,7 @@ static JSValue defineProperties(ExecState* exec, JSObject* object, JSObject* pro
 EncodedJSValue JSC_HOST_CALL objectConstructorDefineProperties(ExecState* exec)
 {
     if (!exec->argument(0).isObject())
-        return throwVMError(exec, createTypeError(exec, ASCIILiteral("Properties can only be defined on Objects.")));
+        return throwVMTypeError(exec, ASCIILiteral("Properties can only be defined on Objects."));
     JSObject* targetObj = asObject(exec->argument(0));
     JSObject* props = exec->argument(1).toObject(exec);
     if (!props)
@@ -487,14 +498,14 @@ EncodedJSValue JSC_HOST_CALL objectConstructorCreate(ExecState* exec)
 {
     JSValue proto = exec->argument(0);
     if (!proto.isObject() && !proto.isNull())
-        return throwVMError(exec, createTypeError(exec, ASCIILiteral("Object prototype may only be an Object or null.")));
+        return throwVMTypeError(exec, ASCIILiteral("Object prototype may only be an Object or null."));
     JSObject* newObject = proto.isObject()
         ? constructEmptyObject(exec, asObject(proto))
         : constructEmptyObject(exec, exec->lexicalGlobalObject()->nullPrototypeObjectStructure());
     if (exec->argument(1).isUndefined())
         return JSValue::encode(newObject);
     if (!exec->argument(1).isObject())
-        return throwVMError(exec, createTypeError(exec, ASCIILiteral("Property descriptor list must be an Object.")));
+        return throwVMTypeError(exec, ASCIILiteral("Property descriptor list must be an Object."));
     return JSValue::encode(defineProperties(exec, newObject, asObject(exec->argument(1))));
 }
 

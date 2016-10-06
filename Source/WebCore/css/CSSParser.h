@@ -37,7 +37,6 @@
 #include "WebKitCSSFilterValue.h"
 #include <memory>
 #include <wtf/HashMap.h>
-#include <wtf/HashSet.h>
 #include <wtf/Vector.h>
 #include <wtf/text/AtomicString.h>
 #include <wtf/text/TextPosition.h>
@@ -62,6 +61,7 @@ class CSSBasicShapeInset;
 class CSSBasicShapePath;
 class CSSBasicShapePolygon;
 class CSSGridLineNamesValue;
+class CSSImageSetValue;
 class CSSVariableDependentValue;
 class Document;
 class Element;
@@ -86,10 +86,6 @@ class StyleKeyframe;
 class StyleSheetContents;
 class StyledElement;
 class WebKitCSSTransformValue;
-
-#if ENABLE(CSS_IMAGE_SET)
-class CSSImageSetValue;
-#endif
 
 class CSSParser {
     friend inline int cssyylex(void*, CSSParser*);
@@ -149,6 +145,7 @@ public:
     static Ref<ImmutableStyleProperties> parseInlineStyleDeclaration(const String&, Element*);
     std::unique_ptr<MediaQuery> parseMediaQuery(const String&);
 
+    void addPropertyWithPrefixingVariant(CSSPropertyID, RefPtr<CSSValue>&&, bool important, bool implicit = false);
     void addProperty(CSSPropertyID, RefPtr<CSSValue>&&, bool important, bool implicit = false);
     void rollbackLastProperties(int num);
     bool hasProperties() const { return !m_parsedProperties.isEmpty(); }
@@ -175,7 +172,7 @@ public:
         SourceSize(MediaQueryExpression&&, Ref<CSSValue>&&);
     };
     Vector<SourceSize> parseSizesAttribute(StringView);
-    SourceSize sourceSize(MediaQueryExpression&&, CSSParserValue&);
+    Optional<SourceSize> sourceSize(MediaQueryExpression&&, CSSParserValue&);
 
     bool parseFillImage(CSSParserValueList&, RefPtr<CSSValue>&);
 
@@ -234,14 +231,15 @@ public:
     bool isCSSGridLayoutEnabled() const;
     RefPtr<CSSValue> parseGridPosition();
     bool parseGridItemPositionShorthand(CSSPropertyID, bool important);
-    RefPtr<CSSValue> parseGridTemplateColumns();
+    enum TrackListType { GridTemplate, GridTemplateNoRepeat, GridAuto };
+    RefPtr<CSSValue> parseGridTemplateColumns(TrackListType = GridTemplate);
     bool parseGridTemplateRowsAndAreasAndColumns(bool important);
     bool parseGridTemplateShorthand(bool important);
     bool parseGridShorthand(bool important);
     bool parseGridAreaShorthand(bool important);
     bool parseGridGapShorthand(bool important);
     bool parseSingleGridAreaLonghand(RefPtr<CSSValue>&);
-    RefPtr<CSSValue> parseGridTrackList();
+    RefPtr<CSSValue> parseGridTrackList(TrackListType);
     bool parseGridTrackRepeatFunction(CSSValueList&, bool& isAutoRepeat, bool& allTracksAreFixedSized);
     RefPtr<CSSValue> parseGridTrackSize(CSSParserValueList& inputList);
     RefPtr<CSSPrimitiveValue> parseGridBreadth(CSSParserValue&);
@@ -333,9 +331,7 @@ public:
     RefPtr<CSSValueList> parseImageResolution();
 #endif
 
-#if ENABLE(CSS_IMAGE_SET)
     RefPtr<CSSImageSetValue> parseImageSet();
-#endif
 
     bool parseFilterImage(CSSParserValueList&, RefPtr<CSSValue>&);
 
@@ -407,7 +403,8 @@ public:
     void addNamespace(const AtomicString& prefix, const AtomicString& uri);
     QualifiedName determineNameInNamespace(const AtomicString& prefix, const AtomicString& localName);
 
-    void rewriteSpecifiersWithElementName(const AtomicString& namespacePrefix, const AtomicString& elementName, CSSParserSelector&, bool isNamespacePlaceholder = false);
+    void rewriteSpecifiersWithElementName(const AtomicString& namespacePrefix, const AtomicString& elementName, CSSParserSelector&);
+    void rewriteSpecifiersWithElementName(const QualifiedName& tagName, CSSParserSelector&, bool isNamespacePlaceholder = false);
     void rewriteSpecifiersWithNamespaceIfNeeded(CSSParserSelector&);
     std::unique_ptr<CSSParserSelector> rewriteSpecifiers(std::unique_ptr<CSSParserSelector>, std::unique_ptr<CSSParserSelector>);
 

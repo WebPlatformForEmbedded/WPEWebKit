@@ -50,8 +50,8 @@ class Data;
 }
 
 namespace IPC {
-class ArgumentDecoder;
-class ArgumentEncoder;
+class Decoder;
+class Encoder;
 }
 
 namespace WebKit {
@@ -60,8 +60,8 @@ struct WebProcessCreationParameters {
     WebProcessCreationParameters();
     ~WebProcessCreationParameters();
 
-    void encode(IPC::ArgumentEncoder&) const;
-    static bool decode(IPC::ArgumentDecoder&, WebProcessCreationParameters&);
+    void encode(IPC::Encoder&) const;
+    static bool decode(IPC::Decoder&, WebProcessCreationParameters&);
 
     String injectedBundlePath;
     SandboxExtension::Handle injectedBundlePathExtensionHandle;
@@ -165,6 +165,10 @@ struct WebProcessCreationParameters {
 
 #if TARGET_OS_IPHONE || (PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101100)
     RetainPtr<CFDataRef> networkATSContext;
+#endif
+
+#if OS(LINUX)
+    IPC::Attachment memoryPressureMonitorHandle;
 #endif
 };
 

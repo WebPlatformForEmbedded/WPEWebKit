@@ -90,7 +90,9 @@ public:
 #endif
 
     void setCurrentSession(PlatformMediaSession&);
-    PlatformMediaSession* currentSession();
+    PlatformMediaSession* currentSession() const;
+
+    PlatformMediaSession* currentSessionMatching(std::function<bool(const PlatformMediaSession&)>);
 
     void sessionIsPlayingToWirelessPlaybackTargetChanged(PlatformMediaSession&);
     void sessionCanProduceAudioChanged(PlatformMediaSession&);
@@ -110,7 +112,8 @@ private:
     void updateSessionState();
 
     // RemoteCommandListenerClient
-    WEBCORE_EXPORT void didReceiveRemoteControlCommand(PlatformMediaSession::RemoteControlCommandType) override;
+    WEBCORE_EXPORT void didReceiveRemoteControlCommand(PlatformMediaSession::RemoteControlCommandType, const PlatformMediaSession::RemoteCommandArgument*) override;
+    WEBCORE_EXPORT bool supportsSeeking() const override;
 
     // AudioHardwareListenerClient
     void audioHardwareDidBecomeActive() override { }

@@ -456,10 +456,6 @@ void PageClientImpl::updateAcceleratedCompositingMode(const LayerTreeContext&)
 {
 }
 
-void PageClientImpl::willEnterAcceleratedCompositingMode()
-{
-}
-
 void PageClientImpl::setAcceleratedCompositingRootLayer(LayerOrView *rootLayer)
 {
     [m_contentView _setAcceleratedCompositingRootView:rootLayer];
@@ -702,6 +698,7 @@ void PageClientImpl::didRemoveNavigationGestureSnapshot()
 
 void PageClientImpl::didFirstVisuallyNonEmptyLayoutForMainFrame()
 {
+    [m_webView _didFirstVisuallyNonEmptyLayoutForMainFrame];
 }
 
 void PageClientImpl::didFinishLoadForMainFrame()
@@ -740,11 +737,11 @@ void PageClientImpl::didRestoreScrollPosition()
 {
 }
 
-UserInterfaceLayoutDirection PageClientImpl::userInterfaceLayoutDirection()
+WebCore::UserInterfaceLayoutDirection PageClientImpl::userInterfaceLayoutDirection()
 {
     if (!m_webView)
-        return UserInterfaceLayoutDirection::LTR;
-    return ([UIView userInterfaceLayoutDirectionForSemanticContentAttribute:[m_webView semanticContentAttribute]] == UIUserInterfaceLayoutDirectionLeftToRight) ? UserInterfaceLayoutDirection::LTR : UserInterfaceLayoutDirection::RTL;
+        return WebCore::UserInterfaceLayoutDirection::LTR;
+    return ([UIView userInterfaceLayoutDirectionForSemanticContentAttribute:[m_webView semanticContentAttribute]] == UIUserInterfaceLayoutDirectionLeftToRight) ? WebCore::UserInterfaceLayoutDirection::LTR : WebCore::UserInterfaceLayoutDirection::RTL;
 }
 
 } // namespace WebKit

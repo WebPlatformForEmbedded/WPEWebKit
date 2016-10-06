@@ -32,13 +32,13 @@
 
 #include "Document.h"
 #include "Event.h"
+#include "EventNames.h"
 #include "ExceptionCode.h"
 #include "MediaStreamRegistry.h"
 #include "MediaStreamTrackEvent.h"
 #include "Page.h"
 #include "RealtimeMediaSource.h"
 #include "URL.h"
-#include <wtf/NeverDestroyed.h>
 
 namespace WebCore {
 

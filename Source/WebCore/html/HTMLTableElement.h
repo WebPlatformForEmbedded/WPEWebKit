@@ -23,8 +23,7 @@
  *
  */
 
-#ifndef HTMLTableElement_h
-#define HTMLTableElement_h
+#pragma once
 
 #include "HTMLElement.h"
 
@@ -40,28 +39,28 @@ public:
     static Ref<HTMLTableElement> create(Document&);
     static Ref<HTMLTableElement> create(const QualifiedName&, Document&);
 
-    HTMLTableCaptionElement* caption() const;
-    void setCaption(PassRefPtr<HTMLTableCaptionElement>, ExceptionCode&);
+    WEBCORE_EXPORT HTMLTableCaptionElement* caption() const;
+    WEBCORE_EXPORT void setCaption(RefPtr<HTMLTableCaptionElement>&&, ExceptionCode&);
 
-    HTMLTableSectionElement* tHead() const;
-    void setTHead(PassRefPtr<HTMLTableSectionElement>, ExceptionCode&);
+    WEBCORE_EXPORT HTMLTableSectionElement* tHead() const;
+    WEBCORE_EXPORT void setTHead(RefPtr<HTMLTableSectionElement>&&, ExceptionCode&);
 
-    HTMLTableSectionElement* tFoot() const;
-    void setTFoot(PassRefPtr<HTMLTableSectionElement>, ExceptionCode&);
+    WEBCORE_EXPORT HTMLTableSectionElement* tFoot() const;
+    WEBCORE_EXPORT void setTFoot(RefPtr<HTMLTableSectionElement>&&, ExceptionCode&);
 
-    Ref<HTMLTableSectionElement> createTHead();
-    void deleteTHead();
-    Ref<HTMLTableSectionElement> createTFoot();
-    void deleteTFoot();
-    Ref<HTMLTableSectionElement> createTBody();
-    Ref<HTMLTableCaptionElement> createCaption();
-    void deleteCaption();
+    WEBCORE_EXPORT Ref<HTMLTableSectionElement> createTHead();
+    WEBCORE_EXPORT void deleteTHead();
+    WEBCORE_EXPORT Ref<HTMLTableSectionElement> createTFoot();
+    WEBCORE_EXPORT void deleteTFoot();
+    WEBCORE_EXPORT Ref<HTMLTableSectionElement> createTBody();
+    WEBCORE_EXPORT Ref<HTMLTableCaptionElement> createCaption();
+    WEBCORE_EXPORT void deleteCaption();
     RefPtr<HTMLElement> insertRow(ExceptionCode& ec) { return insertRow(-1, ec); }
-    RefPtr<HTMLElement> insertRow(int index, ExceptionCode&);
-    void deleteRow(int index, ExceptionCode&);
+    WEBCORE_EXPORT RefPtr<HTMLElement> insertRow(int index, ExceptionCode&);
+    WEBCORE_EXPORT void deleteRow(int index, ExceptionCode&);
 
-    Ref<HTMLCollection> rows();
-    Ref<HTMLCollection> tBodies();
+    WEBCORE_EXPORT Ref<HTMLCollection> rows();
+    WEBCORE_EXPORT Ref<HTMLCollection> tBodies();
 
     const AtomicString& rules() const;
     const AtomicString& summary() const;
@@ -72,15 +71,15 @@ public:
 private:
     HTMLTableElement(const QualifiedName&, Document&);
 
-    void parseAttribute(const QualifiedName&, const AtomicString&) override;
-    bool isPresentationAttribute(const QualifiedName&) const override;
-    void collectStyleForPresentationAttribute(const QualifiedName&, const AtomicString&, MutableStyleProperties&) override;
-    bool isURLAttribute(const Attribute&) const override;
+    void parseAttribute(const QualifiedName&, const AtomicString&) final;
+    bool isPresentationAttribute(const QualifiedName&) const final;
+    void collectStyleForPresentationAttribute(const QualifiedName&, const AtomicString&, MutableStyleProperties&) final;
+    bool isURLAttribute(const Attribute&) const final;
 
     // Used to obtain either a solid or outset border decl and to deal with the frame and rules attributes.
-    const StyleProperties* additionalPresentationAttributeStyle() const override;
+    const StyleProperties* additionalPresentationAttributeStyle() const final;
 
-    void addSubresourceAttributeURLs(ListHashSet<URL>&) const override;
+    void addSubresourceAttributeURLs(ListHashSet<URL>&) const final;
 
     enum TableRules { UnsetRules, NoneRules, GroupsRules, RowsRules, ColsRules, AllRules };
     enum CellBorders { NoBorders, SolidBorders, InsetBorders, SolidBordersColsOnly, SolidBordersRowsOnly };
@@ -102,5 +101,3 @@ private:
 };
 
 } //namespace
-
-#endif

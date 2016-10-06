@@ -24,8 +24,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef DOMWindow_h
-#define DOMWindow_h
+#pragma once
 
 #include "Base64Utilities.h"
 #include "ContextDestructionObserver.h"
@@ -35,6 +34,7 @@
 #include "Supplementable.h"
 #include <functional>
 #include <memory>
+#include <wtf/HashSet.h>
 #include <wtf/Optional.h>
 #include <wtf/WeakPtr.h>
 
@@ -48,6 +48,7 @@ namespace WebCore {
     class CSSRuleList;
     class CSSStyleDeclaration;
     class Crypto;
+    class CustomElementRegistry;
     class DOMApplicationCache;
     class DOMSelection;
     class DOMURL;
@@ -162,7 +163,7 @@ namespace WebCore {
         Element* frameElement() const;
 
         WEBCORE_EXPORT void focus(bool allowFocus = false);
-        void focus(Document&);
+        void focus(DOMWindow& callerWindow);
         void blur();
         WEBCORE_EXPORT void close();
         void close(Document&);
@@ -174,7 +175,7 @@ namespace WebCore {
 
         void showModalDialog(const String& urlString, const String& dialogFeaturesString, DOMWindow& activeWindow, DOMWindow& firstWindow, std::function<void (DOMWindow&)> prepareDialogFunction);
 
-        void alert(const String& message);
+        void alert(const String& message = emptyString());
         bool confirm(const String& message);
         String prompt(const String& message, const String& defaultValue);
 
@@ -227,11 +228,11 @@ namespace WebCore {
 
         // DOM Level 2 Style Interface
 
-        RefPtr<CSSStyleDeclaration> getComputedStyle(Element*, const String& pseudoElt) const;
+        WEBCORE_EXPORT RefPtr<CSSStyleDeclaration> getComputedStyle(Element&, const String& pseudoElt) const;
 
         // WebKit extensions
 
-        RefPtr<CSSRuleList> getMatchedCSSRules(Element*, const String& pseudoElt, bool authorOnly = true) const;
+        WEBCORE_EXPORT RefPtr<CSSRuleList> getMatchedCSSRules(Element*, const String& pseudoElt, bool authorOnly = true) const;
         double devicePixelRatio() const;
 
         RefPtr<WebKitPoint> webkitConvertPointFromPageToNode(Node*, const WebKitPoint*) const;
@@ -243,8 +244,6 @@ namespace WebCore {
         String crossDomainAccessErrorMessage(const DOMWindow& activeWindow);
 
         void postMessage(PassRefPtr<SerializedScriptValue> message, const MessagePortArray*, const String& targetOrigin, DOMWindow& source, ExceptionCode&);
-        // Needed for Objective-C bindings (see bug 28774).
-        void postMessage(PassRefPtr<SerializedScriptValue> message, MessagePort*, const String& targetOrigin, DOMWindow& source, ExceptionCode&);
         void postMessageTimerFired(PostMessageTimer&);
         void dispatchMessageEventWithOriginCheck(SecurityOrigin* intendedTargetOrigin, Event&, PassRefPtr<Inspector::ScriptCallStack>);
 
@@ -305,6 +304,11 @@ namespace WebCore {
         DOMApplicationCache* applicationCache() const;
         DOMApplicationCache* optionalApplicationCache() const { return m_applicationCache.get(); }
 
+#if ENABLE(CUSTOM_ELEMENTS)
+        CustomElementRegistry* customElementRegistry() { return m_customElementRegistry.get(); }
+        CustomElementRegistry& ensureCustomElementRegistry();
+#endif
+
 #if ENABLE(ORIENTATION_EVENTS)
         // This is the interface orientation in degrees. Some examples are:
         //  0 is straight up; -90 is when the device is rotated 90 clockwise;
@@ -315,6 +319,7 @@ namespace WebCore {
 #if ENABLE(WEB_TIMING)
         Performance* performance() const;
 #endif
+        double nowTimestamp() const;
 
 #if PLATFORM(IOS)
         void incrementScrollEventListenersCount();
@@ -416,6 +421,10 @@ namespace WebCore {
         mutable RefPtr<Storage> m_localStorage;
         mutable RefPtr<DOMApplicationCache> m_applicationCache;
 
+#if ENABLE(CUSTOM_ELEMENTS)
+        RefPtr<CustomElementRegistry> m_customElementRegistry;
+#endif
+
 #if ENABLE(WEB_TIMING)
         mutable RefPtr<Performance> m_performance;
 #endif
@@ -436,5 +445,3 @@ namespace WebCore {
     }
 
 } // namespace WebCore
-
-#endif // DOMWindow_h

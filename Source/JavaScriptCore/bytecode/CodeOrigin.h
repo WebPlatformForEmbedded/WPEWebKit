@@ -30,7 +30,6 @@
 #include "CodeBlockHash.h"
 #include "CodeSpecializationKind.h"
 #include "WriteBarrier.h"
-#include <wtf/BitVector.h>
 #include <wtf/HashMap.h>
 #include <wtf/PrintStream.h>
 #include <wtf/StdLibExtras.h>
@@ -109,7 +108,7 @@ struct CodeOrigin {
     // Get the inline stack. This is slow, and is intended for debugging only.
     Vector<CodeOrigin> inlineStack() const;
     
-    void dump(PrintStream&) const;
+    JS_EXPORT_PRIVATE void dump(PrintStream&) const;
     void dumpInContext(PrintStream&, DumpContext*) const;
 
 private:

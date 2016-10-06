@@ -28,13 +28,13 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef MediaEndpoint_h
-#define MediaEndpoint_h
+#pragma once
 
 #if ENABLE(WEB_RTC)
 
 #include "MediaEndpointConfiguration.h"
 #include "RealtimeMediaSource.h"
+#include <wtf/HashMap.h>
 #include <wtf/text/WTFString.h>
 
 namespace WebCore {
@@ -50,7 +50,6 @@ public:
     virtual void gotDtlsFingerprint(const String& fingerprint, const String& fingerprintFunction) = 0;
     virtual void gotIceCandidate(unsigned mdescIndex, RefPtr<IceCandidate>&&) = 0;
     virtual void doneGatheringCandidates(unsigned mdescIndex) = 0;
-    virtual void gotRemoteSource(unsigned mdescIndex, RefPtr<RealtimeMediaSource>&&) = 0;
 
     virtual ~MediaEndpointClient() { }
 };
@@ -91,5 +90,3 @@ public:
 } // namespace WebCore
 
 #endif // ENABLE(WEB_RTC)
-
-#endif // MediaEndpoint_h

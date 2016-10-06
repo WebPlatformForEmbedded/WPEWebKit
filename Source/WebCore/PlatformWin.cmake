@@ -34,8 +34,8 @@ list(APPEND WebCore_INCLUDE_DIRECTORIES
     "${WEBCORE_DIR}/platform/graphics/opentype"
     "${WEBCORE_DIR}/platform/graphics/win"
     "${WEBCORE_DIR}/platform/network/win"
+    "${WEBCORE_DIR}/platform/spi/win"
     "${WEBCORE_DIR}/platform/win"
-    "${WEBCORE_DIR}/plugins/win"
     "${THIRDPARTY_DIR}/ANGLE/include"
     "${THIRDPARTY_DIR}/ANGLE/include/egl"
 )
@@ -109,8 +109,6 @@ list(APPEND WebCore_SOURCES
 
     platform/text/cf/HyphenationCF.cpp
 
-    platform/text/win/TextBreakIteratorInternalICUWin.cpp
-
     platform/win/BString.cpp
     platform/win/BitmapInfo.cpp
     platform/win/ClipboardUtilitiesWin.cpp
@@ -167,6 +165,7 @@ set(WebCore_FORWARDING_HEADERS_DIRECTORIES
     css
     dom
     editing
+    fileapi
     history
     html
     inspector
@@ -184,6 +183,7 @@ set(WebCore_FORWARDING_HEADERS_DIRECTORIES
 
     Modules/geolocation
     Modules/indexeddb
+    Modules/websockets
 
     Modules/indexeddb/client
     Modules/indexeddb/legacy

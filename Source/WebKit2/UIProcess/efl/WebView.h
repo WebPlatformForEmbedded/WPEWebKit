@@ -221,7 +221,6 @@ private:
     void enterAcceleratedCompositingMode(const LayerTreeContext&) override;
     void exitAcceleratedCompositingMode() override;
     void updateAcceleratedCompositingMode(const LayerTreeContext&) override;
-    void willEnterAcceleratedCompositingMode() override { }
 
 #if ENABLE(FULLSCREEN_API)
     WebFullScreenManagerProxyClient& fullScreenManagerProxyClient() override;
@@ -262,7 +261,7 @@ private:
     void beganExitFullScreen(const WebCore::IntRect&, const WebCore::IntRect&) override { }
 #endif
 
-    UserInterfaceLayoutDirection userInterfaceLayoutDirection() override { return UserInterfaceLayoutDirection::LTR; }
+    WebCore::UserInterfaceLayoutDirection userInterfaceLayoutDirection() override { return WebCore::UserInterfaceLayoutDirection::LTR; }
 
     EwkView* m_ewkView;
 

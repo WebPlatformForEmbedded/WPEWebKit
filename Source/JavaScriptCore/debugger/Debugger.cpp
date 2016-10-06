@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2008, 2013, 2014 Apple Inc. All rights reserved.
+ *  Copyright (C) 2008, 2013, 2014, 2016 Apple Inc. All rights reserved.
  *  Copyright (C) 1999-2001 Harri Porten (porten@kde.org)
  *  Copyright (C) 2001 Peter Kelly (pmk@post.com)
  *
@@ -40,14 +40,21 @@ namespace {
 using namespace JSC;
 
 struct GatherSourceProviders : public MarkedBlock::VoidFunctor {
-    HashSet<SourceProvider*> sourceProviders;
+    // FIXME: This is a mutable field becaue this isn't a C++ lambda.
+    // https://bugs.webkit.org/show_bug.cgi?id=159644
+    mutable HashSet<SourceProvider*> sourceProviders;
     JSGlobalObject* m_globalObject;
 
     GatherSourceProviders(JSGlobalObject* globalObject)
         : m_globalObject(globalObject) { }
 
-    IterationStatus operator()(JSCell* cell)
+    IterationStatus operator()(HeapCell* heapCell, HeapCell::Kind kind) const
     {
+        if (kind != HeapCell::JSCell)
+            return IterationStatus::Continue;
+        
+        JSCell* cell = static_cast<JSCell*>(heapCell);
+        
         JSFunction* function = jsDynamicCast<JSFunction*>(cell);
         if (!function)
             return IterationStatus::Continue;
@@ -191,7 +198,7 @@ public:
     {
     }
 
-    bool operator()(CodeBlock* codeBlock)
+    bool operator()(CodeBlock* codeBlock) const
     {
         if (m_debugger == codeBlock->globalObject()->debugger()) {
             if (m_mode == SteppingModeEnabled)
@@ -212,7 +219,7 @@ void Debugger::setSteppingMode(SteppingMode mode)
     if (mode == m_steppingMode)
         return;
 
-    m_vm.heap.completeAllDFGPlans();
+    m_vm.heap.completeAllJITPlans();
 
     m_steppingMode = mode;
     SetSteppingModeFunctor functor(this, mode);
@@ -298,7 +305,7 @@ public:
     {
     }
 
-    bool operator()(CodeBlock* codeBlock)
+    bool operator()(CodeBlock* codeBlock) const
     {
         if (m_debugger == codeBlock->globalObject()->debugger())
             m_debugger->toggleBreakpoint(codeBlock, m_breakpoint, m_enabledOrNot);
@@ -313,7 +320,7 @@ private:
 
 void Debugger::toggleBreakpoint(Breakpoint& breakpoint, Debugger::BreakpointState enabledOrNot)
 {
-    m_vm.heap.completeAllDFGPlans();
+    m_vm.heap.completeAllJITPlans();
 
     ToggleBreakpointFunctor functor(this, breakpoint, enabledOrNot);
     m_vm.heap.forEachCodeBlock(functor);
@@ -474,7 +481,7 @@ public:
     {
     }
 
-    bool operator()(CodeBlock* codeBlock)
+    bool operator()(CodeBlock* codeBlock) const
     {
         if (codeBlock->hasDebuggerRequests() && m_debugger == codeBlock->globalObject()->debugger())
             codeBlock->clearDebuggerRequests();
@@ -487,7 +494,7 @@ private:
 
 void Debugger::clearBreakpoints()
 {
-    m_vm.heap.completeAllDFGPlans();
+    m_vm.heap.completeAllJITPlans();
 
     m_topBreakpointID = noBreakpointID;
     m_breakpointIDToBreakpoint.clear();
@@ -504,7 +511,7 @@ public:
     {
     }
 
-    bool operator()(CodeBlock* codeBlock)
+    bool operator()(CodeBlock* codeBlock) const
     {
         if (codeBlock->hasDebuggerRequests() && m_globalObject == codeBlock->globalObject())
             codeBlock->clearDebuggerRequests();
@@ -517,7 +524,7 @@ private:
 
 void Debugger::clearDebuggerRequests(JSGlobalObject* globalObject)
 {
-    m_vm.heap.completeAllDFGPlans();
+    m_vm.heap.completeAllJITPlans();
 
     ClearDebuggerRequestsFunctor functor(globalObject);
     m_vm.heap.forEachCodeBlock(functor);
@@ -622,10 +629,6 @@ void Debugger::pauseIfNeeded(CallFrame* callFrame)
     if (m_suppressAllPauses)
         return;
 
-    JSGlobalObject* vmEntryGlobalObject = callFrame->vmEntryGlobalObject();
-    if (!needPauseHandling(vmEntryGlobalObject))
-        return;
-
     Breakpoint breakpoint;
     bool didHitBreakpoint = false;
     bool pauseNow = m_pauseOnNextStatement;
@@ -643,8 +646,9 @@ void Debugger::pauseIfNeeded(CallFrame* callFrame)
     // Make sure we are not going to pause again on breakpoint actions by
     // reseting the pause state before executing any breakpoint actions.
     TemporaryPausedState pausedState(*this);
-    m_pauseOnCallFrame = 0;
+    m_pauseOnCallFrame = nullptr;
     m_pauseOnNextStatement = false;
+    JSGlobalObject* vmEntryGlobalObject = callFrame->vmEntryGlobalObject();
 
     if (didHitBreakpoint) {
         handleBreakpointHit(vmEntryGlobalObject, breakpoint);

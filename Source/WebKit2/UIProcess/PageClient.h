@@ -27,12 +27,12 @@
 #define PageClient_h
 
 #include "ShareableBitmap.h"
-#include "UserInterfaceLayoutDirection.h"
 #include "WebColorPicker.h"
 #include "WebPageProxy.h"
 #include "WebPopupMenuProxy.h"
 #include <WebCore/AlternativeTextClient.h>
 #include <WebCore/EditorClient.h>
+#include <WebCore/UserInterfaceLayoutDirection.h>
 #include <wtf/Forward.h>
 
 #if PLATFORM(COCOA)
@@ -235,7 +235,6 @@ public:
     virtual void enterAcceleratedCompositingMode(const LayerTreeContext&) = 0;
     virtual void exitAcceleratedCompositingMode() = 0;
     virtual void updateAcceleratedCompositingMode(const LayerTreeContext&) = 0;
-    virtual void willEnterAcceleratedCompositingMode() = 0;
 
 #if PLATFORM(MAC)
     virtual void pluginFocusOrWindowFocusChanged(uint64_t pluginComplexTextInputIdentifier, bool pluginHasFocusAndWindowHasFocus) = 0;
@@ -275,6 +274,7 @@ public:
     virtual void registerInsertionUndoGrouping() = 0;
 #endif // USE(INSERTION_UNDO_GROUPING)
 #endif // USE(APPKIT)
+    virtual void setEditableElementIsFocused(bool) = 0;
 #endif // PLATFORM(MAC)
 
 #if PLATFORM(IOS)
@@ -364,7 +364,7 @@ public:
 
     virtual bool windowIsFrontWindowUnderMouse(const NativeWebMouseEvent&) { return false; }
 
-    virtual UserInterfaceLayoutDirection userInterfaceLayoutDirection() = 0;
+    virtual WebCore::UserInterfaceLayoutDirection userInterfaceLayoutDirection() = 0;
 };
 
 } // namespace WebKit

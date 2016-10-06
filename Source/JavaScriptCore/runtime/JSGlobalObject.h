@@ -74,15 +74,15 @@ class GlobalCodeBlock;
 class InputCursor;
 class JSGlobalObjectDebuggable;
 class JSInternalPromise;
+class JSModuleLoader;
 class JSPromise;
 class JSPromiseConstructor;
 class JSPromisePrototype;
-class JSStack;
 class JSTypedArrayViewConstructor;
 class JSTypedArrayViewPrototype;
 class LLIntOffsetsExtractor;
 class Microtask;
-class ModuleLoaderObject;
+class ModuleLoaderPrototype;
 class ModuleProgramExecutable;
 class NativeErrorConstructor;
 class NullGetterFunction;
@@ -166,19 +166,19 @@ struct GlobalObjectMethodTable {
     typedef bool (*ShouldInterruptScriptBeforeTimeoutPtr)(const JSGlobalObject*);
     ShouldInterruptScriptBeforeTimeoutPtr shouldInterruptScriptBeforeTimeout;
 
-    typedef JSInternalPromise* (*ModuleLoaderResolvePtr)(JSGlobalObject*, ExecState*, JSValue, JSValue);
+    typedef JSInternalPromise* (*ModuleLoaderResolvePtr)(JSGlobalObject*, ExecState*, JSModuleLoader*, JSValue, JSValue);
     ModuleLoaderResolvePtr moduleLoaderResolve;
 
-    typedef JSInternalPromise* (*ModuleLoaderFetchPtr)(JSGlobalObject*, ExecState*, JSValue);
+    typedef JSInternalPromise* (*ModuleLoaderFetchPtr)(JSGlobalObject*, ExecState*, JSModuleLoader*, JSValue);
     ModuleLoaderFetchPtr moduleLoaderFetch;
 
-    typedef JSInternalPromise* (*ModuleLoaderTranslatePtr)(JSGlobalObject*, ExecState*, JSValue, JSValue);
+    typedef JSInternalPromise* (*ModuleLoaderTranslatePtr)(JSGlobalObject*, ExecState*, JSModuleLoader*, JSValue, JSValue);
     ModuleLoaderTranslatePtr moduleLoaderTranslate;
 
-    typedef JSInternalPromise* (*ModuleLoaderInstantiatePtr)(JSGlobalObject*, ExecState*, JSValue, JSValue);
+    typedef JSInternalPromise* (*ModuleLoaderInstantiatePtr)(JSGlobalObject*, ExecState*, JSModuleLoader*, JSValue, JSValue);
     ModuleLoaderInstantiatePtr moduleLoaderInstantiate;
 
-    typedef JSValue (*ModuleLoaderEvaluatePtr)(JSGlobalObject*, ExecState*, JSValue, JSValue);
+    typedef JSValue (*ModuleLoaderEvaluatePtr)(JSGlobalObject*, ExecState*, JSModuleLoader*, JSValue, JSValue);
     ModuleLoaderEvaluatePtr moduleLoaderEvaluate;
 
     typedef String (*DefaultLanguageFunctionPtr)();
@@ -209,7 +209,7 @@ private:
 public:
     template<typename T> using Initializer = typename LazyProperty<JSGlobalObject, T>::Initializer;
     
-    Register m_globalCallFrame[JSStack::CallFrameHeaderSize];
+    Register m_globalCallFrame[CallFrame::headerSizeInRegisters];
 
     WriteBarrier<JSObject> m_globalThis;
 
@@ -240,6 +240,7 @@ public:
     WriteBarrier<JSFunction> m_callFunction;
     WriteBarrier<JSFunction> m_applyFunction;
     WriteBarrier<JSFunction> m_definePropertyFunction;
+    LazyProperty<JSGlobalObject, JSFunction> m_arrayProtoToStringFunction;
     LazyProperty<JSGlobalObject, JSFunction> m_arrayProtoValuesFunction;
     LazyProperty<JSGlobalObject, JSFunction> m_initializePromiseFunction;
     WriteBarrier<JSFunction> m_newPromiseCapabilityFunction;
@@ -251,7 +252,7 @@ public:
     WriteBarrier<JSObject> m_regExpProtoUnicodeGetter;
     LazyProperty<JSGlobalObject, GetterSetter> m_throwTypeErrorArgumentsCalleeAndCallerGetterSetter;
 
-    WriteBarrier<ModuleLoaderObject> m_moduleLoader;
+    WriteBarrier<JSModuleLoader> m_moduleLoader;
 
     WriteBarrier<ObjectPrototype> m_objectPrototype;
     WriteBarrier<FunctionPrototype> m_functionPrototype;
@@ -260,6 +261,7 @@ public:
     WriteBarrier<IteratorPrototype> m_iteratorPrototype;
     WriteBarrier<GeneratorFunctionPrototype> m_generatorFunctionPrototype;
     WriteBarrier<GeneratorPrototype> m_generatorPrototype;
+    WriteBarrier<ModuleLoaderPrototype> m_moduleLoaderPrototype;
 
     LazyProperty<JSGlobalObject, Structure> m_debuggerScopeStructure;
     LazyProperty<JSGlobalObject, Structure> m_withScopeStructure;
@@ -307,9 +309,7 @@ public:
     WriteBarrier<Structure> m_proxyObjectStructure;
     WriteBarrier<Structure> m_callableProxyObjectStructure;
     WriteBarrier<Structure> m_proxyRevokeStructure;
-#if ENABLE(WEBASSEMBLY)
-    WriteBarrier<Structure> m_wasmModuleStructure;
-#endif
+    WriteBarrier<Structure> m_moduleLoaderStructure;
 
 #define DEFINE_STORAGE_FOR_SIMPLE_TYPE(capitalName, lowerName, properName, instanceType, jsName) \
     WriteBarrier<capitalName ## Prototype> m_ ## lowerName ## Prototype; \
@@ -485,6 +485,7 @@ public:
     JSFunction* callFunction() const { return m_callFunction.get(); }
     JSFunction* applyFunction() const { return m_applyFunction.get(); }
     JSFunction* definePropertyFunction() const { return m_definePropertyFunction.get(); }
+    JSFunction* arrayProtoToStringFunction() const { return m_arrayProtoToStringFunction.get(this); }
     JSFunction* arrayProtoValuesFunction() const { return m_arrayProtoValuesFunction.get(this); }
     JSFunction* initializePromiseFunction() const { return m_initializePromiseFunction.get(this); }
     JSFunction* newPromiseCapabilityFunction() const { return m_newPromiseCapabilityFunction.get(); }
@@ -498,7 +499,7 @@ public:
         return m_throwTypeErrorArgumentsCalleeAndCallerGetterSetter.get(this);
     }
     
-    ModuleLoaderObject* moduleLoader() const { return m_moduleLoader.get(); }
+    JSModuleLoader* moduleLoader() const { return m_moduleLoader.get(); }
 
     ObjectPrototype* objectPrototype() const { return m_objectPrototype.get(); }
     FunctionPrototype* functionPrototype() const { return m_functionPrototype.get(); }
@@ -582,9 +583,7 @@ public:
     Structure* proxyObjectStructure() const { return m_proxyObjectStructure.get(); }
     Structure* callableProxyObjectStructure() const { return m_callableProxyObjectStructure.get(); }
     Structure* proxyRevokeStructure() const { return m_proxyRevokeStructure.get(); }
-#if ENABLE(WEBASSEMBLY)
-    Structure* wasmModuleStructure() const { return m_wasmModuleStructure.get(); }
-#endif
+    Structure* moduleLoaderStructure() const { return m_moduleLoaderStructure.get(); }
 
     JS_EXPORT_PRIVATE void setRemoteDebuggingEnabled(bool);
     JS_EXPORT_PRIVATE bool remoteDebuggingEnabled() const;

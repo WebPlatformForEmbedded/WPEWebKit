@@ -23,15 +23,13 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef NetworkConnectionToWebProcess_h
-#define NetworkConnectionToWebProcess_h
+#pragma once
 
 #include "BlockingResponseMap.h"
 #include "Connection.h"
 #include "DownloadID.h"
 #include "NetworkConnectionToWebProcessMessages.h"
 #include <WebCore/ResourceLoadPriority.h>
-#include <wtf/HashSet.h>
 #include <wtf/RefCounted.h>
 
 namespace WebCore {
@@ -51,7 +49,7 @@ public:
     static Ref<NetworkConnectionToWebProcess> create(IPC::Connection::Identifier);
     virtual ~NetworkConnectionToWebProcess();
 
-    IPC::Connection* connection() const { return m_connection.get(); }
+    IPC::Connection& connection() { return m_connection.get(); }
 
     void didCleanupResourceLoader(NetworkResourceLoader&);
 
@@ -61,16 +59,16 @@ private:
     NetworkConnectionToWebProcess(IPC::Connection::Identifier);
 
     // IPC::Connection::Client
-    void didReceiveMessage(IPC::Connection&, IPC::MessageDecoder&) override;
-    void didReceiveSyncMessage(IPC::Connection&, IPC::MessageDecoder&, std::unique_ptr<IPC::MessageEncoder>&) override;
+    void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
+    void didReceiveSyncMessage(IPC::Connection&, IPC::Decoder&, std::unique_ptr<IPC::Encoder>&) override;
     void didClose(IPC::Connection&) override;
     void didReceiveInvalidMessage(IPC::Connection&, IPC::StringReference messageReceiverName, IPC::StringReference messageName) override;
     IPC::ProcessType localProcessType() override { return IPC::ProcessType::Network; }
     IPC::ProcessType remoteProcessType() override { return IPC::ProcessType::Web; }
 
     // Message handlers.
-    void didReceiveNetworkConnectionToWebProcessMessage(IPC::Connection&, IPC::MessageDecoder&);
-    void didReceiveSyncNetworkConnectionToWebProcessMessage(IPC::Connection&, IPC::MessageDecoder&, std::unique_ptr<IPC::MessageEncoder>&);
+    void didReceiveNetworkConnectionToWebProcessMessage(IPC::Connection&, IPC::Decoder&);
+    void didReceiveSyncNetworkConnectionToWebProcessMessage(IPC::Connection&, IPC::Decoder&, std::unique_ptr<IPC::Encoder>&);
     
     void scheduleResourceLoad(const NetworkResourceLoadParameters&);
     void performSynchronousLoad(const NetworkResourceLoadParameters&, RefPtr<Messages::NetworkConnectionToWebProcess::PerformSynchronousLoad::DelayedReply>&&);
@@ -95,7 +93,7 @@ private:
     void registerBlobURL(const WebCore::URL&, Vector<WebCore::BlobPart>, const String& contentType);
     void registerBlobURLFromURL(const WebCore::URL&, const WebCore::URL& srcURL);
     void preregisterSandboxExtensionsForOptionallyFileBackedBlob(const Vector<String>& fileBackedPath, const SandboxExtension::HandleArray&);
-    void registerBlobURLOptionallyFileBacked(const WebCore::URL&, const WebCore::URL& srcURL, const String& fileBackedPath);
+    void registerBlobURLOptionallyFileBacked(const WebCore::URL&, const WebCore::URL& srcURL, const String& fileBackedPath, const String& contentType);
     void registerBlobURLForSlice(const WebCore::URL&, const WebCore::URL& srcURL, int64_t start, int64_t end);
     void blobSize(const WebCore::URL&, uint64_t& resultSize);
     void unregisterBlobURL(const WebCore::URL&);
@@ -103,12 +101,10 @@ private:
 
     void ensureLegacyPrivateBrowsingSession();
 
-    RefPtr<IPC::Connection> m_connection;
+    Ref<IPC::Connection> m_connection;
 
     HashMap<ResourceLoadIdentifier, RefPtr<NetworkResourceLoader>> m_networkResourceLoaders;
     HashMap<String, RefPtr<WebCore::BlobDataFileReference>> m_blobDataFileReferences;
 };
 
 } // namespace WebKit
-
-#endif // NetworkConnectionToWebProcess_h

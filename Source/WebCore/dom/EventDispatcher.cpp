@@ -27,6 +27,7 @@
 #include "EventDispatcher.h"
 
 #include "EventContext.h"
+#include "EventNames.h"
 #include "EventPath.h"
 #include "FrameView.h"
 #include "HTMLInputElement.h"
@@ -36,7 +37,6 @@
 #include "ScopedEventQueue.h"
 #include "ShadowRoot.h"
 #include "TouchEvent.h"
-#include <wtf/NeverDestroyed.h>
 
 namespace WebCore {
 
@@ -186,7 +186,8 @@ bool EventDispatcher::dispatchEvent(Node* origin, Event& event)
 
     event.setTarget(EventPath::eventTargetRespectingTargetRules(*node));
     event.setCurrentTarget(nullptr);
-    event.setEventPhase(0);
+    event.resetPropagationFlags();
+    event.setEventPhase(Event::NONE);
 
     if (clickHandlingState.stateful)
         downcast<HTMLInputElement>(*node).didDispatchClickEvent(event, clickHandlingState);

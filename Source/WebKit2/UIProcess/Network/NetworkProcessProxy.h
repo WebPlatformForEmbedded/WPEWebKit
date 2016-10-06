@@ -37,6 +37,7 @@
 
 namespace WebCore {
 class AuthenticationChallenge;
+class ProtectionSpace;
 class ResourceRequest;
 class SecurityOrigin;
 class SessionID;
@@ -92,15 +93,15 @@ private:
     void didSetAssertionState(AssertionState) override;
 
     // IPC::Connection::Client
-    void didReceiveMessage(IPC::Connection&, IPC::MessageDecoder&) override;
-    void didReceiveSyncMessage(IPC::Connection&, IPC::MessageDecoder&, std::unique_ptr<IPC::MessageEncoder>&) override;
+    void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
+    void didReceiveSyncMessage(IPC::Connection&, IPC::Decoder&, std::unique_ptr<IPC::Encoder>&) override;
     void didClose(IPC::Connection&) override;
     void didReceiveInvalidMessage(IPC::Connection&, IPC::StringReference messageReceiverName, IPC::StringReference messageName) override;
     IPC::ProcessType localProcessType() override { return IPC::ProcessType::UI; }
     IPC::ProcessType remoteProcessType() override { return IPC::ProcessType::Network; }
 
     // Message handlers
-    void didReceiveNetworkProcessProxyMessage(IPC::Connection&, IPC::MessageDecoder&);
+    void didReceiveNetworkProcessProxyMessage(IPC::Connection&, IPC::Decoder&);
     void didCreateNetworkConnectionToWebProcess(const IPC::Attachment&);
     void didReceiveAuthenticationChallenge(uint64_t pageID, uint64_t frameID, const WebCore::AuthenticationChallenge&, uint64_t challengeID);
     void didFetchWebsiteData(uint64_t callbackID, const WebsiteData&);
@@ -110,6 +111,9 @@ private:
     void logSampledDiagnosticMessage(uint64_t pageID, const String& message, const String& description);
     void logSampledDiagnosticMessageWithResult(uint64_t pageID, const String& message, const String& description, uint32_t result);
     void logSampledDiagnosticMessageWithValue(uint64_t pageID, const String& message, const String& description, const String& value);
+#if USE(PROTECTION_SPACE_AUTH_CALLBACK)
+    void canAuthenticateAgainstProtectionSpace(uint64_t loaderID, uint64_t pageID, uint64_t frameID, const WebCore::ProtectionSpace&);
+#endif
 
     // ProcessLauncher::Client
     void didFinishLaunching(ProcessLauncher*, IPC::Connection::Identifier) override;

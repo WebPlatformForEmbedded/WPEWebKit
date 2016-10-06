@@ -20,8 +20,7 @@
  *
  */
 
-#ifndef HTMLAreaElement_h
-#define HTMLAreaElement_h
+#pragma once
 
 #include "HTMLAnchorElement.h"
 #include "LayoutRect.h"
@@ -29,8 +28,8 @@
 
 namespace WebCore {
 
-class HitTestResult;
 class HTMLImageElement;
+class HitTestResult;
 class Path;
 
 class HTMLAreaElement final : public HTMLAnchorElement {
@@ -41,25 +40,25 @@ public:
 
     bool mapMouseEvent(LayoutPoint location, const LayoutSize&, HitTestResult&);
 
-    // FIXME: Use RenderElement* instead of RenderObject* once we upstream iOS's DOMUIKitExtensions.{h, mm}.
-    LayoutRect computeRect(RenderObject*) const;
+    // FIXME: Use RenderElement& instead of RenderObject*.
+    WEBCORE_EXPORT LayoutRect computeRect(RenderObject*) const;
     Path computePath(RenderObject*) const;
     Path computePathForFocusRing(const LayoutSize& elementSize) const;
 
     // The parent map's image.
-    HTMLImageElement* imageElement() const;
+    WEBCORE_EXPORT HTMLImageElement* imageElement() const;
     
 private:
     HTMLAreaElement(const QualifiedName&, Document&);
 
-    void parseAttribute(const QualifiedName&, const AtomicString&) override;
-    bool supportsFocus() const override;
-    String target() const override;
-    bool isKeyboardFocusable(KeyboardEvent*) const override;
-    bool isMouseFocusable() const override;
-    bool isFocusable() const override;
-    void updateFocusAppearance(SelectionRestorationMode, SelectionRevealMode) override;
-    void setFocus(bool) override;
+    void parseAttribute(const QualifiedName&, const AtomicString&) final;
+    bool supportsFocus() const final;
+    String target() const final;
+    bool isKeyboardFocusable(KeyboardEvent*) const final;
+    bool isMouseFocusable() const final;
+    bool isFocusable() const final;
+    void updateFocusAppearance(SelectionRestorationMode, SelectionRevealMode) final;
+    void setFocus(bool) final;
 
     enum Shape { Default, Poly, Rect, Circle, Unknown };
     Path getRegion(const LayoutSize&) const;
@@ -73,5 +72,3 @@ private:
 };
 
 } //namespace
-
-#endif

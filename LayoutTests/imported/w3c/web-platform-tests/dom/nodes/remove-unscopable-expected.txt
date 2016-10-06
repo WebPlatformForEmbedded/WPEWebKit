@@ -1,3 +1,8 @@
 
-FAIL remove() should be unscopable undefined is not an object (evaluating 'Element.prototype[Symbol.unscopables].remove')
+PASS before() should be unscopable 
+PASS after() should be unscopable 
+PASS replaceWith() should be unscopable 
+PASS remove() should be unscopable 
+PASS prepend() should be unscopable 
+PASS append() should be unscopable 
 

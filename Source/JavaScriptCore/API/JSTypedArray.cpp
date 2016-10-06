@@ -36,7 +36,6 @@
 #include "JSDataView.h"
 #include "JSGenericTypedArrayViewInlines.h"
 #include "JSTypedArrays.h"
-
 #include <wtf/RefPtr.h>
 
 using namespace JSC;
@@ -103,7 +102,7 @@ static JSObject* createTypedArray(ExecState* exec, JSTypedArrayType type, RefPtr
 {
     JSGlobalObject* globalObject = exec->lexicalGlobalObject();
     if (!buffer) {
-        exec->vm().throwException(exec, createOutOfMemoryError(exec));
+        throwOutOfMemoryError(exec);
         return nullptr;
     }
     switch (type) {

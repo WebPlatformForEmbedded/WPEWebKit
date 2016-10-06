@@ -35,8 +35,6 @@ WebInspector.LayerTreeDetailsSidebarPanel = class LayerTreeDetailsSidebarPanel e
 
         WebInspector.showShadowDOMSetting.addEventListener(WebInspector.Setting.Event.Changed, this._showShadowDOMSettingChanged, this);
 
-        window.addEventListener("resize", this._windowResized.bind(this));
-
         this._buildLayerInfoSection();
         this._buildDataGridSection();
         this._buildBottomBar();
@@ -50,8 +48,6 @@ WebInspector.LayerTreeDetailsSidebarPanel = class LayerTreeDetailsSidebarPanel e
 
         console.assert(this.parentSidebar);
 
-        this.needsRefresh();
-
         super.shown();
     }
 
@@ -62,7 +58,16 @@ WebInspector.LayerTreeDetailsSidebarPanel = class LayerTreeDetailsSidebarPanel e
         super.hidden();
     }
 
-    refresh()
+    // DOMDetailsSidebarPanel Overrides
+
+    supportsDOMNode(nodeToInspect)
+    {
+        return WebInspector.layerTreeManager.supported && nodeToInspect.nodeType() === Node.ELEMENT_NODE;
+    }
+
+    // Protected
+
+    layout()
     {
         if (!this.domNode)
             return;
@@ -73,30 +78,17 @@ WebInspector.LayerTreeDetailsSidebarPanel = class LayerTreeDetailsSidebarPanel e
         });
     }
 
-    // DOMDetailsSidebarPanel Overrides
-
-    supportsDOMNode(nodeToInspect)
-    {
-        return WebInspector.layerTreeManager.supported && nodeToInspect.nodeType() === Node.ELEMENT_NODE;
-    }
-
     // Private
 
     _layerTreeDidChange(event)
     {
-        this.needsRefresh();
+        this.needsLayout();
     }
 
     _showShadowDOMSettingChanged(event)
     {
         if (this.selected)
             this._updateDisplayWithLayers(this._layerForNode, this._unfilteredChildLayers);
-    }
-
-    _windowResized(event)
-    {
-        if (this._popover && this._popover.visible)
-            this._updatePopoverForSelectedNode();
     }
 
     _buildLayerInfoSection()
@@ -142,8 +134,9 @@ WebInspector.LayerTreeDetailsSidebarPanel = class LayerTreeDetailsSidebarPanel e
         this._dataGrid.addEventListener(WebInspector.DataGrid.Event.SortChanged, this._sortDataGrid, this);
         this._dataGrid.addEventListener(WebInspector.DataGrid.Event.SelectedNodeChanged, this._selectedDataGridNodeChanged, this);
 
-        this.sortColumnIdentifierSetting = new WebInspector.Setting("layer-tree-details-sidebar-panel-sort", "memory");
-        this.sortOrderSetting = new WebInspector.Setting("layer-tree-details-sidebar-panel-sort-order", WebInspector.DataGrid.SortOrder.Descending);
+        this._dataGrid.sortColumnIdentifier = "memory";
+        this._dataGrid.sortOrder = WebInspector.DataGrid.SortOrder.Descending;
+        this._dataGrid.createSettings("layer-tree-details-sidebar-panel");
 
         var element = this._dataGrid.element;
         element.addEventListener("focus", this._dataGridGainedFocus.bind(this), false);
@@ -331,8 +324,10 @@ WebInspector.LayerTreeDetailsSidebarPanel = class LayerTreeDetailsSidebarPanel e
             return;
 
         var popover = this._popover;
-        if (!popover)
+        if (!popover) {
             popover = this._popover = new WebInspector.Popover;
+            popover.windowResizeHandler = () => { this._updatePopoverForSelectedNode(); };
+        }
 
         var targetFrame = WebInspector.Rect.rectFromClientRect(dataGridNode.element.getBoundingClientRect());
 

@@ -28,7 +28,6 @@
 
 #include "APIArray.h"
 #include "APIData.h"
-#include "Arguments.h"
 #include "InjectedBundleScriptWorld.h"
 #include "NotificationPermissionRequestManager.h"
 #include "SessionTracker.h"
@@ -66,6 +65,7 @@
 #include <WebCore/PageGroup.h>
 #include <WebCore/PrintContext.h>
 #include <WebCore/ResourceHandle.h>
+#include <WebCore/RuntimeEnabledFeatures.h>
 #include <WebCore/ScriptController.h>
 #include <WebCore/SecurityOrigin.h>
 #include <WebCore/SecurityPolicy.h>
@@ -75,9 +75,6 @@
 #include <WebCore/UserScript.h>
 #include <WebCore/UserStyleSheet.h>
 
-#if ENABLE(CSS_REGIONS) || ENABLE(CSS_COMPOSITING)
-#include <WebCore/RuntimeEnabledFeatures.h>
-#endif
 
 #if ENABLE(NOTIFICATIONS) || ENABLE(LEGACY_NOTIFICATIONS)
 #include "WebNotificationManager.h"
@@ -90,13 +87,13 @@ namespace WebKit {
 
 PassRefPtr<InjectedBundle> InjectedBundle::create(const WebProcessCreationParameters& parameters, API::Object* initializationUserData)
 {
-    RefPtr<InjectedBundle> bundle = adoptRef(new InjectedBundle(parameters));
+    auto bundle = adoptRef(*new InjectedBundle(parameters));
 
     bundle->m_sandboxExtension = SandboxExtension::create(parameters.injectedBundlePathExtensionHandle);
     if (!bundle->initialize(parameters, initializationUserData))
         return nullptr;
 
-    return bundle.release();
+    return WTFMove(bundle);
 }
 
 InjectedBundle::InjectedBundle(const WebProcessCreationParameters& parameters)
@@ -196,6 +193,9 @@ void InjectedBundle::overrideBoolPreferenceForTestRunner(WebPageGroupProxy* page
     if (preference == "WebKitShadowDOMEnabled")
         RuntimeEnabledFeatures::sharedFeatures().setShadowDOMEnabled(enabled);
 
+    if (preference == "WebKitDOMIteratorEnabled")
+        RuntimeEnabledFeatures::sharedFeatures().setDOMIteratorEnabled(enabled);
+
 #if ENABLE(CSS_GRID_LAYOUT)
     if (preference == "WebKitCSSGridLayoutEnabled")
         RuntimeEnabledFeatures::sharedFeatures().setCSSGridLayoutEnabled(enabled);
@@ -230,7 +230,8 @@ void InjectedBundle::overrideBoolPreferenceForTestRunner(WebPageGroupProxy* page
     macro(WebKitEnableCaretBrowsing, CaretBrowsingEnabled, caretBrowsingEnabled) \
     macro(WebKitDisplayImagesKey, LoadsImagesAutomatically, loadsImagesAutomatically) \
     macro(WebKitMediaStreamEnabled, MediaStreamEnabled, mediaStreamEnabled) \
-    macro(WebKitHTTPEquivEnabled, HttpEquivEnabled, httpEquivEnabled)
+    macro(WebKitHTTPEquivEnabled, HttpEquivEnabled, httpEquivEnabled) \
+    macro(WebKitVisualViewportEnabled, VisualViewportEnabled, visualViewportEnabled)
 
 #define OVERRIDE_PREFERENCE_AND_SET_IN_EXISTING_PAGES(TestRunnerName, SettingsName, WebPreferencesName) \
     if (preference == #TestRunnerName) { \

@@ -38,7 +38,7 @@ NetworkProcessCreationParameters::NetworkProcessCreationParameters()
 {
 }
 
-void NetworkProcessCreationParameters::encode(IPC::ArgumentEncoder& encoder) const
+void NetworkProcessCreationParameters::encode(IPC::Encoder& encoder) const
 {
     encoder << privateBrowsingEnabled;
     encoder.encodeEnum(cacheModel);
@@ -74,6 +74,7 @@ void NetworkProcessCreationParameters::encode(IPC::ArgumentEncoder& encoder) con
 #if TARGET_OS_IPHONE || (PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101100)
     IPC::encode(encoder, networkATSContext.get());
 #endif
+    encoder << cookieStoragePartitioningEnabled;
 #endif
 #if USE(SOUP)
     encoder << cookiePersistentStoragePath;
@@ -82,9 +83,12 @@ void NetworkProcessCreationParameters::encode(IPC::ArgumentEncoder& encoder) con
     encoder << ignoreTLSErrors;
     encoder << languages;
 #endif
+#if OS(LINUX)
+    encoder << memoryPressureMonitorHandle;
+#endif
 }
 
-bool NetworkProcessCreationParameters::decode(IPC::ArgumentDecoder& decoder, NetworkProcessCreationParameters& result)
+bool NetworkProcessCreationParameters::decode(IPC::Decoder& decoder, NetworkProcessCreationParameters& result)
 {
     if (!decoder.decode(result.privateBrowsingEnabled))
         return false;
@@ -143,6 +147,8 @@ bool NetworkProcessCreationParameters::decode(IPC::ArgumentDecoder& decoder, Net
     if (!IPC::decode(decoder, result.networkATSContext))
         return false;
 #endif
+    if (!decoder.decode(result.cookieStoragePartitioningEnabled))
+        return false;
 #endif
 
 #if USE(SOUP)
@@ -155,6 +161,11 @@ bool NetworkProcessCreationParameters::decode(IPC::ArgumentDecoder& decoder, Net
     if (!decoder.decode(result.ignoreTLSErrors))
         return false;
     if (!decoder.decode(result.languages))
+        return false;
+#endif
+
+#if OS(LINUX)
+    if (!decoder.decode(result.memoryPressureMonitorHandle))
         return false;
 #endif
 

@@ -492,6 +492,7 @@ public:
 
     // B3 has additional pseudo-opcodes for returning, when it wants to signal that the return
     // consumes some register in some way.
+    void retVoid() { ret(); }
     void ret32(RegisterID) { ret(); }
     void ret64(RegisterID) { ret(); }
     void retFloat(FPRegisterID) { ret(); }
@@ -790,7 +791,8 @@ public:
     using MacroAssemblerBase::branchTest8;
     Jump branchTest8(ResultCondition cond, ExtendedAddress address, TrustedImm32 mask = TrustedImm32(-1))
     {
-        return MacroAssemblerBase::branchTest8(cond, Address(address.base, address.offset), mask);
+        TrustedImm32 mask8(static_cast<int8_t>(mask.m_value));
+        return MacroAssemblerBase::branchTest8(cond, Address(address.base, address.offset), mask8);
     }
 
 #else // !CPU(X86_64)

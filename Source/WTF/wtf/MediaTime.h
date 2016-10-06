@@ -88,6 +88,7 @@ public:
     } ComparisonFlags;
 
     ComparisonFlags compare(const MediaTime& rhs) const;
+    bool isBetween(const MediaTime&, const MediaTime&) const;
 
     bool isValid() const { return m_timeFlags & Valid; }
     bool isInvalid() const { return !isValid(); }
@@ -118,7 +119,7 @@ public:
 
     static const int32_t DefaultTimeScale = 10000000;
     static const int32_t MaximumTimeScale;
-    static const double FuzzinessThreshold;
+
 private:
     void setTimeScale(int32_t);
 

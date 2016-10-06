@@ -41,16 +41,16 @@
 
 namespace WebCore {
 
-Ref<DedicatedWorkerGlobalScope> DedicatedWorkerGlobalScope::create(const URL& url, const String& userAgent, DedicatedWorkerThread& thread, const ContentSecurityPolicyResponseHeaders& contentSecurityPolicyResponseHeaders, bool shouldBypassMainWorldContentSecurityPolicy, PassRefPtr<SecurityOrigin> topOrigin, IDBClient::IDBConnectionProxy* connectionProxy)
+Ref<DedicatedWorkerGlobalScope> DedicatedWorkerGlobalScope::create(const URL& url, const String& userAgent, DedicatedWorkerThread& thread, const ContentSecurityPolicyResponseHeaders& contentSecurityPolicyResponseHeaders, bool shouldBypassMainWorldContentSecurityPolicy, PassRefPtr<SecurityOrigin> topOrigin, IDBClient::IDBConnectionProxy* connectionProxy, SocketProvider* socketProvider)
 {
-    Ref<DedicatedWorkerGlobalScope> context = adoptRef(*new DedicatedWorkerGlobalScope(url, userAgent, thread, shouldBypassMainWorldContentSecurityPolicy, topOrigin, connectionProxy));
+    Ref<DedicatedWorkerGlobalScope> context = adoptRef(*new DedicatedWorkerGlobalScope(url, userAgent, thread, shouldBypassMainWorldContentSecurityPolicy, topOrigin, connectionProxy, socketProvider));
     if (!shouldBypassMainWorldContentSecurityPolicy)
         context->applyContentSecurityPolicyResponseHeaders(contentSecurityPolicyResponseHeaders);
     return context;
 }
 
-DedicatedWorkerGlobalScope::DedicatedWorkerGlobalScope(const URL& url, const String& userAgent, DedicatedWorkerThread& thread, bool shouldBypassMainWorldContentSecurityPolicy, PassRefPtr<SecurityOrigin> topOrigin, IDBClient::IDBConnectionProxy* connectionProxy)
-    : WorkerGlobalScope(url, userAgent, thread, shouldBypassMainWorldContentSecurityPolicy, topOrigin, connectionProxy)
+DedicatedWorkerGlobalScope::DedicatedWorkerGlobalScope(const URL& url, const String& userAgent, DedicatedWorkerThread& thread, bool shouldBypassMainWorldContentSecurityPolicy, PassRefPtr<SecurityOrigin> topOrigin, IDBClient::IDBConnectionProxy* connectionProxy, SocketProvider* socketProvider)
+    : WorkerGlobalScope(url, userAgent, thread, shouldBypassMainWorldContentSecurityPolicy, topOrigin, connectionProxy, socketProvider)
 {
 }
 
@@ -61,14 +61,6 @@ DedicatedWorkerGlobalScope::~DedicatedWorkerGlobalScope()
 EventTargetInterface DedicatedWorkerGlobalScope::eventTargetInterface() const
 {
     return DedicatedWorkerGlobalScopeEventTargetInterfaceType;
-}
-
-void DedicatedWorkerGlobalScope::postMessage(RefPtr<SerializedScriptValue>&& message, MessagePort* port, ExceptionCode& ec)
-{
-    MessagePortArray ports;
-    if (port)
-        ports.append(port);
-    postMessage(WTFMove(message), &ports, ec);
 }
 
 void DedicatedWorkerGlobalScope::postMessage(RefPtr<SerializedScriptValue>&& message, const MessagePortArray* ports, ExceptionCode& ec)

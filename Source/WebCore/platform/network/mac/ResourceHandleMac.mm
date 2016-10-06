@@ -226,6 +226,11 @@ void ResourceHandle::createNSURLConnection(id delegate, bool shouldUseCredential
 #if HAVE(TIMINGDATAOPTIONS)
     [propertyDictionary setObject:@{@"_kCFURLConnectionPropertyTimingDataOptions": @(_TimingDataOptionsEnableW3CNavigationTiming)} forKey:@"kCFURLConnectionURLConnectionProperties"];
 #endif
+
+    // This is used to signal that to CFNetwork that this connection should be considered
+    // web content for purposes of App Transport Security.
+    [propertyDictionary setObject:@{@"NSAllowsArbitraryLoadsInWebContent": @YES} forKey:@"_kCFURLConnectionPropertyATSFrameworkOverrides"];
+
     d->m_connection = adoptNS([[NSURLConnection alloc] _initWithRequest:nsRequest delegate:delegate usesCache:usesCache maxContentLength:0 startImmediately:NO connectionProperties:propertyDictionary]);
 }
 
@@ -617,16 +622,6 @@ bool ResourceHandle::tryHandlePasswordBasedAuthentication(const AuthenticationCh
     return false;
 }
 
-void ResourceHandle::didCancelAuthenticationChallenge(const AuthenticationChallenge& challenge)
-{
-    ASSERT(d->m_currentMacChallenge);
-    ASSERT(d->m_currentMacChallenge == challenge.nsURLAuthenticationChallenge());
-    ASSERT(!d->m_currentWebChallenge.isNull());
-
-    if (client())
-        client()->didCancelAuthenticationChallenge(this, challenge);
-}
-
 #if USE(PROTECTION_SPACE_AUTH_CALLBACK)
 bool ResourceHandle::canAuthenticateAgainstProtectionSpace(const ProtectionSpace& protectionSpace)
 {
@@ -742,14 +737,14 @@ void ResourceHandle::continueWillCacheResponse(NSCachedURLResponse *response)
 
 #if USE(CFNETWORK)
     
-void ResourceHandle::getConnectionTimingData(CFURLConnectionRef connection, ResourceLoadTiming& timing)
+void ResourceHandle::getConnectionTimingData(CFURLConnectionRef connection, NetworkLoadTiming& timing)
 {
     copyTimingData((__bridge NSDictionary*)adoptCF(_CFURLConnectionCopyTimingData(connection)).get(), timing);
 }
     
 #else
     
-void ResourceHandle::getConnectionTimingData(NSURLConnection *connection, ResourceLoadTiming& timing)
+void ResourceHandle::getConnectionTimingData(NSURLConnection *connection, NetworkLoadTiming& timing)
 {
     copyTimingData([connection _timingData], timing);
 }

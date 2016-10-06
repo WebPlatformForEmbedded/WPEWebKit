@@ -23,8 +23,7 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef NetworkProcess_h
-#define NetworkProcess_h
+#pragma once
 
 #include "CacheModel.h"
 #include "ChildProcess.h"
@@ -36,8 +35,8 @@
 #include <WebCore/Proxy.h>
 #include <memory>
 #include <wtf/Forward.h>
+#include <wtf/Function.h>
 #include <wtf/NeverDestroyed.h>
-#include <wtf/NoncopyableFunction.h>
 #include <wtf/RetainPtr.h>
 
 #if PLATFORM(IOS)
@@ -48,6 +47,7 @@ namespace WebCore {
 class DownloadID;
 class CertificateInfo;
 class NetworkStorageSession;
+class ProtectionSpace;
 class SecurityOrigin;
 class SessionID;
 struct SecurityOriginData;
@@ -57,6 +57,7 @@ namespace WebKit {
 class AuthenticationManager;
 class NetworkConnectionToWebProcess;
 class NetworkProcessSupplement;
+class NetworkResourceLoader;
 enum class WebsiteDataFetchOption;
 enum class WebsiteDataType;
 struct NetworkProcessCreationParameters;
@@ -107,14 +108,18 @@ public:
 #endif
 
 #if USE(NETWORK_SESSION)
-    void findPendingDownloadLocation(NetworkDataTask&, ResponseCompletionHandler, const WebCore::ResourceRequest&);
+    void findPendingDownloadLocation(NetworkDataTask&, ResponseCompletionHandler&&, const WebCore::ResourceRequest&, const WebCore::ResourceResponse&);
 #endif
-    
+
+#if USE(PROTECTION_SPACE_AUTH_CALLBACK)
+    void canAuthenticateAgainstProtectionSpace(NetworkResourceLoader&, const WebCore::ProtectionSpace&);
+#endif
+
     void prefetchDNS(const String&);
 
     void ensurePrivateBrowsingSession(WebCore::SessionID);
 
-    void grantSandboxExtensionsToDatabaseProcessForBlobs(const Vector<String>& filenames, NoncopyableFunction<void ()>&& completionHandler);
+    void grantSandboxExtensionsToDatabaseProcessForBlobs(const Vector<String>& filenames, Function<void ()>&& completionHandler);
 
 private:
     NetworkProcess();
@@ -136,8 +141,8 @@ private:
     bool shouldTerminate() override;
 
     // IPC::Connection::Client
-    void didReceiveMessage(IPC::Connection&, IPC::MessageDecoder&) override;
-    void didReceiveSyncMessage(IPC::Connection&, IPC::MessageDecoder&, std::unique_ptr<IPC::MessageEncoder>&) override;
+    void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
+    void didReceiveSyncMessage(IPC::Connection&, IPC::Decoder&, std::unique_ptr<IPC::Encoder>&) override;
     void didClose(IPC::Connection&) override;
     void didReceiveInvalidMessage(IPC::Connection&, IPC::StringReference messageReceiverName, IPC::StringReference messageName) override;
     IPC::ProcessType localProcessType() override { return IPC::ProcessType::Network; }
@@ -153,9 +158,9 @@ private:
 #endif
 
     // Message Handlers
-    void didReceiveNetworkProcessMessage(IPC::Connection&, IPC::MessageDecoder&);
-    void didReceiveSyncNetworkProcessMessage(IPC::Connection&, IPC::MessageDecoder&, std::unique_ptr<IPC::MessageEncoder>&);
-    void initializeNetworkProcess(const NetworkProcessCreationParameters&);
+    void didReceiveNetworkProcessMessage(IPC::Connection&, IPC::Decoder&);
+    void didReceiveSyncNetworkProcessMessage(IPC::Connection&, IPC::Decoder&, std::unique_ptr<IPC::Encoder>&);
+    void initializeNetworkProcess(NetworkProcessCreationParameters&&);
     void createNetworkConnectionToWebProcess();
     void destroyPrivateBrowsingSession(WebCore::SessionID);
 
@@ -171,8 +176,11 @@ private:
     void downloadRequest(WebCore::SessionID, DownloadID, const WebCore::ResourceRequest&);
     void resumeDownload(WebCore::SessionID, DownloadID, const IPC::DataReference& resumeData, const String& path, const SandboxExtension::Handle&);
     void cancelDownload(DownloadID);
+#if USE(PROTECTION_SPACE_AUTH_CALLBACK)
+    void continueCanAuthenticateAgainstProtectionSpace(uint64_t resourceLoadIdentifier, bool canAuthenticate);
+#endif
 #if USE(NETWORK_SESSION)
-    void continueCanAuthenticateAgainstProtectionSpace(DownloadID, bool canAuthenticate);
+    void continueCanAuthenticateAgainstProtectionSpaceDownload(DownloadID, bool canAuthenticate);
     void continueWillSendRequest(DownloadID, WebCore::ResourceRequest&&);
     void continueDecidePendingDownloadDestination(DownloadID, String destination, const SandboxExtension::Handle& sandboxExtensionHandle, bool allowOverwrite);
 #endif
@@ -191,7 +199,7 @@ private:
 #endif
 
     // Platform Helpers
-    void platformSetCacheModel(CacheModel);
+    void platformSetURLCacheSize(unsigned urlCacheMemoryCapacity, uint64_t urlCacheDiskCapacity);
 
     // Connections to WebProcesses.
     Vector<RefPtr<NetworkConnectionToWebProcess>> m_webProcessConnections;
@@ -207,10 +215,12 @@ private:
     typedef HashMap<const char*, std::unique_ptr<NetworkProcessSupplement>, PtrHash<const char*>> NetworkProcessSupplementMap;
     NetworkProcessSupplementMap m_supplements;
 
-    HashMap<uint64_t, NoncopyableFunction<void ()>> m_sandboxExtensionForBlobsCompletionHandlers;
+    HashMap<uint64_t, Function<void ()>> m_sandboxExtensionForBlobsCompletionHandlers;
+    HashMap<uint64_t, Ref<NetworkResourceLoader>> m_waitingNetworkResourceLoaders;
 
 #if PLATFORM(COCOA)
     void platformInitializeNetworkProcessCocoa(const NetworkProcessCreationParameters&);
+    void setCookieStoragePartitioningEnabled(bool);
 
     // FIXME: We'd like to be able to do this without the #ifdef, but WorkQueue + BinarySemaphore isn't good enough since
     // multiple requests to clear the cache can come in before previous requests complete, and we need to wait for all of them.
@@ -224,5 +234,3 @@ private:
 };
 
 } // namespace WebKit
-
-#endif // NetworkProcess_h

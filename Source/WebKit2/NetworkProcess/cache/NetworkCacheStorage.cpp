@@ -38,7 +38,6 @@
 #include <wtf/RandomNumber.h>
 #include <wtf/RunLoop.h>
 #include <wtf/text/CString.h>
-#include <wtf/text/StringBuilder.h>
 
 namespace WebKit {
 namespace NetworkCache {
@@ -99,9 +98,9 @@ bool Storage::ReadOperation::finish()
 struct Storage::WriteOperation {
     WTF_MAKE_FAST_ALLOCATED;
 public:
-    WriteOperation(const Record& record, const MappedBodyHandler& mappedBodyHandler)
+    WriteOperation(const Record& record, MappedBodyHandler&& mappedBodyHandler)
         : record(record)
-        , mappedBodyHandler(mappedBodyHandler)
+        , mappedBodyHandler(WTFMove(mappedBodyHandler))
     { }
     
     const Record record;
@@ -1018,10 +1017,7 @@ void Storage::deleteOldVersions()
                 return;
             if (directoryVersion >= version)
                 return;
-
 #if PLATFORM(MAC)
-            // Allow the last stable version of the cache to co-exist with the latest development one on Mac.
-            const unsigned lastStableVersion = 4;
             if (directoryVersion == lastStableVersion)
                 return;
 #endif

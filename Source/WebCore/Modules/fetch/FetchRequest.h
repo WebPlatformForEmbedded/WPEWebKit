@@ -45,11 +45,14 @@ typedef int ExceptionCode;
 
 class FetchRequest final : public FetchBodyOwner {
 public:
-    static RefPtr<FetchRequest> create(ScriptExecutionContext&, FetchRequest&, const Dictionary&, ExceptionCode&);
-    static RefPtr<FetchRequest> create(ScriptExecutionContext&, const String&, const Dictionary&, ExceptionCode&);
+    static Ref<FetchRequest> create(ScriptExecutionContext& context) { return adoptRef(*new FetchRequest(context, { }, FetchHeaders::create(FetchHeaders::Guard::Request), { })); }
+
+    FetchHeaders* initializeWith(FetchRequest&, const Dictionary&, ExceptionCode&);
+    FetchHeaders* initializeWith(const String&, const Dictionary&, ExceptionCode&);
+    void setBody(JSC::ExecState&, JSC::JSValue, FetchRequest*, ExceptionCode&);
 
     const String& method() const { return m_internalRequest.request.httpMethod(); }
-    const String& url() const { return m_internalRequest.request.url().string(); }
+    const String& url() const;
     FetchHeaders& headers() { return m_headers.get(); }
 
     using Type = FetchOptions::Type;
@@ -92,12 +95,15 @@ public:
 private:
     FetchRequest(ScriptExecutionContext&, FetchBody&&, Ref<FetchHeaders>&&, InternalRequest&&);
 
+    void initializeOptions(const Dictionary&, ExceptionCode&);
+
     // ActiveDOMObject API.
     const char* activeDOMObjectName() const final;
     bool canSuspendForDocumentSuspension() const final;
 
     Ref<FetchHeaders> m_headers;
     InternalRequest m_internalRequest;
+    mutable String m_requestURL;
 };
 
 inline FetchRequest::FetchRequest(ScriptExecutionContext& context, FetchBody&& body, Ref<FetchHeaders>&& headers, InternalRequest&& internalRequest)

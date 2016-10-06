@@ -303,6 +303,16 @@ static _WKStorageBlockingPolicy toAPI(WebCore::SecurityOrigin::StorageBlockingPo
     _preferences->setDisplayListDrawingEnabled(displayListDrawingEnabled);
 }
 
+- (BOOL)_visualViewportEnabled
+{
+    return _preferences->visualViewportEnabled();
+}
+
+- (void)_setVisualViewportEnabled:(BOOL)_visualViewportEnabled
+{
+    _preferences->setVisualViewportEnabled(_visualViewportEnabled);
+}
+
 - (BOOL)_textAutosizingEnabled
 {
     return _preferences->textAutosizingEnabled();
@@ -433,7 +443,7 @@ static _WKStorageBlockingPolicy toAPI(WebCore::SecurityOrigin::StorageBlockingPo
     _preferences->setFixedFontFamily(fixedPitchFontFamily);
 }
 
-+ (WK_ARRAY(_WKExperimentalFeature *) *)_experimentalFeatures
++ (NSArray<_WKExperimentalFeature *> *)_experimentalFeatures
 {
     auto features = WebKit::WebPreferences::experimentalFeatures();
     return [wrapper(API::Array::create(WTFMove(features)).leakRef()) autorelease];
@@ -449,9 +459,21 @@ static _WKStorageBlockingPolicy toAPI(WebCore::SecurityOrigin::StorageBlockingPo
     _preferences->setEnabledForFeature(value, *feature->_experimentalFeature);
 }
 
-#if USE(APPLE_INTERNAL_SDK)
-#import <WebKitAdditions/WKPreferencesPrivateMethods.mm>
+- (BOOL)_applePayCapabilityDisclosureAllowed
+{
+#if ENABLE(APPLE_PAY)
+    return _preferences->applePayCapabilityDisclosureAllowed();
+#else
+    return NO;
 #endif
+}
+
+- (void)_setApplePayCapabilityDisclosureAllowed:(BOOL)applePayCapabilityDisclosureAllowed
+{
+#if ENABLE(APPLE_PAY)
+    _preferences->setApplePayCapabilityDisclosureAllowed(applePayCapabilityDisclosureAllowed);
+#endif
+}
 
 @end
 

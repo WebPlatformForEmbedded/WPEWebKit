@@ -114,6 +114,7 @@ set(WTF_HEADERS
     UniqueRef.h
     VMTags.h
     ValueCheck.h
+    Variant.h
     Vector.h
     VectorTraits.h
     WTFThreadData.h
@@ -140,6 +141,7 @@ set(WTF_HEADERS
     text/CString.h
     text/IntegerToStringConversion.h
     text/LChar.h
+    text/LineBreakIteratorPoolICU.h
     text/StringBuffer.h
     text/StringCommon.h
     text/StringHash.h
@@ -147,8 +149,14 @@ set(WTF_HEADERS
     text/StringView.h
     text/SymbolImpl.h
     text/SymbolRegistry.h
+    text/TextBreakIterator.h
+    text/TextBreakIteratorInternalICU.h
     text/UniquedStringImpl.h
     text/WTFString.h
+
+    text/icu/UTextProvider.h
+    text/icu/UTextProviderLatin1.h
+    text/icu/UTextProviderUTF16.h
 
     threads/BinarySemaphore.h
 
@@ -221,7 +229,12 @@ set(WTF_SOURCES
     text/StringStatics.cpp
     text/StringView.cpp
     text/SymbolRegistry.cpp
+    text/TextBreakIterator.cpp
     text/WTFString.cpp
+
+    text/icu/UTextProvider.cpp
+    text/icu/UTextProviderLatin1.cpp
+    text/icu/UTextProviderUTF16.cpp
 
     threads/BinarySemaphore.cpp
 
@@ -234,6 +247,7 @@ set(WTF_INCLUDE_DIRECTORIES
     "${WTF_DIR}/wtf"
     "${WTF_DIR}/wtf/dtoa"
     "${WTF_DIR}/wtf/text"
+    "${WTF_DIR}/wtf/text/icu"
     "${WTF_DIR}/wtf/threads"
     "${WTF_DIR}/wtf/unicode"
     "${THIRDPARTY_DIR}"
@@ -265,6 +279,7 @@ set(WTF_SYSTEM_INCLUDE_DIRECTORIES
     ${ICU_INCLUDE_DIRS}
 )
 list(APPEND WTF_LIBRARIES
+    ${ICU_DATA_LIBRARIES}
     ${ICU_I18N_LIBRARIES}
     ${ICU_LIBRARIES}
 )
@@ -294,4 +309,16 @@ WEBKIT_FRAMEWORK(WTF)
 if (MSVC)
     set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} /SUBSYSTEM:WINDOWS")
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /SUBSYSTEM:WINDOWS")
+
+    add_custom_command(
+        TARGET WTF
+        PRE_BUILD
+        COMMAND ${PERL_EXECUTABLE} ${WEBKIT_LIBRARIES_DIR}/tools/scripts/auto-version.pl ${DERIVED_SOURCES_DIR}
+        VERBATIM)
+
+    add_custom_command(
+        TARGET WTF
+        POST_BUILD
+        COMMAND ${PERL_EXECUTABLE} ${WEBKIT_LIBRARIES_DIR}/tools/scripts/version-stamp.pl ${DERIVED_SOURCES_DIR} $<TARGET_FILE:WTF>
+        VERBATIM)
 endif ()

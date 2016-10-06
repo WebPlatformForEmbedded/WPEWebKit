@@ -91,7 +91,9 @@ public:
     static float convertTextStrokeWidth(StyleResolver&, CSSValue&);
     static LineBoxContain convertLineBoxContain(StyleResolver&, CSSValue&);
     static TextDecorationSkip convertTextDecorationSkip(StyleResolver&, CSSValue&);
+#if ENABLE(CSS_SHAPES)
     static PassRefPtr<ShapeValue> convertShapeValue(StyleResolver&, CSSValue&);
+#endif
 #if ENABLE(CSS_SCROLL_SNAP)
     static std::unique_ptr<ScrollSnapPoints> convertScrollSnapPoints(StyleResolver&, CSSValue&);
     static LengthSize convertSnapCoordinatePair(StyleResolver&, CSSValue&, size_t offset = 0);
@@ -99,6 +101,7 @@ public:
 #endif
 #if ENABLE(CSS_GRID_LAYOUT)
     static GridTrackSize convertGridTrackSize(StyleResolver&, CSSValue&);
+    static Vector<GridTrackSize> convertGridTrackSizeList(StyleResolver&, CSSValue&);
     static Optional<GridPosition> convertGridPosition(StyleResolver&, CSSValue&);
     static GridAutoFlow convertGridAutoFlow(StyleResolver&, CSSValue&);
 #endif // ENABLE(CSS_GRID_LAYOUT)
@@ -727,11 +730,7 @@ inline TextDecorationSkip StyleBuilderConverter::convertTextDecorationSkip(Style
 #if ENABLE(CSS_SHAPES)
 static inline bool isImageShape(const CSSValue& value)
 {
-    return is<CSSImageValue>(value)
-#if ENABLE(CSS_IMAGE_SET)
-        || is<CSSImageSetValue>(value)
-#endif 
-        || is<CSSImageGeneratorValue>(value);
+    return is<CSSImageValue>(value) || is<CSSImageSetValue>(value) || is<CSSImageGeneratorValue>(value);
 }
 
 inline PassRefPtr<ShapeValue> StyleBuilderConverter::convertShapeValue(StyleResolver& styleResolver, CSSValue& value)
@@ -762,7 +761,7 @@ inline PassRefPtr<ShapeValue> StyleBuilderConverter::convertShapeValue(StyleReso
     }
 
     if (shape)
-        return ShapeValue::createShapeValue(shape.release(), referenceBox);
+        return ShapeValue::createShapeValue(WTFMove(shape), referenceBox);
 
     if (referenceBox != BoxMissing)
         return ShapeValue::createBoxShapeValue(referenceBox);
@@ -788,7 +787,6 @@ inline std::unique_ptr<ScrollSnapPoints> StyleBuilderConverter::convertScrollSna
         return points;
     }
 
-    points->hasRepeat = false;
     for (auto& currentValue : downcast<CSSValueList>(value)) {
         auto& itemValue = downcast<CSSPrimitiveValue>(currentValue.get());
         if (auto* lengthRepeat = itemValue.getLengthRepeatValue()) {
@@ -989,6 +987,20 @@ inline void StyleBuilderConverter::createImplicitNamedGridLinesFromGridArea(cons
             std::sort(endVector.begin(), endVector.end());
         }
     }
+}
+
+inline Vector<GridTrackSize> StyleBuilderConverter::convertGridTrackSizeList(StyleResolver& styleResolver, CSSValue& value)
+{
+    ASSERT(value.isValueList());
+    auto& valueList = downcast<CSSValueList>(value);
+    Vector<GridTrackSize> trackSizes;
+    trackSizes.reserveInitialCapacity(valueList.length());
+    for (auto& currValue : valueList) {
+        ASSERT(!currValue->isGridLineNamesValue());
+        ASSERT(!currValue->isGridAutoRepeatValue());
+        trackSizes.uncheckedAppend(convertGridTrackSize(styleResolver, currValue));
+    }
+    return trackSizes;
 }
 
 inline GridTrackSize StyleBuilderConverter::convertGridTrackSize(StyleResolver& styleResolver, CSSValue& value)

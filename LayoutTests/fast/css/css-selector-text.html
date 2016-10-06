@@ -77,8 +77,11 @@ testSelectorRoundTrip('*|a');
 testSelectorRoundTrip('n|a');
 testSelectorRoundTrip('*|*');
 testSelectorRoundTrip('n|*');
+testSelectorRoundTrip('|a');
+testSelectorRoundTrip('|*');
 testSelectorRoundTrip('[*|a]');
 testSelectorRoundTrip('[n|a]');
+shouldBe("parseThenSerializeRule('[|a] { }')", "'[a] { }'");
 
 debug('');
 
@@ -307,6 +310,34 @@ testSelectorRoundTrip("a[b].c#d::-webkit-input-placeholder");
 
 debug('');
 
+testSelectorRoundTrip("a[b]:default");
+testSelectorRoundTrip("a.b:default");
+testSelectorRoundTrip("a#b:default");
+testSelectorRoundTrip("a[b].c#d:default");
+
+debug('');
+
+testSelectorRoundTrip("a[b]:in-range");
+testSelectorRoundTrip("a.b:in-range");
+testSelectorRoundTrip("a#b:in-range");
+testSelectorRoundTrip("a[b].c#d:in-range");
+
+debug('');
+
+testSelectorRoundTrip("a[b]:out-of-range");
+testSelectorRoundTrip("a.b:out-of-range");
+testSelectorRoundTrip("a#b:out-of-range");
+testSelectorRoundTrip("a[b].c#d:out-of-range");
+
+debug('');
+
+testSelectorRoundTrip("a[b]:focus-within");
+testSelectorRoundTrip("a.b:focus-within");
+testSelectorRoundTrip("a#b:focus-within");
+testSelectorRoundTrip("a[b].c#d:focus-within");
+
+debug('');
+
 testSelectorRoundTrip('input:not([type="file"]):focus');
 testSelectorRoundTrip(':-webkit-any([type="file"])');
 testSelectorRoundTrip(':-webkit-any(:hover)');
@@ -326,7 +357,6 @@ testSelectorRoundTrip(':not(:any-link)');
 debug('');
 
 shouldBe("parseThenSerializeRule('*:active { }')", "':active { }'");
-shouldBe("parseThenSerializeRule('|a { }')", "'a { }'");
 
 debug('');
 

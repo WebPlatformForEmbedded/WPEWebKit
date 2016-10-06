@@ -351,12 +351,25 @@ inline void CanvasRenderingContext2D::FontProxy::drawBidiText(GraphicsContext& c
     context.drawBidiText(m_font, run, point, action);
 }
 
+void CanvasRenderingContext2D::realizeSaves()
+{
+    if (m_unrealizedSaveCount)
+        realizeSavesLoop();
+
+    if (m_unrealizedSaveCount) {
+        static NeverDestroyed<String> consoleMessage(ASCIILiteral("CanvasRenderingContext2D.save() has been called without a matching restore() too many times. Ignoring save()."));
+        canvas()->document().addConsoleMessage(MessageSource::Rendering, MessageLevel::Error, consoleMessage);
+    }
+}
+
 void CanvasRenderingContext2D::realizeSavesLoop()
 {
     ASSERT(m_unrealizedSaveCount);
     ASSERT(m_stateStack.size() >= 1);
     GraphicsContext* context = drawingContext();
     do {
+        if (m_stateStack.size() > MaxSaveCount)
+            break;
         m_stateStack.append(state());
         if (context)
             context->save();
@@ -632,16 +645,6 @@ void CanvasRenderingContext2D::setLineDashOffset(float offset)
     applyLineDash();
 }
 
-float CanvasRenderingContext2D::webkitLineDashOffset() const
-{
-    return lineDashOffset();
-}
-
-void CanvasRenderingContext2D::setWebkitLineDashOffset(float offset)
-{
-    setLineDashOffset(offset);
-}
-
 void CanvasRenderingContext2D::applyLineDash() const
 {
     GraphicsContext* c = drawingContext();
@@ -786,7 +789,7 @@ void CanvasRenderingContext2D::transform(float m11, float m12, float m21, float 
 
     realizeSaves();
 
-    if (auto inverse = newTransform.inverse()) {
+    if (auto inverse = transform.inverse()) {
         modifiableState().transform = newTransform;
         c->concatCTM(transform);
         m_path.transform(inverse.value());
@@ -1377,8 +1380,20 @@ void CanvasRenderingContext2D::drawImage(HTMLImageElement& imageElement, const F
         ec = INDEX_SIZE_ERR;
         return;
     }
-    if (!imageRect.contains(normalizedSrcRect))
+
+    // When the source rectangle is outside the source image, the source rectangle must be clipped
+    // to the source image and the destination rectangle must be clipped in the same proportion.
+    FloatRect originalNormalizedSrcRect = normalizedSrcRect;
+    normalizedSrcRect.intersect(imageRect);
+    if (normalizedSrcRect.isEmpty())
         return;
+
+    if (normalizedSrcRect != originalNormalizedSrcRect) {
+        normalizedDstRect.setWidth(normalizedDstRect.width() * normalizedSrcRect.width() / originalNormalizedSrcRect.width());
+        normalizedDstRect.setHeight(normalizedDstRect.height() * normalizedSrcRect.height() / originalNormalizedSrcRect.height());
+        if (normalizedDstRect.isEmpty())
+            return;
+    }
 
     GraphicsContext* c = drawingContext();
     if (!c)
@@ -1398,7 +1413,7 @@ void CanvasRenderingContext2D::drawImage(HTMLImageElement& imageElement, const F
 
     if (image->isSVGImage()) {
         image->setImageObserver(nullptr);
-        image->setContainerSize(normalizedSrcRect.size());
+        image->setContainerSize(imageRect.size());
     }
 
     if (rectContainsCanvas(normalizedDstRect)) {
@@ -2036,8 +2051,17 @@ RefPtr<ImageData> CanvasRenderingContext2D::getImageData(ImageBuffer::Coordinate
         return createEmptyImageData(imageDataRect.size());
 
     RefPtr<Uint8ClampedArray> byteArray = buffer->getUnmultipliedImageData(imageDataRect, coordinateSystem);
-    if (!byteArray)
+    if (!byteArray) {
+        StringBuilder consoleMessage;
+        consoleMessage.appendLiteral("Unable to get image data from canvas. Requested size was ");
+        consoleMessage.appendNumber(imageDataRect.width());
+        consoleMessage.appendLiteral(" x ");
+        consoleMessage.appendNumber(imageDataRect.height());
+
+        canvas()->document().addConsoleMessage(MessageSource::Rendering, MessageLevel::Error, consoleMessage.toString());
+        ec = INVALID_STATE_ERR;
         return nullptr;
+    }
 
     return ImageData::create(imageDataRect.size(), byteArray.releaseNonNull());
 }
@@ -2472,7 +2496,7 @@ void CanvasRenderingContext2D::drawTextInternal(const String& text, float x, flo
             fontProxy.drawBidiText(*c, textRun, location + offset, FontCascade::UseFallbackIfFontNotReady);
         }
 
-        auto maskImage = ImageBuffer::createCompatibleBuffer(maskRect.size(), *c);
+        auto maskImage = ImageBuffer::createCompatibleBuffer(maskRect.size(), ColorSpaceSRGB, *c);
         if (!maskImage)
             return;
 

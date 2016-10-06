@@ -190,7 +190,7 @@ void InjectedBundle::didReceiveMessageToPage(WKBundlePageRef page, WKStringRef m
         m_pixelResultIsPending = false;
 
         resetLocalSettings();
-        m_testRunner->removeAllWebNotificationPermissions();
+        TestRunner::removeAllWebNotificationPermissions();
 
         InjectedBundle::page()->resetAfterTest();
 
@@ -313,6 +313,8 @@ void InjectedBundle::beginTesting(WKDictionaryRef settings)
 
     m_testRunner->setShadowDOMEnabled(true);
     m_testRunner->setCustomElementsEnabled(true);
+
+    m_testRunner->setDOMIteratorEnabled(true);
 
     m_testRunner->setWebGL2Enabled(true);
 

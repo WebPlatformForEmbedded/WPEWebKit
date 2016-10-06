@@ -30,19 +30,15 @@
 #include "IntRect.h"
 #include "LayoutRect.h"
 #include "PlatformWheelEvent.h"
-#include "RenderObject.h"
 #include "ScrollTypes.h"
 #include <wtf/Forward.h>
+#include <wtf/ThreadSafeRefCounted.h>
 #include <wtf/TypeCasts.h>
 
 #if ENABLE(ASYNC_SCROLLING)
 #include <wtf/HashMap.h>
 #include <wtf/ThreadSafeRefCounted.h>
 #include <wtf/Threading.h>
-#endif
-
-#if PLATFORM(COCOA)
-#include <wtf/RetainPtr.h>
 #endif
 
 #if ENABLE(CSS_SCROLL_SNAP)

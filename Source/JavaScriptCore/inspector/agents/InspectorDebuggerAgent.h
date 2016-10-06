@@ -27,8 +27,7 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef InspectorDebuggerAgent_h
-#define InspectorDebuggerAgent_h
+#pragma once
 
 #include "InspectorBackendDispatchers.h"
 #include "InspectorFrontendDispatchers.h"
@@ -41,7 +40,6 @@
 #include <wtf/HashMap.h>
 #include <wtf/Noncopyable.h>
 #include <wtf/Vector.h>
-#include <wtf/text/StringHash.h>
 
 namespace Inspector {
 
@@ -83,7 +81,8 @@ public:
     void evaluateOnCallFrame(ErrorString&, const String& callFrameId, const String& expression, const String* objectGroup, const bool* includeCommandLineAPI, const bool* doNotPauseOnExceptionsAndMuteConsole, const bool* returnByValue, const bool* generatePreview, const bool* saveResult, RefPtr<Inspector::Protocol::Runtime::RemoteObject>& result, Inspector::Protocol::OptOutput<bool>* wasThrown, Inspector::Protocol::OptOutput<int>* savedResultIndex) final;
     void setOverlayMessage(ErrorString&, const String*) override;
 
-    bool isPaused();
+    bool isPaused() const;
+    bool breakpointsActive() const;
 
     void setSuppressAllPauses(bool);
 
@@ -171,5 +170,3 @@ private:
 };
 
 } // namespace Inspector
-
-#endif // !defined(InspectorDebuggerAgent_h)

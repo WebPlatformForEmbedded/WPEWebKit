@@ -42,8 +42,6 @@ WebInspector.CSSStyleDeclarationTextEditor = class CSSStyleDeclarationTextEditor
         this._filterResultPropertyNames = null;
         this._sortProperties = false;
 
-        this._prefixWhitespace = "\n";
-        this._suffixWhitespace = "\n";
         this._linePrefixWhitespace = "";
 
         this._delegate = delegate || null;
@@ -695,7 +693,7 @@ WebInspector.CSSStyleDeclarationTextEditor = class CSSStyleDeclarationTextEditor
     _formattedContent()
     {
         // Start with the prefix whitespace we stripped.
-        var content = this._prefixWhitespace;
+        var content = WebInspector.CSSStyleDeclarationTextEditor.PrefixWhitespace;
 
         // Get each line and add the line prefix whitespace and newlines.
         var lineCount = this._codeMirror.lineCount();
@@ -707,7 +705,7 @@ WebInspector.CSSStyleDeclarationTextEditor = class CSSStyleDeclarationTextEditor
         }
 
         // Add the suffix whitespace we stripped.
-        content += this._suffixWhitespace;
+        content += WebInspector.CSSStyleDeclarationTextEditor.SuffixWhitespace;
 
         // This regular expression replacement removes extra newlines
         // in between properties while preserving leading whitespace
@@ -789,10 +787,8 @@ WebInspector.CSSStyleDeclarationTextEditor = class CSSStyleDeclarationTextEditor
                 var to = {line: styleTextRange.endLine, ch: styleTextRange.endColumn};
 
                 // Adjust the line position for the missing prefix line.
-                if (this._prefixWhitespace) {
-                    --from.line;
-                    --to.line;
-                }
+                from.line--;
+                to.line--;
 
                 // Adjust the column for the stripped line prefix whitespace.
                 from.ch -= this._linePrefixWhitespace.length;
@@ -889,6 +885,12 @@ WebInspector.CSSStyleDeclarationTextEditor = class CSSStyleDeclarationTextEditor
             createCodeMirrorCubicBezierTextMarkers(this._codeMirror, range, (marker, bezier, bezierString) => {
                 let swatch = new WebInspector.InlineSwatch(WebInspector.InlineSwatch.Type.Bezier, bezier, this._codeMirror.getOption("readOnly"));
                 createSwatch.call(this, swatch, marker, bezier, bezierString);
+            });
+
+            // Look for spring strings and add swatches in front of them.
+            createCodeMirrorSpringTextMarkers(this._codeMirror, range, (marker, spring, springString) => {
+                let swatch = new WebInspector.InlineSwatch(WebInspector.InlineSwatch.Type.Spring, spring, this._codeMirror.getOption("readOnly"));
+                createSwatch.call(this, swatch, marker, spring, springString);
             });
         }
 
@@ -1322,8 +1324,9 @@ WebInspector.CSSStyleDeclarationTextEditor = class CSSStyleDeclarationTextEditor
 
                 for (let mark of marks) {
                     let type = WebInspector.TextMarker.textMarkerForCodeMirrorTextMarker(mark).type;
-                    if (type !== WebInspector.TextMarker.Type.Color && type !== WebInspector.TextMarker.Type.Gradient && type !== WebInspector.TextMarker.Type.CubicBezier)
+                    if (Object.values(WebInspector.TextMarker.Type).includes(type))
                         continue;
+
                     textMarker = mark;
                     break;
                 }
@@ -1666,6 +1669,8 @@ WebInspector.CSSStyleDeclarationTextEditor.Event = {
     Blurred: "css-style-declaration-text-editor-blurred"
 };
 
+WebInspector.CSSStyleDeclarationTextEditor.PrefixWhitespace = "\n";
+WebInspector.CSSStyleDeclarationTextEditor.SuffixWhitespace = "\n";
 WebInspector.CSSStyleDeclarationTextEditor.StyleClassName = "css-style-text-editor";
 WebInspector.CSSStyleDeclarationTextEditor.ReadOnlyStyleClassName = "read-only";
 WebInspector.CSSStyleDeclarationTextEditor.CheckboxPlaceholderElementStyleClassName = "checkbox-placeholder";

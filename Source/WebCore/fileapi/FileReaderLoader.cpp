@@ -56,7 +56,7 @@ FileReaderLoader::FileReaderLoader(ReadType readType, FileReaderLoaderClient* cl
     : m_readType(readType)
     , m_client(client)
     , m_isRawDataConverted(false)
-    , m_stringResult("")
+    , m_stringResult(emptyString())
     , m_variableLength(false)
     , m_bytesLoaded(0)
     , m_totalBytes(0)
@@ -73,6 +73,8 @@ FileReaderLoader::~FileReaderLoader()
 
 void FileReaderLoader::start(ScriptExecutionContext* scriptExecutionContext, Blob& blob)
 {
+    ASSERT(scriptExecutionContext);
+
     // The blob is read by routing through the request handling layer given a temporary public url.
     m_urlForReading = BlobURL::createPublicURL(scriptExecutionContext->securityOrigin());
     if (m_urlForReading.isEmpty()) {
@@ -86,18 +88,16 @@ void FileReaderLoader::start(ScriptExecutionContext* scriptExecutionContext, Blo
     request.setHTTPMethod("GET");
 
     ThreadableLoaderOptions options;
-    options.setSendLoadCallbacks(SendCallbacks);
-    options.setSniffContent(DoNotSniffContent);
-    options.setDataBufferingPolicy(DoNotBufferData);
-    options.preflightPolicy = ConsiderPreflight;
-    options.setAllowCredentials(AllowStoredCredentials);
-    options.crossOriginRequestPolicy = DenyCrossOriginRequests;
+    options.sendLoadCallbacks = SendCallbacks;
+    options.dataBufferingPolicy = DoNotBufferData;
+    options.credentials = FetchOptions::Credentials::Include;
+    options.mode = FetchOptions::Mode::SameOrigin;
     options.contentSecurityPolicyEnforcement = ContentSecurityPolicyEnforcement::DoNotEnforce;
 
     if (m_client)
-        m_loader = ThreadableLoader::create(scriptExecutionContext, this, request, options);
+        m_loader = ThreadableLoader::create(*scriptExecutionContext, *this, WTFMove(request), options);
     else
-        ThreadableLoader::loadResourceSynchronously(scriptExecutionContext, request, *this, options);
+        ThreadableLoader::loadResourceSynchronously(*scriptExecutionContext, WTFMove(request), *this, options);
 }
 
 void FileReaderLoader::cancel()
@@ -121,7 +121,7 @@ void FileReaderLoader::cleanup()
     // If we get any error, we do not need to keep a buffer around.
     if (m_errorCode) {
         m_rawData = nullptr;
-        m_stringResult = "";
+        m_stringResult = emptyString();
     }
 }
 

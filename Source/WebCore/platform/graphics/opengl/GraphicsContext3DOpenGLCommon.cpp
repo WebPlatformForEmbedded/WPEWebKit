@@ -57,6 +57,7 @@
 #include <runtime/Uint8Array.h>
 #include <wtf/HexNumber.h>
 #include <wtf/MainThread.h>
+#include <wtf/ThreadSpecific.h>
 #include <wtf/text/CString.h>
 #include <wtf/text/StringBuilder.h>
 #include <yarr/RegularExpression.h>
@@ -76,6 +77,7 @@
 #endif
 #endif
 
+using namespace WTF;
 
 namespace WebCore {
 
@@ -130,8 +132,10 @@ static uint64_t nameHashForShader(const char* name, size_t length)
 
 PassRefPtr<GraphicsContext3D> GraphicsContext3D::createForCurrentGLContext()
 {
-    RefPtr<GraphicsContext3D> context = adoptRef(new GraphicsContext3D(Attributes(), 0, GraphicsContext3D::RenderToCurrentGLContext));
-    return context->m_private ? context.release() : 0;
+    auto context = adoptRef(*new GraphicsContext3D(Attributes(), 0, GraphicsContext3D::RenderToCurrentGLContext));
+    if (!context->m_private)
+        return nullptr;
+    return WTFMove(context);
 }
 
 void GraphicsContext3D::validateDepthStencil(const char* packedDepthStencilExtension)
@@ -203,7 +207,7 @@ PassRefPtr<ImageData> GraphicsContext3D::paintRenderingResultsToImageData()
     if (m_attrs.premultipliedAlpha)
         return 0;
 
-    RefPtr<ImageData> imageData = ImageData::create(IntSize(m_currentWidth, m_currentHeight));
+    auto imageData = ImageData::create(IntSize(m_currentWidth, m_currentHeight));
     unsigned char* pixels = imageData->data()->data();
     int totalBytes = 4 * m_currentWidth * m_currentHeight;
 
@@ -213,7 +217,7 @@ PassRefPtr<ImageData> GraphicsContext3D::paintRenderingResultsToImageData()
     for (int i = 0; i < totalBytes; i += 4)
         std::swap(pixels[i], pixels[i + 2]);
 
-    return imageData.release();
+    return WTFMove(imageData);
 }
 
 void GraphicsContext3D::prepareTexture()
@@ -233,13 +237,15 @@ void GraphicsContext3D::prepareTexture()
 
 #if USE(COORDINATED_GRAPHICS_THREADED)
 #if USE(OPENGL_ES_2)
-    // For the RPi we need to flush the changes before swapping the buffers to avoid flickering
     ::glFlush();
 #endif
-    std::swap(m_fbo, m_compositorFBO);
     std::swap(m_texture, m_compositorTexture);
+    std::swap(m_texture, m_intermediateTexture);
+    ::glBindFramebuffer(GraphicsContext3D::FRAMEBUFFER, m_fbo);
+    ::glFramebufferTexture2DEXT(GraphicsContext3D::FRAMEBUFFER, GraphicsContext3D::COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_texture, 0);
+    glFlush();
 
-    if (m_state.boundFBO != m_compositorFBO)
+    if (m_state.boundFBO != m_fbo)
         ::glBindFramebufferEXT(GraphicsContext3D::FRAMEBUFFER, m_state.boundFBO);
     else
         ::glBindFramebufferEXT(GraphicsContext3D::FRAMEBUFFER, m_fbo);

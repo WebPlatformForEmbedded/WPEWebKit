@@ -2,7 +2,7 @@
  * Copyright (C) 1999 Lars Knoll (knoll@kde.org)
  *           (C) 1999 Antti Koivisto (koivisto@kde.org)
  *           (C) 2000 Dirk Mueller (mueller@kde.org)
- * Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009, 2010 Apple Inc. All rights reserved.
+ * Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2016 Apple Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -21,8 +21,7 @@
  *
  */
 
-#ifndef HTMLFormControlElement_h
-#define HTMLFormControlElement_h
+#pragma once
 
 #include "Autofill.h"
 #include "FormAssociatedElement.h"
@@ -49,13 +48,13 @@ public:
 
     HTMLFormElement* form() const { return FormAssociatedElement::form(); }
 
-    String formEnctype() const;
-    void setFormEnctype(const String&);
-    String formMethod() const;
-    void setFormMethod(const String&);
+    WEBCORE_EXPORT String formEnctype() const;
+    WEBCORE_EXPORT void setFormEnctype(const String&);
+    WEBCORE_EXPORT String formMethod() const;
+    WEBCORE_EXPORT void setFormMethod(const String&);
     bool formNoValidate() const;
-    String formAction() const;
-    void setFormAction(const AtomicString&);
+    WEBCORE_EXPORT String formAction() const;
+    WEBCORE_EXPORT void setFormAction(const AtomicString&);
 
     void setAncestorDisabled(bool isDisabled);
 
@@ -72,7 +71,6 @@ public:
     void dispatchFormControlInputEvent();
 
     bool isDisabledFormControl() const override;
-    bool isDefaultButtonForForm() const override;
 
     bool isFocusable() const override;
     bool isEnumeratable() const override { return false; }
@@ -95,17 +93,17 @@ public:
 
 #if ENABLE(IOS_AUTOCORRECT_AND_AUTOCAPITALIZE)
     WEBCORE_EXPORT bool autocorrect() const;
-    void setAutocorrect(bool);
+    WEBCORE_EXPORT void setAutocorrect(bool);
 
     WEBCORE_EXPORT WebAutocapitalizeType autocapitalizeType() const;
-    const AtomicString& autocapitalize() const;
-    void setAutocapitalize(const AtomicString&);
+    WEBCORE_EXPORT const AtomicString& autocapitalize() const;
+    WEBCORE_EXPORT void setAutocapitalize(const AtomicString&);
 #endif
 
-    bool willValidate() const final;
+    WEBCORE_EXPORT bool willValidate() const final;
     void updateVisibleValidationMessage();
     void hideVisibleValidationMessage();
-    bool checkValidity(Vector<RefPtr<FormAssociatedElement>>* unhandledInvalidControls = 0);
+    WEBCORE_EXPORT bool checkValidity(Vector<RefPtr<FormAssociatedElement>>* unhandledInvalidControls = nullptr);
     // This must be called when a validation constraint or control value is changed.
     void updateValidity();
     void setCustomValidity(const String&) override;
@@ -118,8 +116,8 @@ public:
 
     static HTMLFormControlElement* enclosingFormControlElement(Node*);
 
-    String autocomplete() const;
-    void setAutocomplete(const String&);
+    WEBCORE_EXPORT String autocomplete() const;
+    WEBCORE_EXPORT void setAutocomplete(const String&);
 
     AutofillMantle autofillMantle() const;
 
@@ -214,5 +212,3 @@ SPECIALIZE_TYPE_TRAITS_BEGIN(WebCore::HTMLFormControlElement)
     static bool isType(const WebCore::Node& node) { return is<WebCore::Element>(node) && isType(downcast<WebCore::Element>(node)); }
     static bool isType(const WebCore::FormAssociatedElement& element) { return element.isFormControlElement(); }
 SPECIALIZE_TYPE_TRAITS_END()
-
-#endif

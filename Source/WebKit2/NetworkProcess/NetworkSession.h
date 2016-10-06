@@ -23,8 +23,7 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef NetworkSession_h
-#define NetworkSession_h
+#pragma once
 
 #if PLATFORM(COCOA)
 OBJC_CLASS NSURLSession;
@@ -55,23 +54,20 @@ public:
         Ephemeral
     };
 
-    static Ref<NetworkSession> create(Type, WebCore::SessionID, CustomProtocolManager*, std::unique_ptr<WebCore::NetworkStorageSession>);
+    static Ref<NetworkSession> create(Type, WebCore::SessionID, CustomProtocolManager*);
     static NetworkSession& defaultSession();
     ~NetworkSession();
 
     void invalidateAndCancel();
 
     WebCore::SessionID sessionID() const { return m_sessionID; }
-    WebCore::NetworkStorageSession& networkStorageSession();
 
     static void setCustomProtocolManager(CustomProtocolManager*);
 #if PLATFORM(COCOA)
     static void setSourceApplicationAuditTokenData(RetainPtr<CFDataRef>&&);
 #endif
 
-#if !USE(CREDENTIAL_STORAGE_WITH_NETWORK_SESSION)
     void clearCredentials();
-#endif
 
     NetworkDataTask* dataTaskForIdentifier(NetworkDataTask::TaskIdentifier, WebCore::StoredCredentials);
 
@@ -80,10 +76,10 @@ public:
     DownloadID takeDownloadID(NetworkDataTask::TaskIdentifier);
     
 private:
-    NetworkSession(Type, WebCore::SessionID, CustomProtocolManager*, std::unique_ptr<WebCore::NetworkStorageSession>);
+    NetworkSession(Type, WebCore::SessionID, CustomProtocolManager*);
+    WebCore::NetworkStorageSession& networkStorageSession();
 
     WebCore::SessionID m_sessionID;
-    std::unique_ptr<WebCore::NetworkStorageSession> m_networkStorageSession;
 
     HashMap<NetworkDataTask::TaskIdentifier, NetworkDataTask*> m_dataTaskMapWithCredentials;
     HashMap<NetworkDataTask::TaskIdentifier, NetworkDataTask*> m_dataTaskMapWithoutCredentials;
@@ -98,5 +94,3 @@ private:
 };
 
 } // namespace WebKit
-
-#endif // NetworkSession_h

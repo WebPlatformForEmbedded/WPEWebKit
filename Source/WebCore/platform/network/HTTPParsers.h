@@ -32,11 +32,17 @@
 #define HTTPParsers_h
 
 #include <wtf/Forward.h>
+#include <wtf/HashSet.h>
 #include <wtf/Optional.h>
 #include <wtf/Vector.h>
+#include <wtf/text/StringHash.h>
 #include <wtf/text/WTFString.h>
 
 namespace WebCore {
+
+typedef HashSet<String, ASCIICaseInsensitiveHash> HTTPHeaderSet;
+
+enum class HTTPHeaderName;
 
 enum class XSSProtectionDisposition {
     Invalid,
@@ -69,16 +75,17 @@ enum XFrameOptionsDisposition {
 };
 
 ContentDispositionType contentDispositionType(const String&);
+bool isValidReasonPhrase(const String&);
 bool isValidHTTPHeaderValue(const String&);
 bool isValidHTTPToken(const String&);
 bool parseHTTPRefresh(const String& refresh, bool fromHttpEquivMeta, double& delay, String& url);
 Optional<std::chrono::system_clock::time_point> parseHTTPDate(const String&);
-String filenameFromHTTPContentDisposition(const String&); 
+String filenameFromHTTPContentDisposition(const String&);
 String extractMIMETypeFromMediaType(const String&);
-String extractCharsetFromMediaType(const String&); 
+String extractCharsetFromMediaType(const String&);
 void findCharsetInMediaType(const String& mediaType, unsigned int& charsetPos, unsigned int& charsetLen, unsigned int start = 0);
 XSSProtectionDisposition parseXSSProtectionHeader(const String& header, String& failureReason, unsigned& failurePosition, String& reportURL);
-String extractReasonPhraseFromHTTPStatusLine(const String&);
+AtomicString extractReasonPhraseFromHTTPStatusLine(const String&);
 XFrameOptionsDisposition parseXFrameOptionsHeader(const String&);
 
 // -1 could be set to one of the return parameters to indicate the value is not specified.
@@ -93,6 +100,16 @@ enum HTTPVersion { Unknown, HTTP_1_0, HTTP_1_1 };
 size_t parseHTTPRequestLine(const char* data, size_t length, String& failureReason, String& method, String& url, HTTPVersion&);
 size_t parseHTTPHeader(const char* data, size_t length, String& failureReason, StringView& nameStr, String& valueStr, bool strict = true);
 size_t parseHTTPRequestBody(const char* data, size_t length, Vector<unsigned char>& body);
+
+void parseAccessControlExposeHeadersAllowList(const String& headerValue, HTTPHeaderSet&);
+
+// HTTP Header routine as per https://fetch.spec.whatwg.org/#terminology-headers
+bool isForbiddenHeaderName(const String&);
+bool isForbiddenResponseHeaderName(const String&);
+bool isSimpleHeader(const String& name, const String& value);
+bool isCrossOriginSafeHeader(HTTPHeaderName, const HTTPHeaderSet&);
+bool isCrossOriginSafeHeader(const String&, const HTTPHeaderSet&);
+bool isCrossOriginSafeRequestHeader(HTTPHeaderName, const String&);
 
 inline bool isHTTPSpace(UChar character)
 {

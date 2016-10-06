@@ -24,6 +24,8 @@
  */
 
 #include "config.h"
+
+#if ENABLE(CSS_SHAPES)
 #include "ShapeValue.h"
 
 #include "CachedImage.h"
@@ -34,7 +36,7 @@ bool ShapeValue::isImageValid() const
 {
     if (!image())
         return false;
-    if (image()->isCachedImage() || image()->isCachedImageSet())
+    if (image()->isCachedImage())
         return image()->cachedImage() && image()->cachedImage()->hasImage();
     return image()->isGeneratedImage();
 }
@@ -62,3 +64,5 @@ bool ShapeValue::operator==(const ShapeValue& other) const
 
 
 } // namespace WebCore
+
+#endif // ENABLE(CSS_SHAPES)

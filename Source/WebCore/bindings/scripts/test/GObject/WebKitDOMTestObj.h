@@ -394,6 +394,18 @@ WEBKIT_API void
 webkit_dom_test_obj_method_with_exception_with_message(WebKitDOMTestObj* self);
 
 /**
+ * webkit_dom_test_obj_public_and_private_method:
+ * @self: A #WebKitDOMTestObj
+ * @argument: A #gchar
+ *
+ * Returns: A #gchar
+ *
+ * Stability: Unstable
+**/
+WEBKIT_API gchar*
+webkit_dom_test_obj_public_and_private_method(WebKitDOMTestObj* self, const gchar* argument);
+
+/**
  * webkit_dom_test_obj_with_script_state_void:
  * @self: A #WebKitDOMTestObj
  *
@@ -484,6 +496,24 @@ webkit_dom_test_obj_with_script_execution_context_and_script_state_with_spaces(W
 **/
 WEBKIT_API void
 webkit_dom_test_obj_with_document_argument(WebKitDOMTestObj* self);
+
+/**
+ * webkit_dom_test_obj_with_caller_document_argument:
+ * @self: A #WebKitDOMTestObj
+ *
+ * Stability: Unstable
+**/
+WEBKIT_API void
+webkit_dom_test_obj_with_caller_document_argument(WebKitDOMTestObj* self);
+
+/**
+ * webkit_dom_test_obj_with_caller_window_argument:
+ * @self: A #WebKitDOMTestObj
+ *
+ * Stability: Unstable
+**/
+WEBKIT_API void
+webkit_dom_test_obj_with_caller_window_argument(WebKitDOMTestObj* self);
 
 /**
  * webkit_dom_test_obj_method_with_optional_arg:
@@ -679,26 +709,6 @@ WEBKIT_API void
 webkit_dom_test_obj_method_with_optional_unsigned_long_long_is_zero(WebKitDOMTestObj* self, guint64 number);
 
 /**
- * webkit_dom_test_obj_method_with_optional_array:
- * @self: A #WebKitDOMTestObj
- * @array: A #gchar
- *
- * Stability: Unstable
-**/
-WEBKIT_API void
-webkit_dom_test_obj_method_with_optional_array(WebKitDOMTestObj* self, const gchar* array);
-
-/**
- * webkit_dom_test_obj_method_with_optional_array_is_empty:
- * @self: A #WebKitDOMTestObj
- * @array: A #gchar
- *
- * Stability: Unstable
-**/
-WEBKIT_API void
-webkit_dom_test_obj_method_with_optional_array_is_empty(WebKitDOMTestObj* self, const gchar* array);
-
-/**
  * webkit_dom_test_obj_method_with_optional_boolean:
  * @self: A #WebKitDOMTestObj
  * @b: A #gboolean
@@ -870,33 +880,38 @@ WEBKIT_API void
 webkit_dom_test_obj_orange(WebKitDOMTestObj* self);
 
 /**
- * webkit_dom_test_obj_strict_function:
+ * webkit_dom_test_obj_variadic_string_method:
  * @self: A #WebKitDOMTestObj
- * @str: A #gchar
- * @a: A #gfloat
- * @b: A #glong
- * @error: #GError
- *
- * Returns: A #gboolean
+ * @head: A #gchar
+ * @...: list of #gchar ended by %NULL.
  *
  * Stability: Unstable
 **/
-WEBKIT_API gboolean
-webkit_dom_test_obj_strict_function(WebKitDOMTestObj* self, const gchar* str, gfloat a, glong b, GError** error);
+WEBKIT_API void
+webkit_dom_test_obj_variadic_string_method(WebKitDOMTestObj* self, const gchar* head, ...);
 
 /**
- * webkit_dom_test_obj_strict_function_with_array:
+ * webkit_dom_test_obj_variadic_double_method:
  * @self: A #WebKitDOMTestObj
- * @objArg: A #WebKitDOMTestObj
- * @array: A #glong
- * @error: #GError
- *
- * Returns: A #gboolean
+ * @head: A #gdouble
+ * @n_tail: number of tail that will be passed
+ * @...: list of #gdouble
  *
  * Stability: Unstable
 **/
-WEBKIT_API gboolean
-webkit_dom_test_obj_strict_function_with_array(WebKitDOMTestObj* self, WebKitDOMTestObj* objArg, glong array, GError** error);
+WEBKIT_API void
+webkit_dom_test_obj_variadic_double_method(WebKitDOMTestObj* self, gdouble head, guint n_tail, ...);
+
+/**
+ * webkit_dom_test_obj_variadic_node_method:
+ * @self: A #WebKitDOMTestObj
+ * @head: A #WebKitDOMNode
+ * @...: list of #WebKitDOMNode ended by %NULL.
+ *
+ * Stability: Unstable
+**/
+WEBKIT_API void
+webkit_dom_test_obj_variadic_node_method(WebKitDOMTestObj* self, WebKitDOMNode* head, ...);
 
 /**
  * webkit_dom_test_obj_any:
@@ -1640,27 +1655,6 @@ WEBKIT_API void
 webkit_dom_test_obj_set_string_attr_with_setter_exception(WebKitDOMTestObj* self, const gchar* value, GError** error);
 
 /**
- * webkit_dom_test_obj_get_strict_type_checking_attribute:
- * @self: A #WebKitDOMTestObj
- *
- * Returns: (transfer none): A #WebKitDOMTestObj
- *
- * Stability: Unstable
-**/
-WEBKIT_API WebKitDOMTestObj*
-webkit_dom_test_obj_get_strict_type_checking_attribute(WebKitDOMTestObj* self);
-
-/**
- * webkit_dom_test_obj_set_strict_type_checking_attribute:
- * @self: A #WebKitDOMTestObj
- * @value: A #WebKitDOMTestObj
- *
- * Stability: Unstable
-**/
-WEBKIT_API void
-webkit_dom_test_obj_set_strict_type_checking_attribute(WebKitDOMTestObj* self, WebKitDOMTestObj* value);
-
-/**
  * webkit_dom_test_obj_get_with_script_state_attribute:
  * @self: A #WebKitDOMTestObj
  *
@@ -1908,27 +1902,6 @@ webkit_dom_test_obj_get_strawberry(WebKitDOMTestObj* self);
 **/
 WEBKIT_API void
 webkit_dom_test_obj_set_strawberry(WebKitDOMTestObj* self, glong value);
-
-/**
- * webkit_dom_test_obj_get_strict_float:
- * @self: A #WebKitDOMTestObj
- *
- * Returns: A #gfloat
- *
- * Stability: Unstable
-**/
-WEBKIT_API gfloat
-webkit_dom_test_obj_get_strict_float(WebKitDOMTestObj* self);
-
-/**
- * webkit_dom_test_obj_set_strict_float:
- * @self: A #WebKitDOMTestObj
- * @value: A #gfloat
- *
- * Stability: Unstable
-**/
-WEBKIT_API void
-webkit_dom_test_obj_set_strict_float(WebKitDOMTestObj* self, gfloat value);
 
 /**
  * webkit_dom_test_obj_get_description:

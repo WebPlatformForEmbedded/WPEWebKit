@@ -131,13 +131,16 @@ void Heap::scavengeSmallPages(std::unique_lock<StaticMutex>& lock, std::chrono::
 
 void Heap::scavengeLargeObjects(std::unique_lock<StaticMutex>& lock, std::chrono::milliseconds sleepDuration)
 {
-    while (XLargeRange range = m_largeFree.removePhysical()) {
+    auto& ranges = m_largeFree.ranges();
+    for (size_t i = ranges.size(); i-- > 0; i = std::min(i, ranges.size())) {
+        auto range = ranges.pop(i);
+
         lock.unlock();
         vmDeallocatePhysicalPagesSloppy(range.begin(), range.size());
         lock.lock();
-        
+
         range.setPhysicalSize(0);
-        m_largeFree.add(range);
+        ranges.push(range);
 
         waitUntilFalse(lock, sleepDuration, m_isAllocatingPages);
     }
@@ -401,11 +404,6 @@ void Heap::deallocateLarge(std::lock_guard<StaticMutex>&, void* object)
     m_largeFree.add(XLargeRange(object, size, size));
     
     m_scavenger.run();
-}
-
-void Heap::heapDestructor()
-{
-    PerProcess<Heap>::get()->m_scavenger.stop();
 }
 
 } // namespace bmalloc

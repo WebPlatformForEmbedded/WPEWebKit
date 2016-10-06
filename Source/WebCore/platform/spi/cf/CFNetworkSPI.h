@@ -133,6 +133,7 @@ typedef void (^CFCachedURLResponseCallBackBlock)(CFCachedURLResponseRef);
 
 #endif // !PLATFORM(WIN) && !USE(APPLE_INTERNAL_SDK)
 
+#if !PLATFORM(WIN)
 EXTERN_C void CFURLRequestSetShouldStartSynchronously(CFURLRequestRef, Boolean);
 
 EXTERN_C CFURLCacheRef CFURLCacheCopySharedURLCache();
@@ -156,9 +157,7 @@ EXTERN_C void CFURLConnectionInvalidateConnectionCache();
 EXTERN_C CFStringRef const kCFHTTPCookieLocalFileDomain;
 EXTERN_C const CFStringRef kCFURLRequestAllowAllPOSTCaching;
 
-#if !PLATFORM(WIN)
 EXTERN_C const CFStringRef _kCFURLConnectionPropertyShouldSniff;
-#endif
 
 EXTERN_C CFHTTPCookieStorageRef _CFHTTPCookieStorageGetDefault(CFAllocatorRef);
 EXTERN_C void CFHTTPCookieStorageSetCookie(CFHTTPCookieStorageRef, CFHTTPCookieRef);
@@ -178,6 +177,8 @@ EXTERN_C CFDictionaryRef _CFURLResponseGetSSLCertificateContext(CFURLResponseRef
 EXTERN_C CFURLRef CFURLResponseGetURL(CFURLResponseRef);
 EXTERN_C void CFURLResponseSetMIMEType(CFURLResponseRef, CFStringRef);
 EXTERN_C CFHTTPCookieStorageRef _CFURLStorageSessionCopyCookieStorage(CFAllocatorRef, CFURLStorageSessionRef);
+EXTERN_C CFArrayRef _CFHTTPCookieStorageCopyCookiesForURLWithMainDocumentURL(CFHTTPCookieStorageRef inCookieStorage, CFURLRef inURL, CFURLRef inMainDocumentURL, Boolean sendSecureCookies);
+#endif // !PLATFORM(WIN)
 
 // FIXME: We should only forward declare this SPI when building for iOS without the Apple Internal SDK.
 // As a workaround for <rdar://problem/19025016>, we must forward declare this SPI regardless of whether
@@ -216,11 +217,12 @@ EXTERN_C CFArrayRef _CFHTTPParsedCookiesWithResponseHeaderFields(CFAllocatorRef 
 
 #if defined(__OBJC__)
 
-#if PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101100
 @interface NSHTTPCookie ()
+#if PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101100
 + (NSArray *)_parsedCookiesWithResponseHeaderFields:(NSDictionary *)headerFields forURL:(NSURL *)aURL;
-@end
 #endif
++ (NSArray *)_cf2nsCookies:(CFArrayRef)cfCookies;
+@end
 
 #if !USE(APPLE_INTERNAL_SDK)
 @interface NSHTTPCookieStorage ()

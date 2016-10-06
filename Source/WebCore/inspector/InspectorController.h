@@ -29,8 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef InspectorController_h
-#define InspectorController_h
+#pragma once
 
 #include "InspectorOverlay.h"
 #include "PageScriptDebugServer.h"
@@ -107,7 +106,7 @@ public:
     WEBCORE_EXPORT Ref<Inspector::Protocol::Array<Inspector::Protocol::OverlayTypes::NodeHighlightData>> buildObjectForHighlightedNodes() const;
 
     bool isUnderTest() const { return m_isUnderTest; }
-    void setIsUnderTest(bool isUnderTest) { m_isUnderTest = isUnderTest; }
+    WEBCORE_EXPORT void setIsUnderTest(bool);
     WEBCORE_EXPORT void evaluateForTestInFrontend(const String& script);
 
     InspectorClient* inspectorClient() const { return m_inspectorClient; }
@@ -150,5 +149,3 @@ private:
 };
 
 } // namespace WebCore
-
-#endif // !defined(InspectorController_h)

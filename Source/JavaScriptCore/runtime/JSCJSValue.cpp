@@ -157,7 +157,7 @@ bool JSValue::putToPrimitive(ExecState* exec, PropertyName propertyName, JSValue
         if (offset != invalidOffset) {
             if (attributes & ReadOnly) {
                 if (slot.isStrictMode())
-                    exec->vm().throwException(exec, createTypeError(exec, StrictModeReadonlyPropertyWriteError));
+                    throwTypeError(exec, StrictModeReadonlyPropertyWriteError);
                 return false;
             }
 
@@ -252,7 +252,9 @@ void JSValue::dumpInContextAssumingStructure(
             } else
                 out.print(" (unresolved)");
             out.print(": ", impl);
-        } else if (structure->classInfo()->isSubClassOf(Structure::info()))
+        } else if (structure->classInfo()->isSubClassOf(Symbol::info()))
+            out.print("Symbol: ", RawPointer(asCell()));
+        else if (structure->classInfo()->isSubClassOf(Structure::info()))
             out.print("Structure: ", inContext(*jsCast<Structure*>(asCell()), context));
         else {
             out.print("Cell: ", RawPointer(asCell()));
@@ -346,7 +348,7 @@ JSString* JSValue::toStringSlowCase(ExecState* exec, bool returnEmptyStringOnErr
     if (isUndefined())
         return vm.smallStrings.undefinedString();
     if (isSymbol()) {
-        throwTypeError(exec, "Cannot convert a symbol to a string");
+        throwTypeError(exec, ASCIILiteral("Cannot convert a symbol to a string"));
         return errorValue();
     }
 

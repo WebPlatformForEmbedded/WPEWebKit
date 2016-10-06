@@ -29,8 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef InstrumentingAgents_h
-#define InstrumentingAgents_h
+#pragma once
 
 #include <inspector/InspectorEnvironment.h>
 #include <wtf/FastMalloc.h>
@@ -58,6 +57,7 @@ class InspectorReplayAgent;
 class InspectorTimelineAgent;
 class Page;
 class PageDebuggerAgent;
+class PageHeapAgent;
 class PageRuntimeAgent;
 class WebConsoleAgent;
 
@@ -128,6 +128,9 @@ public:
     PageDebuggerAgent* pageDebuggerAgent() const { return m_pageDebuggerAgent; }
     void setPageDebuggerAgent(PageDebuggerAgent* agent) { m_pageDebuggerAgent = agent; }
 
+    PageHeapAgent* pageHeapAgent() const { return m_pageHeapAgent; }
+    void setPageHeapAgent(PageHeapAgent* agent) { m_pageHeapAgent = agent; }
+
     InspectorDOMDebuggerAgent* inspectorDOMDebuggerAgent() const { return m_inspectorDOMDebuggerAgent; }
     void setInspectorDOMDebuggerAgent(InspectorDOMDebuggerAgent* agent) { m_inspectorDOMDebuggerAgent = agent; }
 
@@ -160,9 +163,8 @@ private:
     InspectorApplicationCacheAgent* m_inspectorApplicationCacheAgent { nullptr };
     Inspector::InspectorDebuggerAgent* m_inspectorDebuggerAgent { nullptr };
     PageDebuggerAgent* m_pageDebuggerAgent { nullptr };
+    PageHeapAgent* m_pageHeapAgent { nullptr };
     InspectorDOMDebuggerAgent* m_inspectorDOMDebuggerAgent { nullptr };
 };
 
 } // namespace WebCore
-
-#endif // !defined(InstrumentingAgents_h)

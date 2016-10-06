@@ -639,7 +639,16 @@ bool MutableStyleProperties::removeShorthandProperty(CSSPropertyID propertyID)
     StylePropertyShorthand shorthand = shorthandForProperty(propertyID);
     if (!shorthand.length())
         return false;
-    return removePropertiesInSet(shorthand.properties(), shorthand.length());
+
+    bool propertiesWereRemoved = removePropertiesInSet(shorthand.properties(), shorthand.length());
+
+    CSSPropertyID prefixingVariant = prefixingVariantForPropertyId(propertyID);
+    if (prefixingVariant == propertyID)
+        return propertiesWereRemoved;
+
+    StylePropertyShorthand shorthandPrefixingVariant = shorthandForProperty(prefixingVariant);
+    bool prefixedVariantPropertiesWereRemoved = removePropertiesInSet(shorthandPrefixingVariant.properties(), shorthandPrefixingVariant.length());
+    return propertiesWereRemoved || prefixedVariantPropertiesWereRemoved;
 }
 
 bool MutableStyleProperties::removeProperty(CSSPropertyID propertyID, String* returnText)
@@ -647,14 +656,14 @@ bool MutableStyleProperties::removeProperty(CSSPropertyID propertyID, String* re
     if (removeShorthandProperty(propertyID)) {
         // FIXME: Return an equivalent shorthand when possible.
         if (returnText)
-            *returnText = "";
+            *returnText = emptyString();
         return true;
     }
 
     int foundPropertyIndex = findPropertyIndex(propertyID);
     if (foundPropertyIndex == -1) {
         if (returnText)
-            *returnText = "";
+            *returnText = emptyString();
         return false;
     }
 
@@ -673,7 +682,7 @@ bool MutableStyleProperties::removeCustomProperty(const String& propertyName, St
     int foundPropertyIndex = findCustomPropertyIndex(propertyName);
     if (foundPropertyIndex == -1) {
         if (returnText)
-            *returnText = "";
+            *returnText = emptyString();
         return false;
     }
 
@@ -837,12 +846,7 @@ bool MutableStyleProperties::addParsedProperty(const CSSProperty& property)
             return setProperty(property);
         return false;
     }
-    
-    // Only add properties that have no !important counterpart present
-    if (!propertyIsImportant(property.id()) || property.isImportant())
-        return setProperty(property);
-    
-    return false;
+    return setProperty(property);
 }
 
 String StyleProperties::asText() const
@@ -1313,9 +1317,9 @@ Ref<MutableStyleProperties> StyleProperties::copyPropertiesInSet(const CSSProper
     Vector<CSSProperty, 256> list;
     list.reserveInitialCapacity(length);
     for (unsigned i = 0; i < length; ++i) {
-        RefPtr<CSSValue> value = getPropertyCSSValueInternal(set[i]);
+        auto value = getPropertyCSSValueInternal(set[i]);
         if (value)
-            list.append(CSSProperty(set[i], value.release(), false));
+            list.append(CSSProperty(set[i], WTFMove(value), false));
     }
     return MutableStyleProperties::create(list.data(), list.size());
 }

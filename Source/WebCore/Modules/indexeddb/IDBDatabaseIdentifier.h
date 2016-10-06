@@ -30,7 +30,6 @@
 
 #include "SecurityOriginData.h"
 #include <wtf/Ref.h>
-#include <wtf/RefCounted.h>
 #include <wtf/text/StringHash.h>
 #include <wtf/text/WTFString.h>
 
@@ -98,7 +97,7 @@ public:
     template<class Encoder> void encode(Encoder&) const;
     template<class Decoder> static bool decode(Decoder&, IDBDatabaseIdentifier&);
 
-#ifndef NDEBUG
+#if !LOG_DISABLED
     String debugString() const;
 #endif
 

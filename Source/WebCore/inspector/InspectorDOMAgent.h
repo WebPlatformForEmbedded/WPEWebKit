@@ -27,12 +27,10 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef InspectorDOMAgent_h
-#define InspectorDOMAgent_h
+#pragma once
 
 #include "EventTarget.h"
 #include "InspectorWebAgentBase.h"
-#include "RenderLayer.h"
 #include "Timer.h"
 #include <inspector/InspectorBackendDispatchers.h>
 #include <inspector/InspectorFrontendDispatchers.h>
@@ -49,6 +47,7 @@ class InjectedScriptManager;
 }
 
 namespace JSC {
+class ExecState;
 class JSValue;
 }
 
@@ -61,6 +60,8 @@ class DOMEditor;
 class Document;
 class Element;
 class Event;
+class FloatQuad;
+class Frame;
 class InspectorHistory;
 class InspectorOverlay;
 class InspectorPageAgent;
@@ -68,6 +69,7 @@ class HitTestResult;
 class HTMLElement;
 class NameNodeMap;
 class Node;
+class PseudoElement;
 class RevalidateStyleAttributeTask;
 class ShadowRoot;
 
@@ -77,10 +79,10 @@ typedef String ErrorString;
 typedef int BackendNodeId;
 
 struct EventListenerInfo {
-    EventListenerInfo(Node* node, const AtomicString& eventType, const EventListenerVector& eventListenerVector)
+    EventListenerInfo(Node* node, const AtomicString& eventType, EventListenerVector&& eventListenerVector)
         : node(node)
         , eventType(eventType)
-        , eventListenerVector(eventListenerVector)
+        , eventListenerVector(WTFMove(eventListenerVector))
     {
     }
 
@@ -277,5 +279,3 @@ private:
 };
 
 } // namespace WebCore
-
-#endif // !defined(InspectorDOMAgent_h)

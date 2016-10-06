@@ -41,6 +41,7 @@
 #include "CSSFontSelector.h"
 #include "CSSFontValue.h"
 #include "CSSFunctionValue.h"
+#include "CSSImageSetValue.h"
 #include "CSSInheritedValue.h"
 #include "CSSInitialValue.h"
 #include "CSSKeyframeRule.h"
@@ -152,11 +153,6 @@
 #include "CSSGridTemplateAreasValue.h"
 #endif
 
-#if ENABLE(CSS_IMAGE_SET)
-#include "CSSImageSetValue.h"
-#include "StyleCachedImageSet.h"
-#endif
-
 #if ENABLE(DASHBOARD_SUPPORT)
 #include "DashboardRegion.h"
 #endif
@@ -194,8 +190,7 @@ inline void StyleResolver::State::clear()
     m_parentStyle = nullptr;
     m_ownedParentStyle = nullptr;
     m_regionForStyling = nullptr;
-    m_pendingImageProperties.clear();
-    m_filtersWithPendingSVGDocuments.clear();
+    m_pendingResources = nullptr;
     m_cssToLengthConversionData = CSSToLengthConversionData();
 }
 
@@ -384,6 +379,13 @@ void StyleResolver::State::setParentStyle(std::unique_ptr<RenderStyle> parentSty
     m_parentStyle = m_ownedParentStyle.get();
 }
 
+Style::PendingResources& StyleResolver::State::ensurePendingResources()
+{
+    if (!m_pendingResources)
+        m_pendingResources = std::make_unique<Style::PendingResources>();
+    return *m_pendingResources;
+}
+
 static inline bool isAtShadowBoundary(const Element& element)
 {
     auto* parentNode = element.parentNode();
@@ -528,7 +530,7 @@ void StyleResolver::keyframeStylesForAnimation(const Element& element, const Ren
     auto* keyframes = &keyframesRule->keyframes();
     Vector<Ref<StyleKeyframe>> newKeyframesIfNecessary;
 
-    bool hasDuplicateKeys;
+    bool hasDuplicateKeys = false;
     HashSet<double> keyframeKeys;
     for (auto& keyframe : *keyframes) {
         for (auto key : keyframe->keys()) {
@@ -1055,10 +1057,10 @@ void StyleResolver::adjustRenderStyle(RenderStyle& style, const RenderStyle& par
 
 bool StyleResolver::checkRegionStyle(const Element* regionElement)
 {
-    unsigned rulesSize = m_ruleSets.authorStyle()->regionSelectorsAndRuleSets().size();
+    unsigned rulesSize = m_ruleSets.authorStyle().regionSelectorsAndRuleSets().size();
     for (unsigned i = 0; i < rulesSize; ++i) {
-        ASSERT(m_ruleSets.authorStyle()->regionSelectorsAndRuleSets().at(i).ruleSet.get());
-        if (checkRegionSelector(m_ruleSets.authorStyle()->regionSelectorsAndRuleSets().at(i).selector, regionElement))
+        ASSERT(m_ruleSets.authorStyle().regionSelectorsAndRuleSets().at(i).ruleSet.get());
+        if (checkRegionSelector(m_ruleSets.authorStyle().regionSelectorsAndRuleSets().at(i).selector, regionElement))
             return true;
     }
 
@@ -1710,10 +1712,8 @@ RefPtr<StyleImage> StyleResolver::styleImage(CSSPropertyID property, CSSValue& v
         return generatedOrPendingFromValue(property, downcast<CSSImageGeneratorValue>(value));
     }
 
-#if ENABLE(CSS_IMAGE_SET)
     if (is<CSSImageSetValue>(value))
         return setOrPendingFromValue(property, downcast<CSSImageSetValue>(value));
-#endif
 
     if (is<CSSCursorImageValue>(value))
         return cursorOrPendingFromValue(property, downcast<CSSCursorImageValue>(value));
@@ -1725,7 +1725,7 @@ Ref<StyleImage> StyleResolver::cachedOrPendingFromValue(CSSPropertyID property, 
 {
     Ref<StyleImage> image = value.cachedOrPendingImage();
     if (image->isPendingImage())
-        m_state.pendingImageProperties().set(property, &value);
+        m_state.ensurePendingResources().pendingImages.set(property, &value);
     return image;
 }
 
@@ -1737,27 +1737,25 @@ Ref<StyleImage> StyleResolver::generatedOrPendingFromValue(CSSPropertyID propert
     }
 
     if (value.isPending()) {
-        m_state.pendingImageProperties().set(property, &value);
+        m_state.ensurePendingResources().pendingImages.set(property, &value);
         return StylePendingImage::create(&value);
     }
     return StyleGeneratedImage::create(value);
 }
 
-#if ENABLE(CSS_IMAGE_SET)
 RefPtr<StyleImage> StyleResolver::setOrPendingFromValue(CSSPropertyID property, CSSImageSetValue& value)
 {
     RefPtr<StyleImage> image = value.cachedOrPendingImageSet(document());
     if (image && image->isPendingImage())
-        m_state.pendingImageProperties().set(property, &value);
+        m_state.ensurePendingResources().pendingImages.set(property, &value);
     return image;
 }
-#endif
 
 RefPtr<StyleImage> StyleResolver::cursorOrPendingFromValue(CSSPropertyID property, CSSCursorImageValue& value)
 {
     RefPtr<StyleImage> image = value.cachedOrPendingImage(document());
     if (image && image->isPendingImage())
-        m_state.pendingImageProperties().set(property, &value);
+        m_state.ensurePendingResources().pendingImages.set(property, &value);
     return image;
 }
 
@@ -1960,28 +1958,6 @@ static FilterOperation::OperationType filterOperationForType(WebKitCSSFilterValu
     return FilterOperation::NONE;
 }
 
-void StyleResolver::loadPendingSVGDocuments()
-{
-    State& state = m_state;
-
-    // Crash reports indicate that we've seen calls to this function when our
-    // style is NULL. We don't know exactly why this happens. Our guess is
-    // reentering styleForElement().
-    ASSERT(state.style());
-    if (!state.style() || !state.style()->hasFilter() || state.filtersWithPendingSVGDocuments().isEmpty())
-        return;
-
-    ResourceLoaderOptions options = CachedResourceLoader::defaultCachedResourceOptions();
-    options.setContentSecurityPolicyImposition(m_state.element() && m_state.element()->isInUserAgentShadowTree() ? ContentSecurityPolicyImposition::SkipPolicyCheck : ContentSecurityPolicyImposition::DoPolicyCheck);
-
-    CachedResourceLoader& cachedResourceLoader = state.document().cachedResourceLoader();
-    
-    for (auto& filterOperation : state.filtersWithPendingSVGDocuments())
-        filterOperation->getOrCreateCachedSVGDocumentReference()->load(cachedResourceLoader, options);
-
-    state.filtersWithPendingSVGDocuments().clear();
-}
-
 bool StyleResolver::createFilterOperations(const CSSValue& inValue, FilterOperations& outOperations)
 {
     State& state = m_state;
@@ -2018,7 +1994,7 @@ bool StyleResolver::createFilterOperations(const CSSValue& inValue, FilterOperat
 
             RefPtr<ReferenceFilterOperation> operation = ReferenceFilterOperation::create(cssUrl, url.fragmentIdentifier());
             if (SVGURIReference::isExternalURIReference(cssUrl, m_state.document()))
-                state.filtersWithPendingSVGDocuments().append(operation);
+                state.ensurePendingResources().pendingSVGFilters.append(operation);
 
             operations.operations().append(operation);
             continue;
@@ -2118,177 +2094,17 @@ bool StyleResolver::createFilterOperations(const CSSValue& inValue, FilterOperat
     return true;
 }
 
-RefPtr<StyleImage> StyleResolver::loadPendingImage(const StylePendingImage& pendingImage, const ResourceLoaderOptions& options)
-{
-    if (auto imageValue = pendingImage.cssImageValue())
-        return imageValue->cachedImage(m_state.document().cachedResourceLoader(), options);
-
-    if (auto imageGeneratorValue = pendingImage.cssImageGeneratorValue()) {
-        imageGeneratorValue->loadSubimages(m_state.document().cachedResourceLoader(), options);
-        return StyleGeneratedImage::create(*imageGeneratorValue);
-    }
-
-    if (auto cursorImageValue = pendingImage.cssCursorImageValue())
-        return cursorImageValue->cachedImage(m_state.document().cachedResourceLoader(), options);
-
-#if ENABLE(CSS_IMAGE_SET)
-    if (auto imageSetValue = pendingImage.cssImageSetValue())
-        return imageSetValue->cachedImageSet(m_state.document().cachedResourceLoader(), options);
-#endif
-
-    return nullptr;
-}
-
-RefPtr<StyleImage> StyleResolver::loadPendingImage(const StylePendingImage& pendingImage)
-{
-    ResourceLoaderOptions options = CachedResourceLoader::defaultCachedResourceOptions();
-    options.setContentSecurityPolicyImposition(m_state.element() && m_state.element()->isInUserAgentShadowTree() ? ContentSecurityPolicyImposition::SkipPolicyCheck : ContentSecurityPolicyImposition::DoPolicyCheck);
-    return loadPendingImage(pendingImage, options);
-}
-
-#if ENABLE(CSS_SHAPES)
-void StyleResolver::loadPendingShapeImage(ShapeValue* shapeValue)
-{
-    if (!shapeValue)
-        return;
-
-    StyleImage* image = shapeValue->image();
-    if (!is<StylePendingImage>(image))
-        return;
-
-    auto& pendingImage = downcast<StylePendingImage>(*image);
-
-    ResourceLoaderOptions options = CachedResourceLoader::defaultCachedResourceOptions();
-    options.setRequestOriginPolicy(PotentiallyCrossOriginEnabled);
-    options.setAllowCredentials(DoNotAllowStoredCredentials);
-    options.setContentSecurityPolicyImposition(m_state.element() && m_state.element()->isInUserAgentShadowTree() ? ContentSecurityPolicyImposition::SkipPolicyCheck : ContentSecurityPolicyImposition::DoPolicyCheck);
-
-    shapeValue->setImage(loadPendingImage(pendingImage, options));
-}
-#endif
-
-void StyleResolver::loadPendingImages()
-{
-    RELEASE_ASSERT(!m_inLoadPendingImages);
-    TemporaryChange<bool> changeInLoadPendingImages(m_inLoadPendingImages, true);
-
-    if (m_state.pendingImageProperties().isEmpty())
-        return;
-
-    auto end = m_state.pendingImageProperties().end().keys();
-    for (auto it = m_state.pendingImageProperties().begin().keys(); it != end; ++it) {
-        CSSPropertyID currentProperty = *it;
-
-        switch (currentProperty) {
-        case CSSPropertyBackgroundImage: {
-            for (FillLayer* backgroundLayer = &m_state.style()->ensureBackgroundLayers(); backgroundLayer; backgroundLayer = backgroundLayer->next()) {
-                auto* styleImage = backgroundLayer->image();
-                if (is<StylePendingImage>(styleImage))
-                    backgroundLayer->setImage(loadPendingImage(downcast<StylePendingImage>(*styleImage)));
-            }
-            break;
-        }
-        case CSSPropertyContent: {
-            for (ContentData* contentData = const_cast<ContentData*>(m_state.style()->contentData()); contentData; contentData = contentData->next()) {
-                if (is<ImageContentData>(*contentData)) {
-                    auto& styleImage = downcast<ImageContentData>(*contentData).image();
-                    if (is<StylePendingImage>(styleImage)) {
-                        if (RefPtr<StyleImage> loadedImage = loadPendingImage(downcast<StylePendingImage>(styleImage)))
-                            downcast<ImageContentData>(*contentData).setImage(loadedImage.release());
-                    }
-                }
-            }
-            break;
-        }
-        case CSSPropertyCursor: {
-            if (CursorList* cursorList = m_state.style()->cursors()) {
-                for (size_t i = 0; i < cursorList->size(); ++i) {
-                    CursorData& currentCursor = cursorList->at(i);
-                    auto* styleImage = currentCursor.image();
-                    if (is<StylePendingImage>(styleImage))
-                        currentCursor.setImage(loadPendingImage(downcast<StylePendingImage>(*styleImage)));
-                }
-            }
-            break;
-        }
-        case CSSPropertyListStyleImage: {
-            auto* styleImage = m_state.style()->listStyleImage();
-            if (is<StylePendingImage>(styleImage))
-                m_state.style()->setListStyleImage(loadPendingImage(downcast<StylePendingImage>(*styleImage)));
-            break;
-        }
-        case CSSPropertyBorderImageSource: {
-            auto* styleImage = m_state.style()->borderImageSource();
-            if (is<StylePendingImage>(styleImage))
-                m_state.style()->setBorderImageSource(loadPendingImage(downcast<StylePendingImage>(*styleImage)));
-            break;
-        }
-        case CSSPropertyWebkitBoxReflect: {
-            if (StyleReflection* reflection = m_state.style()->boxReflect()) {
-                const NinePieceImage& maskImage = reflection->mask();
-                auto* styleImage = maskImage.image();
-                if (is<StylePendingImage>(styleImage)) {
-                    RefPtr<StyleImage> loadedImage = loadPendingImage(downcast<StylePendingImage>(*styleImage));
-                    reflection->setMask(NinePieceImage(loadedImage.release(), maskImage.imageSlices(), maskImage.fill(), maskImage.borderSlices(), maskImage.outset(), maskImage.horizontalRule(), maskImage.verticalRule()));
-                }
-            }
-            break;
-        }
-        case CSSPropertyWebkitMaskBoxImageSource: {
-            auto* styleImage = m_state.style()->maskBoxImageSource();
-            if (is<StylePendingImage>(styleImage))
-                m_state.style()->setMaskBoxImageSource(loadPendingImage(downcast<StylePendingImage>(*styleImage)));
-            break;
-        }
-        case CSSPropertyWebkitMaskImage: {
-            for (FillLayer* maskLayer = &m_state.style()->ensureMaskLayers(); maskLayer; maskLayer = maskLayer->next()) {
-                auto* styleImage = maskLayer->image();
-                if (is<StylePendingImage>(styleImage))
-                    maskLayer->setImage(loadPendingImage(downcast<StylePendingImage>(*styleImage)));
-            }
-            break;
-        }
-#if ENABLE(CSS_SHAPES)
-        case CSSPropertyWebkitShapeOutside:
-            loadPendingShapeImage(m_state.style()->shapeOutside());
-            break;
-#endif
-        default:
-            ASSERT_NOT_REACHED();
-        }
-    }
-
-    m_state.pendingImageProperties().clear();
-}
-
-#ifndef NDEBUG
-static bool inLoadPendingResources = false;
-#endif
-
 void StyleResolver::loadPendingResources()
 {
-    // We've seen crashes in all three of the functions below. Some of them
-    // indicate that style() is NULL. This NULL check will cut down on total
-    // crashes, while the ASSERT will help us find the cause in debug builds.
     ASSERT(style());
     if (!style())
         return;
 
-#ifndef NDEBUG
-    // Re-entering this function will probably mean trouble. Catch it in debug builds.
-    ASSERT(!inLoadPendingResources);
-    inLoadPendingResources = true;
-#endif
+    RELEASE_ASSERT(!m_inLoadPendingImages);
+    TemporaryChange<bool> changeInLoadPendingImages(m_inLoadPendingImages, true);
 
-    // Start loading images referenced by this style.
-    loadPendingImages();
-
-    // Start loading the SVG Documents referenced by this style.
-    loadPendingSVGDocuments();
-
-#ifndef NDEBUG
-    inLoadPendingResources = false;
-#endif
+    if (auto pendingResources = state().takePendingResources())
+        Style::loadPendingResources(*pendingResources, document(), *style(), m_state.element());
 }
 
 inline StyleResolver::MatchedProperties::MatchedProperties()
@@ -2384,7 +2200,7 @@ void StyleResolver::CascadedProperties::setDeferred(CSSPropertyID id, CSSValue& 
     m_deferredProperties.append(property);
 }
 
-void StyleResolver::CascadedProperties::addStyleProperties(const StyleProperties& properties, StyleRule&, bool isImportant, bool inheritedOnly, PropertyWhitelistType propertyWhitelistType, unsigned linkMatchType, CascadeLevel cascadeLevel)
+void StyleResolver::CascadedProperties::addStyleProperties(const StyleProperties& properties, bool isImportant, bool inheritedOnly, PropertyWhitelistType propertyWhitelistType, unsigned linkMatchType, CascadeLevel cascadeLevel)
 {
     for (unsigned i = 0, count = properties.propertyCount(); i < count; ++i) {
         auto current = properties.propertyAt(i);
@@ -2428,7 +2244,7 @@ void StyleResolver::CascadedProperties::addMatch(const MatchResult& matchResult,
     auto propertyWhitelistType = static_cast<PropertyWhitelistType>(matchedProperties.whitelistType);
     auto cascadeLevel = cascadeLevelForIndex(matchResult, index);
 
-    addStyleProperties(*matchedProperties.properties, *matchResult.matchedRules[index], isImportant, inheritedOnly, propertyWhitelistType, matchedProperties.linkMatchType, cascadeLevel);
+    addStyleProperties(*matchedProperties.properties, isImportant, inheritedOnly, propertyWhitelistType, matchedProperties.linkMatchType, cascadeLevel);
 }
 
 void StyleResolver::CascadedProperties::addNormalMatches(const MatchResult& matchResult, int startIndex, int endIndex, bool inheritedOnly)

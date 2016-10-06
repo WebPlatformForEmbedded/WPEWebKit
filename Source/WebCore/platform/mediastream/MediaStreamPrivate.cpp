@@ -257,7 +257,7 @@ void MediaStreamPrivate::updateActiveVideoTrack()
 {
     m_activeVideoTrack = nullptr;
     for (auto& track : m_trackSet.values()) {
-        if (!track->ended() && track->type() == RealtimeMediaSource::Type::Video && !track->ended()) {
+        if (!track->ended() && track->type() == RealtimeMediaSource::Type::Video) {
             m_activeVideoTrack = track.get();
             break;
         }
@@ -299,7 +299,7 @@ void MediaStreamPrivate::trackEnded(MediaStreamTrackPrivate&)
     });
 }
 
-void MediaStreamPrivate::scheduleDeferredTask(NoncopyableFunction<void ()>&& function)
+void MediaStreamPrivate::scheduleDeferredTask(Function<void ()>&& function)
 {
     ASSERT(function);
     callOnMainThread([weakThis = createWeakPtr(), function = WTFMove(function)] {

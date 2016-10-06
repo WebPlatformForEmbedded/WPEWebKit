@@ -183,12 +183,18 @@ void CachedResource::failBeforeStarting()
     error(CachedResource::LoadError);
 }
 
-static void addAdditionalRequestHeadersToRequest(ResourceRequest& request, const CachedResourceLoader& cachedResourceLoader)
+static void addAdditionalRequestHeadersToRequest(ResourceRequest& request, const CachedResourceLoader& cachedResourceLoader, CachedResource& resource)
 {
+    if (resource.type() == CachedResource::MainResource)
+        return;
+    // In some cases we may try to load resources in frameless documents. Such loads always fail.
+    // FIXME: We shouldn't get this far.
+    if (!cachedResourceLoader.frame())
+        return;
+
     // Note: We skip the Content-Security-Policy check here because we check
     // the Content-Security-Policy at the CachedResourceLoader layer so we can
     // handle different resource types differently.
-
     FrameLoader& frameLoader = cachedResourceLoader.frame()->loader();
     String outgoingReferrer;
     String outgoingOrigin;
@@ -200,8 +206,29 @@ static void addAdditionalRequestHeadersToRequest(ResourceRequest& request, const
         outgoingOrigin = SecurityOrigin::createFromString(outgoingReferrer)->toString();
     }
 
-    auto referrerPolicy = cachedResourceLoader.document() ? cachedResourceLoader.document()->referrerPolicy() : ReferrerPolicy::Default;
-    outgoingReferrer = SecurityPolicy::generateReferrerHeader(referrerPolicy, request.url(), outgoingReferrer);
+    // FIXME: Refactor SecurityPolicy::generateReferrerHeader to align with new terminology used in https://w3c.github.io/webappsec-referrer-policy.
+    switch (resource.options().referrerPolicy) {
+    case FetchOptions::ReferrerPolicy::EmptyString: {
+        ReferrerPolicy referrerPolicy = cachedResourceLoader.document() ? cachedResourceLoader.document()->referrerPolicy() : ReferrerPolicy::Default;
+        outgoingReferrer = SecurityPolicy::generateReferrerHeader(referrerPolicy, request.url(), outgoingReferrer);
+        break; }
+    case FetchOptions::ReferrerPolicy::NoReferrerWhenDowngrade:
+        outgoingReferrer = SecurityPolicy::generateReferrerHeader(ReferrerPolicy::Default, request.url(), outgoingReferrer);
+        break;
+    case FetchOptions::ReferrerPolicy::NoReferrer:
+        outgoingReferrer = String();
+        break;
+    case FetchOptions::ReferrerPolicy::Origin:
+        outgoingReferrer = SecurityPolicy::generateReferrerHeader(ReferrerPolicy::Origin, request.url(), outgoingReferrer);
+        break;
+    case FetchOptions::ReferrerPolicy::OriginWhenCrossOrigin:
+        if (resource.isCrossOrigin())
+            outgoingReferrer = SecurityPolicy::generateReferrerHeader(ReferrerPolicy::Origin, request.url(), outgoingReferrer);
+        break;
+    case FetchOptions::ReferrerPolicy::UnsafeUrl:
+        break;
+    };
+
     if (outgoingReferrer.isEmpty())
         request.clearHTTPReferrer();
     else
@@ -213,7 +240,7 @@ static void addAdditionalRequestHeadersToRequest(ResourceRequest& request, const
 
 void CachedResource::addAdditionalRequestHeaders(CachedResourceLoader& cachedResourceLoader)
 {
-    addAdditionalRequestHeadersToRequest(m_resourceRequest, cachedResourceLoader);
+    addAdditionalRequestHeadersToRequest(m_resourceRequest, cachedResourceLoader, *this);
 }
 
 void CachedResource::load(CachedResourceLoader& cachedResourceLoader, const ResourceLoaderOptions& options)
@@ -231,7 +258,7 @@ void CachedResource::load(CachedResourceLoader& cachedResourceLoader, const Reso
     }
 
     FrameLoader& frameLoader = frame.loader();
-    if (options.securityCheck() == DoSecurityCheck && (frameLoader.state() == FrameStateProvisional || !frameLoader.activeDocumentLoader() || frameLoader.activeDocumentLoader()->isStopping())) {
+    if (options.securityCheck == DoSecurityCheck && (frameLoader.state() == FrameStateProvisional || !frameLoader.activeDocumentLoader() || frameLoader.activeDocumentLoader()->isStopping())) {
         failBeforeStarting();
         return;
     }
@@ -275,8 +302,18 @@ void CachedResource::load(CachedResourceLoader& cachedResourceLoader, const Reso
 #endif
     m_resourceRequest.setPriority(loadPriority());
 
-    if (type() != MainResource)
+    if (type() != MainResource) {
+        if (m_resourceRequest.hasHTTPOrigin())
+            m_origin = SecurityOrigin::createFromString(m_resourceRequest.httpOrigin());
+        else
+            m_origin = cachedResourceLoader.document()->securityOrigin();
+        ASSERT(m_origin);
+
+        if (!m_resourceRequest.url().protocolIsData() && m_origin && !m_origin->canRequest(m_resourceRequest.url()))
+            setCrossOrigin();
+
         addAdditionalRequestHeaders(cachedResourceLoader);
+    }
 
     // FIXME: It's unfortunate that the cache layer and below get to know anything about fragment identifiers.
     // We should look into removing the expectation of that knowledge from the platform network stacks.
@@ -352,7 +389,7 @@ void CachedResource::finish()
 bool CachedResource::passesAccessControlCheck(SecurityOrigin& securityOrigin)
 {
     String errorDescription;
-    return WebCore::passesAccessControlCheck(response(), resourceRequest().allowCookies() ? AllowStoredCredentials : DoNotAllowStoredCredentials, &securityOrigin, errorDescription);
+    return WebCore::passesAccessControlCheck(response(), resourceRequest().allowCookies() ? AllowStoredCredentials : DoNotAllowStoredCredentials, securityOrigin, errorDescription);
 }
 
 bool CachedResource::passesSameOriginPolicyCheck(SecurityOrigin& securityOrigin)
@@ -360,6 +397,23 @@ bool CachedResource::passesSameOriginPolicyCheck(SecurityOrigin& securityOrigin)
     if (securityOrigin.canRequest(responseForSameOriginPolicyChecks().url()))
         return true;
     return passesAccessControlCheck(securityOrigin);
+}
+
+void CachedResource::setCrossOrigin()
+{
+    ASSERT(m_options.mode != FetchOptions::Mode::SameOrigin);
+    m_responseTainting = (m_options.mode == FetchOptions::Mode::Cors) ? ResourceResponse::Tainting::Cors : ResourceResponse::Tainting::Opaque;
+}
+
+bool CachedResource::isCrossOrigin() const
+{
+    return m_responseTainting != ResourceResponse::Tainting::Basic;
+}
+
+bool CachedResource::isClean() const
+{
+    // https://html.spec.whatwg.org/multipage/infrastructure.html#cors-same-origin
+    return !loadFailedOrCanceled() && m_responseTainting != ResourceResponse::Tainting::Opaque;
 }
 
 bool CachedResource::isExpired() const
@@ -392,7 +446,7 @@ std::chrono::microseconds CachedResource::freshnessLifetime(const ResourceRespon
             // FIXME: We should not cache subresources either, but when we tried this
             // it caused performance and flakiness issues in our test infrastructure.
             if (m_type == MainResource || SchemeRegistry::shouldAlwaysRevalidateURLScheme(protocol))
-                return std::chrono::microseconds::zero();
+                return 0us;
         }
 
         return std::chrono::microseconds::max();
@@ -421,8 +475,8 @@ const ResourceResponse& CachedResource::responseForSameOriginPolicyChecks() cons
 
 void CachedResource::setResponse(const ResourceResponse& response)
 {
+    ASSERT(m_response.type() == ResourceResponse::Type::Default);
     m_response = response;
-    m_response.setType(m_responseType);
     m_response.setRedirected(m_redirectChainCacheStatus.status != RedirectChainCacheStatus::NoRedirection);
 
     m_varyingHeaderValues = collectVaryingRequestHeaders(m_resourceRequest, m_response, m_sessionID);
@@ -780,7 +834,7 @@ bool CachedResource::varyHeaderValuesMatch(const ResourceRequest& request, const
         return true;
 
     ResourceRequest requestWithFullHeaders(request);
-    addAdditionalRequestHeadersToRequest(requestWithFullHeaders, cachedResourceLoader);
+    addAdditionalRequestHeadersToRequest(requestWithFullHeaders, cachedResourceLoader, *this);
 
     return verifyVaryingRequestHeaders(m_varyingHeaderValues, requestWithFullHeaders, m_sessionID);
 }

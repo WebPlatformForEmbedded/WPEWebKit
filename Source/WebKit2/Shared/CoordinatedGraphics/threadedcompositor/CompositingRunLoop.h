@@ -30,7 +30,10 @@
 
 #include <functional>
 #include <wtf/Atomics.h>
+#include <wtf/Condition.h>
 #include <wtf/FastMalloc.h>
+#include <wtf/Function.h>
+#include <wtf/NeverDestroyed.h>
 #include <wtf/Noncopyable.h>
 #include <wtf/RunLoop.h>
 
@@ -41,16 +44,16 @@ class CompositingRunLoop {
     WTF_MAKE_FAST_ALLOCATED;
 public:
     CompositingRunLoop(std::function<void ()>&&);
+    ~CompositingRunLoop();
 
-    void performTask(NoncopyableFunction<void ()>&&);
-    void performTaskSync(NoncopyableFunction<void ()>&&);
+    void performTask(Function<void ()>&&);
+    void performTaskSync(Function<void ()>&&);
 
     bool isActive();
     void scheduleUpdate();
     void stopUpdates();
 
     void updateCompleted();
-    RunLoop& runLoop() { return m_runLoop; }
     void run();
     void stop();
 
@@ -63,7 +66,6 @@ private:
 
     void updateTimerFired();
 
-    RunLoop& m_runLoop;
     RunLoop::Timer<CompositingRunLoop> m_updateTimer;
     std::function<void ()> m_updateFunction;
     Atomic<UpdateState> m_updateState;

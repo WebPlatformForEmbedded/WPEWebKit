@@ -28,6 +28,7 @@
 #include "CSSFontSelector.h"
 #include "Chrome.h"
 #include "ChromeClient.h"
+#include "ControlStates.h"
 #include "Document.h"
 #include "EventHandler.h"
 #include "FloatQuad.h"
@@ -109,6 +110,25 @@ static OverrideSizeMap* gExtraBlockOffsetMap = nullptr;
 static const int autoscrollBeltSize = 20;
 static const unsigned backgroundObscurationTestMaxDepth = 4;
 
+using ControlStatesRendererMap = HashMap<const RenderObject*, std::unique_ptr<ControlStates>>;
+static ControlStatesRendererMap& controlStatesRendererMap()
+{
+    static NeverDestroyed<ControlStatesRendererMap> map;
+    return map;
+}
+
+static ControlStates* controlStatesForRenderer(const RenderBox& renderer)
+{
+    return controlStatesRendererMap().ensure(&renderer, [] {
+        return std::make_unique<ControlStates>();
+    }).iterator->value.get();
+}
+
+static void removeControlStatesForRenderer(const RenderBox& renderer)
+{
+    controlStatesRendererMap().remove(&renderer);
+}
+
 bool RenderBox::s_hadOverflowClip = false;
 
 static bool skipBodyBackground(const RenderBox* bodyElementRenderer)
@@ -158,8 +178,7 @@ RenderBox::~RenderBox()
 #endif
 
     view().unscheduleLazyRepaint(*this);
-    if (hasControlStatesForRenderer(this))
-        removeControlStatesForRenderer(this);
+    removeControlStatesForRenderer(*this);
 }
 
 RenderRegion* RenderBox::clampToStartAndEndRegions(RenderRegion* region) const
@@ -401,6 +420,8 @@ void RenderBox::styleDidChange(StyleDifference diff, const RenderStyle* oldStyle
                 rootStyleChanged = true;
             }
             setNeedsLayoutAndPrefWidthsRecalc();
+
+            view().frameView().topContentDirectionDidChange();
         }
 
         if (viewStyle.writingMode() != newStyle.writingMode() && (isDocElementRenderer || !documentElementRenderer->style().hasExplicitlySetWritingMode())) {
@@ -1012,7 +1033,7 @@ LayoutSize RenderBox::cachedSizeForOverflowClip() const
     return layer()->size();
 }
 
-void RenderBox::applyCachedClipAndScrollOffsetForRepaint(LayoutRect& paintRect) const
+void RenderBox::applyCachedClipAndScrollPositionForRepaint(LayoutRect& paintRect) const
 {
     flipForWritingMode(paintRect);
     paintRect.moveBy(-scrollPosition()); // For overflow:auto/scroll/hidden.
@@ -1349,15 +1370,9 @@ void RenderBox::paintBoxDecorations(PaintInfo& paintInfo, const LayoutPoint& pai
 
     // If we have a native theme appearance, paint that before painting our background.
     // The theme will tell us whether or not we should also paint the CSS background.
-    ControlStates* controlStates = nullptr;
     bool borderOrBackgroundPaintingIsNeeded = true;
     if (style().hasAppearance()) {
-        if (hasControlStatesForRenderer(this))
-            controlStates = controlStatesForRenderer(this);
-        else {
-            controlStates = new ControlStates();
-            addControlStatesForRenderer(this, controlStates);
-        }
+        ControlStates* controlStates = controlStatesForRenderer(*this);
         borderOrBackgroundPaintingIsNeeded = theme().paint(*this, *controlStates, paintInfo, paintRect);
         if (controlStates->needsRepaint())
             view().scheduleLazyRepaint(*this);
@@ -2194,16 +2209,15 @@ LayoutRect RenderBox::clippedOverflowRectForRepaint(const RenderLayerModelObject
     return computeRectForRepaint(r, repaintContainer);
 }
 
-static inline bool shouldApplyContainersClipAndOffset(const RenderLayerModelObject* repaintContainer, RenderBox* containerBox)
+bool RenderBox::shouldApplyClipAndScrollPositionForRepaint(const RenderLayerModelObject* repaintContainer) const
 {
 #if PLATFORM(IOS)
-    if (!repaintContainer || repaintContainer != containerBox)
+    if (!repaintContainer || repaintContainer != this)
         return true;
 
-    return !containerBox->hasLayer() || !containerBox->layer()->usesCompositedScrolling();
+    return !hasLayer() || !layer()->usesCompositedScrolling();
 #else
     UNUSED_PARAM(repaintContainer);
-    UNUSED_PARAM(containerBox);
     return true;
 #endif
 }
@@ -2309,8 +2323,8 @@ LayoutRect RenderBox::computeRectForRepaint(const LayoutRect& rect, const Render
     adjustedRect.setLocation(topLeft);
     if (container->hasOverflowClip()) {
         RenderBox& containerBox = downcast<RenderBox>(*container);
-        if (shouldApplyContainersClipAndOffset(repaintContainer, &containerBox)) {
-            containerBox.applyCachedClipAndScrollOffsetForRepaint(adjustedRect);
+        if (containerBox.shouldApplyClipAndScrollPositionForRepaint(repaintContainer)) {
+            containerBox.applyCachedClipAndScrollPositionForRepaint(adjustedRect);
             if (adjustedRect.isEmpty())
                 return adjustedRect;
         }
@@ -2409,19 +2423,20 @@ void RenderBox::computeLogicalWidthInRegion(LogicalExtentComputedValues& compute
         return;
     }
 
+    LayoutUnit containerWidthInInlineDirection = containerLogicalWidth;
+    if (hasPerpendicularContainingBlock)
+        containerWidthInInlineDirection = perpendicularContainingBlockLogicalHeight();
+
     // Width calculations
     if (treatAsReplaced) {
         computedValues.m_extent = logicalWidthLength.value() + borderAndPaddingLogicalWidth();
 #if ENABLE(CSS_GRID_LAYOUT)
-    } else if (parent()->isRenderGrid() && style().logicalWidth().isAuto() && style().logicalMinWidth().isAuto() && style().overflowX() == OVISIBLE && containerLogicalWidth < minPreferredLogicalWidth()) {
+    } else if (parent()->isRenderGrid() && style().logicalWidth().isAuto() && style().logicalMinWidth().isAuto() && style().overflowX() == OVISIBLE && containerWidthInInlineDirection < minPreferredLogicalWidth()) {
         // TODO (lajava) Move this logic to the LayoutGrid class.
         // Implied minimum size of Grid items.
-        computedValues.m_extent = constrainLogicalWidthInRegionByMinMax(minPreferredLogicalWidth(), containerLogicalWidth, cb);
+        computedValues.m_extent = constrainLogicalWidthInRegionByMinMax(minPreferredLogicalWidth(), containerWidthInInlineDirection, cb);
 #endif
     } else {
-        LayoutUnit containerWidthInInlineDirection = containerLogicalWidth;
-        if (hasPerpendicularContainingBlock)
-            containerWidthInInlineDirection = perpendicularContainingBlockLogicalHeight();
         LayoutUnit preferredWidth = computeLogicalWidthInRegionUsing(MainOrPreferredSize, styleToUse.logicalWidth(), containerWidthInInlineDirection, cb, region);
         computedValues.m_extent = constrainLogicalWidthInRegionByMinMax(preferredWidth, containerWidthInInlineDirection, cb, region);
     }
@@ -2442,6 +2457,10 @@ void RenderBox::computeLogicalWidthInRegion(LogicalExtentComputedValues& compute
     
     if (!hasPerpendicularContainingBlock && containerLogicalWidth && containerLogicalWidth != (computedValues.m_extent + computedValues.m_margins.m_start + computedValues.m_margins.m_end)
         && !isFloating() && !isInline() && !cb.isFlexibleBoxIncludingDeprecated()
+#if ENABLE(MATHML)
+        // RenderMathMLBlocks take the size of their content so we must not adjust the margin to fill the container size.
+        && !cb.isRenderMathMLBlock()
+#endif
 #if ENABLE(CSS_GRID_LAYOUT)
         && !cb.isRenderGrid()
 #endif
@@ -2472,7 +2491,7 @@ LayoutUnit RenderBox::fillAvailableMeasure(LayoutUnit availableLogicalWidth, Lay
 LayoutUnit RenderBox::computeIntrinsicLogicalWidthUsing(Length logicalWidthLength, LayoutUnit availableLogicalWidth, LayoutUnit borderAndPadding) const
 {
     if (logicalWidthLength.type() == FillAvailable)
-        return fillAvailableMeasure(availableLogicalWidth);
+        return std::max(borderAndPadding, fillAvailableMeasure(availableLogicalWidth));
 
     LayoutUnit minLogicalWidth = 0;
     LayoutUnit maxLogicalWidth = 0;
@@ -2588,6 +2607,12 @@ bool RenderBox::sizesLogicalWidthToFitContent(SizeType widthType) const
         if (dir == MAUTO || dir == MFORWARD || dir == MBACKWARD || dir == MLEFT || dir == MRIGHT)
             return true;
     }
+
+#if ENABLE(MATHML)
+    // RenderMathMLBlocks take the size of their content, not of their container.
+    if (parent()->isRenderMathMLBlock())
+        return true;
+#endif
 
     // Flexible box items should shrink wrap, so we lay them out at their intrinsic widths.
     // In the case of columns that have a stretch alignment, we layout at the stretched size
@@ -2990,6 +3015,8 @@ Optional<LayoutUnit> RenderBox::computePercentageLogicalHeight(const Length& hei
 #if ENABLE(CSS_GRID_LAYOUT)
     else if (hasOverrideContainingBlockLogicalHeight())
         availableHeight = overrideContainingBlockContentLogicalHeight();
+    else if (cb->isGridItem() && cb->hasOverrideLogicalContentHeight())
+        availableHeight = cb->overrideLogicalContentHeight();
 #endif
     else if (is<RenderTableCell>(*cb)) {
         if (!skippedAutoHeightContainingBlock) {
@@ -4356,7 +4383,7 @@ void RenderBox::computePositionedLogicalHeightReplaced(LogicalExtentComputedValu
     computedValues.m_position = logicalTopPos;
 }
 
-LayoutRect RenderBox::localCaretRect(InlineBox* box, int caretOffset, LayoutUnit* extraWidthToEndOfLine)
+LayoutRect RenderBox::localCaretRect(InlineBox* box, unsigned caretOffset, LayoutUnit* extraWidthToEndOfLine)
 {
     // VisiblePositions at offsets inside containers either a) refer to the positions before/after
     // those containers (tables and select elements) or b) refer to the position inside an empty block.
@@ -5103,7 +5130,7 @@ RenderObject* RenderBox::splitAnonymousBoxesAroundChild(RenderObject* beforeChil
 
             // We have to split the parent box into two boxes and move children
             // from |beforeChild| to end into the new post box.
-            RenderBox* postBox = boxToSplit.createAnonymousBoxWithSameTypeAs(this);
+            auto* postBox = boxToSplit.createAnonymousBoxWithSameTypeAs(*this).release();
             postBox->setChildrenInline(boxToSplit.childrenInline());
             RenderBox* parentBox = downcast<RenderBox>(boxToSplit.parent());
             // We need to invalidate the |parentBox| before inserting the new node

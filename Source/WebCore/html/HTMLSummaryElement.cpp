@@ -23,6 +23,7 @@
 
 #if ENABLE(DETAILS_ELEMENT)
 #include "DetailsMarkerControl.h"
+#include "EventNames.h"
 #include "HTMLDetailsElement.h"
 #include "HTMLFormControlElement.h"
 #include "HTMLSlotElement.h"
@@ -39,7 +40,7 @@ using namespace HTMLNames;
 Ref<HTMLSummaryElement> HTMLSummaryElement::create(const QualifiedName& tagName, Document& document)
 {
     Ref<HTMLSummaryElement> summary = adoptRef(*new HTMLSummaryElement(tagName, document));
-    summary->addShadowRoot(ShadowRoot::create(document, ShadowRoot::Type::UserAgent));
+    summary->addShadowRoot(ShadowRoot::create(document, ShadowRoot::Mode::UserAgent));
     return summary;
 }
 

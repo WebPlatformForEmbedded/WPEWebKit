@@ -23,8 +23,7 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef InspectorScriptProfilerAgent_h
-#define InspectorScriptProfilerAgent_h
+#pragma once
 
 #include "InspectorBackendDispatchers.h"
 #include "InspectorFrontendDispatchers.h"
@@ -53,6 +52,9 @@ public:
     void startTracking(ErrorString&, const bool* includeSamples) override;
     void stopTracking(ErrorString&) override;
 
+    void programmaticCaptureStarted();
+    void programmaticCaptureStopped();
+
     // Debugger::ProfilingClient
     bool isAlreadyProfiling() const override;
     double willEvaluateScript() override;
@@ -79,5 +81,3 @@ private:
 };
 
 } // namespace Inspector
-
-#endif // InspectorScriptProfilerAgent_h

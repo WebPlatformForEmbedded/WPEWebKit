@@ -30,7 +30,7 @@
 
 namespace WebKit {
 
-void WebPageCreationParameters::encode(IPC::ArgumentEncoder& encoder) const
+void WebPageCreationParameters::encode(IPC::Encoder& encoder) const
 {
     encoder << viewSize;
     encoder << viewState;
@@ -83,12 +83,14 @@ void WebPageCreationParameters::encode(IPC::ArgumentEncoder& encoder) const
     encoder << screenSize;
     encoder << availableScreenSize;
     encoder << textAutosizingWidth;
+    encoder << ignoresViewportScaleLimits;
 #endif
     encoder << appleMailPaginationQuirkEnabled;
     encoder << shouldScaleViewToFitDocument;
+    encoder.encodeEnum(userInterfaceLayoutDirection);
 }
 
-bool WebPageCreationParameters::decode(IPC::ArgumentDecoder& decoder, WebPageCreationParameters& parameters)
+bool WebPageCreationParameters::decode(IPC::Decoder& decoder, WebPageCreationParameters& parameters)
 {
     if (!decoder.decode(parameters.viewSize))
         return false;
@@ -186,12 +188,17 @@ bool WebPageCreationParameters::decode(IPC::ArgumentDecoder& decoder, WebPageCre
         return false;
     if (!decoder.decode(parameters.textAutosizingWidth))
         return false;
+    if (!decoder.decode(parameters.ignoresViewportScaleLimits))
+        return false;
 #endif
 
     if (!decoder.decode(parameters.appleMailPaginationQuirkEnabled))
         return false;
 
     if (!decoder.decode(parameters.shouldScaleViewToFitDocument))
+        return false;
+
+    if (!decoder.decodeEnum(parameters.userInterfaceLayoutDirection))
         return false;
 
     return true;

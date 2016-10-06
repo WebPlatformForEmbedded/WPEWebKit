@@ -58,6 +58,28 @@ void UIScriptController::doAsyncTask(JSValueRef)
 }
 #endif
 
+void UIScriptController::setDidStartFormControlInteractionCallback(JSValueRef callback)
+{
+    m_context->registerCallback(callback, CallbackTypeDidStartFormControlInteraction);
+    platformSetDidStartFormControlInteractionCallback();
+}
+
+JSValueRef UIScriptController::didStartFormControlInteractionCallback() const
+{
+    return m_context->callbackWithID(CallbackTypeDidStartFormControlInteraction);
+}
+
+void UIScriptController::setDidEndFormControlInteractionCallback(JSValueRef callback)
+{
+    m_context->registerCallback(callback, CallbackTypeDidEndFormControlInteraction);
+    platformSetDidEndFormControlInteractionCallback();
+}
+
+JSValueRef UIScriptController::didEndFormControlInteractionCallback() const
+{
+    return m_context->callbackWithID(CallbackTypeDidEndFormControlInteraction);
+}
+
 void UIScriptController::setWillBeginZoomingCallback(JSValueRef callback)
 {
     m_context->registerCallback(callback, CallbackTypeWillBeginZooming);
@@ -150,6 +172,26 @@ void UIScriptController::keyDownUsingHardwareKeyboard(JSStringRef, JSValueRef)
 {
 }
 
+void UIScriptController::dismissFormAccessoryView()
+{
+}
+
+void UIScriptController::selectFormAccessoryPickerRow(long)
+{
+}
+
+void UIScriptController::scrollToOffset(long x, long y)
+{
+}
+
+void UIScriptController::keyboardAccessoryBarNext()
+{
+}
+
+void UIScriptController::keyboardAccessoryBarPrevious()
+{
+}
+
 double UIScriptController::zoomScale() const
 {
     return 1;
@@ -168,6 +210,14 @@ double UIScriptController::maximumZoomScale() const
 JSObjectRef UIScriptController::contentVisibleRect() const
 {
     return nullptr;
+}
+
+void UIScriptController::platformSetDidStartFormControlInteractionCallback()
+{
+}
+
+void UIScriptController::platformSetDidEndFormControlInteractionCallback()
+{
 }
 
 void UIScriptController::platformSetWillBeginZoomingCallback()

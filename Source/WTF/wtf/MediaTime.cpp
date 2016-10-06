@@ -59,7 +59,6 @@ static int32_t signum(int64_t val)
 }
 
 const int32_t MediaTime::MaximumTimeScale = 0x7fffffffL;
-const double MediaTime::FuzzinessThreshold = 0.00003;
 
 MediaTime::MediaTime()
     : m_timeValue(0)
@@ -402,7 +401,7 @@ MediaTime::ComparisonFlags MediaTime::compare(const MediaTime& rhs) const
         return LessThan;
 
     if (hasDoubleValue() && rhs.hasDoubleValue()) {
-        if (fabs(m_timeValueAsDouble - rhs.m_timeValueAsDouble) <= FuzzinessThreshold)
+        if (m_timeValueAsDouble == rhs.m_timeValueAsDouble)
             return EqualTo;
 
         return m_timeValueAsDouble < rhs.m_timeValueAsDouble ? LessThan : GreaterThan;
@@ -432,6 +431,13 @@ MediaTime::ComparisonFlags MediaTime::compare(const MediaTime& rhs) const
     if (lhsFactor == rhsFactor)
         return EqualTo;
     return lhsFactor > rhsFactor ? GreaterThan : LessThan;
+}
+
+bool MediaTime::isBetween(const MediaTime& a, const MediaTime& b) const
+{
+    if (a > b)
+        return *this > b && *this < a;
+    return *this > a && *this < b;
 }
 
 const MediaTime& MediaTime::zeroTime()

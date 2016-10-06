@@ -26,6 +26,7 @@
 #include "config.h"
 
 #include "Counters.h"
+#include "DeletedAddressOfOperator.h"
 #include "MoveOnly.h"
 #include "RefLogger.h"
 #include <wtf/HashSet.h>
@@ -388,11 +389,53 @@ TEST(WTF_HashSet, Ref)
         RefLogger a("a");
         Ref<RefLogger> ref(a);
         set.add(WTFMove(ref));
+
+        auto aOut = set.take(&a);
+        ASSERT_TRUE(static_cast<bool>(aOut));
+        ASSERT_EQ(&a, aOut.value().ptr());
+    }
+
+    ASSERT_STREQ("ref(a) deref(a) ", takeLogStr().c_str());
+
+    {
+        HashSet<Ref<RefLogger>> set;
+
+        RefLogger a("a");
+        Ref<RefLogger> ref(a);
+        set.add(WTFMove(ref));
+
+        auto aOut = set.takeAny();
+        ASSERT_TRUE(static_cast<bool>(aOut));
+        ASSERT_EQ(&a, aOut.value().ptr());
+    }
+
+    ASSERT_STREQ("ref(a) deref(a) ", takeLogStr().c_str());
+
+    {
+        HashSet<Ref<RefLogger>> set;
+        auto emptyTake = set.takeAny();
+        ASSERT_FALSE(static_cast<bool>(emptyTake));
+    }
+
+    {
+        HashSet<Ref<RefLogger>> set;
+
+        RefLogger a("a");
+        Ref<RefLogger> ref(a);
+        set.add(WTFMove(ref));
         
         ASSERT_TRUE(set.contains(&a));
     }
 
     ASSERT_STREQ("ref(a) deref(a) ", takeLogStr().c_str());
+}
+
+TEST(WTF_HashSet, DeletedAddressOfOperator)
+{
+    HashSet<DeletedAddressOfOperator> set1;
+    set1.add(10);
+
+    set1.remove(10);
 }
 
 } // namespace TestWebKitAPI

@@ -22,8 +22,7 @@
  *
  */
 
-#ifndef RenderStyle_h
-#define RenderStyle_h
+#pragma once
 
 #include "AnimationList.h"
 #include "BorderValue.h"
@@ -31,20 +30,16 @@
 #include "CSSPrimitiveValue.h"
 #include "CSSPropertyNames.h"
 #include "Color.h"
-#include "ColorSpace.h"
 #include "CounterDirectives.h"
 #include "DataRef.h"
-#include "FontBaseline.h"
 #include "FontDescription.h"
 #include "GraphicsTypes.h"
 #include "Length.h"
 #include "LengthBox.h"
-#include "LengthFunctions.h"
 #include "LengthPoint.h"
 #include "LengthSize.h"
 #include "LineClampValue.h"
 #include "NinePieceImage.h"
-#include "OutlineValue.h"
 #include "Pagination.h"
 #include "RenderStyleConstants.h"
 #include "RoundedRect.h"
@@ -57,7 +52,6 @@
 #include "StyleDeprecatedFlexibleBoxData.h"
 #include "StyleFilterData.h"
 #include "StyleFlexibleBoxData.h"
-#include "StyleInheritedData.h"
 #include "StyleMarqueeData.h"
 #include "StyleMultiColData.h"
 #include "StyleRareInheritedData.h"
@@ -73,7 +67,6 @@
 #include <memory>
 #include <wtf/Forward.h>
 #include <wtf/NeverDestroyed.h>
-#include <wtf/RefCounted.h>
 #include <wtf/StdLibExtras.h>
 #include <wtf/Vector.h>
 
@@ -474,7 +467,7 @@ protected:
 // don't inherit
     NonInheritedFlags noninherited_flags;
 
-#if !ASSERT_DISABLED
+#if !ASSERT_DISABLED || ENABLE(SECURITY_ASSERTIONS)
     bool m_deletionHasBegun { false };
 #endif
 
@@ -503,6 +496,10 @@ public:
 
     static RenderStyle createAnonymousStyleWithDisplay(const RenderStyle& parentStyle, EDisplay);
     static RenderStyle createStyleInheritingFromPseudoStyle(const RenderStyle& pseudoStyle);
+
+#if !ASSERT_DISABLED || ENABLE(SECURITY_ASSERTIONS)
+    bool deletionHasBegun() const { return m_deletionHasBegun; }
+#endif
 
     ContentPosition resolvedJustifyContentPosition(const StyleContentAlignmentData& normalValueBehavior) const;
     ContentDistributionType resolvedJustifyContentDistribution(const StyleContentAlignmentData& normalValueBehavior) const;
@@ -759,7 +756,7 @@ public:
 
     const Length& specifiedLineHeight() const;
     WEBCORE_EXPORT Length lineHeight() const;
-    int computedLineHeight() const;
+    WEBCORE_EXPORT int computedLineHeight() const;
 
     EWhiteSpace whiteSpace() const { return static_cast<EWhiteSpace>(inherited_flags._white_space); }
     static bool autoWrap(EWhiteSpace ws)
@@ -981,8 +978,8 @@ public:
     bool isGridAutoFlowDirectionColumn() const { return (rareNonInheritedData->m_grid->m_gridAutoFlow & InternalAutoFlowDirectionColumn); }
     bool isGridAutoFlowAlgorithmSparse() const { return (rareNonInheritedData->m_grid->m_gridAutoFlow & InternalAutoFlowAlgorithmSparse); }
     bool isGridAutoFlowAlgorithmDense() const { return (rareNonInheritedData->m_grid->m_gridAutoFlow & InternalAutoFlowAlgorithmDense); }
-    const GridTrackSize& gridAutoColumns() const { return rareNonInheritedData->m_grid->m_gridAutoColumns; }
-    const GridTrackSize& gridAutoRows() const { return rareNonInheritedData->m_grid->m_gridAutoRows; }
+    const Vector<GridTrackSize>& gridAutoColumns() const { return rareNonInheritedData->m_grid->m_gridAutoColumns; }
+    const Vector<GridTrackSize>& gridAutoRows() const { return rareNonInheritedData->m_grid->m_gridAutoRows; }
     const Length& gridColumnGap() const { return rareNonInheritedData->m_grid->m_gridColumnGap; }
     const Length& gridRowGap() const { return rareNonInheritedData->m_grid->m_gridRowGap; }
 
@@ -1562,8 +1559,8 @@ public:
     void setJustifySelfPosition(ItemPosition position) { rareNonInheritedData.access()->m_justifySelf.setPosition(position); }
     void setJustifySelfOverflow(OverflowAlignment overflow) { rareNonInheritedData.access()->m_justifySelf.setOverflow(overflow); }
 #if ENABLE(CSS_GRID_LAYOUT)
-    void setGridAutoColumns(const GridTrackSize& length) { SET_NESTED_VAR(rareNonInheritedData, m_grid, m_gridAutoColumns, length); }
-    void setGridAutoRows(const GridTrackSize& length) { SET_NESTED_VAR(rareNonInheritedData, m_grid, m_gridAutoRows, length); }
+    void setGridAutoColumns(const Vector<GridTrackSize>& trackSizeList) { SET_NESTED_VAR(rareNonInheritedData, m_grid, m_gridAutoColumns, trackSizeList); }
+    void setGridAutoRows(const Vector<GridTrackSize>& trackSizeList) { SET_NESTED_VAR(rareNonInheritedData, m_grid, m_gridAutoRows, trackSizeList); }
     void setGridColumns(const Vector<GridTrackSize>& lengths) { SET_NESTED_VAR(rareNonInheritedData, m_grid, m_gridColumns, lengths); }
     void setGridRows(const Vector<GridTrackSize>& lengths) { SET_NESTED_VAR(rareNonInheritedData, m_grid, m_gridRows, lengths); }
     void setGridAutoRepeatColumns(const Vector<GridTrackSize>& lengths) { SET_NESTED_VAR(rareNonInheritedData, m_grid, m_gridAutoRepeatColumns, lengths); }
@@ -2098,8 +2095,8 @@ public:
 
     static GridAutoFlow initialGridAutoFlow() { return AutoFlowRow; }
 
-    static GridTrackSize initialGridAutoColumns() { return GridTrackSize(Length(Auto)); }
-    static GridTrackSize initialGridAutoRows() { return GridTrackSize(Length(Auto)); }
+    static Vector<GridTrackSize> initialGridAutoColumns() { return { GridTrackSize(Length(Auto)) }; }
+    static Vector<GridTrackSize> initialGridAutoRows() { return { GridTrackSize(Length(Auto)) }; }
 
     static NamedGridAreaMap initialNamedGridArea() { return NamedGridAreaMap(); }
     static size_t initialNamedGridAreaCount() { return 0; }
@@ -2351,6 +2348,9 @@ inline void RenderStyle::setHasPseudoStyles(PseudoIdSet pseudoIdSet)
     noninherited_flags.setHasPseudoStyles(pseudoIdSet);
 }
 
-} // namespace WebCore
+inline bool pseudoElementRendererIsNeeded(const RenderStyle* style)
+{
+    return style && style->display() != NONE && (style->contentData() || style->hasFlowFrom());
+}
 
-#endif // RenderStyle_h
+} // namespace WebCore

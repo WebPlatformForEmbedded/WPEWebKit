@@ -30,14 +30,9 @@
 #include "WKAPICast.h"
 #include "WebPreferences.h"
 #include <WebCore/Settings.h>
-#include <wtf/PassRefPtr.h>
 #include <wtf/RefPtr.h>
 
 using namespace WebKit;
-
-#if USE(APPLE_INTERNAL_SDK)
-#include <WebKitAdditions/WKPreferencesAdditions.cpp>
-#endif
 
 WKTypeID WKPreferencesGetTypeID()
 {
@@ -46,20 +41,20 @@ WKTypeID WKPreferencesGetTypeID()
 
 WKPreferencesRef WKPreferencesCreate()
 {
-    RefPtr<WebPreferences> preferences = WebPreferences::createWithLegacyDefaults(String(), "WebKit2.", "WebKit2.");
-    return toAPI(preferences.release().leakRef());
+    auto preferences = WebPreferences::createWithLegacyDefaults(String(), "WebKit2.", "WebKit2.");
+    return toAPI(preferences.leakRef());
 }
 
 WKPreferencesRef WKPreferencesCreateWithIdentifier(WKStringRef identifierRef)
 {
-    RefPtr<WebPreferences> preferences = WebPreferences::createWithLegacyDefaults(toWTFString(identifierRef), "WebKit2.", "WebKit2.");
-    return toAPI(preferences.release().leakRef());
+    auto preferences = WebPreferences::createWithLegacyDefaults(toWTFString(identifierRef), "WebKit2.", "WebKit2.");
+    return toAPI(preferences.leakRef());
 }
 
 WKPreferencesRef WKPreferencesCreateCopy(WKPreferencesRef preferencesRef)
 {
-    RefPtr<WebPreferences> preferences = toImpl(preferencesRef)->copy();
-    return toAPI(preferences.release().leakRef());
+    auto preferences = toImpl(preferencesRef)->copy();
+    return toAPI(preferences.leakRef());
 }
 
 void WKPreferencesEnableAllExperimentalFeatures(WKPreferencesRef preferencesRef)
@@ -1524,6 +1519,36 @@ void WKPreferencesSetSelectionPaintingWithoutSelectionGapsEnabled(WKPreferencesR
 bool WKPreferencesGetSelectionPaintingWithoutSelectionGapsEnabled(WKPreferencesRef preferencesRef)
 {
     return toImpl(preferencesRef)->selectionPaintingWithoutSelectionGapsEnabled();
+}
+
+void WKPreferencesSetAllowsPictureInPictureMediaPlayback(WKPreferencesRef preferencesRef, bool enabled)
+{
+    toImpl(preferencesRef)->setAllowsPictureInPictureMediaPlayback(enabled);
+}
+
+bool WKPreferencesGetAllowsPictureInPictureMediaPlayback(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->allowsPictureInPictureMediaPlayback();
+}
+
+WK_EXPORT bool WKPreferencesGetApplePayEnabled(WKPreferencesRef preferencesRef)
+{
+    return WebKit::toImpl(preferencesRef)->applePayEnabled();
+}
+
+void WKPreferencesSetApplePayEnabled(WKPreferencesRef preferencesRef, bool enabled)
+{
+    WebKit::toImpl(preferencesRef)->setApplePayEnabled(enabled);
+}
+
+bool WKPreferencesGetApplePayCapabilityDisclosureAllowed(WKPreferencesRef preferencesRef)
+{
+    return WebKit::toImpl(preferencesRef)->applePayCapabilityDisclosureAllowed();
+}
+
+void WKPreferencesSetApplePayCapabilityDisclosureAllowed(WKPreferencesRef preferencesRef, bool allowed)
+{
+    WebKit::toImpl(preferencesRef)->setApplePayCapabilityDisclosureAllowed(allowed);
 }
 
 void WKPreferencesSetAllowRunningOfInsecureContent(WKPreferencesRef preferencesRef, bool enabled)

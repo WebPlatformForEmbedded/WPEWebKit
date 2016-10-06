@@ -83,7 +83,6 @@ bool Settings::gAVFoundationNSURLSessionEnabled = true;
 
 #if PLATFORM(COCOA)
 bool Settings::gQTKitEnabled = false;
-bool Settings::gCookieStoragePartitioningEnabled = false;
 #endif
 
 bool Settings::gMockScrollbarsEnabled = false;
@@ -175,7 +174,7 @@ static const bool defaultSelectTrailingWhitespaceEnabled = false;
 // This amount of time must have elapsed before we will even consider scheduling a layout without a delay.
 // FIXME: For faster machines this value can really be lowered to 200. 250 is adequate, but a little high
 // for dual G5s. :)
-static const auto layoutScheduleThreshold = std::chrono::milliseconds(250);
+static const auto layoutScheduleThreshold = 250ms;
 
 Settings::Settings(Page* page)
     : m_page(nullptr)
@@ -193,6 +192,7 @@ Settings::Settings(Page* page)
     , m_loadsImagesAutomatically(false)
     , m_areImagesEnabled(true)
     , m_preferMIMETypeForImages(false)
+    , m_isCachedPDFImageEnabled(true)
     , m_arePluginsEnabled(false)
     , m_isScriptEnabled(false)
     , m_needsAdobeFrameReloadingQuirk(false)
@@ -218,6 +218,11 @@ Settings::Settings(Page* page)
     AtomicString::init();
     initializeDefaultFontFamilies();
     m_page = page; // Page is not yet fully initialized when constructing Settings, so keeping m_page null over initializeDefaultFontFamilies() call.
+
+#if USE(GSTREAMER) && ENABLE(MEDIA_SOURCE)
+    // Use a lower default value to make the "29. VideoBufferSize" YoutubeTV 2016 test pass.
+    m_maximumSourceBufferSize = 130 * 1024 * 1024;
+#endif
 }
 
 Settings::~Settings()
@@ -425,6 +430,11 @@ void Settings::setPreferMIMETypeForImages(bool preferMIMETypeForImages)
     m_preferMIMETypeForImages = preferMIMETypeForImages;
 }
 
+void Settings::setCachedPDFImageEnabled(bool isCachedPDFImageEnabled)
+{
+    m_isCachedPDFImageEnabled = isCachedPDFImageEnabled;
+}
+
 void Settings::setForcePendingWebGLPolicy(bool forced)
 {
     m_forcePendingWebGLPolicy = forced;
@@ -591,11 +601,6 @@ void Settings::setQTKitEnabled(bool enabled)
 
     gQTKitEnabled = enabled;
     HTMLMediaElement::resetMediaEngines();
-}
-    
-void Settings::setCookieStoragePartitioningEnabled(bool enabled)
-{
-    gCookieStoragePartitioningEnabled = enabled;
 }
 #endif
 

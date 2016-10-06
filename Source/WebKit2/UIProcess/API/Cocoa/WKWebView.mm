@@ -35,6 +35,7 @@
 #import "DiagnosticLoggingClient.h"
 #import "FindClient.h"
 #import "LegacySessionStateCoding.h"
+#import "Logging.h"
 #import "NavigationState.h"
 #import "ObjCObjectGraph.h"
 #import "RemoteLayerTreeScrollingPerformanceData.h"
@@ -75,19 +76,20 @@
 #import "WebViewImpl.h"
 #import "_WKDiagnosticLoggingDelegate.h"
 #import "_WKFindDelegate.h"
-#import "_WKFormDelegate.h"
 #import "_WKFrameHandleInternal.h"
 #import "_WKHitTestResultInternal.h"
 #import "_WKInputDelegate.h"
 #import "_WKRemoteObjectRegistryInternal.h"
 #import "_WKSessionStateInternal.h"
 #import "_WKVisitedLinkStoreInternal.h"
+#import <WebCore/GraphicsContextCG.h>
 #import <WebCore/IOSurface.h>
 #import <WebCore/JSDOMBinding.h>
 #import <WebCore/NSTextFinderSPI.h>
 #import <WebCore/PlatformScreen.h>
 #import <WebCore/RuntimeApplicationChecks.h>
 #import <WebCore/Settings.h>
+#import <WebCore/TextStream.h>
 #import <WebCore/WritingMode.h>
 #import <wtf/HashMap.h>
 #import <wtf/MathExtras.h>
@@ -161,6 +163,16 @@ enum class DynamicViewportUpdateMode {
 static const uint32_t firstSDKVersionWithLinkPreviewEnabledByDefault = 0xA0000;
 #endif
 
+#if USE(APPLE_INTERNAL_SDK)
+#import <WebKitAdditions/WKWebViewAdditionsBefore.mm>
+#else
+@implementation WKWebView (Additions)
+- (void)_setIsBlankBeforeFirstNonEmptyLayout:(BOOL)isBlank
+{
+}
+@end
+#endif
+
 #if PLATFORM(MAC)
 #import "WKTextFinderClient.h"
 #import "WKViewInternal.h"
@@ -222,7 +234,7 @@ WKWebView* fromWebPageProxy(WebKit::WebPageProxy& page)
     uint64_t _firstPaintAfterCommitLoadTransactionID;
     DynamicViewportUpdateMode _dynamicViewportUpdateMode;
     CATransform3D _resizeAnimationTransformAdjustments;
-    uint64_t _resizeAnimationTransformTransactionID;
+    Optional<uint64_t> _resizeAnimationTransformTransactionID;
     RetainPtr<UIView> _resizeAnimationView;
     CGFloat _lastAdjustmentForScroller;
     Optional<CGRect> _frozenVisibleContentRect;
@@ -322,15 +334,6 @@ static bool shouldAllowPictureInPictureMediaPlayback()
     return shouldAllowPictureInPictureMediaPlayback;
 }
 
-#if __IPHONE_OS_VERSION_MIN_REQUIRED >= 100000
-static void forceAlwaysUserScalableChangedCallback(CFNotificationCenterRef, void* observer, CFStringRef, const void*, CFDictionaryRef)
-{
-    ASSERT(observer);
-    WKWebView* webview = static_cast<WKWebView*>(observer);
-    [webview _updateForceAlwaysUserScalable];
-}
-#endif
-
 #endif
 
 #if ENABLE(DATA_DETECTION) && PLATFORM(IOS)
@@ -377,11 +380,11 @@ static uint32_t convertSystemLayoutDirection(NSUserInterfaceLayoutDirection dire
 {
     switch (direction) {
     case NSUserInterfaceLayoutDirectionLeftToRight:
-        return static_cast<uint32_t>(WebCore::LTR);
+        return static_cast<uint32_t>(WebCore::UserInterfaceLayoutDirection::LTR);
     case NSUserInterfaceLayoutDirectionRightToLeft:
-        return static_cast<uint32_t>(WebCore::RTL);
+        return static_cast<uint32_t>(WebCore::UserInterfaceLayoutDirection::RTL);
     }
-    return static_cast<uint32_t>(WebCore::LTR);
+    return static_cast<uint32_t>(WebCore::UserInterfaceLayoutDirection::LTR);
 }
 #endif
 
@@ -434,7 +437,8 @@ static uint32_t convertSystemLayoutDirection(NSUserInterfaceLayoutDirection dire
     pageConfiguration->preferenceValues().set(WebKit::WebPreferencesKey::shouldConvertPositionStyleOnCopyKey(), WebKit::WebPreferencesStore::Value(!![_configuration _convertsPositionStyleOnCopy]));
     pageConfiguration->preferenceValues().set(WebKit::WebPreferencesKey::httpEquivEnabledKey(), WebKit::WebPreferencesStore::Value(!![_configuration _allowsMetaRefresh]));
     pageConfiguration->preferenceValues().set(WebKit::WebPreferencesKey::allowUniversalAccessFromFileURLsKey(), WebKit::WebPreferencesStore::Value(!![_configuration _allowUniversalAccessFromFileURLs]));
-    
+    pageConfiguration->setInitialCapitalizationEnabled([_configuration _initialCapitalizationEnabled]);
+
 #if PLATFORM(MAC)
     pageConfiguration->preferenceValues().set(WebKit::WebPreferencesKey::showsURLsInToolTipsEnabledKey(), WebKit::WebPreferencesStore::Value(!![_configuration _showsURLsInToolTips]));
     pageConfiguration->preferenceValues().set(WebKit::WebPreferencesKey::serviceControlsEnabledKey(), WebKit::WebPreferencesStore::Value(!![_configuration _serviceControlsEnabled]));
@@ -479,8 +483,8 @@ static uint32_t convertSystemLayoutDirection(NSUserInterfaceLayoutDirection dire
     pageConfiguration->preferenceValues().set(WebKit::WebPreferencesKey::allowsAirPlayForMediaPlaybackKey(), WebKit::WebPreferencesStore::Value(!![_configuration allowsAirPlayForMediaPlayback]));
 #endif
 
-#if USE(APPLE_INTERNAL_SDK)
-#import <WebKitAdditions/WKWebViewInitialization.mm>
+#if ENABLE(APPLE_PAY)
+    pageConfiguration->preferenceValues().set(WebKit::WebPreferencesKey::applePayEnabledKey(), WebKit::WebPreferencesStore::Value(!![_configuration _applePayEnabled]));
 #endif
 
 #if PLATFORM(IOS)
@@ -488,6 +492,8 @@ static uint32_t convertSystemLayoutDirection(NSUserInterfaceLayoutDirection dire
     _scrollView = adoptNS([[WKScrollView alloc] initWithFrame:bounds]);
     [_scrollView setInternalDelegate:self];
     [_scrollView setBouncesZoom:YES];
+
+    [self _setIsBlankBeforeFirstNonEmptyLayout:YES];
 
     [self addSubview:_scrollView.get()];
 
@@ -519,12 +525,9 @@ static uint32_t convertSystemLayoutDirection(NSUserInterfaceLayoutDirection dire
     [center addObserver:self selector:@selector(_windowDidRotate:) name:UIWindowDidRotateNotification object:nil];
     [center addObserver:self selector:@selector(_contentSizeCategoryDidChange:) name:UIContentSizeCategoryDidChangeNotification object:nil];
     _page->contentSizeCategoryDidChange([self _contentSizeCategory]);
-    
-#if __IPHONE_OS_VERSION_MIN_REQUIRED >= 100000
-    CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), (__bridge const void *)(self), forceAlwaysUserScalableChangedCallback, kAXSAllowForceWebScalingEnabledNotification, 0, CFNotificationSuspensionBehaviorDeliverImmediately);
-#endif
 
     [[_configuration _contentProviderRegistry] addPage:*_page];
+    _page->setForceAlwaysUserScalable([_configuration ignoresViewportScaleLimits]);
 #endif
 
 #if PLATFORM(MAC)
@@ -541,6 +544,8 @@ static uint32_t convertSystemLayoutDirection(NSUserInterfaceLayoutDirection dire
         _page->setApplicationNameForUserAgent(applicationNameForUserAgent);
 
     _navigationState = std::make_unique<WebKit::NavigationState>(self);
+    _page->setNavigationClient(_navigationState->createNavigationClient());
+
     _uiDelegate = std::make_unique<WebKit::UIDelegate>(self);
     _page->setFindClient(std::make_unique<WebKit::FindClient>(self));
     _page->setDiagnosticLoggingClient(std::make_unique<WebKit::DiagnosticLoggingClient>(self));
@@ -661,7 +666,7 @@ static uint32_t convertSystemLayoutDirection(NSUserInterfaceLayoutDirection dire
     if (!navigation)
         return nil;
 
-    return [wrapper(*navigation.release().leakRef()) autorelease];
+    return [wrapper(*navigation.leakRef()) autorelease];
 }
 
 - (WKNavigation *)loadFileURL:(NSURL *)URL allowingReadAccessToURL:(NSURL *)readAccessURL
@@ -676,7 +681,7 @@ static uint32_t convertSystemLayoutDirection(NSUserInterfaceLayoutDirection dire
     if (!navigation)
         return nil;
 
-    return [wrapper(*navigation.release().leakRef()) autorelease];
+    return [wrapper(*navigation.leakRef()) autorelease];
 }
 
 - (WKNavigation *)loadHTMLString:(NSString *)string baseURL:(NSURL *)baseURL
@@ -692,7 +697,7 @@ static uint32_t convertSystemLayoutDirection(NSUserInterfaceLayoutDirection dire
     if (!navigation)
         return nil;
 
-    return [wrapper(*navigation.release().leakRef()) autorelease];
+    return [wrapper(*navigation.leakRef()) autorelease];
 }
 
 - (WKNavigation *)goToBackForwardListItem:(WKBackForwardListItem *)item
@@ -701,7 +706,7 @@ static uint32_t convertSystemLayoutDirection(NSUserInterfaceLayoutDirection dire
     if (!navigation)
         return nil;
 
-    return [wrapper(*navigation.release().leakRef()) autorelease];
+    return [wrapper(*navigation.leakRef()) autorelease];
 }
 
 - (NSString *)title
@@ -758,7 +763,7 @@ static uint32_t convertSystemLayoutDirection(NSUserInterfaceLayoutDirection dire
     if (!navigation)
         return nil;
  
-    return [wrapper(*navigation.release().leakRef()) autorelease];
+    return [wrapper(*navigation.leakRef()) autorelease];
 }
 
 - (WKNavigation *)goForward
@@ -767,7 +772,7 @@ static uint32_t convertSystemLayoutDirection(NSUserInterfaceLayoutDirection dire
     if (!navigation)
         return nil;
 
-    return [wrapper(*navigation.release().leakRef()) autorelease];
+    return [wrapper(*navigation.leakRef()) autorelease];
 }
 
 - (WKNavigation *)reload
@@ -778,7 +783,7 @@ static uint32_t convertSystemLayoutDirection(NSUserInterfaceLayoutDirection dire
     if (!navigation)
         return nil;
 
-    return [wrapper(*navigation.release().leakRef()) autorelease];
+    return [wrapper(*navigation.leakRef()) autorelease];
 }
 
 - (WKNavigation *)reloadFromOrigin
@@ -789,7 +794,7 @@ static uint32_t convertSystemLayoutDirection(NSUserInterfaceLayoutDirection dire
     if (!navigation)
         return nil;
 
-    return [wrapper(*navigation.release().leakRef()) autorelease];
+    return [wrapper(*navigation.leakRef()) autorelease];
 }
 
 - (void)stopLoading
@@ -942,6 +947,12 @@ static WKErrorCode callbackErrorCode(WebKit::CallbackBase::Error error)
 
     if (!CGSizeEqualToSize(oldBounds.size, bounds.size))
         [self _frameOrBoundsChanged];
+}
+
+- (void)layoutSubviews
+{
+    [super layoutSubviews];
+    [self _frameOrBoundsChanged];
 }
 
 - (UIScrollView *)scrollView
@@ -1222,7 +1233,8 @@ static inline bool areEssentiallyEqualAsFloat(float a, float b)
         return;
 
     if (_dynamicViewportUpdateMode != DynamicViewportUpdateMode::NotResizing) {
-        if (layerTreeTransaction.transactionID() >= _resizeAnimationTransformTransactionID) {
+        if (_resizeAnimationTransformTransactionID && layerTreeTransaction.transactionID() >= _resizeAnimationTransformTransactionID.value()) {
+            _resizeAnimationTransformTransactionID = Nullopt;
             [_resizeAnimationView layer].sublayerTransform = _resizeAnimationTransformAdjustments;
             if (_dynamicViewportUpdateMode == DynamicViewportUpdateMode::ResizingWithDocumentHidden) {
                 [_contentView setHidden:NO];
@@ -1376,14 +1388,17 @@ static inline bool areEssentiallyEqualAsFloat(float a, float b)
 
 #if USE(IOSURFACE)
     WebCore::IOSurface::Format snapshotFormat = WebCore::screenSupportsExtendedColor() ? WebCore::IOSurface::Format::RGB10 : WebCore::IOSurface::Format::RGBA;
-    auto surface = WebCore::IOSurface::create(WebCore::expandedIntSize(snapshotSize), WebCore::ColorSpaceSRGB, snapshotFormat);
+    auto surface = WebCore::IOSurface::create(WebCore::expandedIntSize(snapshotSize), WebCore::sRGBColorSpaceRef(), snapshotFormat);
+    if (!surface)
+        return nullptr;
     CARenderServerRenderLayerWithTransform(MACH_PORT_NULL, self.layer.context.contextId, reinterpret_cast<uint64_t>(self.layer), surface->surface(), 0, 0, &transform);
 
     WebCore::IOSurface::Format compressedFormat = WebCore::IOSurface::Format::YUV422;
     if (WebCore::IOSurface::allowConversionFromFormatToFormat(snapshotFormat, compressedFormat)) {
         RefPtr<WebKit::ViewSnapshot> viewSnapshot = WebKit::ViewSnapshot::create(nullptr);
         WebCore::IOSurface::convertToFormat(WTFMove(surface), WebCore::IOSurface::Format::YUV422, [viewSnapshot](std::unique_ptr<WebCore::IOSurface> convertedSurface) {
-            viewSnapshot->setSurface(WTFMove(convertedSurface));
+            if (convertedSurface)
+                viewSnapshot->setSurface(WTFMove(convertedSurface));
         });
 
         return viewSnapshot;
@@ -1417,6 +1432,8 @@ static inline bool areEssentiallyEqualAsFloat(float a, float b)
 
     if (scale != zoomScale)
         _page->willStartUserTriggeredZooming();
+
+    LOG_WITH_STREAM(VisibleRects, stream << "_zoomToPoint:" << point << " scale: " << scale << " duration:" << duration);
 
     [_scrollView _zoomToCenter:point scale:scale duration:duration];
 }
@@ -1518,6 +1535,8 @@ static WebCore::FloatPoint constrainContentOffset(WebCore::FloatPoint contentOff
 
     [_contentView willStartZoomOrScroll];
 
+    LOG_WITH_STREAM(VisibleRects, stream << "_scrollToRect: scrolling to " << [_scrollView contentOffset] + scrollViewOffsetDelta);
+
     [_scrollView setContentOffset:([_scrollView contentOffset] + scrollViewOffsetDelta) animated:YES];
     return true;
 }
@@ -1534,6 +1553,9 @@ static WebCore::FloatPoint constrainContentOffset(WebCore::FloatPoint contentOff
     if (CGPointEqualToPoint(boundedOffset, currentOffset))
         return;
     [_contentView willStartZoomOrScroll];
+
+    LOG_WITH_STREAM(VisibleRects, stream << "_scrollByContentOffset: scrolling to " << boundedOffset);
+
     [_scrollView setContentOffset:boundedOffset animated:YES];
 }
 
@@ -1659,6 +1681,8 @@ static WebCore::FloatPoint constrainContentOffset(WebCore::FloatPoint contentOff
     if (scale != contentZoomScale(self))
         _page->willStartUserTriggeredZooming();
 
+    LOG_WITH_STREAM(VisibleRects, stream << "_zoomToFocusRect: zooming to " << newCenter << " scale:" << scale);
+
     // The newCenter has been computed in the new scale, but _zoomToCenter expected the center to be in the original scale.
     newCenter.scale(1 / scale, 1 / scale);
     [_scrollView _zoomToCenter:newCenter
@@ -1735,11 +1759,16 @@ static WebCore::FloatPoint constrainContentOffset(WebCore::FloatPoint contentOff
     if (!_viewportMetaTagWidthWasExplicit || _viewportMetaTagCameFromImageDocument)
         return YES;
 
-    // For scalable viewports, only disable double tap gestures if the viewport width is device width.
+    // If the page set a viewport width that wasn't the device width, then it was
+    // scaled and thus will probably need to zoom.
     if (_viewportMetaTagWidth != WebCore::ViewportArguments::ValueDeviceWidth)
         return YES;
 
-    return !areEssentiallyEqualAsFloat(contentZoomScale(self), _initialScaleFactor);
+    // At this point, we have a page that asked for width = device-width. However,
+    // if the content's width and height were large, we might have had to shrink it.
+    // Since we'll enable double tap zoom whenever we're not at the actual
+    // initial scale, this simply becomes a test of the current scale against 1.
+    return !areEssentiallyEqualAsFloat(contentZoomScale(self), 1);
 }
 
 #pragma mark - UIScrollViewDelegate
@@ -1898,7 +1927,10 @@ static WebCore::FloatPoint constrainContentOffset(WebCore::FloatPoint contentOff
 
 - (CGRect)_visibleContentRect
 {
-    CGRect visibleRectInContentCoordinates = _frozenVisibleContentRect ? _frozenVisibleContentRect.value() : [self convertRect:self.bounds toView:_contentView.get()];
+    if (_frozenVisibleContentRect)
+        return _frozenVisibleContentRect.value();
+
+    CGRect visibleRectInContentCoordinates = [self convertRect:self.bounds toView:_contentView.get()];
     
     if (UIScrollView *enclosingScroller = [self _scroller]) {
         CGRect viewVisibleRect = [self _visibleRectInEnclosingScrollView:enclosingScroller];
@@ -2057,7 +2089,7 @@ static bool scrollViewCanScroll(UIScrollView *scrollView)
         }
     }
 #endif
-    
+
     [_contentView didUpdateVisibleRect:visibleRectInContentCoordinates
         unobscuredRect:unobscuredRectInContentCoordinates
         unobscuredRectInScrollViewCoordinates:unobscuredRect
@@ -2066,6 +2098,11 @@ static bool scrollViewCanScroll(UIScrollView *scrollView)
         inStableState:inStableState
         isChangingObscuredInsetsInteractively:_isChangingObscuredInsetsInteractively
         enclosedInScrollableAncestorView:scrollViewCanScroll([self _scroller])];
+}
+
+- (void)_didFirstVisuallyNonEmptyLayoutForMainFrame
+{
+    [self _setIsBlankBeforeFirstNonEmptyLayout:NO];
 }
 
 - (void)_didFinishLoadForMainFrame
@@ -2201,17 +2238,14 @@ static bool scrollViewCanScroll(UIScrollView *scrollView)
 
     _frozenVisibleContentRect = [self convertRect:fullViewRect toView:_contentView.get()];
     _frozenUnobscuredContentRect = [self convertRect:unobscuredRect toView:_contentView.get()];
+    
+    LOG_WITH_STREAM(VisibleRects, stream << "_navigationGestureDidBegin: freezing visibleContentRect " << _frozenVisibleContentRect.value() << " UnobscuredContentRect " << _frozenUnobscuredContentRect.value());
 }
 
 - (void)_navigationGestureDidEnd
 {
     _frozenVisibleContentRect = Nullopt;
     _frozenUnobscuredContentRect = Nullopt;
-}
-
-- (void)_updateForceAlwaysUserScalable
-{
-    _page->updateForceAlwaysUserScalable();
 }
 
 #endif // PLATFORM(IOS)
@@ -3177,7 +3211,7 @@ WEBCORE_COMMAND(yankAndSelect)
     if (!navigation)
         return nil;
 
-    return [wrapper(*navigation.release().leakRef()) autorelease];
+    return [wrapper(*navigation.leakRef()) autorelease];
 }
 
 - (NSArray *)_certificateChain
@@ -3258,7 +3292,7 @@ WEBCORE_COMMAND(yankAndSelect)
     if (!navigation)
         return nil;
     
-    return [wrapper(*navigation.release().leakRef()) autorelease];
+    return [wrapper(*navigation.leakRef()) autorelease];
 }
 
 - (void)_killWebContentProcessAndResetState
@@ -3339,12 +3373,24 @@ static int32_t activeOrientation(WKWebView *webView)
     WebKit::SessionState sessionState = _page->sessionState();
 
     // FIXME: This should not use the legacy session state encoder.
-    return [wrapper(*WebKit::encodeLegacySessionState(sessionState).release().leakRef()) autorelease];
+    return [wrapper(*WebKit::encodeLegacySessionState(sessionState).leakRef()) autorelease];
 }
 
 - (_WKSessionState *)_sessionState
 {
     return adoptNS([[_WKSessionState alloc] _initWithSessionState:_page->sessionState()]).autorelease();
+}
+
+- (_WKSessionState *)_sessionStateWithFilter:(BOOL (^)(WKBackForwardListItem *item))filter
+{
+    WebKit::SessionState sessionState = _page->sessionState([filter](WebKit::WebBackForwardListItem& item) {
+        if (!filter)
+            return true;
+
+        return (bool)filter(wrapper(item));
+    });
+
+    return adoptNS([[_WKSessionState alloc] _initWithSessionState:sessionState]).autorelease();
 }
 
 - (void)_restoreFromSessionStateData:(NSData *)sessionStateData
@@ -3363,7 +3409,7 @@ static int32_t activeOrientation(WKWebView *webView)
     if (!navigation)
         return nil;
 
-    return [wrapper(*navigation.release().leakRef()) autorelease];
+    return [wrapper(*navigation.leakRef()) autorelease];
 }
 
 - (void)_close
@@ -3683,11 +3729,6 @@ static inline WebKit::FindOptions toFindOptions(_WKFindOptions wkFindOptions)
     return _inputDelegate.getAutoreleased();
 }
 
-- (id <_WKFormDelegate>)_formDelegate
-{
-    return (id <_WKFormDelegate>)[self _inputDelegate];
-}
-
 - (void)_setInputDelegate:(id <_WKInputDelegate>)inputDelegate
 {
     _inputDelegate = inputDelegate;
@@ -3749,11 +3790,6 @@ static inline WebKit::FindOptions toFindOptions(_WKFindOptions wkFindOptions)
         _page->setFormClient(std::make_unique<FormClient>(self));
     else
         _page->setFormClient(nullptr);
-}
-
-- (void)_setFormDelegate:(id <_WKFormDelegate>)formDelegate
-{
-    [self _setInputDelegate:(id <_WKInputDelegate>)formDelegate];
 }
 
 - (BOOL)_isDisplayingStandaloneImageDocument
@@ -4203,7 +4239,11 @@ static inline WebKit::FindOptions toFindOptions(_WKFindOptions wkFindOptions)
 #if USE(IOSURFACE)
     // If we are parented and thus won't incur a significant penalty from paging in tiles, snapshot the view hierarchy directly.
     if (CADisplay *display = self.window.screen._display) {
-        auto surface = WebCore::IOSurface::create(WebCore::expandedIntSize(WebCore::FloatSize(imageSize)), WebCore::ColorSpaceSRGB);
+        auto surface = WebCore::IOSurface::create(WebCore::expandedIntSize(WebCore::FloatSize(imageSize)), WebCore::sRGBColorSpaceRef());
+        if (!surface) {
+            completionHandler(nullptr);
+            return;
+        }
         CGFloat imageScaleInViewCoordinates = imageWidth / rectInViewCoordinates.size.width;
         CATransform3D transform = CATransform3DMakeScale(imageScaleInViewCoordinates, imageScaleInViewCoordinates, 1);
         transform = CATransform3DTranslate(transform, -rectInViewCoordinates.origin.x, -rectInViewCoordinates.origin.y, 0);
@@ -4296,6 +4336,27 @@ static inline WebKit::FindOptions toFindOptions(_WKFindOptions wkFindOptions)
     UIViewPrintFormatter *viewPrintFormatter = self.viewPrintFormatter;
     ASSERT([viewPrintFormatter isKindOfClass:[_WKWebViewPrintFormatter class]]);
     return (_WKWebViewPrintFormatter *)viewPrintFormatter;
+}
+
+static WebCore::UserInterfaceLayoutDirection toUserInterfaceLayoutDirection(UISemanticContentAttribute contentAttribute)
+{
+    auto direction = [UIView userInterfaceLayoutDirectionForSemanticContentAttribute:contentAttribute];
+    switch (direction) {
+    case UIUserInterfaceLayoutDirectionLeftToRight:
+        return WebCore::UserInterfaceLayoutDirection::LTR;
+    case UIUserInterfaceLayoutDirectionRightToLeft:
+        return WebCore::UserInterfaceLayoutDirection::RTL;
+    }
+
+    ASSERT_NOT_REACHED();
+    return WebCore::UserInterfaceLayoutDirection::LTR;
+}
+
+- (void)setSemanticContentAttribute:(UISemanticContentAttribute)contentAttribute
+{
+    [super setSemanticContentAttribute:contentAttribute];
+
+    _page->setUserInterfaceLayoutDirection(toUserInterfaceLayoutDirection(contentAttribute));
 }
 
 #else // #if PLATFORM(IOS)
@@ -4400,6 +4461,16 @@ static inline WebKit::FindOptions toFindOptions(_WKFindOptions wkFindOptions)
     _impl->setClipsToVisibleRect(expandsToFit);
 }
 
+- (BOOL)_shouldExpandContentToViewHeightForAutoLayout
+{
+    return _impl->shouldExpandToViewHeightForAutoLayout();
+}
+
+- (void)_setShouldExpandContentToViewHeightForAutoLayout:(BOOL)shouldExpand
+{
+    return _impl->setShouldExpandToViewHeightForAutoLayout(shouldExpand);
+}
+
 - (NSPrintOperation *)_printOperationWithPrintInfo:(NSPrintInfo *)printInfo
 {
     if (auto webFrameProxy = _page->mainFrame())
@@ -4412,6 +4483,13 @@ static inline WebKit::FindOptions toFindOptions(_WKFindOptions wkFindOptions)
     if (auto webFrameProxy = _page->process().webFrame(frameHandle._frameID))
         return _impl->printOperationWithPrintInfo(printInfo, *webFrameProxy);
     return nil;
+}
+
+- (void)setUserInterfaceLayoutDirection:(NSUserInterfaceLayoutDirection)userInterfaceLayoutDirection
+{
+    [super setUserInterfaceLayoutDirection:userInterfaceLayoutDirection];
+
+    _impl->setUserInterfaceLayoutDirection(userInterfaceLayoutDirection);
 }
 
 #endif
@@ -4436,6 +4514,36 @@ static inline WebKit::FindOptions toFindOptions(_WKFindOptions wkFindOptions)
 - (CGPoint)_convertPointFromViewToContents:(CGPoint)point
 {
     return [self convertPoint:point toView:self._currentContentView];
+}
+
+- (void)keyboardAccessoryBarNext
+{
+    [_contentView accessoryTab:YES];
+}
+
+- (void)keyboardAccessoryBarPrevious
+{
+    [_contentView accessoryTab:NO];
+}
+
+- (void)dismissFormAccessoryView
+{
+    [_contentView accessoryDone];
+}
+
+- (void)selectFormAccessoryPickerRow:(int)rowIndex
+{
+    [_contentView selectFormAccessoryPickerRow:rowIndex];
+}
+
+- (void)didStartFormControlInteraction
+{
+    // For subclasses to override.
+}
+
+- (void)didEndFormControlInteraction
+{
+    // For subclasses to override.
 }
 
 #endif // PLATFORM(IOS)
@@ -4553,12 +4661,22 @@ static inline WebKit::FindOptions toFindOptions(_WKFindOptions wkFindOptions)
 
 @end
 
-#if PLATFORM(IOS) && USE(APPLE_INTERNAL_SDK)
-#import <WebKitAdditions/WKWebViewAdditions.mm>
-#endif
+@implementation WKWebView (WKBinaryCompatibilityWithIOS10)
 
-#if PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101200 && USE(APPLE_INTERNAL_SDK)
-#import <WebKitAdditions/WKWebViewAdditionsMac.mm>
+- (id <_WKInputDelegate>)_formDelegate
+{
+    return self._inputDelegate;
+}
+
+- (void)_setFormDelegate:(id <_WKInputDelegate>)formDelegate
+{
+    self._inputDelegate = formDelegate;
+}
+
+@end
+
+#if USE(APPLE_INTERNAL_SDK)
+#import <WebKitAdditions/WKWebViewAdditionsAfter.mm>
 #endif
 
 #endif // WK_API_ENABLED

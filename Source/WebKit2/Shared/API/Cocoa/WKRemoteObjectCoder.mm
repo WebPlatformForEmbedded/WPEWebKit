@@ -108,9 +108,9 @@ static void encodeToObjectStream(WKRemoteObjectEncoder *encoder, id value)
     size_t position = encoder->_objectStream->size();
     encoder->_objectStream->elements().append(nullptr);
 
-    RefPtr<API::Dictionary> encodedObject = createEncodedObject(encoder, value);
+    auto encodedObject = createEncodedObject(encoder, value);
     ASSERT(!encoder->_objectStream->elements()[position]);
-    encoder->_objectStream->elements()[position] = encodedObject.release();
+    encoder->_objectStream->elements()[position] = WTFMove(encodedObject);
 }
 
 static void encodeInvocationArguments(WKRemoteObjectEncoder *encoder, NSInvocation *invocation, NSUInteger firstArgument)
@@ -204,6 +204,17 @@ static void encodeInvocationArguments(WKRemoteObjectEncoder *encoder, NSInvocati
             encodeToObjectStream(encoder, value);
             break;
         }
+
+        // struct
+        case '{':
+            if (!strcmp(type, @encode(NSRange))) {
+                NSRange value;
+                [invocation getArgument:&value atIndex:i];
+
+                encodeToObjectStream(encoder, [NSValue valueWithRange:value]);
+                break;
+            }
+            FALLTHROUGH;
 
         default:
             [NSException raise:NSInvalidArgumentException format:@"Unsupported invocation argument type '%s'", type];
@@ -537,6 +548,15 @@ static void decodeInvocationArguments(WKRemoteObjectDecoder *decoder, NSInvocati
             // FIXME: Make sure the invocation doesn't outlive the value.
             break;
         }
+
+        // struct
+        case '{':
+            if (!strcmp(type, @encode(NSRange))) {
+                NSRange value = [decodeObjectFromObjectStream(decoder, { [NSValue class] }) rangeValue];
+                [invocation setArgument:&value atIndex:i];
+                break;
+            }
+            FALLTHROUGH;
 
         default:
             [NSException raise:NSInvalidArgumentException format:@"Unsupported invocation argument type '%s' for argument %zu", type, (unsigned long)i];

@@ -248,9 +248,9 @@ NetscapePluginInstanceProxy::NetscapePluginInstanceProxy(NetscapePluginHostProxy
 
 PassRefPtr<NetscapePluginInstanceProxy> NetscapePluginInstanceProxy::create(NetscapePluginHostProxy* pluginHostProxy, WebHostedNetscapePluginView *pluginView, bool fullFramePlugin)
 {
-    RefPtr<NetscapePluginInstanceProxy> proxy = adoptRef(new NetscapePluginInstanceProxy(pluginHostProxy, pluginView, fullFramePlugin));
-    pluginHostProxy->addPluginInstance(proxy.get());
-    return proxy.release();
+    auto proxy = adoptRef(*new NetscapePluginInstanceProxy(pluginHostProxy, pluginView, fullFramePlugin));
+    pluginHostProxy->addPluginInstance(proxy.ptr());
+    return WTFMove(proxy);
 }
 
 NetscapePluginInstanceProxy::~NetscapePluginInstanceProxy()
@@ -801,8 +801,8 @@ NPError NetscapePluginInstanceProxy::loadRequest(NSURLRequest *request, const ch
             return NPERR_INVALID_PARAM;
         }
 
-        RefPtr<PluginRequest> pluginRequest = PluginRequest::create(requestID, request, target, allowPopups);
-        m_pluginRequests.append(pluginRequest.release());
+        auto pluginRequest = PluginRequest::create(requestID, request, target, allowPopups);
+        m_pluginRequests.append(WTFMove(pluginRequest));
         m_requestTimer.startOneShot(0);
     } else {
         RefPtr<HostedNetscapePluginStream> stream = HostedNetscapePluginStream::create(this, requestID, request);
@@ -889,7 +889,7 @@ bool NetscapePluginInstanceProxy::evaluate(uint32_t objectID, const String& scri
     Strong<JSGlobalObject> globalObject(pluginWorld().vm(), frame->script().globalObject(pluginWorld()));
     ExecState* exec = globalObject->globalExec();
 
-    UserGestureIndicator gestureIndicator(allowPopups ? DefinitelyProcessingUserGesture : PossiblyProcessingUserGesture);
+    UserGestureIndicator gestureIndicator(allowPopups ? Optional<ProcessingUserGestureState>(ProcessingUserGesture) : Nullopt);
     
     JSValue result = JSC::evaluate(exec, makeSource(script));
     
@@ -1372,11 +1372,11 @@ bool NetscapePluginInstanceProxy::demarshalValueFromArray(ExecState* exec, NSArr
             if (!frame->script().canExecuteScripts(NotAboutToExecuteScript))
                 return false;
 
-            RefPtr<RootObject> rootObject = frame->script().createRootObject(m_pluginView);
+            auto rootObject = frame->script().createRootObject(m_pluginView);
             if (!rootObject)
                 return false;
             
-            result = ProxyInstance::create(rootObject.release(), this, objectID)->createRuntimeObject(exec);
+            result = ProxyInstance::create(WTFMove(rootObject), this, objectID)->createRuntimeObject(exec);
             return true;
         }
         default:
@@ -1525,7 +1525,11 @@ bool NetscapePluginInstanceProxy::getCookies(data_t urlData, mach_msg_type_numbe
         return false;
     
     if (Frame* frame = core([m_pluginView webFrame])) {
-        String cookieString = cookies(frame->document(), url); 
+        auto* document = frame->document();
+        if (!document)
+            return false;
+
+        String cookieString = cookies(*document, url);
         WTF::CString cookieStringUTF8 = cookieString.utf8();
         if (cookieStringUTF8.isNull())
             return false;
@@ -1552,8 +1556,12 @@ bool NetscapePluginInstanceProxy::setCookies(data_t urlData, mach_msg_type_numbe
         String cookieString = String::fromUTF8(cookiesData, cookiesLength);
         if (!cookieString)
             return false;
-        
-        WebCore::setCookies(frame->document(), url, cookieString);
+
+        auto* document = frame->document();
+        if (!document)
+            return false;
+
+        WebCore::setCookies(*document, url, cookieString);
         return true;
     }
 

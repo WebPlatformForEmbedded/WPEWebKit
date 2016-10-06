@@ -56,6 +56,22 @@ Ref<ProcessPoolConfiguration> ProcessPoolConfiguration::createWithLegacyOptions(
     return configuration;
 }
 
+Ref<ProcessPoolConfiguration> ProcessPoolConfiguration::createWithWebsiteDataStoreConfiguration(const WebKit::WebsiteDataStore::Configuration& legacyConfiguration)
+{
+    auto configuration = ProcessPoolConfiguration::create();
+
+    configuration->m_applicationCacheDirectory = legacyConfiguration.applicationCacheDirectory;
+    configuration->m_applicationCacheFlatFileSubdirectoryName = legacyConfiguration.applicationCacheFlatFileSubdirectoryName;
+    configuration->m_diskCacheDirectory = legacyConfiguration.networkCacheDirectory;
+    configuration->m_mediaCacheDirectory = legacyConfiguration.mediaCacheDirectory;
+    configuration->m_indexedDBDatabaseDirectory = WebKit::WebProcessPool::legacyPlatformDefaultIndexedDBDatabaseDirectory();
+    configuration->m_localStorageDirectory = legacyConfiguration.localStorageDirectory;
+    configuration->m_mediaKeysStorageDirectory = legacyConfiguration.mediaKeysStorageDirectory;
+    configuration->m_webSQLDatabaseDirectory = legacyConfiguration.webSQLDatabaseDirectory;
+
+    return configuration;
+}
+
 ProcessPoolConfiguration::ProcessPoolConfiguration()
     : m_applicationCacheDirectory(WebsiteDataStore::defaultApplicationCacheDirectory())
     , m_applicationCacheFlatFileSubdirectoryName("Files")
@@ -93,6 +109,7 @@ Ref<ProcessPoolConfiguration> ProcessPoolConfiguration::copy()
     copy->m_cachePartitionedURLSchemes = this->m_cachePartitionedURLSchemes;
     copy->m_alwaysRevalidatedURLSchemes = this->m_alwaysRevalidatedURLSchemes;
     copy->m_fullySynchronousModeIsAllowedForTesting = this->m_fullySynchronousModeIsAllowedForTesting;
+    copy->m_ignoreSynchronousMessagingTimeoutsForTesting = this->m_ignoreSynchronousMessagingTimeoutsForTesting;
     copy->m_overrideLanguages = this->m_overrideLanguages;
     
     return copy;

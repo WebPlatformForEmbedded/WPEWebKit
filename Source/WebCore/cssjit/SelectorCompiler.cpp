@@ -323,6 +323,7 @@ private:
     void generateElementIsRoot(Assembler::JumpList& failureCases);
     void generateElementIsScopeRoot(Assembler::JumpList& failureCases);
     void generateElementIsTarget(Assembler::JumpList& failureCases);
+    void generateElementHasFocusWithin(Assembler::JumpList& failureCases);
 
     // Helpers.
     void generateAddStyleRelationIfResolvingStyle(Assembler::RegisterID element, Style::Relation::Type, Optional<Assembler::RegisterID> value = { });
@@ -535,7 +536,7 @@ static inline FunctionType addPseudoClassType(const CSSSelector& selector, Selec
         fragment.unoptimizedPseudoClasses.append(JSC::FunctionPtr(isChecked));
         return FunctionType::SimpleSelectorChecker;
     case CSSSelector::PseudoClassDefault:
-        fragment.unoptimizedPseudoClasses.append(JSC::FunctionPtr(isDefaultButtonForForm));
+        fragment.unoptimizedPseudoClasses.append(JSC::FunctionPtr(matchesDefaultPseudoClass));
         return FunctionType::SimpleSelectorChecker;
     case CSSSelector::PseudoClassDisabled:
         fragment.unoptimizedPseudoClasses.append(JSC::FunctionPtr(isDisabled));
@@ -558,7 +559,7 @@ static inline FunctionType addPseudoClassType(const CSSSelector& selector, Selec
         fragment.unoptimizedPseudoClasses.append(JSC::FunctionPtr(isInRange));
         return FunctionType::SimpleSelectorChecker;
     case CSSSelector::PseudoClassIndeterminate:
-        fragment.unoptimizedPseudoClasses.append(JSC::FunctionPtr(shouldAppearIndeterminate));
+        fragment.unoptimizedPseudoClasses.append(JSC::FunctionPtr(matchesIndeterminatePseudoClass));
         return FunctionType::SimpleSelectorChecker;
     case CSSSelector::PseudoClassInvalid:
         fragment.unoptimizedPseudoClasses.append(JSC::FunctionPtr(isInvalid));
@@ -674,6 +675,7 @@ static inline FunctionType addPseudoClassType(const CSSSelector& selector, Selec
     case CSSSelector::PseudoClassLastChild:
     case CSSSelector::PseudoClassOnlyChild:
     case CSSSelector::PseudoClassPlaceholderShown:
+    case CSSSelector::PseudoClassFocusWithin:
         fragment.pseudoClasses.add(type);
         if (selectorContext == SelectorContext::QuerySelector)
             return FunctionType::SimpleSelectorChecker;
@@ -827,8 +829,7 @@ static inline FunctionType addPseudoClassType(const CSSSelector& selector, Selec
             return functionType;
         }
     case CSSSelector::PseudoClassHost:
-        // :host matches based on context. Cases that reach selector checker don't match.
-        return FunctionType::CannotMatchAnything;
+        return FunctionType::CannotCompile;
     case CSSSelector::PseudoClassUnknown:
         ASSERT_NOT_REACHED();
         return FunctionType::CannotMatchAnything;
@@ -1064,10 +1065,10 @@ static inline bool attributeValueTestingRequiresExtraRegister(const AttributeMat
 static const unsigned minimumRequiredRegisterCount = 5;
 // Element + ElementData + scratchRegister + attributeArrayPointer + expectedLocalName + (qualifiedNameImpl && expectedValue).
 static const unsigned minimumRequiredRegisterCountForAttributeFilter = 6;
-#if CPU(X86_64)
-// Element + SiblingCounter + SiblingCounterCopy + divisor + dividend + remainder.
+// On x86, we always need 6 registers: Element + SiblingCounter + SiblingCounterCopy + divisor + dividend + remainder.
+// On other architectures, we need 6 registers for style resolution:
+//     Element + elementCounter + previousSibling + checkingContext + lastRelation + nextSiblingElement.
 static const unsigned minimumRequiredRegisterCountForNthChildFilter = 6;
-#endif
 
 static unsigned minimumRegisterRequirements(const SelectorFragment& selectorFragment)
 {
@@ -1091,10 +1092,8 @@ static unsigned minimumRegisterRequirements(const SelectorFragment& selectorFrag
         minimum = std::max(minimum, attributeMinimum);
     }
 
-#if CPU(X86_64)
     if (!selectorFragment.nthChildFilters.isEmpty() || !selectorFragment.nthChildOfFilters.isEmpty() || !selectorFragment.nthLastChildFilters.isEmpty() || !selectorFragment.nthLastChildOfFilters.isEmpty())
         minimum = std::max(minimum, minimumRequiredRegisterCountForNthChildFilter);
-#endif
 
     // :any pseudo class filters cause some register pressure.
     for (const auto& subFragments : selectorFragment.anyFilters) {
@@ -2578,6 +2577,9 @@ void SelectorCodeGenerator::generateElementMatching(Assembler::JumpList& matchin
     if (fragment.pseudoClasses.contains(CSSSelector::PseudoClassTarget))
         generateElementIsTarget(matchingPostTagNameFailureCases);
 
+    if (fragment.pseudoClasses.contains(CSSSelector::PseudoClassFocusWithin))
+        generateElementHasFocusWithin(matchingPostTagNameFailureCases);
+
     for (unsigned i = 0; i < fragment.unoptimizedPseudoClasses.size(); ++i)
         generateElementFunctionCallTest(matchingPostTagNameFailureCases, fragment.unoptimizedPseudoClasses[i]);
 
@@ -3211,10 +3213,22 @@ void SelectorCodeGenerator::generateElementIsHovered(Assembler::JumpList& failur
 
     generateAddStyleRelationIfResolvingStyle(elementAddressRegister, Style::Relation::AffectedByHover);
 
+    Assembler::JumpList successCases;
+    if (m_selectorContext != SelectorContext::QuerySelector && fragment.relationToRightFragment != FragmentRelation::Rightmost) {
+        // :hover always matches when not in rightmost position when collecting rules for descendant style invalidation optimization.
+        // Resolving style for a matching descendant will set parent childrenAffectedByHover bit even when the element is not currently hovered.
+        // This bit has to be set for the event based :hover invalidation to work.
+        // FIXME: We should just collect style relation bits and apply them as needed when computing style invalidation optimization.
+        LocalRegister checkingContext(m_registerAllocator);
+        successCases.append(branchOnResolvingMode(Assembler::Equal, SelectorChecker::Mode::CollectingRulesIgnoringVirtualPseudoElements, checkingContext));
+    }
+
     FunctionCall functionCall(m_assembler, m_registerAllocator, m_stackAllocator, m_functionCalls);
     functionCall.setFunctionAddress(elementIsHovered);
     functionCall.setOneArgument(elementAddressRegister);
     failureCases.append(functionCall.callAndBranchOnBooleanReturnValue(Assembler::Zero));
+
+    successCases.link(&m_assembler);
 }
 
 void SelectorCodeGenerator::generateElementIsInLanguage(Assembler::JumpList& failureCases, const SelectorFragment& fragment)
@@ -3789,6 +3803,12 @@ void SelectorCodeGenerator::generateElementIsTarget(Assembler::JumpList& failure
     LocalRegister document(m_registerAllocator);
     getDocument(m_assembler, elementAddressRegister, document);
     failureCases.append(m_assembler.branchPtr(Assembler::NotEqual, Assembler::Address(document, Document::cssTargetMemoryOffset()), elementAddressRegister));
+}
+
+void SelectorCodeGenerator::generateElementHasFocusWithin(Assembler::JumpList& failureCases)
+{
+    generateAddStyleRelationIfResolvingStyle(elementAddressRegister, Style::Relation::AffectedByFocusWithin);
+    failureCases.append(m_assembler.branchTest32(Assembler::Zero, Assembler::Address(elementAddressRegister, Node::nodeFlagsMemoryOffset()), Assembler::TrustedImm32(Node::flagHasFocusWithin())));
 }
 
 void SelectorCodeGenerator::generateElementIsFirstLink(Assembler::JumpList& failureCases, Assembler::RegisterID element)

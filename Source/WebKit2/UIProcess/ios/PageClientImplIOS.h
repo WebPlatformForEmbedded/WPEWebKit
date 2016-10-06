@@ -103,7 +103,6 @@ private:
     void enterAcceleratedCompositingMode(const LayerTreeContext&) override;
     void exitAcceleratedCompositingMode() override;
     void updateAcceleratedCompositingMode(const LayerTreeContext&) override;
-    void willEnterAcceleratedCompositingMode() override;
     void setAcceleratedCompositingRootLayer(LayerOrView *) override;
     LayerOrView *acceleratedCompositingRootLayer() const override;
     LayerHostingMode viewLayerHostingMode() override { return LayerHostingMode::OutOfProcess; }
@@ -191,7 +190,7 @@ private:
 
     void didRestoreScrollPosition() override;
 
-    UserInterfaceLayoutDirection userInterfaceLayoutDirection() override;
+    WebCore::UserInterfaceLayoutDirection userInterfaceLayoutDirection() override;
 
     WKContentView *m_contentView;
     WKWebView *m_webView;

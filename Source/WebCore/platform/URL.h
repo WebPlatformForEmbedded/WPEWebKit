@@ -28,7 +28,6 @@
 
 #include "PlatformExportMacros.h"
 #include <wtf/Forward.h>
-#include <wtf/HashMap.h>
 #include <wtf/RetainPtr.h>
 #include <wtf/text/WTFString.h>
 
@@ -114,6 +113,11 @@ public:
     WEBCORE_EXPORT String fragmentIdentifier() const;
     WEBCORE_EXPORT bool hasFragmentIdentifier() const;
 
+    bool hasUsername() const;
+    bool hasPassword() const;
+    bool hasQuery() const;
+    bool hasFragment() const;
+
     // Unlike user() and pass(), these functions don't decode escape sequences.
     // This is necessary for accurate round-tripping, because encoding doesn't encode '%' characters.
     String encodedUser() const;
@@ -187,18 +191,17 @@ public:
     operator NSString*() const { return string(); }
 #endif
 
-    const URL* innerURL() const { return 0; }
-
 #ifndef NDEBUG
     void print() const;
 #endif
 
-    bool isSafeToSendToAnotherThread() const;
-
     template <class Encoder> void encode(Encoder&) const;
     template <class Decoder> static bool decode(Decoder&, URL&);
 
+    String serialize(bool omitFragment = false) const;
+
 private:
+    friend class URLParser;
     WEBCORE_EXPORT void invalidate();
     static bool protocolIs(const String&, const char*);
     void init(const URL&, const String&, const TextEncoding&);
@@ -216,16 +219,16 @@ private:
     bool m_isValid : 1;
     bool m_protocolIsInHTTPFamily : 1;
 
-    int m_schemeEnd;
-    int m_userStart;
-    int m_userEnd;
-    int m_passwordEnd;
-    int m_hostEnd;
-    int m_portEnd;
-    int m_pathAfterLastSlash;
-    int m_pathEnd;
-    int m_queryEnd;
-    int m_fragmentEnd;
+    unsigned m_schemeEnd;
+    unsigned m_userStart;
+    unsigned m_userEnd;
+    unsigned m_passwordEnd;
+    unsigned m_hostEnd;
+    unsigned m_portEnd;
+    unsigned m_pathAfterLastSlash;
+    unsigned m_pathEnd;
+    unsigned m_queryEnd;
+    unsigned m_fragmentEnd;
 };
 
 template <class Encoder>
@@ -309,7 +312,7 @@ WEBCORE_EXPORT bool protocolIsJavaScript(const String& url);
 WEBCORE_EXPORT bool protocolIsInHTTPFamily(const String& url);
 
 unsigned short defaultPortForProtocol(const String& protocol);
-bool isDefaultPortForProtocol(unsigned short port, const String& protocol);
+WEBCORE_EXPORT bool isDefaultPortForProtocol(unsigned short port, const String& protocol);
 WEBCORE_EXPORT bool portAllowed(const URL&); // Blacklist ports that should never be used for Web resources.
 
 bool isValidProtocol(const String&);
@@ -388,6 +391,26 @@ inline bool URL::hasPath() const
 inline bool URL::hasPort() const
 {
     return m_hostEnd < m_portEnd;
+}
+
+inline bool URL::hasUsername() const
+{
+    return m_userEnd > m_userStart;
+}
+
+inline bool URL::hasPassword() const
+{
+    return m_passwordEnd > (m_userEnd + 1);
+}
+
+inline bool URL::hasQuery() const
+{
+    return m_queryEnd > m_pathEnd;
+}
+
+inline bool URL::hasFragment() const
+{
+    return m_fragmentEnd > m_queryEnd;
 }
 
 inline bool URL::protocolIsInHTTPFamily() const

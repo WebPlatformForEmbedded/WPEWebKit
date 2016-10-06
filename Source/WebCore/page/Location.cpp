@@ -60,7 +60,15 @@ String Location::href() const
     if (!m_frame)
         return String();
 
-    return url().string();
+    auto& url = this->url();
+
+    if (!url.hasUsername() && !url.hasPassword())
+        return url.string();
+
+    URL urlWithoutCredentials(url);
+    urlWithoutCredentials.setUser(WTF::emptyString());
+    urlWithoutCredentials.setPass(WTF::emptyString());
+    return urlWithoutCredentials.string();
 }
 
 String Location::protocol() const
@@ -96,7 +104,7 @@ String Location::port() const
         return String();
 
     const URL& url = this->url();
-    return url.hasPort() ? String::number(url.port()) : "";
+    return url.hasPort() ? String::number(url.port()) : emptyString();
 }
 
 String Location::pathname() const
@@ -124,13 +132,13 @@ String Location::origin() const
     return SecurityOrigin::create(url())->toString();
 }
 
-Ref<DOMStringList> Location::ancestorOrigins() const
+Vector<String> Location::ancestorOrigins() const
 {
-    auto origins = DOMStringList::create();
+    Vector<String> origins;
     if (!m_frame)
         return origins;
     for (Frame* frame = m_frame->tree().parent(); frame; frame = frame->tree().parent())
-        origins->append(frame->document()->securityOrigin()->toString());
+        origins.append(frame->document()->securityOrigin()->toString());
     return origins;
 }
 

@@ -26,6 +26,7 @@
 #include "Document.h"
 #include "EventDispatcher.h"
 #include "EventHandler.h"
+#include "EventNames.h"
 #include "Frame.h"
 #include "PlatformKeyboardEvent.h"
 #include "Settings.h"
@@ -99,7 +100,7 @@ KeyboardEvent::KeyboardEvent()
 {
 }
 
-KeyboardEvent::KeyboardEvent(const PlatformKeyboardEvent& key, AbstractView* view)
+KeyboardEvent::KeyboardEvent(const PlatformKeyboardEvent& key, DOMWindow* view)
     : UIEventWithKeyState(eventTypeForKeyboardEventType(key.type()),
                           true, true, key.timestamp(), view, 0, key.ctrlKey(), key.altKey(), key.shiftKey(), key.metaKey())
     , m_keyEvent(std::make_unique<PlatformKeyboardEvent>(key))
@@ -138,7 +139,7 @@ KeyboardEvent::~KeyboardEvent()
 {
 }
 
-void KeyboardEvent::initKeyboardEvent(const AtomicString& type, bool canBubble, bool cancelable, AbstractView* view,
+void KeyboardEvent::initKeyboardEvent(const AtomicString& type, bool canBubble, bool cancelable, DOMWindow* view,
                                       const String &keyIdentifier, unsigned location,
                                       bool ctrlKey, bool altKey, bool shiftKey, bool metaKey, bool altGraphKey)
 {

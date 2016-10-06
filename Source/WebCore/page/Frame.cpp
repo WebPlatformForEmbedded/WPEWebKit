@@ -217,8 +217,8 @@ Frame::~Frame()
 
     disconnectOwnerElement();
 
-    for (auto& observer : m_destructionObservers)
-        observer->frameDestroyed();
+    while (auto* destructionObserver = m_destructionObservers.takeAny())
+        destructionObserver->frameDestroyed();
 
     if (!isMainFrame())
         m_mainFrame.selfOnlyDeref();
@@ -476,7 +476,7 @@ String Frame::matchLabelsAgainstElement(const Vector<String>& labels, Element* e
     if (!resultFromNameAttribute.isEmpty())
         return resultFromNameAttribute;
     
-    return matchLabelsAgainstString(labels, element->fastGetAttribute(idAttr));
+    return matchLabelsAgainstString(labels, element->attributeWithoutSynchronization(idAttr));
 }
 
 #if PLATFORM(IOS)

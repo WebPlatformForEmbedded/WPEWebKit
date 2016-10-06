@@ -81,7 +81,7 @@ private:
     WebCore::FloatPoint indicatorLocation() const;
 
     // IPC::MessageReceiver
-    void didReceiveMessage(IPC::Connection&, IPC::MessageDecoder&) override;
+    void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
 
     // Message handlers
     void willCommitLayerTree(uint64_t transactionID);
@@ -91,7 +91,8 @@ private:
 
     RemoteLayerTreeHost m_remoteLayerTreeHost;
     bool m_isWaitingForDidUpdateGeometry { false };
-    bool m_haveSentDidUpdateSinceLastCommit { false };
+    enum DidUpdateMessageState { DoesNotNeedDidUpdate, NeedsDidUpdate, MissedCommit };
+    DidUpdateMessageState m_didUpdateMessageState { DoesNotNeedDidUpdate };
 
     WebCore::IntSize m_lastSentSize;
 

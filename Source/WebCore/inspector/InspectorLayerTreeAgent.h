@@ -26,17 +26,21 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef InspectorLayerTreeAgent_h
-#define InspectorLayerTreeAgent_h
+#pragma once
 
 #include "InspectorWebAgentBase.h"
-#include "RenderLayer.h"
 #include <inspector/InspectorBackendDispatchers.h>
 #include <inspector/InspectorFrontendDispatchers.h>
 #include <inspector/InspectorProtocolObjects.h>
 #include <wtf/text/WTFString.h>
 
 namespace WebCore {
+
+class IntRect;
+class Node;
+class PseudoElement;
+class RenderElement;
+class RenderLayer;
 
 typedef String ErrorString;
 
@@ -88,5 +92,3 @@ private:
 };
 
 } // namespace WebCore
-
-#endif // !defined(InspectorLayerTreeAgent_h)

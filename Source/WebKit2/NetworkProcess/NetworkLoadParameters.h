@@ -32,20 +32,15 @@
 
 namespace WebKit {
 
-class NetworkResourceLoadParameters;
-
 class NetworkLoadParameters {
 public:
-    NetworkLoadParameters() = default;
-    NetworkLoadParameters(const NetworkResourceLoadParameters&);
-
     uint64_t webPageID { 0 };
     uint64_t webFrameID { 0 };
     WebCore::SessionID sessionID { WebCore::SessionID::emptySessionID() };
     WebCore::ResourceRequest request;
     WebCore::ContentSniffingPolicy contentSniffingPolicy { WebCore::SniffContent };
     WebCore::StoredCredentials allowStoredCredentials { WebCore::DoNotAllowStoredCredentials };
-    WebCore::ClientCredentialPolicy clientCredentialPolicy { WebCore::DoNotAskClientForAnyCredentials };
+    WebCore::ClientCredentialPolicy clientCredentialPolicy { WebCore::ClientCredentialPolicy::CannotAskClientForCredentials };
     bool shouldClearReferrerOnHTTPSToHTTPRedirect { true };
     bool defersLoading { false };
     bool needsCertificateInfo { false };

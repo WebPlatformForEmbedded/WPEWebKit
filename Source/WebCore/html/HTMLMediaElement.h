@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2007-2015 Apple Inc. All rights reserved.
+ * Copyright (C) 2007-2016 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -38,6 +38,7 @@
 #include "MediaElementSession.h"
 #include "MediaProducer.h"
 #include "PageThrottler.h"
+#include "UserInterfaceLayoutDirection.h"
 
 #if ENABLE(VIDEO_TRACK)
 #include "AudioTrack.h"
@@ -129,7 +130,7 @@ public:
     WEBCORE_EXPORT PlatformMedia platformMedia() const;
     PlatformLayer* platformLayer() const;
     bool isVideoLayerInline();
-    void setPreparedForInline(bool);
+    void setPreparedToReturnVideoLayerToInline(bool);
     void waitForPreparedForInlineThen(std::function<void()> completionHandler = [] { });
 #if PLATFORM(IOS) || (PLATFORM(MAC) && ENABLE(VIDEO_PRESENTATION_MODE))
     void setVideoFullscreenLayer(PlatformLayer*, std::function<void()> completionHandler = [] { });
@@ -155,7 +156,7 @@ public:
 
 // DOM API
 // error state
-    MediaError* error() const;
+    WEBCORE_EXPORT MediaError* error() const;
 
     void setSrc(const String&);
     const URL& currentSrc() const { return m_currentSrc; }
@@ -165,21 +166,24 @@ public:
     void setSrcObject(ScriptExecutionContext&, MediaStream*);
 #endif
 
+    WEBCORE_EXPORT void setCrossOrigin(const AtomicString&);
+    WEBCORE_EXPORT String crossOrigin() const;
+
 // network state
     using HTMLMediaElementEnums::NetworkState;
-    NetworkState networkState() const;
+    WEBCORE_EXPORT NetworkState networkState() const;
 
-    String preload() const;    
-    void setPreload(const String&);
+    WEBCORE_EXPORT String preload() const;
+    WEBCORE_EXPORT void setPreload(const String&);
 
     Ref<TimeRanges> buffered() const override;
-    void load();
-    String canPlayType(const String& mimeType, const String& keySystem = String(), const URL& = URL()) const;
+    WEBCORE_EXPORT void load();
+    WEBCORE_EXPORT String canPlayType(const String& mimeType, const String& keySystem = String(), const URL& = URL()) const;
 
 // ready state
     using HTMLMediaElementEnums::ReadyState;
     ReadyState readyState() const override;
-    bool seeking() const;
+    WEBCORE_EXPORT bool seeking() const;
 
 // playback state
     WEBCORE_EXPORT double currentTime() const override;
@@ -197,11 +201,11 @@ public:
     MediaTime currentMediaTime() const;
     void setCurrentTime(const MediaTime&);
     MediaTime durationMediaTime() const;
-    void fastSeek(const MediaTime&);
+    WEBCORE_EXPORT void fastSeek(const MediaTime&);
 
     void updatePlaybackRate();
-    bool webkitPreservesPitch() const;
-    void setWebkitPreservesPitch(bool);
+    WEBCORE_EXPORT bool webkitPreservesPitch() const;
+    WEBCORE_EXPORT void setWebkitPreservesPitch(bool);
     Ref<TimeRanges> played() override;
     Ref<TimeRanges> seekable() const override;
     WEBCORE_EXPORT bool ended() const;
@@ -216,16 +220,16 @@ public:
     WEBCORE_EXPORT void play() override;
     WEBCORE_EXPORT void pause() override;
     void setShouldBufferData(bool) override;
-    void fastSeek(double);
+    WEBCORE_EXPORT void fastSeek(double);
     double minFastReverseRate() const;
     double maxFastForwardRate() const;
 
     void purgeBufferedDataIfPossible();
 
 // captions
-    bool webkitHasClosedCaptions() const;
-    bool webkitClosedCaptionsVisible() const;
-    void setWebkitClosedCaptionsVisible(bool);
+    WEBCORE_EXPORT bool webkitHasClosedCaptions() const;
+    WEBCORE_EXPORT bool webkitClosedCaptionsVisible() const;
+    WEBCORE_EXPORT void setWebkitClosedCaptionsVisible(bool);
 
     bool elementIsHidden() const override { return m_elementIsHidden; }
 
@@ -256,8 +260,8 @@ public:
 #endif
 
 // controls
-    bool controls() const;
-    void setControls(bool);
+    WEBCORE_EXPORT bool controls() const;
+    WEBCORE_EXPORT void setControls(bool);
     WEBCORE_EXPORT double volume() const override;
     void setVolume(double, ExceptionCode&) override;
     WEBCORE_EXPORT bool muted() const override;
@@ -329,8 +333,8 @@ public:
     void textTrackModeChanged(TextTrack*) override;
     void textTrackAddCues(TextTrack*, const TextTrackCueList*) override;
     void textTrackRemoveCues(TextTrack*, const TextTrackCueList*) override;
-    void textTrackAddCue(TextTrack*, PassRefPtr<TextTrackCue>) override;
-    void textTrackRemoveCue(TextTrack*, PassRefPtr<TextTrackCue>) override;
+    void textTrackAddCue(TextTrack*, TextTrackCue&) override;
+    void textTrackRemoveCue(TextTrack*, TextTrackCue&) override;
 
     // VideoTrackClient
     void videoTrackSelectedChanged(VideoTrack*) override;
@@ -444,6 +448,7 @@ public:
 
 #if ENABLE(MEDIA_CONTROLS_SCRIPT)
     void pageScaleFactorChanged();
+    void userInterfaceLayoutDirectionChanged();
     WEBCORE_EXPORT String getCurrentMediaControlsStatus();
 #endif
 
@@ -611,7 +616,7 @@ private:
 #endif
 
     bool mediaPlayerShouldWaitForResponseToAuthenticationChallenge(const AuthenticationChallenge&) override;
-    void mediaPlayerHandlePlaybackCommand(PlatformMediaSession::RemoteControlCommandType command) override { didReceiveRemoteControlCommand(command); }
+    void mediaPlayerHandlePlaybackCommand(PlatformMediaSession::RemoteControlCommandType command) override { didReceiveRemoteControlCommand(command, nullptr); }
     String mediaPlayerSourceApplicationIdentifier() const override;
     Vector<String> mediaPlayerPreferredAudioCharacteristics() const override;
 
@@ -688,8 +693,10 @@ private:
     void beginProcessingMediaPlayerCallback() { ++m_processingMediaPlayerCallback; }
     void endProcessingMediaPlayerCallback() { ASSERT(m_processingMediaPlayerCallback); --m_processingMediaPlayerCallback; }
 
+    enum class UpdateState { Asynchronously, Synchronously };
+
+    void updatePlayState(UpdateState updateState = UpdateState::Synchronously);
     void updateVolume();
-    void updatePlayState();
     void setPlaying(bool);
     bool potentiallyPlaying() const;
     bool endedPlayback() const;
@@ -721,7 +728,7 @@ private:
 
     void changeNetworkStateFromLoadingToIdle();
 
-    void removeBehaviorsRestrictionsAfterFirstUserGesture();
+    void removeBehaviorsRestrictionsAfterFirstUserGesture(MediaElementSession::BehaviorRestrictions mask = MediaElementSession::AllRestrictions);
 
     void updateMediaController();
     bool isBlocked() const;
@@ -750,7 +757,8 @@ private:
     double mediaSessionDuration() const override { return duration(); }
     double mediaSessionCurrentTime() const override { return currentTime(); }
     bool canReceiveRemoteControlCommands() const override { return true; }
-    void didReceiveRemoteControlCommand(PlatformMediaSession::RemoteControlCommandType) override;
+    void didReceiveRemoteControlCommand(PlatformMediaSession::RemoteControlCommandType, const PlatformMediaSession::RemoteCommandArgument*) override;
+    bool supportsSeeking() const override;
     bool shouldOverrideBackgroundPlaybackRestriction(PlatformMediaSession::InterruptionType) const override;
     bool shouldOverrideBackgroundLoadingRestriction() const override;
 
@@ -768,18 +776,23 @@ private:
     void prepareForDocumentSuspension() final;
     void resumeFromDocumentSuspension() final;
 
-    enum class UpdateMediaState { Asynchronously, Synchronously };
-    void updateMediaState(UpdateMediaState updateState = UpdateMediaState::Synchronously);
+    void updateMediaState(UpdateState updateState = UpdateState::Synchronously);
     bool hasPlaybackTargetAvailabilityListeners() const { return m_hasPlaybackTargetAvailabilityListeners; }
 #endif
 
+    bool isVideoTooSmallForInlinePlayback();
     void isVisibleInViewportChanged() final;
     void updateShouldAutoplay();
 
     void pauseAfterDetachedTask();
     void updatePlaybackControlsManager();
+    void scheduleUpdatePlaybackControlsManager();
 
     void updateRenderer();
+
+    void updatePageScaleFactorJSProperty();
+    void updateUsesLTRUserInterfaceLayoutDirectionJSProperty();
+    void setControllerJSProperty(const char*, JSC::JSValue);
 
     Timer m_pendingActionTimer;
     Timer m_progressEventTimer;
@@ -790,6 +803,7 @@ private:
     GenericTaskQueue<Timer> m_shadowDOMTaskQueue;
     GenericTaskQueue<Timer> m_promiseTaskQueue;
     GenericTaskQueue<Timer> m_pauseAfterDetachedTaskQueue;
+    GenericTaskQueue<Timer> m_updatePlaybackControlsManagerQueue;
     RefPtr<TimeRanges> m_playedTimeRanges;
     GenericEventQueue m_asyncEventQueue;
 

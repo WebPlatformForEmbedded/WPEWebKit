@@ -1,6 +1,6 @@
 /*
  *  Copyright (C) 1999-2001 Harri Porten (porten@kde.org)
- *  Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2013 Apple Inc. All rights reserved.
+ *  Copyright (C) 2004-2011, 2013, 2016 Apple Inc. All rights reserved.
  *  Copyright (C) 2007 Samuel Weinig <sam@webkit.org>
  *  Copyright (C) 2013 Michael Pruett <michael@68k.org>
  *
@@ -24,7 +24,6 @@
 
 #include "CachedScript.h"
 #include "DOMConstructorWithDocument.h"
-#include "DOMStringList.h"
 #include "ExceptionCode.h"
 #include "ExceptionCodeDescription.h"
 #include "ExceptionHeaders.h"
@@ -43,11 +42,13 @@
 #include <runtime/DateInstance.h>
 #include <runtime/Error.h>
 #include <runtime/ErrorHandlingScope.h>
+#include <runtime/ErrorInstance.h>
 #include <runtime/Exception.h>
 #include <runtime/ExceptionHelpers.h>
 #include <runtime/JSFunction.h>
 #include <stdarg.h>
 #include <wtf/MathExtras.h>
+#include <wtf/unicode/CharacterNames.h>
 
 using namespace JSC;
 using namespace Inspector;
@@ -102,13 +103,6 @@ JSValue jsStringOrUndefined(ExecState* exec, const URL& url)
     return jsStringWithCache(exec, url.string());
 }
 
-String valueToStringWithNullCheck(ExecState* exec, JSValue value)
-{
-    if (value.isNull())
-        return String();
-    return value.toString(exec)->value(exec);
-}
-
 String valueToStringTreatingNullAsEmptyString(ExecState* exec, JSValue value)
 {
     if (value.isNull())
@@ -121,6 +115,51 @@ String valueToStringWithUndefinedOrNullCheck(ExecState* exec, JSValue value)
     if (value.isUndefinedOrNull())
         return String();
     return value.toString(exec)->value(exec);
+}
+
+String valueToUSVString(ExecState* exec, JSValue value)
+{
+    String string = value.toWTFString(exec);
+    if (exec->hadException())
+        return { };
+    StringView view { string };
+
+    // Fast path for 8-bit strings, since they can't have any surrogates.
+    if (view.is8Bit())
+        return string;
+
+    // Fast path for the case where there are no unpaired surrogates.
+    bool foundUnpairedSurrogate = false;
+    for (auto codePoint : view.codePoints()) {
+        if (U_IS_SURROGATE(codePoint)) {
+            foundUnpairedSurrogate = true;
+            break;
+        }
+    }
+    if (!foundUnpairedSurrogate)
+        return string;
+
+    // Slow path: http://heycam.github.io/webidl/#dfn-obtain-unicode
+    // Replaces unpaired surrogates with the replacement character.
+    StringBuilder result;
+    result.reserveCapacity(view.length());
+    for (auto codePoint : view.codePoints()) {
+        if (U_IS_SURROGATE(codePoint))
+            result.append(replacementCharacter);
+        else
+            result.append(codePoint);
+    }
+    return result.toString();
+}
+
+String valueToUSVStringTreatingNullAsEmptyString(ExecState* exec, JSValue value)
+{
+    return value.isNull() ? emptyString() : valueToUSVString(exec, value);
+}
+
+String valueToUSVStringWithUndefinedOrNullCheck(ExecState* exec, JSValue value)
+{
+    return value.isUndefinedOrNull() ? String() : valueToUSVString(exec, value);
 }
 
 JSValue jsDateOrNaN(ExecState* exec, double value)
@@ -144,16 +183,6 @@ double valueToDate(ExecState* exec, JSValue value)
     if (!value.inherits(DateInstance::info()))
         return std::numeric_limits<double>::quiet_NaN();
     return static_cast<DateInstance*>(value.toObject(exec))->internalNumber();
-}
-
-JSC::JSValue jsArray(JSC::ExecState* exec, JSDOMGlobalObject* globalObject, DOMStringList* stringList)
-{
-    JSC::MarkedArgumentBuffer list;
-    if (stringList) {
-        for (unsigned i = 0; i < stringList->length(); ++i)
-            list.append(jsStringWithCache(exec, stringList->item(i)));
-    }
-    return JSC::constructArray(exec, 0, globalObject, list);
 }
 
 void reportException(ExecState* exec, JSValue exceptionValue, CachedScript* cachedScript)
@@ -197,12 +226,16 @@ void reportException(ExecState* exec, Exception* exception, CachedScript* cached
     }
 
     String errorMessage;
-    if (ExceptionBase* exceptionBase = toExceptionBase(exception->value()))
-        errorMessage = exceptionBase->message() + ": "  + exceptionBase->description();
+    JSValue exceptionValue = exception->value();
+    if (ExceptionBase* exceptionBase = toExceptionBase(exceptionValue))
+        errorMessage = exceptionBase->toString();
     else {
         // FIXME: <http://webkit.org/b/115087> Web Inspector: WebCore::reportException should not evaluate JavaScript handling exceptions
         // If this is a custom exception object, call toString on it to try and get a nice string representation for the exception.
-        errorMessage = exception->value().toString(exec)->value(exec);
+        if (ErrorInstance* error = jsDynamicCast<ErrorInstance*>(exceptionValue))
+            errorMessage = error->sanitizedToString(exec);
+        else
+            errorMessage = exceptionValue.toString(exec)->value(exec);
 
         // We need to clear any new exception that may be thrown in the toString() call above.
         // reportException() is not supposed to be making new exceptions.
@@ -268,11 +301,24 @@ static JSValue createDOMException(ExecState* exec, ExceptionCode ec, const Strin
 
     JSValue errorObject;
     switch (description.type) {
-        DOM_EXCEPTION_INTERFACES_FOR_EACH(TRY_TO_CREATE_EXCEPTION)
+    case DOMCoreExceptionType:
 #if ENABLE(INDEXED_DATABASE)
     case IDBDatabaseExceptionType:
-        errorObject = toJS(exec, globalObject, DOMCoreException::createWithDescriptionAsMessage(description));
 #endif
+        errorObject = toJS(exec, globalObject, DOMCoreException::create(description));
+        break;
+    case FileExceptionType:
+        errorObject = toJS(exec, globalObject, FileException::create(description));
+        break;
+    case SQLExceptionType:
+        errorObject = toJS(exec, globalObject, SQLException::create(description));
+        break;
+    case SVGExceptionType:
+        errorObject = toJS(exec, globalObject, SVGException::create(description));
+        break;
+    case XPathExceptionType:
+        errorObject = toJS(exec, globalObject, XPathException::create(description));
+        break;
     }
     
     ASSERT(errorObject);
@@ -307,6 +353,22 @@ void setDOMException(JSC::ExecState* exec, const ExceptionCodeWithMessage& ec)
 }
 
 #undef TRY_TO_CREATE_EXCEPTION
+
+bool hasIteratorMethod(JSC::ExecState& state, JSC::JSValue value)
+{
+    if (!value.isObject())
+        return false;
+
+    auto& vm = state.vm();
+    JSObject* object = JSC::asObject(value);
+    CallData callData;
+    CallType callType;
+    JSValue applyMethod = object->getMethod(&state, callData, callType, vm.propertyNames->iteratorSymbol, ASCIILiteral("Symbol.iterator property should be callable"));
+    if (vm.exception())
+        return false;
+
+    return !applyMethod.isUndefined();
+}
 
 bool shouldAllowAccessToNode(ExecState* exec, Node* node)
 {
@@ -369,12 +431,12 @@ static String rangeErrorString(double value, double min, double max)
 static double enforceRange(ExecState& state, double x, double minimum, double maximum)
 {
     if (std::isnan(x) || std::isinf(x)) {
-        state.vm().throwException(&state, createTypeError(&state, rangeErrorString(x, minimum, maximum)));
+        throwTypeError(&state, rangeErrorString(x, minimum, maximum));
         return 0;
     }
     x = trunc(x);
     if (x < minimum || x > maximum) {
-        state.vm().throwException(&state, createTypeError(&state, rangeErrorString(x, minimum, maximum)));
+        throwTypeError(&state, rangeErrorString(x, minimum, maximum));
         return 0;
     }
     return x;
@@ -731,7 +793,7 @@ bool BindingSecurity::shouldAllowAccessToNode(JSC::ExecState* state, Node* targe
     
 static EncodedJSValue throwTypeError(JSC::ExecState& state, const String& errorMessage)
 {
-    return throwVMError(&state, createTypeError(&state, errorMessage));
+    return throwVMTypeError(&state, errorMessage);
 }
 
 static void appendArgumentMustBe(StringBuilder& builder, unsigned argumentIndex, const char* argumentName, const char* interfaceName, const char* functionName)
@@ -786,7 +848,7 @@ JSC::EncodedJSValue throwArgumentMustBeEnumError(JSC::ExecState& state, unsigned
     appendArgumentMustBe(builder, argumentIndex, argumentName, functionInterfaceName, functionName);
     builder.appendLiteral("one of: ");
     builder.append(expectedValues);
-    return throwTypeError(state, builder.toString());
+    return throwVMTypeError(&state, builder.toString());
 }
 
 JSC::EncodedJSValue throwArgumentMustBeFunctionError(JSC::ExecState& state, unsigned argumentIndex, const char* argumentName, const char* interfaceName, const char* functionName)
@@ -794,7 +856,7 @@ JSC::EncodedJSValue throwArgumentMustBeFunctionError(JSC::ExecState& state, unsi
     StringBuilder builder;
     appendArgumentMustBe(builder, argumentIndex, argumentName, interfaceName, functionName);
     builder.appendLiteral("a function");
-    return throwTypeError(state, builder.toString());
+    return throwVMTypeError(&state, builder.toString());
 }
 
 JSC::EncodedJSValue throwArgumentTypeError(JSC::ExecState& state, unsigned argumentIndex, const char* argumentName, const char* functionInterfaceName, const char* functionName, const char* expectedType)
@@ -803,12 +865,12 @@ JSC::EncodedJSValue throwArgumentTypeError(JSC::ExecState& state, unsigned argum
     appendArgumentMustBe(builder, argumentIndex, argumentName, functionInterfaceName, functionName);
     builder.appendLiteral("an instance of ");
     builder.append(expectedType);
-    return throwTypeError(state, builder.toString());
+    return throwVMTypeError(&state, builder.toString());
 }
 
 void throwArrayElementTypeError(JSC::ExecState& state)
 {
-    throwTypeError(state, "Invalid Array element type");
+    throwTypeError(state, ASCIILiteral("Invalid Array element type"));
 }
 
 void throwAttributeTypeError(JSC::ExecState& state, const char* interfaceName, const char* attributeName, const char* expectedType)
@@ -822,11 +884,6 @@ JSC::EncodedJSValue throwConstructorDocumentUnavailableError(JSC::ExecState& sta
     return throwVMError(&state, createReferenceError(&state, makeString(interfaceName, " constructor associated document is unavailable")));
 }
 
-JSC::EncodedJSValue throwGetterTypeError(JSC::ExecState& state, const char* interfaceName, const char* attributeName)
-{
-    return throwTypeError(state, makeString("The ", interfaceName, '.', attributeName, " getter can only be used on instances of ", interfaceName));
-}
-
 void throwSequenceTypeError(JSC::ExecState& state)
 {
     throwTypeError(state, ASCIILiteral("Value is not a sequence"));
@@ -837,15 +894,30 @@ void throwNonFiniteTypeError(ExecState& state)
     throwTypeError(&state, ASCIILiteral("The provided value is non-finite"));
 }
 
+String makeGetterTypeErrorMessage(const char* interfaceName, const char* attributeName)
+{
+    return makeString("The ", interfaceName, '.', attributeName, " getter can only be used on instances of ", interfaceName);
+}
+
+JSC::EncodedJSValue throwGetterTypeError(JSC::ExecState& state, const char* interfaceName, const char* attributeName)
+{
+    return throwVMTypeError(&state, makeGetterTypeErrorMessage(interfaceName, attributeName));
+}
+
 bool throwSetterTypeError(JSC::ExecState& state, const char* interfaceName, const char* attributeName)
 {
     throwTypeError(state, makeString("The ", interfaceName, '.', attributeName, " setter can only be used on instances of ", interfaceName));
     return false;
 }
 
+String makeThisTypeErrorMessage(const char* interfaceName, const char* functionName)
+{
+    return makeString("Can only call ", interfaceName, '.', functionName, " on instances of ", interfaceName);
+}
+
 EncodedJSValue throwThisTypeError(JSC::ExecState& state, const char* interfaceName, const char* functionName)
 {
-    return throwTypeError(state, makeString("Can only call ", interfaceName, '.', functionName, " on instances of ", interfaceName));
+    return throwTypeError(state, makeThisTypeErrorMessage(interfaceName, functionName));
 }
 
 void callFunctionWithCurrentArguments(JSC::ExecState& state, JSC::JSObject& thisObject, JSC::JSFunction& function)

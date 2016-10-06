@@ -24,8 +24,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. 
  */
 
-#ifndef Settings_h
-#define Settings_h
+#pragma once
 
 #include "ClipboardAccessPolicy.h"
 #include "EditingBehaviorTypes.h"
@@ -146,6 +145,9 @@ public:
     WEBCORE_EXPORT void setPreferMIMETypeForImages(bool);
     bool preferMIMETypeForImages() const { return m_preferMIMETypeForImages; }
 
+    WEBCORE_EXPORT void setCachedPDFImageEnabled(bool);
+    bool isCachedPDFImageEnabled() const { return m_isCachedPDFImageEnabled; }
+
     WEBCORE_EXPORT void setPluginsEnabled(bool);
     bool arePluginsEnabled() const { return m_arePluginsEnabled; }
 
@@ -203,9 +205,6 @@ public:
 #if PLATFORM(COCOA)
     WEBCORE_EXPORT static void setQTKitEnabled(bool flag);
     static bool isQTKitEnabled() { return gQTKitEnabled; }
-
-    WEBCORE_EXPORT static void setCookieStoragePartitioningEnabled(bool flag);
-    static bool cookieStoragePartitioningEnabled() { return gCookieStoragePartitioningEnabled; }
 #else
     static bool isQTKitEnabled() { return false; }
 #endif
@@ -289,15 +288,19 @@ public:
     WEBCORE_EXPORT static void setMockCaptureDevicesEnabled(bool);
 #endif
 
+#if ENABLE(APPLE_PAY)
+    bool applePayEnabled() const { return m_applePayEnabled; }
+    void setApplePayEnabled(bool applePayEnabled) { m_applePayEnabled = applePayEnabled; }
+
+    bool applePayCapabilityDisclosureAllowed() const { return m_applePayCapabilityDisclosureAllowed; }
+    void setApplePayCapabilityDisclosureAllowed(bool applePayCapabilityDisclosureAllowed) { m_applePayCapabilityDisclosureAllowed = applePayCapabilityDisclosureAllowed; }
+#endif
+
     WEBCORE_EXPORT void setForcePendingWebGLPolicy(bool);
     bool isForcePendingWebGLPolicy() const { return m_forcePendingWebGLPolicy; }
 
     WEBCORE_EXPORT static void setAllowsAnySSLCertificate(bool);
     static bool allowsAnySSLCertificate();
-
-#if USE(APPLE_INTERNAL_SDK)
-#import <WebKitAdditions/SettingsGettersAndSetters.h>
-#endif
 
 private:
     explicit Settings(Page*);
@@ -324,6 +327,7 @@ private:
     bool m_loadsImagesAutomatically : 1;
     bool m_areImagesEnabled : 1;
     bool m_preferMIMETypeForImages : 1;
+    bool m_isCachedPDFImageEnabled : 1;
     bool m_arePluginsEnabled : 1;
     bool m_isScriptEnabled : 1;
     bool m_needsAdobeFrameReloadingQuirk : 1;
@@ -363,7 +367,6 @@ private:
 
 #if PLATFORM(COCOA)
     WEBCORE_EXPORT static bool gQTKitEnabled;
-    static bool gCookieStoragePartitioningEnabled;
 #endif
 
     static bool gMockScrollbarsEnabled;
@@ -390,15 +393,14 @@ private:
     static bool gMockCaptureDevicesEnabled;
 #endif
 
+#if ENABLE(APPLE_PAY)
+    bool m_applePayEnabled { false };
+    bool m_applePayCapabilityDisclosureAllowed { true };
+#endif
+
     static bool gLowPowerVideoAudioBufferSizeEnabled;
     static bool gResourceLoadStatisticsEnabledEnabled;
     static bool gAllowsAnySSLCertificate;
-
-#if USE(APPLE_INTERNAL_SDK)
-#import <WebKitAdditions/SettingsMembers.h>
-#endif
 };
 
 } // namespace WebCore
-
-#endif

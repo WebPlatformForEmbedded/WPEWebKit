@@ -222,11 +222,10 @@ bool safeToExecute(AbstractStateType& state, Graph& graph, Node* node)
     case GetGlobalVar:
     case GetGlobalLexicalVariable:
     case PutGlobalVariable:
-    case VarInjectionWatchpoint:
     case CheckCell:
     case CheckBadCell:
     case CheckNotEmpty:
-    case CheckIdent:
+    case CheckStringIdent:
     case RegExpExec:
     case RegExpTest:
     case CompareLess:
@@ -235,10 +234,12 @@ bool safeToExecute(AbstractStateType& state, Graph& graph, Node* node)
     case CompareGreaterEq:
     case CompareEq:
     case CompareStrictEq:
+    case CompareEqPtr:
     case Call:
     case TailCallInlinedCaller:
     case Construct:
     case CallVarargs:
+    case CallEval:
     case TailCallVarargsInlinedCaller:
     case TailCallForwardVarargsInlinedCaller:
     case ConstructVarargs:
@@ -256,6 +257,7 @@ bool safeToExecute(AbstractStateType& state, Graph& graph, Node* node)
     case OverridesHasInstance:
     case InstanceOf:
     case InstanceOfCustom:
+    case IsJSArray:
     case IsEmpty:
     case IsUndefined:
     case IsBoolean:
@@ -265,10 +267,13 @@ bool safeToExecute(AbstractStateType& state, Graph& graph, Node* node)
     case IsObjectOrNull:
     case IsFunction:
     case IsRegExpObject:
+    case IsTypedArrayView:
     case TypeOf:
     case LogicalNot:
+    case CallObjectConstructor:
     case ToPrimitive:
     case ToString:
+    case ToNumber:
     case SetFunctionName:
     case StrCat:
     case CallStringConstructor:
@@ -341,7 +346,7 @@ bool safeToExecute(AbstractStateType& state, Graph& graph, Node* node)
     case GetMyArgumentByVal:
     case GetMyArgumentByValOutOfBounds:
     case ForwardVarargs:
-    case CopyRest:
+    case CreateRest:
     case StringReplace:
     case StringReplaceRegExp:
     case GetRegExpObjectLastIndex:

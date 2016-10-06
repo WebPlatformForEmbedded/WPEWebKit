@@ -76,6 +76,7 @@ BuildbotIteration.ProductiveSteps = {
 BuildbotIteration.TestSteps = {
     "API tests": "platform api test",
     "bindings-generation-tests": "bindings tests",
+    "builtins-generator-tests": "builtins generator tests",
     "jscore-test": "javascript test",
     "layout-test": "layout test",
     "perf-test": "performance test",
@@ -251,7 +252,7 @@ BuildbotIteration.prototype = {
             var results = new BuildbotTestResults(step);
             if (step.name === "layout-test")
                 this.layoutTestResults = results;
-            else if (["jscore-test", "webkit-32bit-jsc-test", "webkit-jsc-cloop-test"].indexOf(step.name) >= 0)
+            else if (/(?=.*test)(?=.*jsc)/.test(step.name))
                 this.javaScriptCoreTestResults = results;
             if (results.allPassed)
                 return;
@@ -302,7 +303,7 @@ BuildbotIteration.prototype = {
         this._parseData(data);
 
         // Update the sorting since it is based on the revision numbers that just became known.
-        this.queue.sortIterations();
+        this.queue.updateIterationPosition(this);
 
         this.dispatchEventToListeners(BuildbotIteration.Event.Updated);
     },

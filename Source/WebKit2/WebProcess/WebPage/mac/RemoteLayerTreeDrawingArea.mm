@@ -37,6 +37,7 @@
 #import "RemoteScrollingCoordinatorTransaction.h"
 #import "WebPage.h"
 #import "WebProcess.h"
+#import <QuartzCore/QuartzCore.h>
 #import <WebCore/DebugPageOverlays.h>
 #import <WebCore/Frame.h>
 #import <WebCore/FrameView.h>
@@ -48,7 +49,7 @@
 #import <WebCore/RenderView.h>
 #import <WebCore/Settings.h>
 #import <WebCore/TiledBacking.h>
-#import <QuartzCore/QuartzCore.h>
+#import <wtf/SystemTracing.h>
 
 using namespace WebCore;
 
@@ -111,9 +112,9 @@ GraphicsLayerFactory* RemoteLayerTreeDrawingArea::graphicsLayerFactory()
 
 RefPtr<DisplayRefreshMonitor> RemoteLayerTreeDrawingArea::createDisplayRefreshMonitor(PlatformDisplayID displayID)
 {
-    RefPtr<RemoteLayerTreeDisplayRefreshMonitor> monitor = RemoteLayerTreeDisplayRefreshMonitor::create(displayID, *this);
-    m_displayRefreshMonitors.add(monitor.get());
-    return monitor.release();
+    auto monitor = RemoteLayerTreeDisplayRefreshMonitor::create(displayID, *this);
+    m_displayRefreshMonitors.add(monitor.ptr());
+    return WTFMove(monitor);
 }
 
 void RemoteLayerTreeDrawingArea::willDestroyDisplayRefreshMonitor(DisplayRefreshMonitor* monitor)
@@ -396,7 +397,7 @@ void RemoteLayerTreeDrawingArea::flushLayers()
     m_webPage.send(Messages::RemoteLayerTreeDrawingAreaProxy::WillCommitLayerTree(layerTransaction.transactionID()));
 
     Messages::RemoteLayerTreeDrawingAreaProxy::CommitLayerTree message(layerTransaction, scrollingTransaction);
-    auto commitEncoder = std::make_unique<IPC::MessageEncoder>(Messages::RemoteLayerTreeDrawingAreaProxy::CommitLayerTree::receiverName(), Messages::RemoteLayerTreeDrawingAreaProxy::CommitLayerTree::name(), m_webPage.pageID());
+    auto commitEncoder = std::make_unique<IPC::Encoder>(Messages::RemoteLayerTreeDrawingAreaProxy::CommitLayerTree::receiverName(), Messages::RemoteLayerTreeDrawingAreaProxy::CommitLayerTree::name(), m_webPage.pageID());
     commitEncoder->encode(message.arguments());
 
     // FIXME: Move all backing store flushing management to RemoteLayerBackingStoreCollection.
@@ -436,6 +437,8 @@ void RemoteLayerTreeDrawingArea::flushLayers()
 
 void RemoteLayerTreeDrawingArea::didUpdate()
 {
+    TraceScope tracingScope(RAFDidUpdateStart, RAFDidUpdateEnd);
+
     // FIXME: This should use a counted replacement for setLayerTreeStateIsFrozen, but
     // the callers of that function are not strictly paired.
 
@@ -468,12 +471,12 @@ bool RemoteLayerTreeDrawingArea::markLayersVolatileImmediatelyIfPossible()
     return m_remoteLayerTreeContext->backingStoreCollection().markAllBackingStoreVolatileImmediatelyIfPossible();
 }
 
-Ref<RemoteLayerTreeDrawingArea::BackingStoreFlusher> RemoteLayerTreeDrawingArea::BackingStoreFlusher::create(IPC::Connection* connection, std::unique_ptr<IPC::MessageEncoder> encoder, Vector<RetainPtr<CGContextRef>> contextsToFlush)
+Ref<RemoteLayerTreeDrawingArea::BackingStoreFlusher> RemoteLayerTreeDrawingArea::BackingStoreFlusher::create(IPC::Connection* connection, std::unique_ptr<IPC::Encoder> encoder, Vector<RetainPtr<CGContextRef>> contextsToFlush)
 {
     return adoptRef(*new RemoteLayerTreeDrawingArea::BackingStoreFlusher(connection, WTFMove(encoder), WTFMove(contextsToFlush)));
 }
 
-RemoteLayerTreeDrawingArea::BackingStoreFlusher::BackingStoreFlusher(IPC::Connection* connection, std::unique_ptr<IPC::MessageEncoder> encoder, Vector<RetainPtr<CGContextRef>> contextsToFlush)
+RemoteLayerTreeDrawingArea::BackingStoreFlusher::BackingStoreFlusher(IPC::Connection* connection, std::unique_ptr<IPC::Encoder> encoder, Vector<RetainPtr<CGContextRef>> contextsToFlush)
     : m_connection(connection)
     , m_commitEncoder(WTFMove(encoder))
     , m_contextsToFlush(WTFMove(contextsToFlush))
@@ -485,6 +488,8 @@ void RemoteLayerTreeDrawingArea::BackingStoreFlusher::flush()
 {
     ASSERT(!m_hasFlushed);
 
+    TraceScope tracingScope(RAFBackingStoreFlushStart, RAFBackingStoreFlushEnd);
+    
     for (auto& context : m_contextsToFlush)
         CGContextFlush(context.get());
     m_hasFlushed = true;
@@ -506,7 +511,7 @@ void RemoteLayerTreeDrawingArea::addTransactionCallbackID(uint64_t callbackID)
     scheduleCompositingLayerFlush();
 }
 
-bool RemoteLayerTreeDrawingArea::dispatchDidLayout(WebCore::LayoutMilestones layoutMilestones)
+bool RemoteLayerTreeDrawingArea::dispatchDidReachLayoutMilestone(WebCore::LayoutMilestones layoutMilestones)
 {
     m_pendingNewlyReachedLayoutMilestones |= layoutMilestones;
     return true;

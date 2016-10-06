@@ -134,7 +134,7 @@ _PATH_RULES_SPECIFIER = [
     # API and therefore do not follow the same header including
     # discipline as WebCore.
 
-    ([# TestNetscapePlugIn has no config.h and uses funny names like
+    ([  # TestNetscapePlugIn has no config.h and uses funny names like
       # NPP_SetWindow.
       os.path.join('Tools', 'DumpRenderTree', 'TestNetscapePlugIn')],
      ["-build/include",
@@ -244,6 +244,7 @@ _PATH_RULES_SPECIFIER = [
     #   No carriage-return line endings: since this is easy to correct.
     #
     ([os.path.join('webkitpy', 'thirdparty'),
+      os.path.join('Source', 'ThirdParty', 'ANGLE'),
       os.path.join('Source', 'ThirdParty', 'brotli'),
       os.path.join('Source', 'ThirdParty', 'woff2')],
      ["-",
@@ -511,6 +512,7 @@ class FileType:
     XCODEPROJ = 10
     CMAKE = 11
     FEATUREDEFINES = 12
+
 
 class CheckerDispatcher(object):
 

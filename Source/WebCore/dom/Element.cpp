@@ -4,7 +4,7 @@
  *           (C) 2001 Peter Kelly (pmk@post.com)
  *           (C) 2001 Dirk Mueller (mueller@kde.org)
  *           (C) 2007 David Smith (catfish.man@gmail.com)
- * Copyright (C) 2004-2015 Apple Inc. All rights reserved.
+ * Copyright (C) 2004-2016 Apple Inc. All rights reserved.
  *           (C) 2007 Eric Seidel (eric@webkit.org)
  *
  * This library is free software; you can redistribute it and/or
@@ -37,14 +37,17 @@
 #include "ClientRectList.h"
 #include "ComposedTreeAncestorIterator.h"
 #include "ContainerNodeAlgorithms.h"
-#include "CustomElementDefinitions.h"
+#include "CustomElementReactionQueue.h"
+#include "CustomElementRegistry.h"
 #include "DOMTokenList.h"
 #include "Dictionary.h"
+#include "DocumentAnimation.h"
 #include "DocumentSharedObjectPool.h"
 #include "ElementIterator.h"
 #include "ElementRareData.h"
 #include "EventDispatcher.h"
 #include "EventHandler.h"
+#include "EventNames.h"
 #include "FlowThreadController.h"
 #include "FocusController.h"
 #include "FocusEvent.h"
@@ -66,7 +69,7 @@
 #include "IdTargetObserverRegistry.h"
 #include "JSLazyEventListener.h"
 #include "KeyboardEvent.h"
-#include "LifecycleCallbackQueue.h"
+#include "KeyframeEffect.h"
 #include "MainFrame.h"
 #include "MutationObserverInterestGroup.h"
 #include "MutationRecord.h"
@@ -102,7 +105,6 @@
 #include "XMLNames.h"
 #include "htmlediting.h"
 #include "markup.h"
-#include <wtf/BitVector.h>
 #include <wtf/CurrentTime.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/text/CString.h>
@@ -181,8 +183,8 @@ Element::~Element()
     if (document().hasLivingRenderTree()) {
         // When the document is not destroyed, an element that was part of a named flow
         // content nodes should have been removed from the content nodes collection
-        // and the isNamedFlowContentNode flag reset.
-        ASSERT_WITH_SECURITY_IMPLICATION(!isNamedFlowContentNode());
+        // and the isNamedFlowContentElement flag reset.
+        ASSERT_WITH_SECURITY_IMPLICATION(!isNamedFlowContentElement());
     }
 #endif
 
@@ -291,7 +293,7 @@ bool Element::dispatchMouseEvent(const PlatformMouseEvent& platformEvent, const 
             mouseEvent->bubbles(), mouseEvent->cancelable(), mouseEvent->view(), mouseEvent->detail(),
             mouseEvent->screenX(), mouseEvent->screenY(), mouseEvent->clientX(), mouseEvent->clientY(),
             mouseEvent->ctrlKey(), mouseEvent->altKey(), mouseEvent->shiftKey(), mouseEvent->metaKey(),
-            mouseEvent->button(), relatedTarget);
+            mouseEvent->button(), mouseEvent->syntheticClickType(), relatedTarget);
 
         if (mouseEvent->defaultHandled())
             doubleClickEvent->setDefaultHandled();
@@ -497,6 +499,19 @@ const AtomicString& Element::getAttribute(const QualifiedName& name) const
     return nullAtom;
 }
 
+Vector<String> Element::getAttributeNames() const
+{
+    Vector<String> attributesVector;
+    if (!hasAttributes())
+        return attributesVector;
+
+    auto attributes = attributesIterator();
+    attributesVector.reserveInitialCapacity(attributes.attributeCount());
+    for (auto& attribute : attributes)
+        attributesVector.uncheckedAppend(attribute.name().toString());
+    return attributesVector;
+}
+
 bool Element::isFocusable() const
 {
     if (!inDocument() || !supportsFocus())
@@ -552,12 +567,13 @@ void Element::setActive(bool flag, bool pause)
 
     document().userActionElements().setActive(this, flag);
 
-    if (!renderer())
-        return;
-
-    bool reactsToPress = renderStyle()->affectedByActive() || childrenAffectedByActive();
+    const RenderStyle* renderStyle = this->renderStyle();
+    bool reactsToPress = (renderStyle && renderStyle->affectedByActive()) || styleAffectedByActive();
     if (reactsToPress)
         setNeedsStyleRecalc();
+
+    if (!renderer())
+        return;
 
     if (renderer()->style().hasAppearance() && renderer()->theme().stateChanged(*renderer(), ControlStates::PressedState))
         reactsToPress = true;
@@ -600,6 +616,9 @@ void Element::setFocus(bool flag)
 
     document().userActionElements().setFocused(this, flag);
     setNeedsStyleRecalc();
+
+    for (Element* element = this; element; element = element->parentOrShadowHostElement())
+        element->setHasFocusWithin(flag);
 }
 
 void Element::setHovered(bool flag)
@@ -638,9 +657,9 @@ void Element::scrollIntoView(bool alignToTop)
     LayoutRect bounds = renderer()->anchorRect();
     // Align to the top / bottom and to the closest edge.
     if (alignToTop)
-        renderer()->scrollRectToVisible(bounds, ScrollAlignment::alignToEdgeIfNeeded, ScrollAlignment::alignTopAlways);
+        renderer()->scrollRectToVisible(SelectionRevealMode::Reveal, bounds, ScrollAlignment::alignToEdgeIfNeeded, ScrollAlignment::alignTopAlways);
     else
-        renderer()->scrollRectToVisible(bounds, ScrollAlignment::alignToEdgeIfNeeded, ScrollAlignment::alignBottomAlways);
+        renderer()->scrollRectToVisible(SelectionRevealMode::Reveal, bounds, ScrollAlignment::alignToEdgeIfNeeded, ScrollAlignment::alignBottomAlways);
 }
 
 void Element::scrollIntoViewIfNeeded(bool centerIfNeeded)
@@ -652,9 +671,9 @@ void Element::scrollIntoViewIfNeeded(bool centerIfNeeded)
 
     LayoutRect bounds = renderer()->anchorRect();
     if (centerIfNeeded)
-        renderer()->scrollRectToVisible(bounds, ScrollAlignment::alignCenterIfNeeded, ScrollAlignment::alignCenterIfNeeded);
+        renderer()->scrollRectToVisible(SelectionRevealMode::Reveal, bounds, ScrollAlignment::alignCenterIfNeeded, ScrollAlignment::alignCenterIfNeeded);
     else
-        renderer()->scrollRectToVisible(bounds, ScrollAlignment::alignToEdgeIfNeeded, ScrollAlignment::alignToEdgeIfNeeded);
+        renderer()->scrollRectToVisible(SelectionRevealMode::Reveal, bounds, ScrollAlignment::alignToEdgeIfNeeded, ScrollAlignment::alignToEdgeIfNeeded);
 }
 
 void Element::scrollIntoViewIfNotVisible(bool centerIfNotVisible)
@@ -666,9 +685,9 @@ void Element::scrollIntoViewIfNotVisible(bool centerIfNotVisible)
     
     LayoutRect bounds = renderer()->anchorRect();
     if (centerIfNotVisible)
-        renderer()->scrollRectToVisible(bounds, ScrollAlignment::alignCenterIfNotVisible, ScrollAlignment::alignCenterIfNotVisible);
+        renderer()->scrollRectToVisible(SelectionRevealMode::Reveal, bounds, ScrollAlignment::alignCenterIfNotVisible, ScrollAlignment::alignCenterIfNotVisible);
     else
-        renderer()->scrollRectToVisible(bounds, ScrollAlignment::alignToEdgeIfNotVisible, ScrollAlignment::alignToEdgeIfNotVisible);
+        renderer()->scrollRectToVisible(SelectionRevealMode::Reveal, bounds, ScrollAlignment::alignToEdgeIfNotVisible, ScrollAlignment::alignToEdgeIfNotVisible);
 }
     
 void Element::scrollByUnits(int units, ScrollGranularity granularity)
@@ -793,7 +812,7 @@ Element* Element::bindingsOffsetParent()
     Element* element = offsetParent();
     if (!element || !element->isInShadowTree())
         return element;
-    return element->containingShadowRoot()->type() == ShadowRoot::Type::UserAgent ? nullptr : element;
+    return element->containingShadowRoot()->mode() == ShadowRoot::Mode::UserAgent ? nullptr : element;
 }
 
 Element* Element::offsetParent()
@@ -960,37 +979,40 @@ IntRect Element::boundsInRootViewSpace()
     return result;
 }
 
-static bool layoutOverflowRectContainsAllDescendants(const RenderElement& renderer)
+static bool layoutOverflowRectContainsAllDescendants(const RenderBox& renderBox)
 {
-    if (renderer.isRenderView())
+    if (renderBox.isRenderView())
         return true;
 
-    if (!renderer.element())
+    if (!renderBox.element())
         return false;
 
     // If there are any position:fixed inside of us, game over.
-    if (auto viewPositionedObjects = renderer.view().positionedObjects()) {
-        for (RenderBox* it : *viewPositionedObjects) {
-            if (it != &renderer && it->style().position() == FixedPosition && renderer.element()->contains(it->element()))
+    if (auto* viewPositionedObjects = renderBox.view().positionedObjects()) {
+        for (auto* positionedBox : *viewPositionedObjects) {
+            if (positionedBox == &renderBox)
+                continue;
+            if (positionedBox->style().position() == FixedPosition && renderBox.element()->contains(positionedBox->element()))
                 return false;
         }
     }
 
-    if (renderer.canContainAbsolutelyPositionedObjects()) {
+    if (renderBox.canContainAbsolutelyPositionedObjects()) {
         // Our layout overflow will include all descendant positioned elements.
         return true;
     }
 
     // This renderer may have positioned descendants whose containing block is some ancestor.
-    if (auto containingBlock = renderer.containingBlockForAbsolutePosition()) {
-        if (auto positionedObjects = containingBlock->positionedObjects()) {
-            for (RenderBox* it : *positionedObjects) {
-                if (it != &renderer && renderer.element()->contains(it->element()))
+    if (auto* containingBlock = renderBox.containingBlockForAbsolutePosition()) {
+        if (auto* positionedObjects = containingBlock->positionedObjects()) {
+            for (auto* positionedBox : *positionedObjects) {
+                if (positionedBox == &renderBox)
+                    continue;
+                if (renderBox.element()->contains(positionedBox->element()))
                     return false;
             }
         }
     }
-    
     return false;
 }
 
@@ -1273,12 +1295,8 @@ void Element::attributeChanged(const QualifiedName& name, const AtomicString& ol
     document().incDOMTreeVersion();
 
 #if ENABLE(CUSTOM_ELEMENTS)
-    if (UNLIKELY(isCustomElement())) {
-        auto* definitions = document().customElementDefinitions();
-        auto* interface = definitions->findInterface(tagQName());
-        RELEASE_ASSERT(interface);
-        LifecycleCallbackQueue::enqueueAttributeChangedCallback(*this, *interface, name, oldValue, newValue);
-    }
+    if (UNLIKELY(isCustomElement()))
+        CustomElementReactionQueue::enqueueAttributeChangedCallbackIfNeeded(*this, name, oldValue, newValue);
 #endif
 
     if (valueIsSameAsBefore)
@@ -1380,6 +1398,21 @@ ElementStyle Element::resolveStyle(const RenderStyle* parentStyle)
     return styleResolver().styleForElement(*this, parentStyle);
 }
 
+#if ENABLE(WEB_ANIMATIONS)
+WebAnimationVector Element::getAnimations()
+{
+    auto checkTarget = [this](AnimationEffect const& effect)
+    {
+        return (static_cast<KeyframeEffect const&>(effect).target() == this);
+    };
+
+    auto* document = DocumentAnimation::from(&this->document());
+    if (document)
+        return document->getAnimations(checkTarget);
+    return WebAnimationVector();
+}
+#endif
+
 bool Element::hasDisplayContents() const
 {
     return hasRareData() && elementRareData()->hasDisplayContents();
@@ -1449,6 +1482,19 @@ void Element::parserDidSetAttributes()
 {
 }
 
+void Element::didMoveToNewDocument(Document* oldDocument)
+{
+    Node::didMoveToNewDocument(oldDocument);
+
+    if (oldDocument->inQuirksMode() != document().inQuirksMode()) {
+        // ElementData::m_classNames or ElementData::m_idForStyleResolution need to be updated with the right case.
+        if (hasID())
+            attributeChanged(idAttr, nullAtom, getIdAttribute());
+        if (hasClass())
+            attributeChanged(classAttr, nullAtom, getAttribute(classAttr));
+    }
+}
+
 bool Element::hasAttributes() const
 {
     synchronizeAllAttributes();
@@ -1485,12 +1531,12 @@ void Element::setPrefix(const AtomicString& prefix, ExceptionCode& ec)
     if (ec)
         return;
 
-    m_tagName.setPrefix(prefix.isEmpty() ? AtomicString() : prefix);
+    m_tagName.setPrefix(prefix.isEmpty() ? nullAtom : prefix);
 }
 
 const AtomicString& Element::imageSourceURL() const
 {
-    return fastGetAttribute(srcAttr);
+    return attributeWithoutSynchronization(srcAttr);
 }
 
 bool Element::rendererIsNeeded(const RenderStyle& style)
@@ -1550,8 +1596,13 @@ Node::InsertionNotificationRequest Element::insertedInto(ContainerNode& insertio
 
     if (newScope && hasTagName(labelTag)) {
         if (newScope->shouldCacheLabelsByForAttribute())
-            updateLabel(*newScope, nullAtom, fastGetAttribute(forAttr));
+            updateLabel(*newScope, nullAtom, attributeWithoutSynchronization(forAttr));
     }
+
+#if ENABLE(CUSTOM_ELEMENTS)
+    if (newDocument && UNLIKELY(isCustomElement()))
+        CustomElementReactionQueue::enqueueConnectedCallbackIfNeeded(*this);
+#endif
 
     return InsertionDone;
 }
@@ -1596,8 +1647,13 @@ void Element::removedFrom(ContainerNode& insertionPoint)
 
         if (oldScope && hasTagName(labelTag)) {
             if (oldScope->shouldCacheLabelsByForAttribute())
-                updateLabel(*oldScope, fastGetAttribute(forAttr), nullAtom);
+                updateLabel(*oldScope, attributeWithoutSynchronization(forAttr), nullAtom);
         }
+
+#if ENABLE(CUSTOM_ELEMENTS)
+        if (oldDocument && UNLIKELY(isCustomElement()))
+            CustomElementReactionQueue::enqueueDisconnectedCallbackIfNeeded(*this);
+#endif
     }
 
     if (!parentNode()) {
@@ -1619,7 +1675,7 @@ void Element::removedFrom(ContainerNode& insertionPoint)
 
 void Element::unregisterNamedFlowContentElement()
 {
-    if (isNamedFlowContentNode() && document().renderView())
+    if (isNamedFlowContentElement() && document().renderView())
         document().renderView()->flowThreadController().unregisterNamedFlowContentElement(*this);
 }
 
@@ -1648,7 +1704,7 @@ void Element::addShadowRoot(Ref<ShadowRoot>&& newShadowRoot)
 
     InspectorInstrumentation::didPushShadowRoot(*this, shadowRoot);
 
-    if (shadowRoot.type() == ShadowRoot::Type::UserAgent)
+    if (shadowRoot.mode() == ShadowRoot::Mode::UserAgent)
         didAddUserAgentShadowRoot(&shadowRoot);
 }
 
@@ -1727,7 +1783,7 @@ RefPtr<ShadowRoot> Element::attachShadow(const ShadowRootInit& init, ExceptionCo
         return nullptr;
     }
 
-    auto shadow = ShadowRoot::create(document(), init.mode == ShadowRootMode::Open ? ShadowRoot::Type::Open : ShadowRoot::Type::Closed);
+    auto shadow = ShadowRoot::create(document(), init.mode == ShadowRootMode::Open ? ShadowRoot::Mode::Open : ShadowRoot::Mode::Closed);
     addShadowRoot(shadow.copyRef());
     return WTFMove(shadow);
 }
@@ -1738,7 +1794,7 @@ ShadowRoot* Element::shadowRootForBindings(JSC::ExecState& state) const
     if (!root)
         return nullptr;
 
-    if (root->type() != ShadowRoot::Type::Open) {
+    if (root->mode() != ShadowRoot::Mode::Open) {
         if (!JSC::jsCast<JSDOMGlobalObject*>(state.lexicalGlobalObject())->world().shadowRootIsAlwaysOpen())
             return nullptr;
     }
@@ -1749,7 +1805,7 @@ ShadowRoot* Element::shadowRootForBindings(JSC::ExecState& state) const
 ShadowRoot* Element::userAgentShadowRoot() const
 {
     if (ShadowRoot* shadowRoot = this->shadowRoot()) {
-        ASSERT(shadowRoot->type() == ShadowRoot::Type::UserAgent);
+        ASSERT(shadowRoot->mode() == ShadowRoot::Mode::UserAgent);
         return shadowRoot;
     }
     return nullptr;
@@ -1759,7 +1815,7 @@ ShadowRoot& Element::ensureUserAgentShadowRoot()
 {
     ShadowRoot* shadowRoot = userAgentShadowRoot();
     if (!shadowRoot) {
-        addShadowRoot(ShadowRoot::create(document(), ShadowRoot::Type::UserAgent));
+        addShadowRoot(ShadowRoot::create(document(), ShadowRoot::Mode::UserAgent));
         shadowRoot = userAgentShadowRoot();
     }
     return *shadowRoot;
@@ -1905,6 +1961,16 @@ void Element::childrenChanged(const ChildChange& change)
 void Element::setAttributeEventListener(const AtomicString& eventType, const QualifiedName& attributeName, const AtomicString& attributeValue)
 {
     setAttributeEventListener(eventType, JSLazyEventListener::create(*this, attributeName, attributeValue));
+}
+
+void Element::setIsNamedFlowContentElement()
+{
+    ensureElementRareData().setIsNamedFlowContentElement(true);
+}
+
+void Element::clearIsNamedFlowContentElement()
+{
+    ensureElementRareData().setIsNamedFlowContentElement(false);
 }
 
 void Element::removeAllEventListeners()
@@ -2244,20 +2310,18 @@ void Element::focus(bool restorePreviousSelection, FocusDirection direction)
     }
         
     cancelFocusAppearanceUpdate();
+
+    SelectionRevealMode revealMode = SelectionRevealMode::Reveal;
 #if PLATFORM(IOS)
     // Focusing a form element triggers animation in UIKit to scroll to the right position.
     // Calling updateFocusAppearance() would generate an unnecessary call to ScrollView::setScrollPosition(),
     // which would jump us around during this animation. See <rdar://problem/6699741>.
-    FrameView* view = document().view();
-    bool isFormControl = view && is<HTMLFormControlElement>(*this);
+    bool isFormControl = is<HTMLFormControlElement>(*this);
     if (isFormControl)
-        view->setProhibitsScrolling(true);
+        revealMode = SelectionRevealMode::RevealUpToMainFrame;
 #endif
-    updateFocusAppearance(restorePreviousSelection ? SelectionRestorationMode::Restore : SelectionRestorationMode::SetDefault);
-#if PLATFORM(IOS)
-    if (isFormControl)
-        view->setProhibitsScrolling(false);
-#endif
+
+    updateFocusAppearance(restorePreviousSelection ? SelectionRestorationMode::Restore : SelectionRestorationMode::SetDefault, revealMode);
 }
 
 void Element::updateFocusAppearanceAfterAttachIfNeeded()
@@ -2289,11 +2353,10 @@ void Element::updateFocusAppearance(SelectionRestorationMode, SelectionRevealMod
         
         if (frame->selection().shouldChangeSelection(newSelection)) {
             frame->selection().setSelection(newSelection, FrameSelection::defaultSetSelectionOptions(), Element::defaultFocusTextStateChangeIntent());
-            if (revealMode == SelectionRevealMode::Reveal)
-                frame->selection().revealSelection();
+            frame->selection().revealSelection(revealMode);
         }
-    } else if (renderer() && !renderer()->isWidget() && revealMode == SelectionRevealMode::Reveal)
-        renderer()->scrollRectToVisible(renderer()->anchorRect());
+    } else if (renderer() && !renderer()->isWidget())
+        renderer()->scrollRectToVisible(revealMode, renderer()->anchorRect());
 }
 
 void Element::blur()
@@ -2347,7 +2410,7 @@ bool Element::dispatchMouseForceWillBegin()
     if (!frame)
         return false;
 
-    PlatformMouseEvent platformMouseEvent(frame->eventHandler().lastKnownMousePosition(), frame->eventHandler().lastKnownMouseGlobalPosition(), NoButton, PlatformEvent::NoType, 1, false, false, false, false, WTF::currentTime(), ForceAtClick);
+    PlatformMouseEvent platformMouseEvent(frame->eventHandler().lastKnownMousePosition(), frame->eventHandler().lastKnownMouseGlobalPosition(), NoButton, PlatformEvent::NoType, 1, false, false, false, false, WTF::currentTime(), ForceAtClick, NoTap);
     Ref<MouseEvent> mouseForceWillBeginEvent =  MouseEvent::create(eventNames().webkitmouseforcewillbeginEvent, document().defaultView(), platformMouseEvent, 0, nullptr);
     mouseForceWillBeginEvent->setTarget(this);
     dispatchEvent(mouseForceWillBeginEvent);
@@ -2449,7 +2512,7 @@ String Element::title() const
 
 const AtomicString& Element::pseudo() const
 {
-    return fastGetAttribute(pseudoAttr);
+    return attributeWithoutSynchronization(pseudoAttr);
 }
 
 void Element::setPseudo(const AtomicString& value)
@@ -2564,9 +2627,14 @@ void Element::setStyleAffectedByEmpty()
     ensureElementRareData().setStyleAffectedByEmpty(true);
 }
 
-void Element::setChildrenAffectedByActive()
+void Element::setStyleAffectedByFocusWithin()
 {
-    ensureElementRareData().setChildrenAffectedByActive(true);
+    ensureElementRareData().setStyleAffectedByFocusWithin(true);
+}
+
+void Element::setStyleAffectedByActive()
+{
+    ensureElementRareData().setStyleAffectedByActive(true);
 }
 
 void Element::setChildrenAffectedByDrag()
@@ -2597,7 +2665,7 @@ bool Element::hasFlagsSetDuringStylingOfChildren() const
 
     if (!hasRareData())
         return false;
-    return rareDataChildrenAffectedByActive()
+    return rareDataStyleAffectedByActive()
         || rareDataChildrenAffectedByDrag()
         || rareDataChildrenAffectedByBackwardPositionalRules()
         || rareDataChildrenAffectedByPropertyBasedBackwardPositionalRules();
@@ -2609,10 +2677,22 @@ bool Element::rareDataStyleAffectedByEmpty() const
     return elementRareData()->styleAffectedByEmpty();
 }
 
-bool Element::rareDataChildrenAffectedByActive() const
+bool Element::rareDataStyleAffectedByFocusWithin() const
 {
     ASSERT(hasRareData());
-    return elementRareData()->childrenAffectedByActive();
+    return elementRareData()->styleAffectedByFocusWithin();
+}
+
+bool Element::rareDataIsNamedFlowContentElement() const
+{
+    ASSERT(hasRareData());
+    return elementRareData()->isNamedFlowContentElement();
+}
+
+bool Element::rareDataStyleAffectedByActive() const
+{
+    ASSERT(hasRareData());
+    return elementRareData()->styleAffectedByActive();
 }
 
 bool Element::rareDataChildrenAffectedByDrag() const
@@ -2749,7 +2829,27 @@ void Element::clearAfterPseudoElement()
     elementRareData()->setAfterPseudoElement(nullptr);
 }
 
+bool Element::matchesValidPseudoClass() const
+{
+    return false;
+}
+
+bool Element::matchesInvalidPseudoClass() const
+{
+    return false;
+}
+
 bool Element::matchesReadWritePseudoClass() const
+{
+    return false;
+}
+
+bool Element::matchesIndeterminatePseudoClass() const
+{
+    return shouldAppearIndeterminate();
+}
+
+bool Element::matchesDefaultPseudoClass() const
 {
     return false;
 }
@@ -2908,7 +3008,7 @@ void Element::requestPointerLock()
 
 SpellcheckAttributeState Element::spellcheckAttributeState() const
 {
-    const AtomicString& value = fastGetAttribute(HTMLNames::spellcheckAttr);
+    const AtomicString& value = attributeWithoutSynchronization(HTMLNames::spellcheckAttr);
     if (value.isNull())
         return SpellcheckAttributeDefault;
     if (value.isEmpty() || equalLettersIgnoringASCIICase(value, "true"))
@@ -3398,12 +3498,120 @@ void Element::clearHasPendingResources()
 
 bool Element::canContainRangeEndPoint() const
 {
-    return !equalLettersIgnoringASCIICase(fastGetAttribute(roleAttr), "img");
+    return !equalLettersIgnoringASCIICase(attributeWithoutSynchronization(roleAttr), "img");
 }
 
 String Element::completeURLsInAttributeValue(const URL& base, const Attribute& attribute) const
 {
     return URL(base, attribute.value()).string();
+}
+
+bool Element::ieForbidsInsertHTML() const
+{
+    // FIXME: Supposedly IE disallows setting innerHTML, outerHTML
+    // and createContextualFragment on these tags. We have no tests to
+    // verify this however, so this list could be totally wrong.
+    // This list was moved from the previous endTagRequirement() implementation.
+    // This is also called from editing and assumed to be the list of tags
+    // for which no end tag should be serialized. It's unclear if the list for
+    // IE compat and the list for serialization sanity are the same.
+    if (hasTagName(areaTag)
+        || hasTagName(baseTag)
+        || hasTagName(basefontTag)
+        || hasTagName(brTag)
+        || hasTagName(colTag)
+        || hasTagName(embedTag)
+        || hasTagName(frameTag)
+        || hasTagName(hrTag)
+        || hasTagName(imageTag)
+        || hasTagName(imgTag)
+        || hasTagName(inputTag)
+        || hasTagName(isindexTag)
+        || hasTagName(linkTag)
+        || hasTagName(metaTag)
+        || hasTagName(paramTag)
+        || hasTagName(sourceTag)
+        || hasTagName(wbrTag))
+        return true;
+    // FIXME: I'm not sure why dashboard mode would want to change the
+    // serialization of <canvas>, that seems like a bad idea.
+#if ENABLE(DASHBOARD_SUPPORT)
+    if (hasTagName(canvasTag)) {
+        Settings* settings = document().settings();
+        if (settings && settings->usesDashboardBackwardCompatibilityMode())
+            return true;
+    }
+#endif
+    return false;
+}
+
+Node* Element::insertAdjacent(const String& where, Ref<Node>&& newChild, ExceptionCode& ec)
+{
+    // In Internet Explorer if the element has no parent and where is "beforeBegin" or "afterEnd",
+    // a document fragment is created and the elements appended in the correct order. This document
+    // fragment isn't returned anywhere.
+    //
+    // This is impossible for us to implement as the DOM tree does not allow for such structures,
+    // Opera also appears to disallow such usage.
+
+    if (equalLettersIgnoringASCIICase(where, "beforebegin")) {
+        ContainerNode* parent = this->parentNode();
+        return (parent && parent->insertBefore(newChild, this, ec)) ? newChild.ptr() : nullptr;
+    }
+
+    if (equalLettersIgnoringASCIICase(where, "afterbegin"))
+        return insertBefore(newChild, firstChild(), ec) ? newChild.ptr() : nullptr;
+
+    if (equalLettersIgnoringASCIICase(where, "beforeend"))
+        return appendChild(newChild, ec) ? newChild.ptr() : nullptr;
+
+    if (equalLettersIgnoringASCIICase(where, "afterend")) {
+        ContainerNode* parent = this->parentNode();
+        return (parent && parent->insertBefore(newChild, nextSibling(), ec)) ? newChild.ptr() : nullptr;
+    }
+
+    ec = SYNTAX_ERR;
+    return nullptr;
+}
+
+Element* Element::insertAdjacentElement(const String& where, Element& newChild, ExceptionCode& ec)
+{
+    Node* returnValue = insertAdjacent(where, newChild, ec);
+    ASSERT_WITH_SECURITY_IMPLICATION(!returnValue || is<Element>(*returnValue));
+    return downcast<Element>(returnValue);
+}
+
+// Step 1 of https://w3c.github.io/DOM-Parsing/#dom-element-insertadjacenthtml.
+static Element* contextElementForInsertion(const String& where, Element* element, ExceptionCode& ec)
+{
+    if (equalLettersIgnoringASCIICase(where, "beforebegin") || equalLettersIgnoringASCIICase(where, "afterend")) {
+        auto* parent = element->parentElement();
+        if (!parent) {
+            ec = NO_MODIFICATION_ALLOWED_ERR;
+            return nullptr;
+        }
+        return parent;
+    }
+    if (equalLettersIgnoringASCIICase(where, "afterbegin") || equalLettersIgnoringASCIICase(where, "beforeend"))
+        return element;
+    ec =  SYNTAX_ERR;
+    return nullptr;
+}
+
+void Element::insertAdjacentHTML(const String& where, const String& markup, ExceptionCode& ec)
+{
+    Element* contextElement = contextElementForInsertion(where, this, ec);
+    if (!contextElement)
+        return;
+    RefPtr<DocumentFragment> fragment = createFragmentForInnerOuterHTML(*contextElement, markup, AllowScriptingContent, ec);
+    if (!fragment)
+        return;
+    insertAdjacent(where, fragment.releaseNonNull(), ec);
+}
+
+void Element::insertAdjacentText(const String& where, const String& text, ExceptionCode& ec)
+{
+    insertAdjacent(where, document().createTextNode(text), ec);
 }
 
 } // namespace WebCore

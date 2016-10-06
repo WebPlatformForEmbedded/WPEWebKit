@@ -29,7 +29,6 @@
 #import "WKBase.h"
 #import "WebProcess.h"
 #import "XPCServiceEntryPoint.h"
-#import <wtf/RunLoop.h>
 
 #if PLATFORM(IOS)
 #import <WebCore/GraphicsServicesSPI.h>
@@ -43,9 +42,9 @@
 using namespace WebCore;
 using namespace WebKit;
 
-extern "C" WK_EXPORT void WebContentServiceInitializer(xpc_connection_t connection, xpc_object_t initializerMessage);
+extern "C" WK_EXPORT void WebContentServiceInitializer(xpc_connection_t connection, xpc_object_t initializerMessage, xpc_object_t priorityBoostMessage);
 
-void WebContentServiceInitializer(xpc_connection_t connection, xpc_object_t initializerMessage)
+void WebContentServiceInitializer(xpc_connection_t connection, xpc_object_t initializerMessage, xpc_object_t priorityBoostMessage)
 {
     // Remove the WebProcessShim from the DYLD_INSERT_LIBRARIES environment variable so any processes spawned by
     // the this process don't try to insert the shim and crash.
@@ -63,7 +62,7 @@ void WebContentServiceInitializer(xpc_connection_t connection, xpc_object_t init
     InitWebCoreThreadSystemInterface();
 #endif // PLATFORM(IOS)
 
-    XPCServiceInitializer<WebProcess, XPCServiceInitializerDelegate>(adoptOSObject(connection), initializerMessage);
+    XPCServiceInitializer<WebProcess, XPCServiceInitializerDelegate>(adoptOSObject(connection), initializerMessage, priorityBoostMessage);
 
 #if HAVE(OS_ACTIVITY)
 #pragma clang diagnostic push

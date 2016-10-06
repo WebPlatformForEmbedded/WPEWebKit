@@ -23,11 +23,11 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. 
  */
 
-#ifndef FrameSelection_h
-#define FrameSelection_h
+#pragma once
 
 #include "AXTextStateChangeIntent.h"
 #include "EditingStyle.h"
+#include "Element.h"
 #include "IntRect.h"
 #include "LayoutRect.h"
 #include "Range.h"
@@ -137,7 +137,7 @@ public:
 
     WEBCORE_EXPORT Element* rootEditableElementOrDocumentElement() const;
      
-    void moveTo(const Range*);
+    WEBCORE_EXPORT void moveTo(const Range*);
     WEBCORE_EXPORT void moveTo(const VisiblePosition&, EUserTriggered = NotUserTriggered, CursorAlignOnScroll = AlignCursorOnScrollIfNeeded);
     WEBCORE_EXPORT void moveTo(const VisiblePosition&, const VisiblePosition&, EUserTriggered = NotUserTriggered);
     void moveTo(const Position&, EAffinity, EUserTriggered = NotUserTriggered);
@@ -266,7 +266,7 @@ public:
 
     WEBCORE_EXPORT HTMLFormElement* currentForm() const;
 
-    WEBCORE_EXPORT void revealSelection(const ScrollAlignment& = ScrollAlignment::alignCenterIfNeeded, RevealExtentOption = DoNotRevealExtent);
+    WEBCORE_EXPORT void revealSelection(SelectionRevealMode = SelectionRevealMode::Reveal, const ScrollAlignment& = ScrollAlignment::alignCenterIfNeeded, RevealExtentOption = DoNotRevealExtent);
     WEBCORE_EXPORT void setSelectionFromNone();
 
     bool shouldShowBlockCursor() const { return m_shouldShowBlockCursor; }
@@ -350,7 +350,7 @@ private:
     bool m_updateAppearanceEnabled : 1;
     bool m_caretBlinks : 1;
     Color m_caretColor;
-    int m_scrollingSuppressCount;
+    int m_scrollingSuppressCount { 0 };
 #endif
 };
 
@@ -384,5 +384,3 @@ inline void FrameSelection::notifyAccessibilityForSelectionChange(const AXTextSt
 void showTree(const WebCore::FrameSelection&);
 void showTree(const WebCore::FrameSelection*);
 #endif
-
-#endif // FrameSelection_h

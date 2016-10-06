@@ -47,7 +47,7 @@ static JSValue namedItems(ExecState& state, JSHTMLAllCollection* collection, Pro
 
     // FIXME: HTML5 specification says this should be a HTMLCollection.
     // http://www.whatwg.org/specs/web-apps/current-work/multipage/common-dom-interfaces.html#htmlallcollection
-    return toJS(&state, collection->globalObject(), StaticElementList::adopt(namedItems));
+    return toJS(&state, collection->globalObject(), StaticElementList::create(WTFMove(namedItems)));
 }
 
 // HTMLAllCollections are strange objects, they support both get and call.
@@ -104,9 +104,13 @@ bool JSHTMLAllCollection::nameGetter(ExecState* state, PropertyName propertyName
 
 JSValue JSHTMLAllCollection::item(ExecState& state)
 {
-    if (Optional<uint32_t> index = parseIndex(*state.argument(0).toString(&state)->value(&state).impl()))
+    if (UNLIKELY(state.argumentCount() < 1))
+        return state.vm().throwException(&state, createNotEnoughArgumentsError(&state));
+
+    String argument = state.uncheckedArgument(0).toWTFString(&state);
+    if (Optional<uint32_t> index = parseIndex(*argument.impl()))
         return toJS(&state, globalObject(), wrapped().item(index.value()));
-    return namedItems(state, this, Identifier::fromString(&state, state.argument(0).toString(&state)->value(&state)));
+    return namedItems(state, this, Identifier::fromString(&state, argument));
 }
 
 JSValue JSHTMLAllCollection::namedItem(ExecState& state)

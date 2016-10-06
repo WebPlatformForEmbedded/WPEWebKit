@@ -1,3 +1,240 @@
+2016-08-19  Dean Jackson  <dino@apple.com>
+
+        Implement preferLowPowerToHighPerformance for WebGL
+        https://bugs.webkit.org/show_bug.cgi?id=161017
+        <rdar://problem/26819135>
+
+        Reviewed by Myles Maxfield.
+
+        A manual test that creates contexts with and without preferLowPowerToHighPerformance
+        to see what is used. This has to be manual because it depends on the hardware
+        configuration, and we don't have a way to detect it up-front. Also, if the
+        code was failing, it would be the same result as on a single GPU system.
+
+        * ManualTests/webgl-preferLowPowerToHighPerformance.html: Added.
+
+2016-08-19  Per Arne Vollan  <pvollan@apple.com>
+
+        [Win] Warning fix.
+        https://bugs.webkit.org/show_bug.cgi?id=160994
+
+        Reviewed by Anders Carlsson.
+
+        Ignore warning when function declared with __declspec(noreturn) has non void return type.
+
+        * Source/cmake/OptionsWin.cmake:
+
+2016-08-17  Don Olmstead  <don.olmstead@am.sony.com>
+
+        Use find_library within Windows build
+        https://bugs.webkit.org/show_bug.cgi?id=160904
+
+        Reviewed by Brent Fulgham.
+
+        * Source/cmake/FindICU.cmake:
+        * Source/cmake/OptionsWin.cmake:
+
+2016-08-17  Gyuyoung Kim  <gyuyoung.kim@navercorp.com>
+
+        [EFL] Bump efl version from 1.17 to 1.18
+        https://bugs.webkit.org/show_bug.cgi?id=160899
+
+        Reviewed by Antonio Gomes.
+
+        * Source/cmake/OptionsEfl.cmake: Update ewebkit version to 1.18.0.
+
+2016-08-04  Csaba Osztrogonác  <ossy@webkit.org>
+
+        [Mac][cmake] Fix the build after Objective-C bindings generator removal
+        https://bugs.webkit.org/show_bug.cgi?id=160545
+
+        Reviewed by Alex Christensen.
+
+        * Source/cmake/WebKitMacros.cmake:
+
+2016-08-03  Csaba Osztrogonác  <ossy@webkit.org>
+
+        Lacking support on a arm-traditional disassembler.
+        https://bugs.webkit.org/show_bug.cgi?id=123717
+
+        Reviewed by Mark Lam.
+
+        * Source/cmake/FindLLVM.cmake: Added back the r196749 state.
+        * Source/cmake/OptionsCommon.cmake: Added back the r196749 state.
+
+2016-08-01  Keith Miller  <keith_miller@apple.com>
+
+        We should not keep the JavaScript tests inside the Source/JavaScriptCore/ directory.
+        https://bugs.webkit.org/show_bug.cgi?id=160372
+
+        Rubber stamped by Geoffrey Garen.
+
+        This patch moves all the JavaScript tests from Source/JavaScriptCore/tests to
+        a new top level directory, JSTests. Having the tests in the Source directory
+        was both confusing and inconvenient for people that just want to checkout the
+        source code of WebKit. Since there is no other obvious place to put all the
+        JavaScript tests a new top level directory seemed the most sensible.
+
+        * JSTests/: Copied from Source/JavaScriptCore/tests.
+        * Source/JavaScriptCore/tests/: Deleted.
+        * Scripts/import-test262-tests:
+        * Scripts/run-javascriptcore-tests:
+        * Scripts/update-javascriptcore-test-res:
+
+
+2016-07-27  Carlos Garcia Campos  <cgarcia@igalia.com>
+
+        Unreviewed. Update OptionsGTK.cmake and NEWS for 2.13.4 release.
+
+        * Source/cmake/OptionsGTK.cmake: Bump version numbers.
+
+2016-07-22  Carlos Garcia Campos  <cgarcia@igalia.com>
+
+        [GTK] Enable threaded compositor by default
+        https://bugs.webkit.org/show_bug.cgi?id=160079
+
+        Reviewed by Žan Doberšek.
+
+        * Source/cmake/OptionsGTK.cmake:
+
+2016-07-20  Csaba Osztrogonác  <ossy@webkit.org>
+
+        JSC JIT Broken on ARMv7 Traditional (without Thumb2)
+        https://bugs.webkit.org/show_bug.cgi?id=159880
+
+        Reviewed by Carlos Garcia Campos.
+
+        * Source/cmake/OptionsCommon.cmake: Use the BFD linker on ARM traditional because of a gold linker bug.
+
+2016-07-18  Alexey Proskuryakov  <ap@apple.com>
+
+        "make ARCHS=x86_64" fails to build
+        https://bugs.webkit.org/show_bug.cgi?id=159867
+
+        Reviewed by Dan Bernstein.
+
+        * Makefile.shared: Override VALID_ARCHS when ARCHS is set, so that even projects
+        that normally customize VALID_ARCHS wouldn't fail to build.
+
+2016-07-18  Carlos Garcia Campos  <cgarcia@igalia.com>
+
+        Unreviewed. Update OptionsGTK.cmake and NEWS for 2.13.3 release.
+
+        * Source/cmake/OptionsGTK.cmake: Bump version numbers.
+
+2016-07-13  Per Arne Vollan  <pvollan@apple.com>
+
+        [Win] DLLs are missing version information.
+        https://bugs.webkit.org/show_bug.cgi?id=159349
+
+        Reviewed by Alex Christensen.
+
+        Avoid using environment variable WEBKIT_LIBRARIES when finding version stamper utility,
+        in case it is not defined. Instead, use the location of the perl script to find the
+        utility.
+
+        * Source/cmake/tools/scripts/version-stamp.pl:
+
+2016-07-12  Gyuyoung Kim  <gyuyoung.kim@webkit.org>
+
+        Remove ENABLE_CSS3_TEXT_LINE_BREAK flag
+        https://bugs.webkit.org/show_bug.cgi?id=159671
+
+        Reviewed by Csaba Osztrogonác.
+
+        ENABLE_CSS3_TEXT_LINE_BREAK feature was implemented without guards.
+        https://bugs.webkit.org/show_bug.cgi?id=89235
+
+        So this guard can be removed in build scripts.
+
+        * Source/cmake/OptionsMac.cmake:
+        * Source/cmake/WebKitFeatures.cmake:
+
+2016-07-12  Per Arne Vollan  <pvollan@apple.com>
+
+        [Win] DLLs are missing version information.
+        https://bugs.webkit.org/show_bug.cgi?id=159349
+
+        Reviewed by Brent Fulgham.
+
+        The version stamping will fail if the target path has forward slashes.
+
+        * Source/cmake/tools/scripts/version-stamp.pl: Replace forward slashes with backslashes.
+
+2016-07-05  Olivier Blin  <olivier.blin@softathome.com>
+
+        ENABLE_MEDIA_SOURCE should depend on ENABLE_VIDEO
+        https://bugs.webkit.org/show_bug.cgi?id=159424
+
+        Reviewed by Philippe Normand.
+
+        MEDIA_SOURCE requires VIDEO enabled, since MediaSource needs HTMLMediaElement.
+
+        * Source/cmake/WebKitFeatures.cmake:
+
+2016-07-05  Per Arne Vollan  <pvollan@apple.com>
+
+        [Win] Layout Test http/tests/security/contentSecurityPolicy/source-list-parsing-10.html is failing
+        https://bugs.webkit.org/show_bug.cgi?id=147646
+
+        Reviewed by Brent Fulgham.
+
+        Disable CSP_NEXT. We can then use the common expected test results for this test. 
+
+        * Source/cmake/OptionsWin.cmake:
+
+2016-07-04  Gyuyoung Kim  <gyuyoung.kim@webkit.org>
+
+        [EFL] Remove mac configuration dependency in WebKit Version definition
+        https://bugs.webkit.org/show_bug.cgi?id=159407
+
+        Reviewed by Yusuke Suzuki.
+
+        EFL port has been used Version.xconfig file in WebKit/mac/Configurations.
+        in order to generate WebKitVersion.h file. But it can be simply defined
+        in cmake.
+
+        * Source/cmake/OptionsEfl.cmake:
+
+2016-07-03  Dan Bernstein  <mitz@apple.com>
+
+        [Xcode] With default verbosity, make(1) output no longer hides environment variable listings
+        https://bugs.webkit.org/show_bug.cgi?id=159392
+
+        Reviewed by Alexey Proskuryakov.
+
+        * Makefile.shared: Pass the -hideShellScriptEnvironment option to xcodebuild instead of
+          piping its output through an ineffective "grep -v setenv",
+
+2016-07-01  Konstantin Tokarev  <annulen@yandex.ru>
+
+        [cmake] Make LEGACY_WEB_AUDIO depend on WEB_AUDIO.
+        https://bugs.webkit.org/show_bug.cgi?id=159338
+
+        Reviewed by Michael Catanzaro.
+
+        Enabling LEGACY_WEB_AUDIO makes no sense when WEB_AUDIO is
+        disabled.
+
+        * Source/cmake/WebKitFeatures.cmake:
+
+2016-06-28  Per Arne Vollan  <pvollan@apple.com>
+
+        [Win] Custom elements tests are failing.
+        https://bugs.webkit.org/show_bug.cgi?id=159139
+
+        Reviewed by Alex Christensen.
+
+        Enable custom element API on Windows. 
+ 
+        * Source/cmake/OptionsWin.cmake:
+
+2016-06-23  Carlos Garcia Campos  <cgarcia@igalia.com>
+
+        Unreviewed. Update OptionsGTK.cmake and NEWS for 2.13.2 release.
+
+        * Source/cmake/OptionsGTK.cmake: Bump version numbers.
+
 2016-06-15  Romain Bellessort  <romain.bellessort@crf.canon.fr>
 
         Enabling Shadow DOM for all platforms

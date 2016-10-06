@@ -29,6 +29,7 @@
 #if ENABLE(MEDIA_SOURCE) && USE(AVFOUNDATION)
 
 #import "AVFoundationMIMETypeCache.h"
+#import "AVFoundationSPI.h"
 #import "CDMSessionAVStreamSession.h"
 #import "CDMSessionMediaSourceAVFObjC.h"
 #import "FileSystem.h"
@@ -244,7 +245,11 @@ MediaPlayer::SupportsType MediaPlayerPrivateMediaSourceAVFObjC::supportsType(con
     if (parameters.codecs.isEmpty())
         return MediaPlayer::MayBeSupported;
 
-    NSString *typeString = [NSString stringWithFormat:@"%@; codecs=\"%@\"", (NSString *)parameters.type, (NSString *)parameters.codecs];
+    NSString *outputCodecs = parameters.codecs;
+    if ([getAVStreamDataParserClass() respondsToSelector:@selector(outputMIMECodecParameterForInputMIMECodecParameter:)])
+        outputCodecs = [getAVStreamDataParserClass() outputMIMECodecParameterForInputMIMECodecParameter:outputCodecs];
+
+    NSString *typeString = [NSString stringWithFormat:@"%@; codecs=\"%@\"", (NSString *)parameters.type, (NSString *)outputCodecs];
     return [getAVURLAssetClass() isPlayableExtendedMIMEType:typeString] ? MediaPlayer::IsSupported : MediaPlayer::MayBeSupported;;
 }
 
@@ -468,7 +473,8 @@ bool MediaPlayerPrivateMediaSourceAVFObjC::seeking() const
 
 void MediaPlayerPrivateMediaSourceAVFObjC::setRateDouble(double rate)
 {
-    m_rate = rate;
+    // AVSampleBufferRenderSynchronizer does not support negative rate yet.
+    m_rate = std::max<double>(rate, 0);
     if (shouldBePlaying())
         [m_synchronizer setRate:m_rate];
 }
@@ -755,7 +761,7 @@ void MediaPlayerPrivateMediaSourceAVFObjC::addDisplayLayer(AVSampleBufferDisplay
     m_player->firstVideoFrameAvailable();
 
 #if PLATFORM(MAC) && ENABLE(VIDEO_PRESENTATION_MODE)
-    m_videoFullscreenLayerManager->setVideoLayers(m_sampleBufferDisplayLayer.get(), nil, snappedIntRect(m_player->client().mediaPlayerContentBoxRect()).size());
+    m_videoFullscreenLayerManager->setVideoLayer(m_sampleBufferDisplayLayer.get(), snappedIntRect(m_player->client().mediaPlayerContentBoxRect()).size());
 #endif
 }
 

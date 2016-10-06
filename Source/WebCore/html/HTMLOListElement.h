@@ -20,8 +20,7 @@
  *
  */
 
-#ifndef HTMLOListElement_h
-#define HTMLOListElement_h
+#pragma once
 
 #include "HTMLElement.h"
 #include <wtf/Optional.h>
@@ -34,7 +33,7 @@ public:
     static Ref<HTMLOListElement> create(const QualifiedName&, Document&);
 
     int start() const { return m_start ? m_start.value() : (m_isReversed ? itemCount() : 1); }
-    void setStart(int);
+    WEBCORE_EXPORT void setStart(int);
 
     bool isReversed() const { return m_isReversed; }
 
@@ -52,11 +51,11 @@ private:
         return m_itemCount;
     }
 
-    void recalculateItemCount();
+    WEBCORE_EXPORT void recalculateItemCount();
 
-    void parseAttribute(const QualifiedName&, const AtomicString&) override;
-    bool isPresentationAttribute(const QualifiedName&) const override;
-    void collectStyleForPresentationAttribute(const QualifiedName&, const AtomicString&, MutableStyleProperties&) override;
+    void parseAttribute(const QualifiedName&, const AtomicString&) final;
+    bool isPresentationAttribute(const QualifiedName&) const final;
+    void collectStyleForPresentationAttribute(const QualifiedName&, const AtomicString&, MutableStyleProperties&) final;
 
     Optional<int> m_start;
     unsigned m_itemCount;
@@ -66,5 +65,3 @@ private:
 };
 
 } //namespace
-
-#endif

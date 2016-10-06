@@ -62,6 +62,7 @@
 #include "MainFrame.h"
 #include "MemoryCache.h"
 #include "Page.h"
+#include "RenderObject.h"
 #include "ScriptController.h"
 #include "SecurityOrigin.h"
 #include "Settings.h"
@@ -418,13 +419,13 @@ void InspectorPageAgent::removeScriptToEvaluateOnLoad(ErrorString& error, const 
 
 void InspectorPageAgent::reload(ErrorString&, const bool* const optionalIgnoreCache, const String* optionalScriptToEvaluateOnLoad)
 {
-    m_pendingScriptToEvaluateOnLoadOnce = optionalScriptToEvaluateOnLoad ? *optionalScriptToEvaluateOnLoad : "";
+    m_pendingScriptToEvaluateOnLoadOnce = optionalScriptToEvaluateOnLoad ? *optionalScriptToEvaluateOnLoad : emptyString();
     m_page.mainFrame().loader().reload(optionalIgnoreCache ? *optionalIgnoreCache : false);
 }
 
 void InspectorPageAgent::navigate(ErrorString&, const String& url)
 {
-    UserGestureIndicator indicator(DefinitelyProcessingUserGesture);
+    UserGestureIndicator indicator(ProcessingUserGesture);
     Frame& frame = m_page.mainFrame();
 
     ResourceRequest resourceRequest(frame.document()->completeURL(url));
@@ -515,10 +516,12 @@ void InspectorPageAgent::getCookies(ErrorString&, RefPtr<Inspector::Protocol::Ar
 
     for (Frame* frame = &mainFrame(); frame; frame = frame->tree().traverseNext()) {
         Document* document = frame->document();
+        if (!document)
+            continue;
 
         for (auto& url : allResourcesURLsForFrame(frame)) {
             Vector<Cookie> docCookiesList;
-            rawCookiesImplemented = getRawCookies(document, URL(ParsedURLString, url), docCookiesList);
+            rawCookiesImplemented = getRawCookies(*document, URL(ParsedURLString, url), docCookiesList);
 
             if (!rawCookiesImplemented) {
                 // FIXME: We need duplication checking for the String representation of cookies.
@@ -544,8 +547,10 @@ void InspectorPageAgent::getCookies(ErrorString&, RefPtr<Inspector::Protocol::Ar
 void InspectorPageAgent::deleteCookie(ErrorString&, const String& cookieName, const String& url)
 {
     URL parsedURL(ParsedURLString, url);
-    for (Frame* frame = &m_page.mainFrame(); frame; frame = frame->tree().traverseNext())
-        WebCore::deleteCookie(frame->document(), parsedURL, cookieName);
+    for (Frame* frame = &m_page.mainFrame(); frame; frame = frame->tree().traverseNext()) {
+        if (auto* document = frame->document())
+            WebCore::deleteCookie(*document, parsedURL, cookieName);
+    }
 }
 
 void InspectorPageAgent::getResourceTree(ErrorString&, RefPtr<Inspector::Protocol::Page::FrameResourceTree>& object)
@@ -765,7 +770,7 @@ Frame* InspectorPageAgent::frameForId(const String& frameId)
 String InspectorPageAgent::frameId(Frame* frame)
 {
     if (!frame)
-        return "";
+        return emptyString();
     String identifier = m_frameToIdentifier.get(frame);
     if (identifier.isNull()) {
         identifier = IdentifiersFactory::createIdentifier();
@@ -783,7 +788,7 @@ bool InspectorPageAgent::hasIdForFrame(Frame* frame) const
 String InspectorPageAgent::loaderId(DocumentLoader* loader)
 {
     if (!loader)
-        return "";
+        return emptyString();
     String identifier = m_loaderToIdentifier.get(loader);
     if (identifier.isNull()) {
         identifier = IdentifiersFactory::createIdentifier();
@@ -925,7 +930,7 @@ Ref<Inspector::Protocol::Page::Frame> InspectorPageAgent::buildObjectForFrame(Fr
     if (frame->ownerElement()) {
         String name = frame->ownerElement()->getNameAttribute();
         if (name.isEmpty())
-            name = frame->ownerElement()->getAttribute(HTMLNames::idAttr);
+            name = frame->ownerElement()->attributeWithoutSynchronization(HTMLNames::idAttr);
         frameObject->setName(name);
     }
 

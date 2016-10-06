@@ -48,7 +48,6 @@
 #include "JSCInlines.h"
 #include "JSLexicalEnvironment.h"
 #include "JSModuleEnvironment.h"
-#include "JSStackInlines.h"
 #include "JSString.h"
 #include "JSWithScope.h"
 #include "LLIntCLoop.h"
@@ -76,7 +75,6 @@
 #include <wtf/StdLibExtras.h>
 #include <wtf/StringPrintStream.h>
 #include <wtf/Threading.h>
-#include <wtf/WTFThreadData.h>
 #include <wtf/text/StringBuilder.h>
 
 #if ENABLE(JIT)
@@ -216,10 +214,12 @@ unsigned sizeOfVarargs(CallFrame* callFrame, JSValue arguments, uint32_t firstVa
         length = jsCast<ScopedArguments*>(cell)->length(callFrame);
         break;
     case StringType:
+    case SymbolType:
         callFrame->vm().throwException(callFrame, createInvalidFunctionApplyParameterError(callFrame,  arguments));
         return 0;
+        
     default:
-        ASSERT(arguments.isObject());
+        RELEASE_ASSERT(arguments.isObject());
         length = getLength(callFrame, jsCast<JSObject*>(cell));
         if (UNLIKELY(callFrame->hadException()))
             return 0;
@@ -235,22 +235,22 @@ unsigned sizeOfVarargs(CallFrame* callFrame, JSValue arguments, uint32_t firstVa
     return length;
 }
 
-unsigned sizeFrameForForwardArguments(CallFrame* callFrame, JSStack* stack, unsigned numUsedStackSlots)
+unsigned sizeFrameForForwardArguments(CallFrame* callFrame, VM& vm, unsigned numUsedStackSlots)
 {
     unsigned length = callFrame->argumentCount();
     CallFrame* calleeFrame = calleeFrameForVarargs(callFrame, numUsedStackSlots, length + 1);
-    if (!stack->ensureCapacityFor(calleeFrame->registers()))
+    if (UNLIKELY(!vm.ensureStackCapacityFor(calleeFrame->registers())))
         throwStackOverflowError(callFrame);
 
     return length;
 }
 
-unsigned sizeFrameForVarargs(CallFrame* callFrame, JSStack* stack, JSValue arguments, unsigned numUsedStackSlots, uint32_t firstVarArgOffset)
+unsigned sizeFrameForVarargs(CallFrame* callFrame, VM& vm, JSValue arguments, unsigned numUsedStackSlots, uint32_t firstVarArgOffset)
 {
     unsigned length = sizeOfVarargs(callFrame, arguments, firstVarArgOffset);
     
     CallFrame* calleeFrame = calleeFrameForVarargs(callFrame, numUsedStackSlots, length + 1);
-    if (length > maxArguments || !stack->ensureCapacityFor(calleeFrame->registers())) {
+    if (UNLIKELY(length > maxArguments || !vm.ensureStackCapacityFor(calleeFrame->registers()))) {
         throwStackOverflowError(callFrame);
         return 0;
     }
@@ -323,7 +323,9 @@ void setupForwardArgumentsFrameAndSetThis(CallFrame* execCaller, CallFrame* exec
 
 Interpreter::Interpreter(VM& vm)
     : m_vm(vm)
-    , m_stack(vm)
+#if !ENABLE(JIT)
+    , m_cloopStack(vm)
+#endif
     , m_errorHandlingModeReentry(0)
 #if !ASSERT_DISABLED
     , m_initialized(false)
@@ -401,8 +403,8 @@ void Interpreter::dumpRegisters(CallFrame* callFrame)
     const Register* it;
     const Register* end;
 
-    it = callFrame->registers() + JSStack::ThisArgument + callFrame->argumentCount();
-    end = callFrame->registers() + JSStack::ThisArgument - 1;
+    it = callFrame->registers() + CallFrameSlot::thisArgument + callFrame->argumentCount();
+    end = callFrame->registers() + CallFrameSlot::thisArgument - 1;
     while (it > end) {
         JSValue v = it->jsValue();
         int registerNumber = it - callFrame->registers();
@@ -827,7 +829,7 @@ JSValue Interpreter::execute(ProgramExecutable* program, CallFrame* callFrame, J
     if (vm.isCollectorBusy())
         return jsNull();
 
-    if (!vm.isSafeToRecurse())
+    if (UNLIKELY(!vm.isSafeToRecurseSoft()))
         return checkedReturn(throwStackOverflowError(callFrame));
 
     // First check if the "program" is actually just a JSON object. If so,
@@ -941,10 +943,13 @@ failedJSONP:
     if (JSObject* error = program->initializeGlobalProperties(vm, callFrame, scope))
         return checkedReturn(callFrame->vm().throwException(callFrame, error));
 
-    if (JSObject* error = program->prepareForExecution(callFrame, nullptr, scope, CodeForCall))
-        return checkedReturn(callFrame->vm().throwException(callFrame, error));
-
-    ProgramCodeBlock* codeBlock = program->codeBlock();
+    ProgramCodeBlock* codeBlock;
+    {
+        CodeBlock* tempCodeBlock;
+        if (JSObject* error = program->prepareForExecution<ProgramExecutable>(callFrame, nullptr, scope, CodeForCall, tempCodeBlock))
+            return checkedReturn(callFrame->vm().throwException(callFrame, error));
+        codeBlock = jsCast<ProgramCodeBlock*>(tempCodeBlock);
+    }
 
     if (UNLIKELY(vm.shouldTriggerTermination(callFrame)))
         return throwTerminatedExecutionException(callFrame);
@@ -987,16 +992,15 @@ JSValue Interpreter::executeCall(CallFrame* callFrame, JSObject* function, CallT
     }
 
     VMEntryScope entryScope(vm, globalObject);
-    if (!vm.isSafeToRecurse())
+    if (UNLIKELY(!vm.isSafeToRecurseSoft()))
         return checkedReturn(throwStackOverflowError(callFrame));
 
     if (isJSCall) {
         // Compile the callee:
-        JSObject* compileError = callData.js.functionExecutable->prepareForExecution(callFrame, jsCast<JSFunction*>(function), scope, CodeForCall);
-        if (UNLIKELY(!!compileError)) {
+        JSObject* compileError = callData.js.functionExecutable->prepareForExecution<FunctionExecutable>(callFrame, jsCast<JSFunction*>(function), scope, CodeForCall, newCodeBlock);
+        if (UNLIKELY(!!compileError))
             return checkedReturn(callFrame->vm().throwException(callFrame, compileError));
-        }
-        newCodeBlock = callData.js.functionExecutable->codeBlockForCall();
+
         ASSERT(!!newCodeBlock);
         newCodeBlock->m_shouldAlwaysBeInlined = false;
     } else
@@ -1049,16 +1053,15 @@ JSObject* Interpreter::executeConstruct(CallFrame* callFrame, JSObject* construc
     }
 
     VMEntryScope entryScope(vm, globalObject);
-    if (!vm.isSafeToRecurse())
+    if (UNLIKELY(!vm.isSafeToRecurseSoft()))
         return checkedReturn(throwStackOverflowError(callFrame));
 
     if (isJSConstruct) {
         // Compile the callee:
-        JSObject* compileError = constructData.js.functionExecutable->prepareForExecution(callFrame, jsCast<JSFunction*>(constructor), scope, CodeForConstruct);
-        if (UNLIKELY(!!compileError)) {
+        JSObject* compileError = constructData.js.functionExecutable->prepareForExecution<FunctionExecutable>(callFrame, jsCast<JSFunction*>(constructor), scope, CodeForConstruct, newCodeBlock);
+        if (UNLIKELY(!!compileError))
             return checkedReturn(callFrame->vm().throwException(callFrame, compileError));
-        }
-        newCodeBlock = constructData.js.functionExecutable->codeBlockForConstruct();
+
         ASSERT(!!newCodeBlock);
         newCodeBlock->m_shouldAlwaysBeInlined = false;
     } else
@@ -1098,12 +1101,12 @@ CallFrameClosure Interpreter::prepareForRepeatCall(FunctionExecutable* functionE
         return CallFrameClosure();
 
     // Compile the callee:
-    JSObject* error = functionExecutable->prepareForExecution(callFrame, function, scope, CodeForCall);
+    CodeBlock* newCodeBlock;
+    JSObject* error = functionExecutable->prepareForExecution<FunctionExecutable>(callFrame, function, scope, CodeForCall, newCodeBlock);
     if (error) {
         callFrame->vm().throwException(callFrame, error);
         return CallFrameClosure();
     }
-    CodeBlock* newCodeBlock = functionExecutable->codeBlockForCall();
     newCodeBlock->m_shouldAlwaysBeInlined = false;
 
     size_t argsCount = argumentCountIncludingThis;
@@ -1146,7 +1149,7 @@ JSValue Interpreter::execute(EvalExecutable* eval, CallFrame* callFrame, JSValue
         return jsNull();
 
     VMEntryScope entryScope(vm, scope->globalObject());
-    if (!vm.isSafeToRecurse())
+    if (UNLIKELY(!vm.isSafeToRecurseSoft()))
         return checkedReturn(throwStackOverflowError(callFrame));        
 
     unsigned numVariables = eval->numVariables();
@@ -1173,10 +1176,14 @@ JSValue Interpreter::execute(EvalExecutable* eval, CallFrame* callFrame, JSValue
         }
     }
 
-    JSObject* compileError = eval->prepareForExecution(callFrame, nullptr, scope, CodeForCall);
-    if (UNLIKELY(!!compileError))
-        return checkedReturn(callFrame->vm().throwException(callFrame, compileError));
-    EvalCodeBlock* codeBlock = eval->codeBlock();
+    EvalCodeBlock* codeBlock;
+    {
+        CodeBlock* tempCodeBlock;
+        JSObject* compileError = eval->prepareForExecution<EvalExecutable>(callFrame, nullptr, scope, CodeForCall, tempCodeBlock);
+        if (UNLIKELY(!!compileError))
+            return checkedReturn(callFrame->vm().throwException(callFrame, compileError));
+        codeBlock = jsCast<EvalCodeBlock*>(tempCodeBlock);
+    }
 
     // We can't declare a "var"/"function" that overwrites a global "let"/"const"/"class" in a sloppy-mode eval.
     if (variableObject->isGlobalObject() && !eval->isStrictMode() && (numVariables || numFunctions)) {
@@ -1185,8 +1192,7 @@ JSValue Interpreter::execute(EvalExecutable* eval, CallFrame* callFrame, JSValue
             const Identifier& ident = codeBlock->variable(i);
             PropertySlot slot(globalLexicalEnvironment, PropertySlot::InternalMethodType::VMInquiry);
             if (JSGlobalLexicalEnvironment::getOwnPropertySlot(globalLexicalEnvironment, callFrame, ident, slot)) {
-                return checkedReturn(callFrame->vm().throwException(callFrame,
-                    createTypeError(callFrame, makeString("Can't create duplicate global variable in eval: '", String(ident.impl()), "'"))));
+                return checkedReturn(throwTypeError(callFrame, makeString("Can't create duplicate global variable in eval: '", String(ident.impl()), "'")));
             }
         }
 
@@ -1194,8 +1200,7 @@ JSValue Interpreter::execute(EvalExecutable* eval, CallFrame* callFrame, JSValue
             FunctionExecutable* function = codeBlock->functionDecl(i);
             PropertySlot slot(globalLexicalEnvironment, PropertySlot::InternalMethodType::VMInquiry);
             if (JSGlobalLexicalEnvironment::getOwnPropertySlot(globalLexicalEnvironment, callFrame, function->name(), slot)) {
-                return checkedReturn(callFrame->vm().throwException(callFrame,
-                    createTypeError(callFrame, makeString("Can't create duplicate global variable in eval: '", String(function->name().impl()), "'"))));
+                return checkedReturn(throwTypeError(callFrame, makeString("Can't create duplicate global variable in eval: '", String(function->name().impl()), "'")));
             }
         }
     }
@@ -1206,7 +1211,7 @@ JSValue Interpreter::execute(EvalExecutable* eval, CallFrame* callFrame, JSValue
     if (numVariables || numFunctions) {
         BatchedTransitionOptimizer optimizer(vm, variableObject);
         if (variableObject->next())
-            variableObject->globalObject()->varInjectionWatchpoint()->fireAll("Executed eval, fired VarInjection watchpoint");
+            variableObject->globalObject()->varInjectionWatchpoint()->fireAll(vm, "Executed eval, fired VarInjection watchpoint");
 
         for (unsigned i = 0; i < numVariables; ++i) {
             const Identifier& ident = codeBlock->variable(i);
@@ -1249,13 +1254,17 @@ JSValue Interpreter::execute(ModuleProgramExecutable* executable, CallFrame* cal
         return jsNull();
 
     VMEntryScope entryScope(vm, scope->globalObject());
-    if (!vm.isSafeToRecurse())
+    if (UNLIKELY(!vm.isSafeToRecurseSoft()))
         return checkedReturn(throwStackOverflowError(callFrame));
 
-    JSObject* compileError = executable->prepareForExecution(callFrame, nullptr, scope, CodeForCall);
-    if (UNLIKELY(!!compileError))
-        return checkedReturn(callFrame->vm().throwException(callFrame, compileError));
-    ModuleProgramCodeBlock* codeBlock = executable->codeBlock();
+    ModuleProgramCodeBlock* codeBlock;
+    {
+        CodeBlock* tempCodeBlock;
+        JSObject* compileError = executable->prepareForExecution<ModuleProgramExecutable>(callFrame, nullptr, scope, CodeForCall, tempCodeBlock);
+        if (UNLIKELY(!!compileError))
+            return checkedReturn(callFrame->vm().throwException(callFrame, compileError));
+        codeBlock = jsCast<ModuleProgramCodeBlock*>(tempCodeBlock);
+    }
 
     if (UNLIKELY(vm.shouldTriggerTermination(callFrame)))
         return throwTerminatedExecutionException(callFrame);

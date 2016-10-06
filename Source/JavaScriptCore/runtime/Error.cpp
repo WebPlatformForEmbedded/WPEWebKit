@@ -37,8 +37,6 @@
 #include "JSCInlines.h"
 #include "SourceCode.h"
 
-#include <wtf/text/StringBuilder.h>
-
 namespace JSC {
 
 static const char* linePropertyName = "line";
@@ -98,12 +96,6 @@ JSObject* createURIError(ExecState* exec, const String& message, ErrorInstance::
     return ErrorInstance::create(exec, globalObject->vm(), globalObject->URIErrorConstructor()->errorStructure(), message, appender, TypeNothing, true);
 }
 
-JSObject* createOutOfMemoryError(ExecState* exec, ErrorInstance::SourceAppender appender) 
-{
-    return createError(exec, ASCIILiteral("Out of memory"), appender);
-}
-
-
 class FindFirstCallerFrameWithCodeblockFunctor {
 public:
     FindFirstCallerFrameWithCodeblockFunctor(CallFrame* startCallFrame)
@@ -149,7 +141,7 @@ bool addErrorInfoAndGetBytecodeOffset(ExecState* exec, VM& vm, JSObject* obj, bo
 
         ASSERT(exec == vm.topCallFrame || exec == exec->lexicalGlobalObject()->globalExec() || exec == exec->vmEntryGlobalObject()->globalExec());
 
-        StackFrame* firstNonNativeFrame;
+        StackFrame* firstNonNativeFrame = nullptr;
         for (unsigned i = 0 ; i < stackTrace.size(); ++i) {
             firstNonNativeFrame = &stackTrace.at(i);
             if (!firstNonNativeFrame->isNative())
@@ -167,12 +159,12 @@ bool addErrorInfoAndGetBytecodeOffset(ExecState* exec, VM& vm, JSObject* obj, bo
         unsigned line;
         unsigned column;
         firstNonNativeFrame->computeLineAndColumn(line, column);
-        obj->putDirect(vm, vm.propertyNames->line, jsNumber(line), ReadOnly | DontDelete);
-        obj->putDirect(vm, vm.propertyNames->column, jsNumber(column), ReadOnly | DontDelete);
+        obj->putDirect(vm, vm.propertyNames->line, jsNumber(line));
+        obj->putDirect(vm, vm.propertyNames->column, jsNumber(column));
 
         String frameSourceURL = firstNonNativeFrame->sourceURL();
         if (!frameSourceURL.isEmpty())
-            obj->putDirect(vm, vm.propertyNames->sourceURL, jsString(&vm, frameSourceURL), ReadOnly | DontDelete);
+            obj->putDirect(vm, vm.propertyNames->sourceURL, jsString(&vm, frameSourceURL));
 
         obj->putDirect(vm, vm.propertyNames->stack, Interpreter::stackTraceAsString(vm, stackTrace), DontEnum);
 
@@ -193,9 +185,9 @@ JSObject* addErrorInfo(CallFrame* callFrame, JSObject* error, int line, const So
     const String& sourceURL = source.provider()->url();
 
     if (line != -1)
-        error->putDirect(*vm, Identifier::fromString(vm, linePropertyName), jsNumber(line), ReadOnly | DontDelete);
+        error->putDirect(*vm, Identifier::fromString(vm, linePropertyName), jsNumber(line));
     if (!sourceURL.isNull())
-        error->putDirect(*vm, Identifier::fromString(vm, sourceURLPropertyName), jsString(vm, sourceURL), ReadOnly | DontDelete);
+        error->putDirect(*vm, Identifier::fromString(vm, sourceURLPropertyName), jsString(vm, sourceURL));
     return error;
 }
 
@@ -208,12 +200,17 @@ bool hasErrorInfo(ExecState* exec, JSObject* error)
 
 JSObject* throwConstructorCannotBeCalledAsFunctionTypeError(ExecState* exec, const char* constructorName)
 {
-    return exec->vm().throwException(exec, createTypeError(exec, makeString("calling ", constructorName, " constructor without new is invalid")));
+    return throwTypeError(exec, makeString("calling ", constructorName, " constructor without new is invalid"));
 }
 
 JSObject* throwTypeError(ExecState* exec)
 {
     return exec->vm().throwException(exec, createTypeError(exec));
+}
+
+JSObject* throwTypeError(ExecState* exec, ASCIILiteral errorMessage)
+{
+    return throwTypeError(exec, String(errorMessage));
 }
 
 JSObject* throwTypeError(ExecState* exec, const String& message)
@@ -278,7 +275,7 @@ JSObject* createURIError(ExecState* exec, const String& message)
 
 JSObject* createOutOfMemoryError(ExecState* exec)
 {
-    return createOutOfMemoryError(exec, nullptr);
+    return createError(exec, ASCIILiteral("Out of memory"), nullptr);
 }
 
 

@@ -72,6 +72,8 @@ typedef void (*AXPostedNotificationCallback)(id element, NSString* notification,
 - (NSUInteger)accessibilityARIAColumnIndex;
 - (UIAccessibilityTraits)_axContainedByFieldsetTrait;
 - (id)_accessibilityFieldsetAncestor;
+- (BOOL)_accessibilityHasTouchEventListener;
+- (NSString *)accessibilityExpandedTextValue;
 
 // TextMarker related
 - (NSArray *)textMarkerRange;
@@ -338,7 +340,10 @@ JSRetainPtr<JSStringRef> AccessibilityUIElement::stringAttributeValue(JSStringRe
     
     if (JSStringIsEqualToUTF8CString(attribute, "AXARIACurrent"))
         return [[m_element accessibilityARIACurrentStatus] createJSStringRef];
-    
+
+    if (JSStringIsEqualToUTF8CString(attribute, "AXExpandedTextValue"))
+        return [[m_element accessibilityExpandedTextValue] createJSStringRef];
+
     return JSStringCreateWithCharacters(0, 0);
 }
 
@@ -379,6 +384,8 @@ PassRefPtr<AccessibilityUIElement> AccessibilityUIElement::uiElementAttributeVal
 
 bool AccessibilityUIElement::boolAttributeValue(JSStringRef attribute)
 {
+    if (JSStringIsEqualToUTF8CString(attribute, "AXHasTouchEventListener"))
+        return [m_element _accessibilityHasTouchEventListener];
     return false;
 }
 
@@ -803,6 +810,7 @@ void AccessibilityUIElement::showMenu()
 
 void AccessibilityUIElement::press()
 {
+    [m_element _accessibilityActivate];
 }
 
 void AccessibilityUIElement::setSelectedChild(AccessibilityUIElement* element) const

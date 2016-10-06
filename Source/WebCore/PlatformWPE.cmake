@@ -129,7 +129,7 @@ list(APPEND WebCore_SOURCES
     platform/network/soup/ResourceHandleSoup.cpp
     platform/network/soup/ResourceRequestSoup.cpp
     platform/network/soup/ResourceResponseSoup.cpp
-    platform/network/soup/SocketStreamHandleSoup.cpp
+    platform/network/soup/SocketStreamHandleImplSoup.cpp
     platform/network/soup/SoupNetworkSession.cpp
     platform/network/soup/SynchronousLoaderClientSoup.cpp
     platform/network/soup/WebKitSoupRequestGeneric.cpp
@@ -137,10 +137,6 @@ list(APPEND WebCore_SOURCES
 
     platform/soup/SharedBufferSoup.cpp
     platform/soup/URLSoup.cpp
-
-    platform/text/icu/UTextProvider.cpp
-    platform/text/icu/UTextProviderLatin1.cpp
-    platform/text/icu/UTextProviderUTF16.cpp
 
     platform/text/Hyphenation.cpp
     platform/text/LocaleICU.cpp
@@ -165,8 +161,6 @@ list(APPEND WebCore_SOURCES
 
     platform/graphics/wpe/IconWPE.cpp
     platform/graphics/wpe/ImageWPE.cpp
-
-    platform/text/wpe/TextBreakIteratorInternalICUWPE.cpp
 
     platform/unix/LoggingUnix.cpp
 
@@ -245,7 +239,7 @@ if (ENABLE_SUBTLE_CRYPTO)
         crypto/CryptoAlgorithmRegistry.cpp
         crypto/CryptoKey.cpp
         crypto/CryptoKeyPair.cpp
-        crypto/SubtleCrypto.cpp
+        crypto/WebKitSubtleCrypto.cpp
 
         crypto/algorithms/CryptoAlgorithmAES_CBC.cpp
         crypto/algorithms/CryptoAlgorithmAES_KW.cpp

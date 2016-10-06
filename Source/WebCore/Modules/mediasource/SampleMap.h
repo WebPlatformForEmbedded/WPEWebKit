@@ -44,7 +44,6 @@ public:
     typedef MapType::iterator iterator;
     typedef MapType::reverse_iterator reverse_iterator;
     typedef std::pair<iterator, iterator> iterator_range;
-    typedef std::pair<reverse_iterator, reverse_iterator> reverse_iterator_range;
 
     iterator begin() { return m_samples.begin(); }
     iterator end() { return m_samples.end(); }
@@ -70,7 +69,6 @@ public:
     typedef std::pair<MediaTime, MediaTime> KeyType;
     typedef std::map<KeyType, RefPtr<MediaSample>> MapType;
     typedef MapType::iterator iterator;
-    typedef MapType::const_iterator const_iterator;
     typedef MapType::reverse_iterator reverse_iterator;
     typedef std::pair<reverse_iterator, reverse_iterator> reverse_iterator_range;
 
@@ -101,7 +99,7 @@ public:
 
     bool empty() const;
     void clear();
-    void addSample(PassRefPtr<MediaSample>);
+    void addSample(MediaSample&);
     void removeSample(MediaSample*);
     size_t sizeInBytes() const { return m_totalSize; }
 
@@ -122,7 +120,7 @@ template<typename I>
 void SampleMap::addRange(I begin, I end)
 {
     for (I iter = begin; iter != end; ++iter)
-        addSample(iter->second);
+        addSample(*iter->second);
 }
 
 }

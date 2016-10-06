@@ -57,8 +57,8 @@ public:
 
     RefPtr<IDBObjectStore> createObjectStore(const String& name, const Dictionary&, ExceptionCodeWithMessage&);
     RefPtr<IDBObjectStore> createObjectStore(const String& name, const IDBKeyPath&, bool autoIncrement, ExceptionCodeWithMessage&);
-    RefPtr<IDBTransaction> transaction(ScriptExecutionContext*, const Vector<String>&, const String& mode, ExceptionCodeWithMessage&);
-    RefPtr<IDBTransaction> transaction(ScriptExecutionContext*, const String&, const String& mode, ExceptionCodeWithMessage&);
+    RefPtr<IDBTransaction> transaction(const Vector<String>&, const String& mode, ExceptionCodeWithMessage&);
+    RefPtr<IDBTransaction> transaction(const String&, const String& mode, ExceptionCodeWithMessage&);
     void deleteObjectStore(const String& name, ExceptionCodeWithMessage&);
     void close();
 
@@ -88,6 +88,7 @@ public:
 
     void fireVersionChangeEvent(const IDBResourceIdentifier& requestIdentifier, uint64_t requestedVersion);
     void didCloseFromServer(const IDBError&);
+    void connectionToServerLost(const IDBError&);
 
     IDBClient::IDBConnectionProxy& connectionProxy() { return m_connectionProxy.get(); }
 

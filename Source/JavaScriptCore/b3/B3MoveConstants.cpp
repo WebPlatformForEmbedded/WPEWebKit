@@ -62,7 +62,7 @@ public:
         
         hoistConstants(
             [&] (const ValueKey& key) -> bool {
-                return key.opcode() == Const32 || key.opcode() == Const64;
+                return key.opcode() == Const32 || key.opcode() == Const64 || key.opcode() == ArgumentReg;
             });
     }
 
@@ -125,7 +125,7 @@ private:
                 if (valueForConstant.get(key) == value)
                     value = m_proc.add<Value>(Nop, value->origin());
                 else
-                    value->replaceWithNop();
+                    value->replaceWithNopIgnoringType();
             }
         }
 

@@ -83,45 +83,6 @@ String HTMLElement::nodeName() const
     return Element::nodeName();
 }
 
-bool HTMLElement::ieForbidsInsertHTML() const
-{
-    // FIXME: Supposedly IE disallows settting innerHTML, outerHTML
-    // and createContextualFragment on these tags.  We have no tests to
-    // verify this however, so this list could be totally wrong.
-    // This list was moved from the previous endTagRequirement() implementation.
-    // This is also called from editing and assumed to be the list of tags
-    // for which no end tag should be serialized. It's unclear if the list for
-    // IE compat and the list for serialization sanity are the same.
-    if (hasTagName(areaTag)
-        || hasTagName(baseTag)
-        || hasTagName(basefontTag)
-        || hasTagName(brTag)
-        || hasTagName(colTag)
-        || hasTagName(embedTag)
-        || hasTagName(frameTag)
-        || hasTagName(hrTag)
-        || hasTagName(imageTag)
-        || hasTagName(imgTag)
-        || hasTagName(inputTag)
-        || hasTagName(isindexTag)
-        || hasTagName(linkTag)
-        || hasTagName(metaTag)
-        || hasTagName(paramTag)
-        || hasTagName(sourceTag)
-        || hasTagName(wbrTag))
-        return true;
-    // FIXME: I'm not sure why dashboard mode would want to change the
-    // serialization of <canvas>, that seems like a bad idea.
-#if ENABLE(DASHBOARD_SUPPORT)
-    if (hasTagName(canvasTag)) {
-        Settings* settings = document().settings();
-        if (settings && settings->usesDashboardBackwardCompatibilityMode())
-            return true;
-    }
-#endif
-    return false;
-}
-
 static inline CSSValueID unicodeBidiAttributeForDirAuto(HTMLElement& element)
 {
     if (element.hasTagName(preTag) || element.hasTagName(textareaTag))
@@ -191,7 +152,7 @@ static inline ContentEditableType contentEditableType(const AtomicString& value)
 
 static ContentEditableType contentEditableType(const HTMLElement& element)
 {
-    return contentEditableType(element.fastGetAttribute(contenteditableAttr));
+    return contentEditableType(element.attributeWithoutSynchronization(contenteditableAttr));
 }
 
 void HTMLElement::collectStyleForPresentationAttribute(const QualifiedName& name, const AtomicString& value, MutableStyleProperties& style)
@@ -243,7 +204,7 @@ void HTMLElement::collectStyleForPresentationAttribute(const QualifiedName& name
         mapLanguageAttributeToLocale(value, style);
     else if (name == langAttr) {
         // xml:lang has a higher priority than lang.
-        if (!fastHasAttribute(XMLNames::langAttr))
+        if (!hasAttributeWithoutSynchronization(XMLNames::langAttr))
             mapLanguageAttributeToLocale(value, style);
     } else
         StyledElement::collectStyleForPresentationAttribute(name, value, style);
@@ -536,12 +497,12 @@ static inline const AtomicString& toValidDirValue(const AtomicString& value)
 
 const AtomicString& HTMLElement::dir() const
 {
-    return toValidDirValue(fastGetAttribute(dirAttr));
+    return toValidDirValue(attributeWithoutSynchronization(dirAttr));
 }
 
 void HTMLElement::setDir(const AtomicString& value)
 {
-    setAttribute(dirAttr, value);
+    setAttributeWithoutSynchronization(dirAttr, value);
 }
 
 void HTMLElement::setInnerText(const String& text, ExceptionCode& ec)
@@ -630,77 +591,6 @@ void HTMLElement::setOuterText(const String& text, ExceptionCode& ec)
         mergeWithNextTextNode(downcast<Text>(*prev), ec);
 }
 
-Node* HTMLElement::insertAdjacent(const String& where, Ref<Node>&& newChild, ExceptionCode& ec)
-{
-    // In Internet Explorer if the element has no parent and where is "beforeBegin" or "afterEnd",
-    // a document fragment is created and the elements appended in the correct order. This document
-    // fragment isn't returned anywhere.
-    //
-    // This is impossible for us to implement as the DOM tree does not allow for such structures,
-    // Opera also appears to disallow such usage.
-
-    if (equalLettersIgnoringASCIICase(where, "beforebegin")) {
-        ContainerNode* parent = this->parentNode();
-        return (parent && parent->insertBefore(newChild, this, ec)) ? newChild.ptr() : nullptr;
-    }
-
-    if (equalLettersIgnoringASCIICase(where, "afterbegin"))
-        return insertBefore(newChild, firstChild(), ec) ? newChild.ptr() : nullptr;
-
-    if (equalLettersIgnoringASCIICase(where, "beforeend"))
-        return appendChild(newChild, ec) ? newChild.ptr() : nullptr;
-
-    if (equalLettersIgnoringASCIICase(where, "afterend")) {
-        ContainerNode* parent = this->parentNode();
-        return (parent && parent->insertBefore(newChild, nextSibling(), ec)) ? newChild.ptr() : nullptr;
-    }
-    
-    // IE throws COM Exception E_INVALIDARG; this is the best DOM exception alternative.
-    ec = NOT_SUPPORTED_ERR;
-    return nullptr;
-}
-
-Element* HTMLElement::insertAdjacentElement(const String& where, Element& newChild, ExceptionCode& ec)
-{
-    Node* returnValue = insertAdjacent(where, newChild, ec);
-    ASSERT_WITH_SECURITY_IMPLICATION(!returnValue || is<Element>(*returnValue));
-    return downcast<Element>(returnValue); 
-}
-
-// Step 3 of http://www.whatwg.org/specs/web-apps/current-work/multipage/apis-in-html-documents.html#insertadjacenthtml()
-static Element* contextElementForInsertion(const String& where, Element* element, ExceptionCode& ec)
-{
-    if (equalLettersIgnoringASCIICase(where, "beforebegin") || equalLettersIgnoringASCIICase(where, "afterend")) {
-        ContainerNode* parent = element->parentNode();
-        if (parent && !is<Element>(*parent)) {
-            ec = NO_MODIFICATION_ALLOWED_ERR;
-            return nullptr;
-        }
-        ASSERT_WITH_SECURITY_IMPLICATION(!parent || is<Element>(*parent));
-        return downcast<Element>(parent);
-    }
-    if (equalLettersIgnoringASCIICase(where, "afterbegin") || equalLettersIgnoringASCIICase(where, "beforeend"))
-        return element;
-    ec =  SYNTAX_ERR;
-    return nullptr;
-}
-
-void HTMLElement::insertAdjacentHTML(const String& where, const String& markup, ExceptionCode& ec)
-{
-    Element* contextElement = contextElementForInsertion(where, this, ec);
-    if (!contextElement)
-        return;
-    RefPtr<DocumentFragment> fragment = createFragmentForInnerOuterHTML(*contextElement, markup, AllowScriptingContent, ec);
-    if (!fragment)
-        return;
-    insertAdjacent(where, fragment.releaseNonNull(), ec);
-}
-
-void HTMLElement::insertAdjacentText(const String& where, const String& text, ExceptionCode& ec)
-{
-    insertAdjacent(where, document().createTextNode(text), ec);
-}
-
 void HTMLElement::applyAlignmentAttributeToStyle(const AtomicString& alignment, MutableStyleProperties& style)
 {
     // Vertical alignment with respect to the current baseline of the text
@@ -764,11 +654,11 @@ String HTMLElement::contentEditable() const
 void HTMLElement::setContentEditable(const String& enabled, ExceptionCode& ec)
 {
     if (equalLettersIgnoringASCIICase(enabled, "true"))
-        setAttribute(contenteditableAttr, AtomicString("true", AtomicString::ConstructFromLiteral));
+        setAttributeWithoutSynchronization(contenteditableAttr, AtomicString("true", AtomicString::ConstructFromLiteral));
     else if (equalLettersIgnoringASCIICase(enabled, "false"))
-        setAttribute(contenteditableAttr, AtomicString("false", AtomicString::ConstructFromLiteral));
+        setAttributeWithoutSynchronization(contenteditableAttr, AtomicString("false", AtomicString::ConstructFromLiteral));
     else if (equalLettersIgnoringASCIICase(enabled, "plaintext-only"))
-        setAttribute(contenteditableAttr, AtomicString("plaintext-only", AtomicString::ConstructFromLiteral));
+        setAttributeWithoutSynchronization(contenteditableAttr, AtomicString("plaintext-only", AtomicString::ConstructFromLiteral));
     else if (equalLettersIgnoringASCIICase(enabled, "inherit"))
         removeAttribute(contenteditableAttr);
     else
@@ -777,12 +667,12 @@ void HTMLElement::setContentEditable(const String& enabled, ExceptionCode& ec)
 
 bool HTMLElement::draggable() const
 {
-    return equalLettersIgnoringASCIICase(fastGetAttribute(draggableAttr), "true");
+    return equalLettersIgnoringASCIICase(attributeWithoutSynchronization(draggableAttr), "true");
 }
 
 void HTMLElement::setDraggable(bool value)
 {
-    setAttribute(draggableAttr, value
+    setAttributeWithoutSynchronization(draggableAttr, value
         ? AtomicString("true", AtomicString::ConstructFromLiteral)
         : AtomicString("false", AtomicString::ConstructFromLiteral));
 }
@@ -794,7 +684,7 @@ bool HTMLElement::spellcheck() const
 
 void HTMLElement::setSpellcheck(bool enable)
 {
-    setAttribute(spellcheckAttr, enable
+    setAttributeWithoutSynchronization(spellcheckAttr, enable
         ? AtomicString("true", AtomicString::ConstructFromLiteral)
         : AtomicString("false", AtomicString::ConstructFromLiteral));
 }
@@ -811,7 +701,7 @@ void HTMLElement::accessKeyAction(bool sendMouseEvents)
 
 String HTMLElement::title() const
 {
-    return fastGetAttribute(titleAttr);
+    return attributeWithoutSynchronization(titleAttr);
 }
 
 int HTMLElement::tabIndex() const
@@ -823,7 +713,7 @@ int HTMLElement::tabIndex() const
 
 TranslateAttributeMode HTMLElement::translateAttributeMode() const
 {
-    const AtomicString& value = fastGetAttribute(translateAttr);
+    const AtomicString& value = attributeWithoutSynchronization(translateAttr);
 
     if (value.isNull())
         return TranslateAttributeInherit;
@@ -851,7 +741,7 @@ bool HTMLElement::translate() const
 
 void HTMLElement::setTranslate(bool enable)
 {
-    setAttribute(translateAttr, enable ? "yes" : "no");
+    setAttributeWithoutSynchronization(translateAttr, enable ? "yes" : "no");
 }
 
 bool HTMLElement::rendererIsNeeded(const RenderStyle& style)
@@ -883,7 +773,7 @@ static inline bool elementAffectsDirectionality(const Node& node)
     if (!is<HTMLElement>(node))
         return false;
     const HTMLElement& element = downcast<HTMLElement>(node);
-    return is<HTMLBDIElement>(element) || element.fastHasAttribute(dirAttr);
+    return is<HTMLBDIElement>(element) || element.hasAttributeWithoutSynchronization(dirAttr);
 }
 
 static void setHasDirAutoFlagRecursively(Node* firstNode, bool flag, Node* lastNode = nullptr)
@@ -917,7 +807,7 @@ void HTMLElement::childrenChanged(const ChildChange& change)
 
 bool HTMLElement::hasDirectionAuto() const
 {
-    const AtomicString& direction = fastGetAttribute(dirAttr);
+    const AtomicString& direction = attributeWithoutSynchronization(dirAttr);
     return (hasTagName(bdiTag) && direction.isNull()) || equalLettersIgnoringASCIICase(direction, "auto");
 }
 
@@ -954,7 +844,7 @@ TextDirection HTMLElement::directionality(Node** strongDirectionalityTextNode) c
 
         // Skip elements with valid dir attribute
         if (is<Element>(*node)) {
-            AtomicString dirAttributeValue = downcast<Element>(*node).fastGetAttribute(dirAttr);
+            AtomicString dirAttributeValue = downcast<Element>(*node).attributeWithoutSynchronization(dirAttr);
             if (isLTROrRTLIgnoringCase(dirAttributeValue) || equalLettersIgnoringASCIICase(dirAttributeValue, "auto")) {
                 node = NodeTraversal::nextSkippingChildren(*node, this);
                 continue;
