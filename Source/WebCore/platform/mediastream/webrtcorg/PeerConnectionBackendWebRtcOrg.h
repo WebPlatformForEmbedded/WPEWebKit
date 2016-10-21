@@ -10,11 +10,111 @@
 #include <wtf/HashMap.h>
 #include <wtf/RefPtr.h>
 
+namespace WRTCInt
+{
+class  RTCStatsReport
+{
+public:
+    typedef std::pair<std::string, std::string> Value;
+    virtual ~RTCStatsReport() = default;
+    virtual double timestamp() const = 0;
+    virtual std::string id() const = 0;
+    virtual std::string type() const = 0;
+    virtual std::vector<Value> values() const = 0;
+};
+
+class  RTCMediaStream
+{
+public:
+    virtual ~RTCMediaStream() = default;
+    virtual std::string id() const = 0;
+};
+
+class  RTCDataChannelClient
+{
+public:
+    virtual ~RTCDataChannelClient() = default;
+    virtual void didChangeReadyState(DataChannelState) = 0;
+    virtual void didReceiveStringData(const std::string&) = 0;
+    virtual void didReceiveRawData(const char*, size_t) = 0;
+};
+
+class  RTCDataChannel
+{
+public:
+    virtual ~RTCDataChannel() = default;
+    virtual std::string label() const = 0;
+    virtual bool ordered() const = 0;
+    virtual unsigned short maxRetransmitTime() const = 0;
+    virtual unsigned short maxRetransmits() const  = 0;
+    virtual std::string protocol() const = 0;
+    virtual bool negotiated() const = 0;
+    virtual unsigned short id() = 0;
+    virtual unsigned long bufferedAmount() = 0;
+    virtual bool sendStringData(const std::string&) = 0;
+    virtual bool sendRawData(const char*, size_t) = 0;
+    virtual void close() = 0;
+    virtual void setClient(WRTCInt::RTCDataChannelClient* client) = 0;
+};
+
+/*
+class  RTCPeerConnectionClient
+{
+public:
+    virtual ~RTCPeerConnectionClient() = default;
+    virtual void requestSucceeded(int id, const RTCSessionDescription& desc) = 0;
+    virtual void requestSucceeded(int id, const std::vector<std::unique_ptr<WRTCInt::RTCStatsReport>>& reports) = 0;
+    virtual void requestSucceeded(int id) = 0;
+    virtual void requestFailed(int id, const std::string& error) = 0;
+    virtual void negotiationNeeded() = 0;
+    virtual void didAddRemoteStream(RTCMediaStream *stream,
+                                    const std::vector<std::string> &audioSources,
+                                    const std::vector<std::string> &videoSources) = 0;
+    virtual void didGenerateIceCandidate(const RTCIceCandidate& candidate) = 0;
+    virtual void didChangeSignalingState(SignalingState state) = 0;
+    virtual void didChangeIceGatheringState(IceGatheringState state) = 0;
+    virtual void didChangeIceConnectionState(IceConnectionState state) = 0;
+    virtual void didAddRemoteDataChannel(RTCDataChannel* channel) = 0;
+};
+
+class  RTCPeerConnection
+{
+public:
+    virtual ~RTCPeerConnection() = default;
+
+    virtual bool setConfiguration(const RTCConfiguration &config, const RTCMediaConstraints& constraints) = 0;
+
+    virtual int createOffer(const RTCOfferAnswerOptions &options) = 0;
+    virtual int createAnswer(const RTCOfferAnswerOptions &options) = 0;
+
+    virtual bool localDescription(RTCSessionDescription& desc) = 0;
+    virtual int setLocalDescription(const RTCSessionDescription& desc) = 0;
+
+    virtual bool remoteDescription(RTCSessionDescription& desc) = 0;
+    virtual int setRemoteDescription(const RTCSessionDescription& desc) = 0;
+
+    virtual bool addIceCandidate(const RTCIceCandidate& candidate) = 0;
+    virtual bool addStream(RTCMediaStream* stream) = 0;
+    virtual bool removeStream(RTCMediaStream* stream) = 0;
+
+    virtual int getStats() = 0;
+
+    virtual RTCDataChannel* createDataChannel(const std::string &label, const DataChannelInit& initData) = 0;
+
+    virtual void stop() = 0;
+
+    virtual RTCPeerConnectionClient* client() = 0;
+};
+*/
+
+RTCMediaSourceCenter* createRTCMediaSourceCenter();
+}
+
 namespace WebCore {
 
 class PeerConnectionBackendClient;
 
-class PeerConnectionBackendWebRtcOrg : public PeerConnectionBackend, public WRTCInt::RTCPeerConnectionClient {
+class PeerConnectionBackendWebRtcOrg : public PeerConnectionBackend /*, public WRTCInt::RTCPeerConnectionClient*/ {
 public:
     PeerConnectionBackendWebRtcOrg(PeerConnectionBackendClient*);
 
@@ -47,24 +147,24 @@ public:
     virtual std::unique_ptr<RTCDataChannelHandler> createDataChannel(const String&, const Dictionary&);
 
     // WRTCInt::RTCPeerConnectionClient
-    virtual void requestSucceeded(int id, const WRTCInt::RTCSessionDescription& desc) override;
-    virtual void requestSucceeded(int id, const std::vector<std::unique_ptr<WRTCInt::RTCStatsReport>>& reports) override;
-    virtual void requestSucceeded(int id) override;
-    virtual void requestFailed(int id, const std::string& error) override;
-    virtual void negotiationNeeded() override;
+    virtual void requestSucceeded(int id, const WRTCInt::RTCSessionDescription& desc);
+    virtual void requestSucceeded(int id, const std::vector<std::unique_ptr<WRTCInt::RTCStatsReport>>& reports);
+    virtual void requestSucceeded(int id);
+    virtual void requestFailed(int id, const std::string& error);
+    virtual void negotiationNeeded();
     virtual void didAddRemoteStream(WRTCInt::RTCMediaStream *stream,
                                     const std::vector<std::string> &audioSources,
-                                    const std::vector<std::string> &videoSources) override;
-    virtual void didGenerateIceCandidate(const WRTCInt::RTCIceCandidate& candidate) override;
+                                    const std::vector<std::string> &videoSources);
+    virtual void didGenerateIceCandidate(const WRTCInt::RTCIceCandidate& candidate);
 
-    virtual void didChangeSignalingState(WRTCInt::SignalingState state) override;
-    virtual void didChangeIceGatheringState(WRTCInt::IceGatheringState state) override;
-    virtual void didChangeIceConnectionState(WRTCInt::IceConnectionState state) override;
-    virtual void didAddRemoteDataChannel(WRTCInt::RTCDataChannel* channel) override;
+    virtual void didChangeSignalingState(WRTCInt::SignalingState state);
+    virtual void didChangeIceGatheringState(WRTCInt::IceGatheringState state);
+    virtual void didChangeIceConnectionState(WRTCInt::IceConnectionState state);
+    virtual void didAddRemoteDataChannel(WRTCInt::RTCDataChannel* channel);
 
 private:
     PeerConnectionBackendClient* m_client;
-    std::unique_ptr<WRTCInt::RTCPeerConnection> m_rtcConnection;
+    std::unique_ptr</*WRTCInt::RTCPeerConnection*/ MockRTCPeerConnection> m_rtcConnection;
 
     bool m_isNegotiationNeeded { false };
     int m_sessionDescriptionRequestId { WRTCInt::InvalidRequestId };
