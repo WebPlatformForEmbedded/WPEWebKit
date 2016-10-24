@@ -140,12 +140,4 @@ void enumerateDevices(DeviceType type, std::vector<std::string>& devices);
 
 }  // namespace WRTCInt
 
-namespace WRTCInt_TestSupport
-{
-
-int exec();
-void quit();
-
-}  // namespace WRTCInt_TestSupport
-
 #endif  // _WRTCINT_H_

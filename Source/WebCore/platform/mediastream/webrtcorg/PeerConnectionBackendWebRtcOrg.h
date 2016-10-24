@@ -30,6 +30,7 @@ public:
     virtual std::string id() const = 0;
 };
 
+/*
 class  RTCDataChannelClient
 {
 public:
@@ -57,7 +58,6 @@ public:
     virtual void setClient(WRTCInt::RTCDataChannelClient* client) = 0;
 };
 
-/*
 class  RTCPeerConnectionClient
 {
 public:
@@ -110,6 +110,11 @@ public:
 RTCMediaSourceCenter* createRTCMediaSourceCenter();
 }
 
+namespace
+{
+class MockRTCDataChannel;
+}
+
 namespace WebCore {
 
 class PeerConnectionBackendClient;
@@ -160,7 +165,7 @@ public:
     virtual void didChangeSignalingState(WRTCInt::SignalingState state);
     virtual void didChangeIceGatheringState(WRTCInt::IceGatheringState state);
     virtual void didChangeIceConnectionState(WRTCInt::IceConnectionState state);
-    virtual void didAddRemoteDataChannel(WRTCInt::RTCDataChannel* channel);
+    virtual void didAddRemoteDataChannel(/*WRTCInt::RTCDataChannel*/ MockRTCDataChannel* channel);
 
 private:
     PeerConnectionBackendClient* m_client;
@@ -176,10 +181,10 @@ private:
 
 class RTCDataChannelHandlerWebRtcOrg
     : public RTCDataChannelHandler
-    , public WRTCInt::RTCDataChannelClient
+    /*, public WRTCInt::RTCDataChannelClient*/
 {
 public:
-    RTCDataChannelHandlerWebRtcOrg(WRTCInt::RTCDataChannel* dataChannel);
+    RTCDataChannelHandlerWebRtcOrg(/*WRTCInt::RTCDataChannel*/ MockRTCDataChannel* dataChannel);
 
     // RTCDataChannelHandler
     void setClient(RTCDataChannelHandlerClient*) override;
@@ -196,12 +201,12 @@ public:
     void close() override;
 
     // WRTCInt::RTCDataChannelClient
-    void didChangeReadyState(WRTCInt::DataChannelState state) override;
-    void didReceiveStringData(const std::string& str) override;
-    void didReceiveRawData(const char* data, size_t sz) override;
+    void didChangeReadyState(WRTCInt::DataChannelState state);
+    void didReceiveStringData(const std::string& str);
+    void didReceiveRawData(const char* data, size_t sz);
 
 private:
-    std::unique_ptr<WRTCInt::RTCDataChannel> m_rtcDataChannel;
+    std::unique_ptr</*WRTCInt::RTCDataChannel*/ MockRTCDataChannel> m_rtcDataChannel;
     RTCDataChannelHandlerClient* m_client;
 };
 

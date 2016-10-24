@@ -38,6 +38,7 @@
 #include <NotImplemented.h>
 
 #include "FloatRect.h"
+#include "PeerConnectionBackendWebRtcOrg.h"
 
 #include <cairo.h>
 using namespace cricket;
