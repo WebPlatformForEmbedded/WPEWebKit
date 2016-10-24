@@ -2,6 +2,8 @@
 #include "MediaPlayerPrivateWebRtcOrg.h"
 #include "RealtimeMediaSourceCenterWebRtcOrg.h"
 
+#include <iostream>
+
 #include <wtf/HashSet.h>
 #include <wtf/text/WTFString.h>
 #include <wtf/NeverDestroyed.h>
@@ -22,6 +24,19 @@
 #include "TimeRanges.h"
 #include "MediaStreamPrivate.h"
 
+#include "webrtc/api/datachannelinterface.h"
+#include "webrtc/api/mediaconstraintsinterface.h"
+#include "webrtc/api/mediastreaminterface.h"
+#include "webrtc/api/peerconnectionfactory.h"
+
+#include "webrtc/base/common.h"
+#include "webrtc/base/nullsocketserver.h"
+#include "webrtc/base/refcount.h"
+#include "webrtc/base/scoped_ref_ptr.h"
+#include "webrtc/base/ssladapter.h"
+#include "/home/shawn/wpe/WebKitForWayland/WebKitBuild/DependenciesWPE/Root/include/webrtc/media/base/videosourceinterface.h"
+#include "/home/shawn/wpe/WebKitForWayland/WebKitBuild/DependenciesWPE/Root/include/webrtc/video_frame.h"
+
 namespace {
 
 class ConditionNotifier {
@@ -41,7 +56,13 @@ private:
 
 }  // namespace
 
+using namespace rtc;
+using namespace cricket;
+
+typedef struct VideoSinkWants VSW;
+
 namespace WebCore {
+//using namespace rtc;
 
 void MediaPlayerPrivateWebRtcOrg::getSupportedTypes(HashSet<String, ASCIICaseInsensitiveHash>& types)
 {
@@ -134,14 +155,17 @@ void MediaPlayerPrivateWebRtcOrg::setVisible(bool visible)
 
 void MediaPlayerPrivateWebRtcOrg::updateVideoRectangle()
 {
-    if (m_rtcRenderer)
-        m_rtcRenderer->setVideoRectangle(m_position.x(), m_position.y(), m_size.width(), m_size.height());
+//    if (m_rtcRenderer)
+//        m_rtcRenderer->setVideoRectangle(m_position.x(), m_position.y(), m_size.width(), m_size.height());
 }
 
 void MediaPlayerPrivateWebRtcOrg::tryAttachRenderer()
 {
-    if (m_rtcRenderer)
-        return;
+//    if (m_rtcRenderer)
+//        return;
+	if (m_rtcStream) {
+		return;
+	}
 
     if (!m_stream || !m_stream->isProducingData())
         return;
@@ -154,35 +178,69 @@ void MediaPlayerPrivateWebRtcOrg::tryAttachRenderer()
         return;
 
     RealtimeVideoSourceWebRtcOrg& videoSource = static_cast<RealtimeVideoSourceWebRtcOrg&>(videoTrack->source());
-    m_rtcRenderer.reset(getRTCMediaSourceCenter().createVideoRenderer(videoSource.rtcStream(), this));
+	m_rtcStream = videoSource.rtcStream();
+	ASSERT(m_rtcStream);
+	m_renderedTrack = m_rtcStream->GetVideoTracks().at(0);
+	if (m_renderedTrack) {
+		VSW vsw;
+		m_renderedTrack->AddOrUpdateSink(this, vsw);
+	}
+//    m_rtcRenderer.reset(getRTCMediaSourceCenter().createVideoRenderer(videoSource.rtcStream(), this));
     videoSource.addObserver(this);
 
     updateVideoRectangle();
 }
 
+void MediaPlayerPrivateWebRtcOrg::OnFrame(const cricket::VideoFrame& frame) 
+{
+    if (frame.width() <= 0 || frame.height() <= 0) {
+    	m_width = m_height = 0;
+        m_imageBuffer.reset();
+        return;
+    }
+    if (frame.width() != m_width || frame.height() != m_height) {
+    	m_width = frame.width();
+        m_height = frame.height();
+        m_imageBuffer.reset(new uint8_t[m_width * m_width * 4]);
+    }
+    size_t size = m_width * m_width * 4;
+    size_t converted_size = frame.ConvertToRgbBuffer(
+    cricket::FOURCC_ARGB, m_imageBuffer.get(), size, m_width * 4);
+    if (converted_size != 0 && size >= converted_size) {
+    	renderFrame();
+    } else {
+    	std::cout << "Failed to convert to RGB buffer";
+    }
+}
+
 void MediaPlayerPrivateWebRtcOrg::removeRenderer()
 {
-    if (!m_rtcRenderer)
+    if (!m_rtcStream)
         return;
 
-    m_rtcRenderer.reset();
+    //m_rtcRenderer.reset();
+	m_rtcStream = NULL;
 
     MediaStreamTrackPrivate *videoTrack = m_stream ? m_stream->activeVideoTrack() : nullptr;
     if (videoTrack) {
         RealtimeVideoSourceWebRtcOrg& videoSource = static_cast<RealtimeVideoSourceWebRtcOrg&>(videoTrack->source());
         videoSource.removeObserver(this);
     }
+	if (m_renderedTrack) {
+		m_renderedTrack->RemoveSink(this);
+		m_renderedTrack = nullptr;
+	}
 }
 
-void MediaPlayerPrivateWebRtcOrg::renderFrame(const unsigned char *data, int byteCount, int width, int height)
+void MediaPlayerPrivateWebRtcOrg::renderFrame()
 {
 #if USE(COORDINATED_GRAPHICS_THREADED)
     cairo_format_t cairoFormat = CAIRO_FORMAT_ARGB32;
-    int stride = cairo_format_stride_for_width (cairoFormat, width);
-    ASSERT(byteCount >= (height * stride));
+    int stride = cairo_format_stride_for_width (cairoFormat, m_width);
+    //ASSERT(byteCount >= (m_height * stride));
     RefPtr<cairo_surface_t> surface = adoptRef(
         cairo_image_surface_create_for_data(
-            (unsigned char*)data, cairoFormat, width, height, stride));
+            (unsigned char*)m_imageBuffer.get(), cairoFormat, m_width, m_height, stride));
     ASSERT(cairo_surface_status(surface.get()) == CAIRO_STATUS_SUCCESS);
     RefPtr<BitmapImage> frame = BitmapImage::create(WTFMove(surface));
     LockHolder lock(m_drawMutex);

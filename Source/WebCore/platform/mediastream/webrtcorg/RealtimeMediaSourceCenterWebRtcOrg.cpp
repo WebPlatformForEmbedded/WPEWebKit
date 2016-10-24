@@ -1,6 +1,29 @@
 #include "config.h"
 #include "RealtimeMediaSourceCenterWebRtcOrg.h"
 
+#include <iostream>
+
+#include "webrtc/common_types.h"
+
+#include "webrtc/base/common.h"
+#include "webrtc/base/nullsocketserver.h"
+#include "webrtc/base/refcount.h"
+#include "webrtc/base/scoped_ref_ptr.h"
+#include "webrtc/base/ssladapter.h"
+
+#include "webrtc/api/datachannelinterface.h"
+#include "webrtc/api/mediaconstraintsinterface.h"
+#include "webrtc/api/mediastreaminterface.h"
+#include "webrtc/api/peerconnectionfactory.h"
+
+#include "webrtc/media/base/videocapturerfactory.h"
+#include "webrtc/media/engine/webrtcvideocapturer.h"
+#include "webrtc/media/engine/webrtcvideocapturerfactory.h"
+#include "webrtc/modules/audio_device/include/audio_device_defines.h"
+#include "webrtc/modules/video_capture/video_capture_factory.h"
+#include "webrtc/voice_engine/include/voe_base.h"
+#include "webrtc/voice_engine/include/voe_hardware.h"
+
 #if ENABLE(MEDIA_STREAM)
 
 #include "MediaStream.h"
@@ -17,16 +40,103 @@
 #include "FloatRect.h"
 
 #include <cairo.h>
+using namespace cricket;
+
+// TODO: Make it possible to overload/override device specific hooks
+webrtc::AudioDeviceModule* CreateAudioDeviceModule(int32_t) {
+    return nullptr;
+}
+cricket::WebRtcVideoEncoderFactory* CreateWebRtcVideoEncoderFactory() {
+    return nullptr;
+}
+cricket::WebRtcVideoDecoderFactory* CreateWebRtcVideoDecoderFactory() {
+    return nullptr;
+}
+cricket::VideoDeviceCapturerFactory* CreateVideoDeviceCapturerFactory() {
+    return nullptr;
+}
 
 namespace WebCore {
 
 void enableWebRtcOrgPeerConnectionBackend();
 
-WRTCInt::RTCMediaSourceCenter& getRTCMediaSourceCenter()
+webrtc::AudioDeviceModule* CreateAudioDeviceModule(int32_t) {
+    return nullptr;
+}
+void enumerateDevices(RealtimeMediaSource::Type type, std::vector<std::string>& devices)
 {
-    static std::unique_ptr<WRTCInt::RTCMediaSourceCenter> rtcMediaSourceCenter;
+    if (RealtimeMediaSource::Audio == type) {
+        webrtc::VoiceEngine* voe = webrtc::VoiceEngine::Create();
+        if (!voe) {
+            std::cout << "Failed to create VoiceEngine";
+            return;
+        }
+        webrtc::VoEBase* base = webrtc::VoEBase::GetInterface(voe);
+        webrtc::AudioDeviceModule* externalADM = CreateAudioDeviceModule(0);
+        if (base->Init(externalADM) != 0) {
+            std::cout << "Failed to init VoEBase";
+            base->Release();
+            webrtc::VoiceEngine::Delete(voe);
+            return;
+        }
+        webrtc::VoEHardware* hardware = webrtc::VoEHardware::GetInterface(voe);
+        if (!hardware) {
+            std::cout << "Failed to get interface to VoEHardware";
+            base->Terminate();
+            base->Release();
+            webrtc::VoiceEngine::Delete(voe);
+            return;
+        }
+        int numOfRecordingDevices;
+        if (hardware->GetNumOfRecordingDevices(numOfRecordingDevices) != -1) {
+            for (int i = 0; i < numOfRecordingDevices; ++i) {
+                char name[webrtc::kAdmMaxDeviceNameSize];
+                char guid[webrtc::kAdmMaxGuidSize];
+                if (hardware->GetRecordingDeviceName(i, name, guid) != -1) {
+                    devices.push_back(name);
+                }
+            }
+        } else {
+            std::cout << "Failed to get number of recording devices";
+        }
+        base->Terminate();
+        base->Release();
+        hardware->Release();
+        webrtc::VoiceEngine::Delete(voe);
+        return;
+    }
+    ASSERT(RealtimeMediaSource::Video == type);
+    std::unique_ptr<webrtc::VideoCaptureModule::DeviceInfo> info(
+        webrtc::VideoCaptureFactory::CreateDeviceInfo(0));
+    if (!info) {
+        std::cout << "Failed to get video capture device info";
+        return;
+    }
+    std::unique_ptr<cricket::VideoDeviceCapturerFactory> factory(
+       CreateVideoDeviceCapturerFactory());
+    if (!factory) {
+       factory.reset(new cricket::WebRtcVideoDeviceCapturerFactory);
+    }
+
+    int numOfDevices = info->NumberOfDevices();
+	for (int i = 0; i < numOfDevices; ++i) {
+        const uint32_t kSize = 256;
+        char name[kSize] = {0};
+        char id[kSize] = {0};
+        if (info->GetDeviceName(i, name, kSize, id, kSize) != -1) {
+            devices.push_back(name);
+            break;
+        } else {
+            std::cout << "Failed to create capturer for: '" << name << "'";
+        }
+    }
+}
+
+RealtimeMediaSourceCenter& getRTCMediaSourceCenter()
+{
+    static std::unique_ptr<RealtimeMediaSourceCenter> rtcMediaSourceCenter;
     if (!rtcMediaSourceCenter)
-        rtcMediaSourceCenter.reset(WRTCInt::createRTCMediaSourceCenter());
+        rtcMediaSourceCenter.reset(new RealtimeMediaSourceCenterWebRtcOrg());
     return *rtcMediaSourceCenter.get();
 }
 
@@ -62,8 +172,6 @@ RealtimeMediaSourceCenter& RealtimeMediaSourceCenter::platformCenter()
 
 RealtimeMediaSourceCenterWebRtcOrg::RealtimeMediaSourceCenterWebRtcOrg()
 {
-    WRTCInt::init();
-
     enableWebRtcOrgPeerConnectionBackend();
 
     m_supportedConstraints.setSupportsWidth(true);
@@ -111,24 +219,16 @@ void RealtimeMediaSourceCenterWebRtcOrg::createMediaStream(MediaStreamCreationCl
         return;
     }
 
-    String audioSourceName = audioSource ? audioSource->name() : String();
-    String videoSourceName = videoSource ? videoSource->name() : String();
-
-    std::shared_ptr<WRTCInt::RTCMediaStream> rtcStream(
-        getRTCMediaSourceCenter().createMediaStream(
-            audioSourceName.utf8().data(), videoSourceName.utf8().data()));
 
     Vector<RefPtr<RealtimeMediaSource>> audioSources;
     Vector<RefPtr<RealtimeMediaSource>> videoSources;
 
     if (audioSource) {
-        audioSource->setRTCStream(rtcStream);
-        audioSources.append(audioSource.release());
+       	audioSources.append(source.release());
     }
 
     if (videoSource) {
-        videoSource->setRTCStream(rtcStream);
-        videoSources.append(videoSource.release());
+		videoSources.append(videoSource.release());
     }
 
     String id = rtcStream->id().c_str();
@@ -183,7 +283,7 @@ RealtimeMediaSourceWebRtcOrgMap RealtimeMediaSourceCenterWebRtcOrg::enumerateSou
 
     if (needsAudio) {
         std::vector<std::string> audioDevices;
-        WRTCInt::enumerateDevices(WRTCInt::AUDIO, audioDevices);
+        enumerateDevices(RealtimeMediaSource::Audio, audioDevices);
         for (auto& device : audioDevices) {
             String name(device.c_str());
             String id(createCanonicalUUIDString());
@@ -195,7 +295,7 @@ RealtimeMediaSourceWebRtcOrgMap RealtimeMediaSourceCenterWebRtcOrg::enumerateSou
 
     if (needsVideo) {
         std::vector<std::string> videoDevices;
-        WRTCInt::enumerateDevices(WRTCInt::VIDEO, videoDevices);
+        enumerateDevices(RealtimeMediaSource::Video, videoDevices);
         for (auto& device : videoDevices) {
             String name(device.c_str());
             String id(createCanonicalUUIDString());

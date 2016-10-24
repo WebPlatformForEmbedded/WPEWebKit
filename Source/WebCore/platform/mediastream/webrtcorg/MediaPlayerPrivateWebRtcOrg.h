@@ -5,6 +5,9 @@
 #include "IntRect.h"
 #include "FloatRect.h"
 
+#include "webrtc/video_frame.h"
+#include "webrtc/media/base/videosinkinterface.h"
+
 #include "RealtimeMediaSourceCenterWebRtcOrg.h"
 
 #if USE(COORDINATED_GRAPHICS_THREADED)
@@ -14,8 +17,9 @@
 namespace WebCore {
 
 class MediaPlayerPrivateWebRtcOrg : public MediaPlayerPrivateInterface
-    , public WRTCInt::RTCVideoRendererClient
+//	, public WRTCInt::RTCVideoRendererClient
     , public RealtimeMediaSource::Observer
+	, public rtc::VideoSinkInterface<cricket::VideoFrame>
 #if USE(COORDINATED_GRAPHICS_THREADED)
     , public TextureMapperPlatformLayerProxyProvider
 #endif
@@ -76,8 +80,10 @@ public:
     bool preventSourceFromStopping() override { return false; }
 
     // WRTCInt::VideoPlayerClient
-    void renderFrame(const unsigned char *data, int byteCount, int width, int height) override;
-    void punchHole(int width, int height) override;
+    void renderFrame();
+    void punchHole(int width, int height);
+	// webrtc::VideoSinkInterface
+	void OnFrame(const cricket::VideoFrame& frame) override;
 
   private:
     static void getSupportedTypes(HashSet<String, ASCIICaseInsensitiveHash>&);
@@ -93,12 +99,18 @@ public:
     Condition m_drawCondition;
     Lock m_drawMutex;
 #endif
-    std::unique_ptr<WRTCInt::RTCVideoRenderer> m_rtcRenderer;
+//    std::unique_ptr<WRTCInt::RTCVideoRenderer> m_rtcRenderer;
 
     MediaPlayer* m_player;
     IntSize m_size;
     IntPoint m_position;
     MediaStreamPrivate* m_stream {nullptr};
+	webrtc::MediaStreamInterface* m_rtcStream;
+	rtc::scoped_refptr<webrtc::VideoTrackInterface> m_renderedTrack;
+	std::unique_ptr<uint8_t[]> m_imageBuffer;
+    int m_width {0};
+    int m_height {0};
+
     bool m_paused {true};
 };
 

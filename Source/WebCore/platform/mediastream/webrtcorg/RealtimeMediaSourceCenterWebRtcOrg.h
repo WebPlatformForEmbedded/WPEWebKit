@@ -7,16 +7,19 @@
 #include "RealtimeMediaSource.h"
 #include "RealtimeMediaSourceCapabilities.h"
 
+#include "webrtc/api/mediastreaminterface.h"
+
 #include <wtf/HashMap.h>
 #include <wtf/RefPtr.h>
 #include <wtf/PassRefPtr.h>
 #include <wtf/text/WTFString.h>
 
-#include <wrtcint.h>
-
 namespace WebCore {
+using namespace webrtc;
 
-WRTCInt::RTCMediaSourceCenter& getRTCMediaSourceCenter();
+//WRTCInt::RTCMediaSourceCenter& getRTCMediaSourceCenter();
+
+class RealtimeMediaSourceCapabilities;
 
 class RealtimeMediaSourceWebRtcOrg : public RealtimeMediaSource
 {
@@ -32,14 +35,14 @@ public:
     virtual bool isProducingData() const override { return m_isProducingData; }
 
     // helper
-    void setRTCStream(std::shared_ptr<WRTCInt::RTCMediaStream> stream) { m_stream = stream; }
-    WRTCInt::RTCMediaStream* rtcStream() { return m_stream.get(); }
+    void setRTCStream(std::shared_ptr<webrtc::MediaStreamInterface> stream) { m_stream = stream; }
+    webrtc::MediaStreamInterface* rtcStream() { return m_stream.get(); }
 
 protected:
     RefPtr<RealtimeMediaSourceCapabilities> m_capabilities;
     RealtimeMediaSourceSettings m_currentSettings;
     bool m_isProducingData { false };
-    std::shared_ptr<WRTCInt::RTCMediaStream> m_stream;
+    std::shared_ptr<webrtc::MediaStreamInterface> m_stream;
 };
 
 class RealtimeAudioSourceWebRtcOrg final : public RealtimeMediaSourceWebRtcOrg
@@ -59,10 +62,13 @@ class RealtimeVideoSourceWebRtcOrg final : public RealtimeMediaSourceWebRtcOrg
 typedef HashMap<String, RefPtr<RealtimeMediaSourceWebRtcOrg>> RealtimeMediaSourceWebRtcOrgMap;
 
 class RealtimeMediaSourceCenterWebRtcOrg final : public RealtimeMediaSourceCenter {
+public:
+	RealtimeMediaSourceCenterWebRtcOrg();
+
 private:
     friend NeverDestroyed<RealtimeMediaSourceCenterWebRtcOrg>;
 
-    RealtimeMediaSourceCenterWebRtcOrg();
+//    RealtimeMediaSourceCenterWebRtcOrg();
 
     void validateRequestConstraints(MediaStreamCreationClient*,
                                     RefPtr<MediaConstraints>& audioConstraints,
