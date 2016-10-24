@@ -34,8 +34,8 @@
 #include "webrtc/base/refcount.h"
 #include "webrtc/base/scoped_ref_ptr.h"
 #include "webrtc/base/ssladapter.h"
-#include "/home/shawn/wpe/WebKitForWayland/WebKitBuild/DependenciesWPE/Root/include/webrtc/media/base/videosourceinterface.h"
-#include "/home/shawn/wpe/WebKitForWayland/WebKitBuild/DependenciesWPE/Root/include/webrtc/video_frame.h"
+#include "webrtc/media/base/videosourceinterface.h"
+#include "webrtc/video_frame.h"
 
 namespace {
 

@@ -10,6 +10,8 @@
 #include <wtf/HashMap.h>
 #include <wtf/RefPtr.h>
 
+#include "wrtcint.h"
+
 namespace WRTCInt
 {
 class  RTCStatsReport
