@@ -338,7 +338,7 @@ public:
     }
 };
 
-class MockRTCDataChannel : public WRTCInt::RTCDataChannel
+class MockRTCDataChannel /*: public WRTCInt::RTCDataChannel*/
 {
     class MockDataChannelObserver: public webrtc::DataChannelObserver, public rtc::RefCountInterface
     {
@@ -357,7 +357,7 @@ class MockRTCDataChannel : public WRTCInt::RTCDataChannel
         }
     };
 
-    WRTCInt::RTCDataChannelClient* m_client;
+    /*WRTCInt::RTCDataChannelClient*/ WebCore::RTCDataChannelHandlerWebRtcOrg* m_client;
     rtc::scoped_refptr<webrtc::DataChannelInterface> m_dataChannel;
     rtc::scoped_refptr<MockDataChannelObserver> m_observer;
 public:
@@ -368,59 +368,59 @@ public:
     {
     }
 
-    ~MockRTCDataChannel() override
+    ~MockRTCDataChannel()
     {
         closeDataChannel();
     }
 
     // WRTCInt::RTCDataChannel
-    std::string label() const override
+    std::string label() const
     {
         return m_dataChannel->label();
     }
-    bool ordered() const override
+    bool ordered() const
     {
         return m_dataChannel->ordered();
     }
-    unsigned short maxRetransmitTime() const override
+    unsigned short maxRetransmitTime() const
     {
         return m_dataChannel->maxRetransmitTime();
     }
-    unsigned short maxRetransmits() const override
+    unsigned short maxRetransmits() const
     {
         return m_dataChannel->maxRetransmits();
     }
-    std::string protocol() const override
+    std::string protocol() const
     {
         return m_dataChannel->protocol();
     }
-    bool negotiated() const override
+    bool negotiated() const
     {
         return m_dataChannel->negotiated();
     }
-    unsigned short id() override
+    unsigned short id()
     {
         return m_dataChannel->id();
     }
-    unsigned long bufferedAmount() override
+    unsigned long bufferedAmount()
     {
         return m_dataChannel->buffered_amount();
     }
-    bool sendStringData(const std::string& str) override
+    bool sendStringData(const std::string& str)
     {
         rtc::CopyOnWriteBuffer buffer(str.c_str(), str.size());
         return m_dataChannel->Send(webrtc::DataBuffer(buffer, false));
     }
-    bool sendRawData(const char* data, size_t sz) override
+    bool sendRawData(const char* data, size_t sz)
     {
         rtc::CopyOnWriteBuffer buffer(data, sz);
         return m_dataChannel->Send(webrtc::DataBuffer(buffer, true));
     }
-    void close() override
+    void close()
     {
         closeDataChannel();
     }
-    void setClient(WRTCInt::RTCDataChannelClient* client) override
+    void setClient(/*WRTCInt::RTCDataChannelClient*/ WebCore::RTCDataChannelHandlerWebRtcOrg* client)
     {
         m_client = client;
         if (m_client != nullptr) {
@@ -739,7 +739,7 @@ public:
         return m_client;
     }
 
-    WRTCInt::RTCDataChannel* createDataChannel(const std::string &label, const WRTCInt::DataChannelInit& initData)
+    /*WRTCInt::RTCDataChannel*/ MockRTCDataChannel* createDataChannel(const std::string &label, const WRTCInt::DataChannelInit& initData)
     {
         webrtc::DataChannelInit config;
         config.id = initData.id;
@@ -1218,7 +1218,7 @@ std::unique_ptr<RTCDataChannelHandler> PeerConnectionBackendWebRtcOrg::createDat
     if (maxRetransmitsConversion && maxRetransmitTimeConversion) {
         return nullptr;
     }
-    WRTCInt::RTCDataChannel* channel = m_rtcConnection->createDataChannel(label.utf8().data(), initData);
+    /*WRTCInt::RTCDataChannel*/ MockRTCDataChannel* channel = m_rtcConnection->createDataChannel(label.utf8().data(), initData);
     return channel
         ? std::make_unique<RTCDataChannelHandlerWebRtcOrg>(channel)
         : nullptr;
@@ -1433,13 +1433,13 @@ void PeerConnectionBackendWebRtcOrg::didChangeIceConnectionState(WRTCInt::IceCon
     m_client->updateIceConnectionState(iceConnectionState);
 }
 
-void PeerConnectionBackendWebRtcOrg::didAddRemoteDataChannel(WRTCInt::RTCDataChannel* channel)
+void PeerConnectionBackendWebRtcOrg::didAddRemoteDataChannel(/*WRTCInt::RTCDataChannel*/ MockRTCDataChannel* channel)
 {
     std::unique_ptr<RTCDataChannelHandler> handler = std::make_unique<RTCDataChannelHandlerWebRtcOrg>(channel);
     m_client->addRemoteDataChannel(WTFMove(handler));
 }
 
-RTCDataChannelHandlerWebRtcOrg::RTCDataChannelHandlerWebRtcOrg(WRTCInt::RTCDataChannel* dataChannel)
+RTCDataChannelHandlerWebRtcOrg::RTCDataChannelHandlerWebRtcOrg(/*WRTCInt::RTCDataChannel*/ MockRTCDataChannel* dataChannel)
     : m_rtcDataChannel(dataChannel)
     , m_client(nullptr)
 {

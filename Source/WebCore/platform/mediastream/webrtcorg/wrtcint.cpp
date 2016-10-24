@@ -132,21 +132,3 @@ void WRTCInt::shutdown()
 {
     rtc::CleanupSSL();
 }
-
-int WRTCInt_TestSupport::exec()
-{
-    if (nullptr == gMainLoop) {
-        gMainLoop = g_main_loop_new(nullptr, FALSE);
-        g_main_loop_run(gMainLoop);
-    }
-    return 0;
-}
-
-void WRTCInt_TestSupport::quit()
-{
-    if (nullptr != gMainLoop) {
-        g_main_loop_quit(gMainLoop);
-        g_main_loop_unref(gMainLoop);
-        gMainLoop = nullptr;
-    }
-}
