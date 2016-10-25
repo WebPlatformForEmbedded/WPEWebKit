@@ -225,14 +225,14 @@ void RealtimeMediaSourceCenterWebRtcOrg::createMediaStream(MediaStreamCreationCl
     Vector<RefPtr<RealtimeMediaSource>> videoSources;
 
     if (audioSource) {
-       	audioSources.append(source.release());
+       	audioSources.append(audioSource.release());
     }
 
     if (videoSource) {
 		videoSources.append(videoSource.release());
     }
 
-    String id = rtcStream->id().c_str();
+    String id = m_rtcStream->id().c_str();
     client->didCreateStream(MediaStreamPrivate::create(id, audioSources, videoSources));
 }
 
