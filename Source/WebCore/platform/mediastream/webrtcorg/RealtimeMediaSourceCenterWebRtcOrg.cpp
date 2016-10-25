@@ -220,7 +220,6 @@ void RealtimeMediaSourceCenterWebRtcOrg::createMediaStream(MediaStreamCreationCl
         return;
     }
 
-
     Vector<RefPtr<RealtimeMediaSource>> audioSources;
     Vector<RefPtr<RealtimeMediaSource>> videoSources;
 
@@ -232,8 +231,7 @@ void RealtimeMediaSourceCenterWebRtcOrg::createMediaStream(MediaStreamCreationCl
 		videoSources.append(videoSource.release());
     }
 
-    String id = m_rtcStream->id().c_str();
-    client->didCreateStream(MediaStreamPrivate::create(id, audioSources, videoSources));
+    client->didCreateStream(MediaStreamPrivate::create(audioSources, videoSources));
 }
 
 bool RealtimeMediaSourceCenterWebRtcOrg::getMediaStreamTrackSources(PassRefPtr<MediaStreamTrackSourcesRequestClient> prpClient)

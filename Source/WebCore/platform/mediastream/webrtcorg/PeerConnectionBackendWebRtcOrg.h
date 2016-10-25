@@ -6,6 +6,18 @@
 
 #include "RealtimeMediaSourceCenterWebRtcOrg.h"
 
+#include "RTCPeerConnection.h"
+#include "RTCDataChannelHandlerClient.h"
+#include "RTCDataChannelHandler.h"
+#include "RTCDataChannel.h"
+#include "RTCDataChannelHandlerClient.h"
+
+#include "webrtc/api/peerconnectioninterface.h"
+#include "webrtc/api/datachannelinterface.h"
+#include "webrtc/api/mediaconstraintsinterface.h"
+#include "webrtc/api/mediastreaminterface.h"
+#include "webrtc/api/peerconnectionfactory.h"
+
 #include <wtf/HashMap.h>
 #include <wtf/RefPtr.h>
 
@@ -48,7 +60,7 @@ public:
     virtual void clearNegotiationNeededState() override;
 
     virtual std::unique_ptr<RTCDataChannelHandler> createDataChannel(const String&, const Dictionary&);
-#ifdef 0
+#if 0
     // WRTCInt::RTCPeerConnectionClient
     virtual void requestSucceeded(int id, const RTCSessionDescription& desc) override;
     virtual void requestSucceeded(int id, const std::vector<std::unique_ptr<RTCStatsReport>>& reports) override;
@@ -130,7 +142,7 @@ public:
     void didChangeReadyState(RTCDataChannelHandlerClient::ReadyState state) override;
     void didReceiveStringData(const String& str) override;
     void didReceiveRawData(const char* data, size_t sz) override;
-	void virtual void didDetectError() override;
+	void didDetectError() override;
 private:
     std::unique_ptr<RTCDataChannel> m_rtcDataChannel;
     RTCDataChannelHandlerClient* m_client;
