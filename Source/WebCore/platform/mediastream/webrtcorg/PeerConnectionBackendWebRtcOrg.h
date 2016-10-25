@@ -48,7 +48,7 @@ public:
     virtual void clearNegotiationNeededState() override;
 
     virtual std::unique_ptr<RTCDataChannelHandler> createDataChannel(const String&, const Dictionary&);
-#ifdef 0
+#if 0
     // WRTCInt::RTCPeerConnectionClient
     virtual void requestSucceeded(int id, const RTCSessionDescription& desc) override;
     virtual void requestSucceeded(int id, const std::vector<std::unique_ptr<RTCStatsReport>>& reports) override;
@@ -130,7 +130,7 @@ public:
     void didChangeReadyState(RTCDataChannelHandlerClient::ReadyState state) override;
     void didReceiveStringData(const String& str) override;
     void didReceiveRawData(const char* data, size_t sz) override;
-	void virtual void didDetectError() override;
+    virtual void didDetectError() override;
 private:
     std::unique_ptr<RTCDataChannel> m_rtcDataChannel;
     RTCDataChannelHandlerClient* m_client;
