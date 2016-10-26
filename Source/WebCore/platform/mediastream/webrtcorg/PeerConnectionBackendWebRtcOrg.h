@@ -62,20 +62,20 @@ public:
     virtual std::unique_ptr<RTCDataChannelHandler> createDataChannel(const String&, const Dictionary&);
 #if 1
     // WRTCInt::RTCPeerConnectionClient
-    virtual void requestSucceeded(int id, const RTCSessionDescription& desc) override;
-    virtual void requestSucceeded(int id, const std::vector<std::unique_ptr<RTCStatsReport>>& reports) override;
-    virtual void requestSucceeded(int id) override;
-    virtual void requestFailed(int id, const std::string& error) override;
-    virtual void negotiationNeeded() override;
-    virtual void didAddRemoteStream(WRTCInt::RTCMediaStream *stream,
+    virtual void requestSucceeded(int id, const RTCSessionDescription& desc);
+    virtual void requestSucceeded(int id, const std::vector<std::unique_ptr<RTCStatsReport>>& reports);
+    virtual void requestSucceeded(int id);
+    virtual void requestFailed(int id, const std::string& error);
+    virtual void negotiationNeeded();
+    virtual void didAddRemoteStream(WebCore::RTCMediaStream *stream,
                                     const std::vector<std::string> &audioSources,
-                                    const std::vector<std::string> &videoSources) override;
-    virtual void didGenerateIceCandidate(const WRTCInt::RTCIceCandidate& candidate) override;
+                                    const std::vector<std::string> &videoSources);
+    virtual void didGenerateIceCandidate(const WebCore::RTCIceCandidate& candidate);
 
-    virtual void didChangeSignalingState(WRTCInt::SignalingState state) override;
-    virtual void didChangeIceGatheringState(WRTCInt::IceGatheringState state) override;
-    virtual void didChangeIceConnectionState(WRTCInt::IceConnectionState state) override;
-    virtual void didAddRemoteDataChannel(WRTCInt::RTCDataChannel* channel) override;
+    virtual void didChangeSignalingState(webrtc::PeerConnectionInterface::SignalingState state);
+    virtual void didChangeIceGatheringState(webrtc::PeerConnectionInterface::IceGatheringState state);
+    virtual void didChangeIceConnectionState(webrtc::PeerConnectionInterface::IceConnectionState state);
+    virtual void didAddRemoteDataChannel(WebCore::RTCDataChannel* channel);
 #endif
 	//PeerConnectionObserver
   	// Triggered when the SignalingState changed.

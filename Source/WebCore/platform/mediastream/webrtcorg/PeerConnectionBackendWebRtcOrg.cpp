@@ -180,7 +180,7 @@ void PeerConnectionBackendWebRtcOrg::replaceTrack(RTCRtpSender&, MediaStreamTrac
 
 void PeerConnectionBackendWebRtcOrg::stop()
 {
-    m_rtcConnection->stop();
+    m_rtcConnection->close();
 }
 
 bool PeerConnectionBackendWebRtcOrg::isNegotiationNeeded() const
@@ -195,7 +195,8 @@ void PeerConnectionBackendWebRtcOrg::markAsNeedingNegotiation()
         RealtimeMediaSource& source = sender->track().source();
         MediaStream* stream = static_cast<RealtimeMediaSourceWebRtcOrg&>(source).rtcStream();
         if (stream) {
-            m_rtcConnection->addStream(stream);
+            WebCore::ExceptionCode x;
+            m_rtcConnection->addStream(Ref<MediaStream>(*stream), x);
             break;
         }
     }
