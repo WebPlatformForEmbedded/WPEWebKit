@@ -29,6 +29,8 @@
 #include "webrtc/api/peerconnectioninterface.h"
 #include "webrtc/api/datachannelinterface.h"
 
+#include "webrtc/media/base/videocapturerfactory.h"
+
 #include "WebRtcOrgUtils.h"
 
 namespace WebCore {
@@ -82,7 +84,7 @@ void PeerConnectionBackendWebRtcOrg::ensurePeerConnectionFactory()
     m_workerThread->SetName("rtc-worker", this);
     m_workerThread->Start();
 
-    m_signalingThread.reset(new SignalingThreadWrapper);
+    m_signalingThread.reset(new rtc::Thread);
 
     m_peerConnectionFactory = webrtc::CreatePeerConnectionFactory(
             m_workerThread.get(),
@@ -101,9 +103,9 @@ void PeerConnectionBackendWebRtcOrg::createPeerConnection()
     	webrtc::PeerConnectionInterface::RTCConfiguration configuration;
         configuration.servers = m_servers;
         m_peerConnection = m_peerConnectionFactory->CreatePeerConnection(
-        			     configuration, constraints.get(), nullptr, nullptr, this);
+        			     configuration, &m_constraints, nullptr, nullptr, this);
 	} else {
-     	m_peerConnection->UpdateIce(m_servers, constraints.get());
+     	m_peerConnection->UpdateIce(m_servers, &m_constraints);
 	}
 }
 void PeerConnectionBackendWebRtcOrg::createOffer(RTCOfferOptions& options, PeerConnection::SessionDescriptionPromise&& promise)
@@ -111,7 +113,7 @@ void PeerConnectionBackendWebRtcOrg::createOffer(RTCOfferOptions& options, PeerC
     ASSERT(InvalidRequestId == m_sessionDescriptionRequestId);
     ASSERT(!m_sessionDescriptionPromise);
 
-    int id = m_rtcConnection->createOffer(options);
+    int id = m_peerConnection->createOffer(options);
     if (InvalidRequestId != id) {
         m_sessionDescriptionRequestId = id;
         m_sessionDescriptionPromise = WTFMove(promise);
@@ -125,7 +127,7 @@ void PeerConnectionBackendWebRtcOrg::createAnswer(RTCAnswerOptions& options, Pee
     ASSERT(InvalidRequestId == m_sessionDescriptionRequestId);
     ASSERT(!m_sessionDescriptionPromise);
 
-    int id = m_rtcConnection->createAnswer(options);
+    int id = m_peerConnection->createAnswer(options);
     if (InvalidRequestId != id) {
         m_sessionDescriptionRequestId = id;
         m_sessionDescriptionPromise = WTFMove(promise);
@@ -139,7 +141,7 @@ void PeerConnectionBackendWebRtcOrg::setLocalDescription(RTCSessionDescription& 
     ASSERT(InvalidRequestId == m_voidRequestId);
     ASSERT(!m_voidPromise);
 
-    int id = m_rtcConnection->setLocalDescription(desc);
+    int id = m_peerConnection->setLocalDescription(desc);
     if (InvalidRequestId != id) {
         m_voidRequestId = id;
         m_voidPromise = WTFMove(promise);
@@ -151,7 +153,7 @@ RefPtr<RTCSessionDescription> PeerConnectionBackendWebRtcOrg::localDescription()
 {
     // TODO: pendingLocalDescription/currentLocalDescription
     RefPtr<RTCSessionDescription> localDesc;
-    m_rtcConnection->localDescription(localDesc);
+    m_peerConnection->localDescription(localDesc);
     return RTCSessionDescription::create(localDesc->type(), localDesc->sdp());
 }
 RefPtr<RTCSessionDescription> PeerConnectionBackendWebRtcOrg::currentLocalDescription() const
@@ -168,7 +170,7 @@ void PeerConnectionBackendWebRtcOrg::setRemoteDescription(RTCSessionDescription&
     ASSERT(InvalidRequestId == m_voidRequestId);
     ASSERT(!m_voidPromise);
 
-    int id = m_rtcConnection->setRemoteDescription(desc);
+    int id = m_peerConnection->setRemoteDescription(desc);
     if (InvalidRequestId != id) {
         m_voidRequestId = id;
         m_voidPromise = WTFMove(promise);
@@ -180,7 +182,7 @@ RefPtr<RTCSessionDescription> PeerConnectionBackendWebRtcOrg::remoteDescription(
 {
     // TODO: pendingRemoteDescription/currentRemoteDescription
     RefPtr<RTCSessionDescription> remoteDesc;
-    m_rtcConnection->remoteDescription(remoteDesc);
+    m_peerConnection->remoteDescription(remoteDesc);
     return RTCSessionDescription::create(remoteDesc->type(), remoteDesc->sdp());
 }
 RefPtr<RTCSessionDescription> PeerConnectionBackendWebRtcOrg::currentRemoteDescription() const
@@ -194,6 +196,8 @@ RefPtr<RTCSessionDescription> PeerConnectionBackendWebRtcOrg::pendingRemoteDescr
 
 void PeerConnectionBackendWebRtcOrg::setConfiguration(RTCConfiguration& rtcConfig, const MediaConstraints& constraints)
 {
+	m_constraints = constraints;
+
 	for (const auto& iceServer : rtcConfig.iceServers) {
     	for (const auto& url : iceServer.urls) {
     	    webrtc::PeerConnectionInterface::IceServer server;
@@ -216,7 +220,7 @@ void PeerConnectionBackendWebRtcOrg::setConfiguration(RTCConfiguration& rtcConfi
 
 void PeerConnectionBackendWebRtcOrg::addIceCandidate(RTCIceCandidate& candidate, PeerConnection::VoidPromise&& promise)
 {
-    bool rc = m_rtcConnection->addIceCandidate(candidate);
+    bool rc = m_peerConnection->addIceCandidate(candidate);
     if (rc) {
         promise.resolve(nullptr);
     } else {
@@ -226,7 +230,7 @@ void PeerConnectionBackendWebRtcOrg::addIceCandidate(RTCIceCandidate& candidate,
 
 void PeerConnectionBackendWebRtcOrg::getStats(MediaStreamTrack*, PeerConnection::StatsPromise&& promise)
 {
-    int id = m_rtcConnection->getStats();
+    int id = m_peerConnection->getStats();
     if (InvalidRequestId != id) {
         m_statsPromises.add(id, WTFMove(promise));
     } else {
@@ -242,7 +246,7 @@ void PeerConnectionBackendWebRtcOrg::replaceTrack(RTCRtpSender&, MediaStreamTrac
 
 void PeerConnectionBackendWebRtcOrg::stop()
 {
-    m_rtcConnection->stop();
+    m_peerConnection->stop();
 }
 
 bool PeerConnectionBackendWebRtcOrg::isNegotiationNeeded() const
@@ -257,7 +261,7 @@ void PeerConnectionBackendWebRtcOrg::markAsNeedingNegotiation()
         RealtimeMediaSource& source = sender->track().source();
         webrtc::MediaStreamInterface* stream = static_cast<RealtimeMediaSourceWebRtcOrg&>(source).rtcStream();
         if (stream) {
-            m_rtcConnection->addStream(stream);
+            m_peerConnection->addStream(stream);
             break;
         }
     }
@@ -288,7 +292,7 @@ std::unique_ptr<RTCDataChannelHandler> PeerConnectionBackendWebRtcOrg::createDat
     if (maxRetransmitsConversion && maxRetransmitTimeConversion) {
         return nullptr;
     }
-    WebCore::RTCDataChannel* channel = m_rtcConnection->createDataChannel(label.utf8().data(), initData);
+    WebCore::RTCDataChannel* channel = m_peerConnection->createDataChannel(label.utf8().data(), initData);
     return channel
         ? std::make_unique<RTCDataChannelHandlerWebRtcOrg>(channel)
         : nullptr;

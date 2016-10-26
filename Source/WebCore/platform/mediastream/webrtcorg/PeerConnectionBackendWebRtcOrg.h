@@ -105,9 +105,20 @@ public:
   	// New Ice candidate have been found.
   	virtual void OnIceCandidate(const IceCandidateInterface* candidate) override;
 
+	//Create webrtc::PeerConnectionInterface
+	void createPeerConnection();
 private:
+	void ensurePeerConnectionFactory();
+	rtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface> m_peerConnectionFactory;
+    std::unique_ptr<rtc::Thread> m_workerThread;
+    std::unique_ptr<rtc::Thread> m_signalingThread;
+	rtc::scoped_refptr<webrtc::PeerConnectionInterface> m_peerConnection;
+	webrtc::MediaConstraintsInterface* m_constraints;
+
+	webrtc::PeerConnectionInterface::IceServers m_servers;
+
     PeerConnectionBackendClient* m_client;
-    std::unique_ptr<RTCPeerConnection> m_rtcConnection;
+//    std::unique_ptr<RTCPeerConnection> m_rtcConnection;
 
     bool m_isNegotiationNeeded { false };
     int m_sessionDescriptionRequestId { InvalidRequestId };
