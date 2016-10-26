@@ -226,7 +226,8 @@ std::unique_ptr<RTCDataChannelHandler> PeerConnectionBackendWebRtcOrg::createDat
     if (maxRetransmitsConversion && maxRetransmitTimeConversion) {
         return nullptr;
     }
-    WebCore::RTCDataChannel* channel = m_rtcConnection->createDataChannel(label.utf8().data(), initData);
+    WebCore::ExceptionCode x;
+    WebCore::RTCDataChannel* channel = m_rtcConnection->createDataChannel(label, options, x).release().get();
     return channel
         ? std::make_unique<RTCDataChannelHandlerWebRtcOrg>(channel)
         : nullptr;
@@ -234,6 +235,7 @@ std::unique_ptr<RTCDataChannelHandler> PeerConnectionBackendWebRtcOrg::createDat
 
 // ===========  WRTCInt::RTCPeerConnectionClient ==========
 
+#if 0
 void PeerConnectionBackendWebRtcOrg::requestSucceeded(int id, const WebCore::RTCSessionDescription& desc)
 {
     ASSERT(id == m_sessionDescriptionRequestId);
@@ -446,6 +448,7 @@ void PeerConnectionBackendWebRtcOrg::didAddRemoteDataChannel(WebCore::RTCDataCha
     std::unique_ptr<RTCDataChannelHandler> handler = std::make_unique<RTCDataChannelHandlerWebRtcOrg>(channel);
     m_client->addRemoteDataChannel(WTFMove(handler));
 }
+#endif
 
 RTCDataChannelHandlerWebRtcOrg::RTCDataChannelHandlerWebRtcOrg(WebCore::RTCDataChannel* dataChannel)
     : m_rtcDataChannel(dataChannel)
@@ -466,7 +469,7 @@ void RTCDataChannelHandlerWebRtcOrg::setClient(RTCDataChannelHandlerClient* clie
 
 String RTCDataChannelHandlerWebRtcOrg::label()
 {
-    return m_rtcDataChannel->label().c_str();
+    return m_rtcDataChannel->label();
 }
 
 bool RTCDataChannelHandlerWebRtcOrg::ordered()
@@ -486,7 +489,7 @@ unsigned short RTCDataChannelHandlerWebRtcOrg::maxRetransmits()
 
 String RTCDataChannelHandlerWebRtcOrg::protocol()
 {
-    return m_rtcDataChannel->protocol().c_str();
+    return m_rtcDataChannel->protocol();
 }
 
 bool RTCDataChannelHandlerWebRtcOrg::negotiated()
