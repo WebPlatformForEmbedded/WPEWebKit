@@ -25,11 +25,13 @@
 
 #include "RTCOfferAnswerOptions.h"
 
+#include "webrtc/api/peerconnectioninterface.h"
+
 namespace WebCore {
 
 using namespace PeerConnection;
+using namespace webrtc;
 
-typedef std::map<std::string, bool> RTCOfferAnswerOptions;
 // mediaconstraintsinterface.h
 const char* const kOfferToReceiveAudio = "OfferToReceiveAudio";
 const char* const kOfferToReceiveVideo = "OfferToReceiveVideo";
@@ -57,16 +59,10 @@ PeerConnectionBackendWebRtcOrg::PeerConnectionBackendWebRtcOrg(PeerConnectionBac
 
 void PeerConnectionBackendWebRtcOrg::createOffer(RTCOfferOptions& options, PeerConnection::SessionDescriptionPromise&& promise)
 {
-    ASSERT(WRTCInt::InvalidRequestId == m_sessionDescriptionRequestId);
+    ASSERT(InvalidRequestId == m_sessionDescriptionRequestId);
     ASSERT(!m_sessionDescriptionPromise);
 
-    RTCOfferAnswerOptions rtcOptions;
-    rtcOptions[kOfferToReceiveAudio] = !!options.offerToReceiveAudio();
-    rtcOptions[kOfferToReceiveVideo] = !!options.offerToReceiveVideo();
-    rtcOptions[kIceRestart] = options.iceRestart();
-    rtcOptions[kVoiceActivityDetection] = options.voiceActivityDetection();
-
-    int id = m_rtcConnection->createOffer(rtcOptions);
+    int id = m_rtcConnection->createOffer(options);
     if (InvalidRequestId != id) {
         m_sessionDescriptionRequestId = id;
         m_sessionDescriptionPromise = WTFMove(promise);
@@ -80,10 +76,7 @@ void PeerConnectionBackendWebRtcOrg::createAnswer(RTCAnswerOptions& options, Pee
     ASSERT(InvalidRequestId == m_sessionDescriptionRequestId);
     ASSERT(!m_sessionDescriptionPromise);
 
-    RTCOfferAnswerOptions rtcOptions;
-    rtcOptions[kVoiceActivityDetection] = options.voiceActivityDetection();
-
-    int id = m_rtcConnection->createAnswer(rtcOptions);
+    int id = m_rtcConnection->createAnswer(options);
     if (InvalidRequestId != id) {
         m_sessionDescriptionRequestId = id;
         m_sessionDescriptionPromise = WTFMove(promise);
@@ -108,9 +101,9 @@ void PeerConnectionBackendWebRtcOrg::setLocalDescription(RTCSessionDescription& 
 RefPtr<RTCSessionDescription> PeerConnectionBackendWebRtcOrg::localDescription() const
 {
     // TODO: pendingLocalDescription/currentLocalDescription
-    RTCSessionDescription localDesc;
+    RefPtr<RTCSessionDescription> localDesc;
     m_rtcConnection->localDescription(localDesc);
-    return RTCSessionDescription::create(localDesc.type(), localDesc.sdp());
+    return RTCSessionDescription::create(localDesc->type(), localDesc->sdp());
 }
 RefPtr<RTCSessionDescription> PeerConnectionBackendWebRtcOrg::currentLocalDescription() const
 {
@@ -137,9 +130,9 @@ void PeerConnectionBackendWebRtcOrg::setRemoteDescription(RTCSessionDescription&
 RefPtr<RTCSessionDescription> PeerConnectionBackendWebRtcOrg::remoteDescription() const
 {
     // TODO: pendingRemoteDescription/currentRemoteDescription
-    RTCSessionDescription remoteDesc;
+    RefPtr<RTCSessionDescription> remoteDesc;
     m_rtcConnection->remoteDescription(remoteDesc);
-    return RTCSessionDescription::create(remoteDesc.type(), remoteDesc.sdp());
+    return RTCSessionDescription::create(remoteDesc->type(), remoteDesc->sdp());
 }
 RefPtr<RTCSessionDescription> PeerConnectionBackendWebRtcOrg::currentRemoteDescription() const
 {
