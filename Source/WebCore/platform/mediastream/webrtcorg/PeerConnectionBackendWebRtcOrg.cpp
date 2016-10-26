@@ -235,7 +235,7 @@ std::unique_ptr<RTCDataChannelHandler> PeerConnectionBackendWebRtcOrg::createDat
 
 // ===========  WRTCInt::RTCPeerConnectionClient ==========
 
-#if 0
+#if 1
 void PeerConnectionBackendWebRtcOrg::requestSucceeded(int id, const WebCore::RTCSessionDescription& desc)
 {
     ASSERT(id == m_sessionDescriptionRequestId);

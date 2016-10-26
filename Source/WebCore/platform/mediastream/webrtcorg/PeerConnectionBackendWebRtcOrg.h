@@ -60,7 +60,7 @@ public:
     virtual void clearNegotiationNeededState() override;
 
     virtual std::unique_ptr<RTCDataChannelHandler> createDataChannel(const String&, const Dictionary&);
-#if 0
+#if 1
     // WRTCInt::RTCPeerConnectionClient
     virtual void requestSucceeded(int id, const RTCSessionDescription& desc) override;
     virtual void requestSucceeded(int id, const std::vector<std::unique_ptr<RTCStatsReport>>& reports) override;
