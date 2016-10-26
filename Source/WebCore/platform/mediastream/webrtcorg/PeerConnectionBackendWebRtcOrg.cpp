@@ -33,10 +33,6 @@ using namespace PeerConnection;
 using namespace webrtc;
 
 // mediaconstraintsinterface.h
-const char* const kOfferToReceiveAudio = "OfferToReceiveAudio";
-const char* const kOfferToReceiveVideo = "OfferToReceiveVideo";
-const char* const kVoiceActivityDetection = "VoiceActivityDetection";
-const char* const kIceRestart = "IceRestart";
 
 static std::unique_ptr<PeerConnectionBackend> createPeerConnectionBackendWebRtcOrg(PeerConnectionBackendClient* client)
 {
@@ -54,9 +50,58 @@ void enableWebRtcOrgPeerConnectionBackend()
 PeerConnectionBackendWebRtcOrg::PeerConnectionBackendWebRtcOrg(PeerConnectionBackendClient* client)
     : m_client(client)
 {
-    m_rtcConnection.reset(getRTCMediaSourceCenter().createPeerConnection(this));
+	createPeerConnection();
 }
 
+// TODO: Make it possible to overload/override device specific hooks
+webrtc::AudioDeviceModule* CreateAudioDeviceModule(int32_t) {
+    return nullptr;
+}
+
+cricket::WebRtcVideoEncoderFactory* CreateWebRtcVideoEncoderFactory() {
+    return nullptr;
+}
+cricket::WebRtcVideoDecoderFactory* CreateWebRtcVideoDecoderFactory() {
+    return nullptr;
+}
+cricket::VideoDeviceCapturerFactory* CreateVideoDeviceCapturerFactory() {
+    return nullptr;
+}
+
+void PeerConnectionBackendWebRtcOrg::ensurePeerConnectionFactory()
+{
+	if (m_peerConnectionFactory != nullptr) {
+    	return;
+    }
+
+    m_workerThread.reset(new rtc::Thread);
+    m_workerThread->SetName("rtc-worker", this);
+    m_workerThread->Start();
+
+    m_signalingThread.reset(new SignalingThreadWrapper);
+
+    m_peerConnectionFactory = webrtc::CreatePeerConnectionFactory(
+            m_workerThread.get(),
+            m_signalingThread.get(),
+            CreateAudioDeviceModule(0),
+            CreateWebRtcVideoEncoderFactory(),
+            CreateWebRtcVideoDecoderFactory());
+
+	ASSERT(m_peerConnectionFactory);
+}
+
+void PeerConnectionBackendWebRtcOrg::createPeerConnection()
+{
+	ensurePeerConnectionFactory();
+    if (!m_peerConnection) {
+    	webrtc::PeerConnectionInterface::RTCConfiguration configuration;
+        configuration.servers = m_servers;
+        m_peerConnection = m_peerConnectionFactory->CreatePeerConnection(
+        			     configuration, constraints.get(), nullptr, nullptr, this);
+	} else {
+     	m_peerConnection->UpdateIce(m_servers, constraints.get());
+	}
+}
 void PeerConnectionBackendWebRtcOrg::createOffer(RTCOfferOptions& options, PeerConnection::SessionDescriptionPromise&& promise)
 {
     ASSERT(InvalidRequestId == m_sessionDescriptionRequestId);
@@ -143,9 +188,26 @@ RefPtr<RTCSessionDescription> PeerConnectionBackendWebRtcOrg::pendingRemoteDescr
     return RefPtr<RTCSessionDescription>();
 }
 
-void PeerConnectionBackendWebRtcOrg::setConfiguration(RTCConfiguration& config, const MediaConstraints& constraints)
+void PeerConnectionBackendWebRtcOrg::setConfiguration(RTCConfiguration& rtcConfig, const MediaConstraints& constraints)
 {
-    m_rtcConnection->setConfiguration(config, constraints);
+	for (const auto& iceServer : rtcConfig.iceServers) {
+    	for (const auto& url : iceServer.urls) {
+    	    webrtc::PeerConnectionInterface::IceServer server;
+            server.uri = url;
+            server.username = iceServer.username;
+            server.password = iceServer.credential;
+            m_servers.push_back(server);
+        }
+	}
+
+	if (!m_peerConnection) {
+    	webrtc::PeerConnectionInterface::RTCConfiguration configuration;
+        configuration.servers = servers;
+        m_peerConnection = m_peerConnectionFactory->CreatePeerConnection(
+        	 configuration, constraints, nullptr, nullptr, this);
+    } else {
+        m_peerConnection->UpdateIce(servers, constraints);
+    }
 }
 
 void PeerConnectionBackendWebRtcOrg::addIceCandidate(RTCIceCandidate& candidate, PeerConnection::VoidPromise&& promise)
@@ -189,7 +251,7 @@ void PeerConnectionBackendWebRtcOrg::markAsNeedingNegotiation()
     Vector<RefPtr<RTCRtpSender>> senders = m_client->getSenders();
     for(auto &sender : senders) {
         RealtimeMediaSource& source = sender->track().source();
-        MediaStream* stream = static_cast<RealtimeMediaSourceWebRtcOrg&>(source).rtcStream();
+        webrtc::MediaStreamInterface* stream = static_cast<RealtimeMediaSourceWebRtcOrg&>(source).rtcStream();
         if (stream) {
             m_rtcConnection->addStream(stream);
             break;
