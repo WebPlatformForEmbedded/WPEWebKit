@@ -16,6 +16,7 @@
 #include "RTCRtpSender.h"
 #include "RTCSessionDescription.h"
 #include "RTCStatsResponse.h"
+#include "RTCStatsReport.h"
 
 #include "MediaStream.h"
 #include "MediaStreamCreationClient.h"
@@ -26,6 +27,9 @@
 #include "RTCOfferAnswerOptions.h"
 
 #include "webrtc/api/peerconnectioninterface.h"
+#include "webrtc/api/datachannelinterface.h"
+
+#include "WebRtcOrgUtils.h"
 
 namespace WebCore {
 
@@ -36,7 +40,7 @@ using namespace webrtc;
 
 static std::unique_ptr<PeerConnectionBackend> createPeerConnectionBackendWebRtcOrg(PeerConnectionBackendClient* client)
 {
-    init();
+    initializeWebRtcOrg();
     return std::unique_ptr<PeerConnectionBackend>(new PeerConnectionBackendWebRtcOrg(client));
 }
 
@@ -266,7 +270,7 @@ void PeerConnectionBackendWebRtcOrg::clearNegotiationNeededState()
 
 std::unique_ptr<RTCDataChannelHandler> PeerConnectionBackendWebRtcOrg::createDataChannel(const String& label, const Dictionary& options)
 {
-    WRTCInt::DataChannelInit initData;
+    webrtc::DataChannelInit initData;
     String maxRetransmitsStr;
     String maxRetransmitTimeStr;
     String protocolStr;
@@ -284,7 +288,7 @@ std::unique_ptr<RTCDataChannelHandler> PeerConnectionBackendWebRtcOrg::createDat
     if (maxRetransmitsConversion && maxRetransmitTimeConversion) {
         return nullptr;
     }
-    WRTCInt::RTCDataChannel* channel = m_rtcConnection->createDataChannel(label.utf8().data(), initData);
+    WebCore::RTCDataChannel* channel = m_rtcConnection->createDataChannel(label.utf8().data(), initData);
     return channel
         ? std::make_unique<RTCDataChannelHandlerWebRtcOrg>(channel)
         : nullptr;
@@ -292,24 +296,24 @@ std::unique_ptr<RTCDataChannelHandler> PeerConnectionBackendWebRtcOrg::createDat
 
 // ===========  WRTCInt::RTCPeerConnectionClient ==========
 
-void PeerConnectionBackendWebRtcOrg::requestSucceeded(int id, const WRTCInt::RTCSessionDescription& desc)
+void PeerConnectionBackendWebRtcOrg::requestSucceeded(int id, const WebCore::RTCSessionDescription& desc)
 {
     ASSERT(id == m_sessionDescriptionRequestId);
     ASSERT(m_sessionDescriptionPromise);
 
     // printf("%p:%s: %d, type=%s sdp=\n%s\n", this, __func__, id, desc.type.c_str(), desc.sdp.c_str());
 
-    String type = desc.type.c_str();
-    String sdp = desc.sdp.c_str();
+    String type = desc.type();
+    String sdp = desc.sdp();
 
     RefPtr<RTCSessionDescription> sessionDesc(RTCSessionDescription::create(type, sdp));
     m_sessionDescriptionPromise->resolve(sessionDesc);
 
-    m_sessionDescriptionRequestId = WRTCInt::InvalidRequestId;
+    m_sessionDescriptionRequestId = WebCore::InvalidRequestId;
     m_sessionDescriptionPromise = WTF::Nullopt;
 }
 
-void PeerConnectionBackendWebRtcOrg::requestSucceeded(int id, const std::vector<std::unique_ptr<WRTCInt::RTCStatsReport>>& reports)
+void PeerConnectionBackendWebRtcOrg::requestSucceeded(int id, const std::vector<std::unique_ptr<WebCore::RTCStatsReport>>& reports)
 {
     Optional<PeerConnection::StatsPromise> statsPromise = m_statsPromises.take(id);
     if (!statsPromise) {
@@ -340,7 +344,7 @@ void PeerConnectionBackendWebRtcOrg::requestSucceeded(int id)
 
     m_voidPromise->resolve(nullptr);
 
-    m_voidRequestId = WRTCInt::InvalidRequestId;
+    m_voidRequestId = WebCore::InvalidRequestId;
     m_voidPromise = WTF::Nullopt;
 }
 
@@ -351,13 +355,13 @@ void PeerConnectionBackendWebRtcOrg::requestFailed(int id, const std::string& er
         ASSERT(!m_sessionDescriptionPromise);
         m_voidPromise->reject(DOMError::create(error.c_str()));
         m_voidPromise = WTF::Nullopt;
-        m_voidRequestId = WRTCInt::InvalidRequestId;
+        m_voidRequestId = WebCore::InvalidRequestId;
     } else if (id == m_sessionDescriptionRequestId) {
         ASSERT(m_sessionDescriptionPromise);
         ASSERT(!m_voidPromise);
         m_sessionDescriptionPromise->reject(DOMError::create(error.c_str()));
         m_sessionDescriptionPromise = WTF::Nullopt;
-        m_sessionDescriptionRequestId = WRTCInt::InvalidRequestId;
+        m_sessionDescriptionRequestId = WebCore::InvalidRequestId;
     } else {
         ASSERT_NOT_REACHED();
     }
@@ -370,13 +374,13 @@ void PeerConnectionBackendWebRtcOrg::negotiationNeeded()
 }
 
 void PeerConnectionBackendWebRtcOrg::didAddRemoteStream(
-    WRTCInt::RTCMediaStream *stream,
+    WebCore::RTCMediaStream *stream,
     const std::vector<std::string> &audioDevices,
     const std::vector<std::string> &videoDevices)
 {
     ASSERT(m_client);
 
-    std::shared_ptr<WRTCInt::RTCMediaStream> rtcStream;
+    std::shared_ptr<WebCore::RTCMediaStream> rtcStream;
     rtcStream.reset(stream);
 
     Vector<RefPtr<RealtimeMediaSource>> audioSources;
@@ -403,7 +407,7 @@ void PeerConnectionBackendWebRtcOrg::didAddRemoteStream(
     m_client->addRemoteStream(WTFMove(mediaStream));
 }
 
-void PeerConnectionBackendWebRtcOrg::didGenerateIceCandidate(const WRTCInt::RTCIceCandidate& iceCandidate)
+void PeerConnectionBackendWebRtcOrg::didGenerateIceCandidate(const WebCore::RTCIceCandidate& iceCandidate)
 {
     ASSERT(m_client);
     String sdp = iceCandidate.sdp.c_str();
@@ -415,28 +419,28 @@ void PeerConnectionBackendWebRtcOrg::didGenerateIceCandidate(const WRTCInt::RTCI
     });
 }
 
-void PeerConnectionBackendWebRtcOrg::didChangeSignalingState(WRTCInt::SignalingState state)
+void PeerConnectionBackendWebRtcOrg::didChangeSignalingState(webrtc::PeerConnectionInterface::SignalingState state)
 {
     ASSERT(m_client);
     PeerConnectionStates::SignalingState signalingState = PeerConnectionStates::SignalingState::Stable;
     switch(state)
     {
-        case WRTCInt::Stable:
+        case webrtc::PeerConnectionInterface::kStable:
             signalingState = PeerConnectionStates::SignalingState::Stable;
             break;
-        case WRTCInt::HaveLocalOffer:
+        case webrtc::PeerConnectionInterface::kHaveLocalOffer:
             signalingState = PeerConnectionStates::SignalingState::HaveLocalOffer;
             break;
-        case WRTCInt::HaveRemoteOffer:
+        case webrtc::PeerConnectionInterface::kHaveRemoteOffer:
             signalingState = PeerConnectionStates::SignalingState::HaveRemoteOffer;
             break;
-        case WRTCInt::HaveLocalPrAnswer:
+        case webrtc::PeerConnectionInterface::kHaveLocalPrAnswer:
             signalingState = PeerConnectionStates::SignalingState::HaveLocalPrAnswer;
             break;
-        case WRTCInt::HaveRemotePrAnswer:
+        case webrtc::PeerConnectionInterface::kHaveRemotePrAnswer:
             signalingState = PeerConnectionStates::SignalingState::HaveRemotePrAnswer;
             break;
-        case WRTCInt::Closed:
+        case webrtc::PeerConnectionInterface::kClosed:
             signalingState = PeerConnectionStates::SignalingState::Closed;
             break;
         default:
@@ -445,19 +449,19 @@ void PeerConnectionBackendWebRtcOrg::didChangeSignalingState(WRTCInt::SignalingS
     m_client->setSignalingState(signalingState);
 }
 
-void PeerConnectionBackendWebRtcOrg::didChangeIceGatheringState(WRTCInt::IceGatheringState state)
+void PeerConnectionBackendWebRtcOrg::didChangeIceGatheringState(webrtc::PeerConnectionInterface::IceGatheringState state)
 {
     ASSERT(m_client);
     PeerConnectionStates::IceGatheringState iceGatheringState = PeerConnectionStates::IceGatheringState::New;
     switch(state)
     {
-        case WRTCInt::IceGatheringNew:
+        case webrtc::PeerConnectionInterface::kIceGatheringNew:
             iceGatheringState = PeerConnectionStates::IceGatheringState::New;
             break;
-        case WRTCInt::IceGatheringGathering:
+        case webrtc::PeerConnectionInterface::kIceGatheringGathering:
             iceGatheringState = PeerConnectionStates::IceGatheringState::Gathering;
             break;
-        case WRTCInt::IceGatheringComplete:
+        case webrtc::PeerConnectionInterface::kIceGatheringComplete:
             iceGatheringState = PeerConnectionStates::IceGatheringState::Complete;
             break;
         default:
@@ -466,31 +470,31 @@ void PeerConnectionBackendWebRtcOrg::didChangeIceGatheringState(WRTCInt::IceGath
     m_client->updateIceGatheringState(iceGatheringState);
 }
 
-void PeerConnectionBackendWebRtcOrg::didChangeIceConnectionState(WRTCInt::IceConnectionState state)
+void PeerConnectionBackendWebRtcOrg::didChangeIceConnectionState(webrtc::PeerConnectionInterface::IceConnectionState state)
 {
     ASSERT(m_client);
     PeerConnectionStates::IceConnectionState iceConnectionState = PeerConnectionStates::IceConnectionState::New;
     switch(state)
     {
-        case WRTCInt::IceConnectionNew:
+        case webrtc::PeerConnectionInterface::kIceConnectionNew:
             iceConnectionState = PeerConnectionStates::IceConnectionState::New;
             break;
-        case WRTCInt::IceConnectionChecking:
+        case webrtc::PeerConnectionInterface::kIceConnectionChecking:
             iceConnectionState = PeerConnectionStates::IceConnectionState::Checking;
             break;
-        case WRTCInt::IceConnectionConnected:
+        case webrtc::PeerConnectionInterface::kIceConnectionConnected:
             iceConnectionState = PeerConnectionStates::IceConnectionState::Connected;
             break;
-        case WRTCInt::IceConnectionCompleted:
+        case webrtc::PeerConnectionInterface::kIceConnectionCompleted:
             iceConnectionState = PeerConnectionStates::IceConnectionState::Completed;
             break;
-        case WRTCInt::IceConnectionFailed:
+        case webrtc::PeerConnectionInterface::kIceConnectionFailed:
             iceConnectionState = PeerConnectionStates::IceConnectionState::Failed;
             break;
-        case WRTCInt::IceConnectionDisconnected:
+        case webrtc::PeerConnectionInterface::kIceConnectionDisconnected:
             iceConnectionState = PeerConnectionStates::IceConnectionState::Disconnected;
             break;
-        case WRTCInt::IceConnectionClosed:
+        case webrtc::PeerConnectionInterface::kIceConnectionClosed:
             iceConnectionState = PeerConnectionStates::IceConnectionState::Closed;
             break;
         default:
@@ -499,13 +503,13 @@ void PeerConnectionBackendWebRtcOrg::didChangeIceConnectionState(WRTCInt::IceCon
     m_client->updateIceConnectionState(iceConnectionState);
 }
 
-void PeerConnectionBackendWebRtcOrg::didAddRemoteDataChannel(WRTCInt::RTCDataChannel* channel)
+void PeerConnectionBackendWebRtcOrg::didAddRemoteDataChannel(WebCore::RTCDataChannel* channel)
 {
     std::unique_ptr<RTCDataChannelHandler> handler = std::make_unique<RTCDataChannelHandlerWebRtcOrg>(channel);
     m_client->addRemoteDataChannel(WTFMove(handler));
 }
 
-RTCDataChannelHandlerWebRtcOrg::RTCDataChannelHandlerWebRtcOrg(WRTCInt::RTCDataChannel* dataChannel)
+RTCDataChannelHandlerWebRtcOrg::RTCDataChannelHandlerWebRtcOrg(WebCore::RTCDataChannel* dataChannel)
     : m_rtcDataChannel(dataChannel)
     , m_client(nullptr)
 {
@@ -577,20 +581,20 @@ void RTCDataChannelHandlerWebRtcOrg::close()
     m_rtcDataChannel->close();
 }
 
-void RTCDataChannelHandlerWebRtcOrg::didChangeReadyState(WRTCInt::DataChannelState state)
+void RTCDataChannelHandlerWebRtcOrg::didChangeReadyState(DataChannelInterface::DataState state)
 {
     RTCDataChannelHandlerClient::ReadyState readyState = RTCDataChannelHandlerClient::ReadyStateConnecting;
     switch(state) {
-        case WRTCInt::DataChannelConnecting:
+        case DataChannelInterface::kConnecting:
             readyState = RTCDataChannelHandlerClient::ReadyStateConnecting;
             break;
-        case WRTCInt::DataChannelOpen:
+        case DataChannelInterface::kOpen:
             readyState = RTCDataChannelHandlerClient::ReadyStateOpen;
             break;
-        case WRTCInt::DataChannelClosing:
+        case DataChannelInterface::kClosing:
             readyState = RTCDataChannelHandlerClient::ReadyStateClosing;
             break;
-        case WRTCInt::DataChannelClosed:
+        case DataChannelInterface::kClosed:
             readyState = RTCDataChannelHandlerClient::ReadyStateClosed;
             break;
         default:
