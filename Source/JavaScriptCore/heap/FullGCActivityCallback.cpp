@@ -74,7 +74,7 @@ double FullGCActivityCallback::deathRate()
         // GC caused the heap to grow(!)
         // This could happen if the we visited more extra memory than was reported allocated.
         // We don't return a negative death rate, since that would schedule the next GC in the past.
-        return 0;
+        return 1.0;
     }
     return static_cast<double>(sizeBefore - sizeAfter) / static_cast<double>(sizeBefore);
 }
