@@ -56,6 +56,7 @@ public:
     // Client methods
     void initializeClient(const WKViewClientBase*);
     void frameDisplayed();
+    void backendStopped();
 
     WebKit::WebPageProxy& page() { return *m_pageProxy; }
 

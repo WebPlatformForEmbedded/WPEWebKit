@@ -117,6 +117,14 @@ wpe_view_backend_dispatch_frame_displayed(struct wpe_view_backend* backend)
 
 __attribute__((visibility("default")))
 void
+wpe_view_backend_dispatch_backend_stopped(struct wpe_view_backend* backend)
+{
+    if (backend->backend_client)
+        backend->backend_client->backend_stopped(backend->backend_client_data);
+}
+
+__attribute__((visibility("default")))
+void
 wpe_view_backend_dispatch_keyboard_event(struct wpe_view_backend* backend, struct wpe_input_keyboard_event* event)
 {
     if (backend->input_client)

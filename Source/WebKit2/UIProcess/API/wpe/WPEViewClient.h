@@ -17,6 +17,7 @@ class View;
 class ViewClient : public API::Client<WKViewClientBase> {
 public:
     void frameDisplayed(View&);
+    void viewbackendStopped(View&);
 };
 
 } // namespace WebKit
