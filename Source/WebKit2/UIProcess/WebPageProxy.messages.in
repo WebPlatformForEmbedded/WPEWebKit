@@ -157,6 +157,7 @@ messages -> WebPageProxy {
 
     # Forms messages
     WillSubmitForm(uint64_t frameID, uint64_t sourceFrameID, Vector<std::pair<String, String>> textFieldValues, uint64_t listenerID, WebKit::UserData userData)
+    InputFocusChanged(String elemId, String elemName, String elemType, String elemValue)
 
     # Callback messages
     VoidCallback(uint64_t callbackID)

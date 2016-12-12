@@ -34,6 +34,7 @@ extern "C" {
 
 // Form Client.
 typedef void (*WKPageWillSubmitFormCallback)(WKPageRef page, WKFrameRef frame, WKFrameRef sourceFrame, WKDictionaryRef values, WKTypeRef userData, WKFormSubmissionListenerRef listener, const void* clientInfo);
+typedef void (*WKPageInputFocusChangedCallback)(WKPageRef page, WKStringRef elemId, WKStringRef elemName, WKStringRef elemType, WKStringRef elemValue, const void* clientInfo);
 
 typedef struct WKPageFormClientBase {
     int                                                                 version;
@@ -46,6 +47,16 @@ typedef struct WKPageFormClientV0 {
     // Version 0.
     WKPageWillSubmitFormCallback                                        willSubmitForm;
 } WKPageFormClientV0;
+
+typedef struct WKPageFormClientV1 {
+    WKPageFormClientBase                                                base;
+
+    // Version 0.
+    WKPageWillSubmitFormCallback                                        willSubmitForm;
+
+    // Version 1.
+    WKPageInputFocusChangedCallback                                     inputFocusChanged;
+} WKPageFormClientV1;
 
 #ifdef __cplusplus
 }
