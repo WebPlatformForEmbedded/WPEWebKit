@@ -71,7 +71,8 @@ void WorkQueue::platformInvalidate()
         LockHolder locker(m_terminateRunLoopConditionMutex);
         if (m_runLoop) {
             m_runLoop->stop();
-            m_terminateRunLoopCondition.wait(m_terminateRunLoopConditionMutex);
+            if(m_runLoop != &RunLoop::current())
+                m_terminateRunLoopCondition.wait(m_terminateRunLoopConditionMutex);
         }
     }
 
