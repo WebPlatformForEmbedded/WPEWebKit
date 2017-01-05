@@ -1,0 +1,7 @@
+
+[
+    Conditional=SPEECH_RECOGNITION,
+] interface SpeechRecognitionError : Event {
+    readonly attribute DOMString error;
+    readonly attribute DOMString message;
+};

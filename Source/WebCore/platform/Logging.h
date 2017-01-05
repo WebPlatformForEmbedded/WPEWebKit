@@ -84,6 +84,7 @@ namespace WebCore {
     M(WebReplay) \
     M(WheelEventTestTriggers) \
     M(ResourceLoadObserver) \
+    M(SpeechRecognition) \
 
 #define DECLARE_LOG_CHANNEL(name) \
     WEBCORE_EXPORT extern WTFLogChannel JOIN_LOG_CHANNEL_WITH_PREFIX(LOG_CHANNEL_PREFIX, name);

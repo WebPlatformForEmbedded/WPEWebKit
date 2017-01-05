@@ -668,6 +668,10 @@ the public iOS SDK. We will also need to update the FeatureDefines.xcconfig file
 #define ENABLE_SPEECH_SYNTHESIS 0
 #endif
 
+#if !defined(ENABLE_SPEECH_RECOGNITION)
+#define ENABLE_SPEECH_RECOGNITION 0
+#endif
+
 #if !defined(ENABLE_SPELLCHECK)
 #define ENABLE_SPELLCHECK 0
 #endif

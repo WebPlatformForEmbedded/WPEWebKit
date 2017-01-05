@@ -266,6 +266,14 @@ set(WebCore_NON_SVG_IDL_FILES
     Modules/speech/SpeechSynthesisUtterance.idl
     Modules/speech/SpeechSynthesisVoice.idl
 
+    Modules/speech/DOMWindowSpeechRecognition.idl
+    Modules/speech/SpeechRecognitionAlternative.idl
+    Modules/speech/SpeechRecognitionError.idl
+    Modules/speech/SpeechRecognitionEvent.idl
+    Modules/speech/SpeechRecognition.idl
+    Modules/speech/SpeechRecognitionResult.idl
+    Modules/speech/SpeechRecognitionResultList.idl   
+
     Modules/streams/ByteLengthQueuingStrategy.idl
     Modules/streams/CountQueuingStrategy.idl
     Modules/streams/ReadableStream.idl
@@ -984,6 +992,16 @@ set(WebCore_SOURCES
     Modules/speech/SpeechSynthesisEvent.cpp
     Modules/speech/SpeechSynthesisUtterance.cpp
     Modules/speech/SpeechSynthesisVoice.cpp
+
+    Modules/speech/DOMWindowSpeechRecognition.cpp
+    Modules/speech/SpeechGrammar.cpp
+    Modules/speech/SpeechGrammarList.cpp
+    Modules/speech/SpeechRecognitionAlternative.cpp
+    Modules/speech/SpeechRecognitionError.cpp
+    Modules/speech/SpeechRecognitionEvent.cpp
+    Modules/speech/SpeechRecognition.cpp
+    Modules/speech/SpeechRecognitionResult.cpp
+    Modules/speech/SpeechRecognitionResultList.cpp
 
     Modules/vibration/NavigatorVibration.cpp
     Modules/vibration/Vibration.cpp

@@ -212,6 +212,8 @@ list(APPEND WebCore_LIBRARIES
     ${LIBXML2_LIBRARIES}
     ${LIBXSLT_LIBRARIES}
     ${SQLITE_LIBRARIES}
+    ${SPHINX_LIBRARIES}
+    ${POCKETSPHINX_LIBRARIES}
     WPE
 )
 
@@ -229,6 +231,8 @@ list(APPEND WebCore_INCLUDE_DIRECTORIES
     ${LIBXML2_INCLUDE_DIR}
     ${LIBXSLT_INCLUDE_DIR}
     ${SQLITE_INCLUDE_DIR}
+    ${SPHINX_INCLUDE_DIRS}
+    ${POCKETSPHINX_INCLUDE_DIRS}
     ${WPE_DIR}
 )
 
@@ -271,4 +275,9 @@ if (ENABLE_SUBTLE_CRYPTO)
     )
 endif ()
 
-
+if (ENABLE_SPEECH_RECOGNITION)
+    list (APPEND WebCore_SOURCES
+        platform/wpe/PlatformSpeechRecognizerWPE.cpp
+        platform/wpe/PlatformSpeechRecognitionProviderWPE.cpp
+    )
+endif ()
