@@ -31,19 +31,11 @@
 #include "WKAPICast.h"
 #include "WPEView.h"
 
-#include <wpe/view-backend.h>
-
 using namespace WebKit;
 
 WKViewRef WKViewCreate(WKPageConfigurationRef configuration)
 {
     return toAPI(WKWPE::View::create(nullptr, *toImpl(configuration)));
-}
-
-WKViewRef WKViewCreateWithDefaultViewBackend(WKPageConfigurationRef configuration)
-{
-    struct wpe_view_backend* backend = wpe_view_backend_create();
-    return toAPI(WKWPE::View::create(backend, *toImpl(configuration)));
 }
 
 WKViewRef WKViewCreateWithViewBackend(struct wpe_view_backend* backend, WKPageConfigurationRef configuration)

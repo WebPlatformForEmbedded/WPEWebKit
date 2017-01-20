@@ -53,6 +53,29 @@ ViewBackend::ViewBackend(struct wpe_view_backend* backend)
     , input_handler(nullptr)
     , output_handler(nullptr)
 {
+}
+
+ViewBackend::~ViewBackend()
+{
+    if(input_handler)
+        input_handler->deinitialize();
+    if(output_handler)
+        output_handler->deinitialize();
+
+    if (compositor) {
+        WstCompositorStop(compositor);
+        WstCompositorDestroy(compositor);
+        compositor = nullptr;
+    }
+
+    if(input_handler)
+        delete input_handler;
+    if(output_handler)
+        delete output_handler;
+}
+
+void ViewBackend::initialize()
+{
     compositor = WstCompositorCreate();
     if (!compositor)
         return;
@@ -82,33 +105,6 @@ ViewBackend::ViewBackend(struct wpe_view_backend* backend)
         delete output_handler;
         input_handler = nullptr;
         output_handler = nullptr;
-    }
-}
-
-ViewBackend::~ViewBackend()
-{
-    if(input_handler)
-        input_handler->deinitialize();
-    if(output_handler)
-        output_handler->deinitialize();
-
-    if (compositor) {
-        WstCompositorStop(compositor);
-        WstCompositorDestroy(compositor);
-        compositor = nullptr;
-    }
-
-    if(input_handler)
-        delete input_handler;
-    if(output_handler)
-        delete output_handler;
-}
-
-void ViewBackend::initialize()
-{
-    if(output_handler)
-    {
-        output_handler->initializeClient();
     }
 }
 
