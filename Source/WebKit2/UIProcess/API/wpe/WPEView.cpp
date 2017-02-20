@@ -37,15 +37,43 @@
 
 using namespace WebKit;
 
+static void runInMainLoop(Function<void ()>&& function)
+{
+    if (RunLoop::isMain())
+    {
+        function();
+    }
+    else
+    {
+        RunLoop::main().dispatch(WTFMove(function));
+    }
+}
+
 namespace WKWPE {
 
 View::View(struct wpe_view_backend* backend, const API::PageConfiguration& baseConfiguration)
     : m_pageClient(std::make_unique<PageClientImpl>(*this))
-    , m_size{ 800, 600 }
+    , m_size { 800, 600 }
     , m_viewStateFlags(WebCore::ActivityState::WindowIsActive | WebCore::ActivityState::IsFocused | WebCore::ActivityState::IsVisible | WebCore::ActivityState::IsInWindow)
     , m_compositingManagerProxy(*this)
 {
-    auto configuration = baseConfiguration.copy();
+    WTF::Ref<API::PageConfiguration> configuration = baseConfiguration.copy();
+    runInMainLoop([this, backend, ref = configuration.copyRef()]
+    {
+        initializeWebPage(backend, ref.copyRef());
+    });
+}
+
+View::~View()
+{
+    runInMainLoop([backend = m_backend]
+    {
+        wpe_view_backend_destroy(backend);
+    });
+}
+
+void View::initializeWebPage(struct wpe_view_backend* backend, WTF::Ref<API::PageConfiguration> configuration)
+{
     auto* preferences = configuration->preferences();
     if (!preferences && configuration->pageGroup()) {
         preferences = &configuration->pageGroup()->preferences();
@@ -82,8 +110,11 @@ View::View(struct wpe_view_backend* backend, const API::PageConfiguration& baseC
         // frame_displayed
         [](void* data)
         {
-            auto& view = *reinterpret_cast<View*>(data);
-            view.frameDisplayed();
+            runInMainLoop([=]
+            {
+                auto& view = *reinterpret_cast<View*>(data);
+                view.m_client.frameDisplayed(view);
+            });
         }
     };
     wpe_view_backend_set_backend_client(m_backend, &s_backendClient, this);
@@ -92,26 +123,38 @@ View::View(struct wpe_view_backend* backend, const API::PageConfiguration& baseC
         // handle_keyboard_event
         [](void* data, struct wpe_input_keyboard_event* event)
         {
-            auto& view = *reinterpret_cast<View*>(data);
-            view.page().handleKeyboardEvent(WebKit::NativeWebKeyboardEvent(event));
+            runInMainLoop([=]
+            {
+                auto& view = *reinterpret_cast<View*>(data);
+                view.page().handleKeyboardEvent(event);
+            });
         },
         // handle_pointer_event
         [](void* data, struct wpe_input_pointer_event* event)
         {
-            auto& view = *reinterpret_cast<View*>(data);
-            view.page().handleMouseEvent(WebKit::NativeWebMouseEvent(event));
+            runInMainLoop([=]
+            {
+                auto& view = *reinterpret_cast<View*>(data);
+                view.page().handleMouseEvent(WebKit::NativeWebMouseEvent(event));
+            });
         },
         // handle_axis_event
         [](void* data, struct wpe_input_axis_event* event)
         {
-            auto& view = *reinterpret_cast<View*>(data);
-            view.page().handleWheelEvent(WebKit::NativeWebWheelEvent(event));
+            runInMainLoop([=]
+            {
+                auto& view = *reinterpret_cast<View*>(data);
+                view.page().handleWheelEvent(WebKit::NativeWebWheelEvent(event));
+            });
         },
         // handle_touch_event
         [](void* data, struct wpe_input_touch_event* event)
         {
-            auto& view = *reinterpret_cast<View*>(data);
-            view.page().handleTouchEvent(WebKit::NativeWebTouchEvent(event));
+            runInMainLoop([=]
+            {
+                auto& view = *reinterpret_cast<View*>(data);
+                view.page().handleTouchEvent(WebKit::NativeWebTouchEvent(event));
+            });
         },
     };
     wpe_view_backend_set_input_client(m_backend, &s_inputClient, this);
@@ -121,37 +164,47 @@ View::View(struct wpe_view_backend* backend, const API::PageConfiguration& baseC
     m_pageProxy->initializeWebPage();
 }
 
-View::~View()
-{
-    wpe_view_backend_destroy(m_backend);
-}
-
 void View::initializeClient(const WKViewClientBase* client)
 {
-    m_client.initialize(client);
+    runInMainLoop([this, client]
+    {
+        m_client.initialize(client);
+    });
 }
 
-void View::frameDisplayed()
+WebCore::IntSize View::size()
 {
-    m_client.frameDisplayed(*this);
+    MutexLocker locker(m_sizeLock);
+    return m_size;
 }
 
 void View::setSize(const WebCore::IntSize& size)
 {
-    m_size = size;
-    if (m_pageProxy->drawingArea())
-        m_pageProxy->drawingArea()->setSize(size, WebCore::IntSize(), WebCore::IntSize());
+    runInMainLoop([=]
+    {
+        if (page().drawingArea())
+        {
+            page().drawingArea()->setSize(size, WebCore::IntSize(), WebCore::IntSize());
+        }
+
+        MutexLocker locker(m_sizeLock);
+        m_size = size;
+    });
 }
 
 void View::setViewState(WebCore::ActivityState::Flags flags)
 {
-    static const WebCore::ActivityState::Flags defaultFlags = WebCore::ActivityState::WindowIsActive | WebCore::ActivityState::IsFocused;
+    static const WebCore::ActivityState::Flags defaultFlags =
+            WebCore::ActivityState::WindowIsActive | WebCore::ActivityState::IsFocused;
 
-    WebCore::ActivityState::Flags changedFlags = m_viewStateFlags ^ (defaultFlags | flags);
-    m_viewStateFlags = defaultFlags | flags;
+    runInMainLoop([=]
+    {
+        WebCore::ActivityState::Flags changedFlags = m_viewStateFlags ^ (defaultFlags | flags);
+        m_viewStateFlags = defaultFlags | flags;
 
-    if (changedFlags)
-        m_pageProxy->activityStateDidChange(changedFlags);
+        if (changedFlags)
+            page().activityStateDidChange(changedFlags);
+    });
 }
 
 } // namespace WKWPE

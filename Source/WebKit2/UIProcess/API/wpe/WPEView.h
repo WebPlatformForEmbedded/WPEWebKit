@@ -54,13 +54,12 @@ public:
 
     // Client methods
     void initializeClient(const WKViewClientBase*);
-    void frameDisplayed();
 
     WebKit::WebPageProxy& page() { return *m_pageProxy; }
 
     struct wpe_view_backend* backend() { return m_backend; }
 
-    const WebCore::IntSize& size() const { return m_size; }
+    WebCore::IntSize size();
 
     WebCore::ActivityState::Flags viewState() const { return m_viewStateFlags; }
     void setViewState(WebCore::ActivityState::Flags);
@@ -69,6 +68,7 @@ private:
     View(struct wpe_view_backend*, const API::PageConfiguration&);
     virtual ~View();
 
+    void initializeWebPage(struct wpe_view_backend* backend, WTF::Ref<API::PageConfiguration> configuration);
     void setSize(const WebCore::IntSize& size);
 
     ViewClient m_client;
@@ -76,6 +76,7 @@ private:
     std::unique_ptr<WebKit::PageClientImpl> m_pageClient;
     RefPtr<WebKit::WebPageProxy> m_pageProxy;
     WebCore::IntSize m_size;
+    Mutex m_sizeLock;
     WebCore::ActivityState::Flags m_viewStateFlags;
 
     WebKit::CompositingManagerProxy m_compositingManagerProxy;
