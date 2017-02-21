@@ -8,6 +8,7 @@
 #include <WebKit/WKURL.h>
 #include <WebKit/WKView.h>
 #include <glib.h>
+#include <getopt.h>
 
 static WKViewRef createView(WKPageConfigurationRef);
 
@@ -132,6 +133,63 @@ static WKViewRef createView(WKPageConfigurationRef pageConfiguration)
     return view;
 }
 
+class LauncherOptions {
+public:
+    LauncherOptions(int argc, char* const* argv);
+    const char* getUserAgent() const { return m_userAgent; };
+    const char* getUrl() const { return m_url; };
+private:
+    const char* m_userAgent;
+    const char* m_url;
+};
+
+const char* defaultUrl = "http://www.webkit.org/blog-files/3d-transforms/poster-circle.html";
+
+LauncherOptions::LauncherOptions(int argc, char* const* argv) :
+        m_userAgent(0),
+        m_url(defaultUrl)
+{
+    int c;
+
+    while (1)
+    {
+        static struct option long_options[] =
+        {
+            {"user_agent",    required_argument, 0, 'a'},
+            {0, 0, 0, 0}
+        };
+        /* getopt_long stores the option index here. */
+        int option_index = 0;
+
+        c = getopt_long (argc, argv, "a:", long_options, &option_index);
+
+        /* Detect the end of the options. */
+        if (c == -1)
+            break;
+
+        switch (c)
+        {
+          case 'a':
+            fprintf (stderr, "Setting User Agent to '%s'\n", optarg);
+            m_userAgent = optarg;
+            break;
+          case 0:
+          case '?':
+            break;
+
+          default:
+            abort ();
+        }
+    }
+
+    /* Any remaining command line argument (not options). */
+    if (optind < argc)
+    {
+        m_url = argv[optind];
+        fprintf(stderr, "Setting initial URL: %s\n", m_url);
+    }
+}
+
 int main(int argc, char* argv[])
 {
     GMainLoop* loop = g_main_loop_new(g_main_context_default(), FALSE);
@@ -145,12 +203,19 @@ int main(int argc, char* argv[])
 
     auto view = adoptWK(createView(pageConfiguration.get()));
 
-    const char* url = "http://www.webkit.org/blog-files/3d-transforms/poster-circle.html";
-    if (argc > 1)
-        url = argv[1];
+    LauncherOptions opts(argc, argv);
 
-    auto shellURL = adoptWK(WKURLCreateWithUTF8CString(url));
-    WKPageLoadURL(WKViewGetPage(view.get()), shellURL.get());
+    auto shellURL = adoptWK(WKURLCreateWithUTF8CString(opts.getUrl()));
+
+    WKPageRef page = WKViewGetPage(view.get());
+
+    if (opts.getUserAgent())
+    {
+        auto userAgent = adoptWK(WKStringCreateWithUTF8CString(opts.getUserAgent()));
+        WKPageSetCustomUserAgent(page, userAgent.get());
+    }
+
+    WKPageLoadURL(page, shellURL.get());
 
     g_main_loop_run(loop);
 
