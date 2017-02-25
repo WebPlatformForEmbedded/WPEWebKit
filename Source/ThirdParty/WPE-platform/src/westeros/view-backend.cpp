@@ -48,6 +48,13 @@ struct ViewBackend {
     WesterosViewbackendOutput* output_handler;
 };
 
+static void compositorDestroyedCallback(WstCompositor* wst, void* userdata)
+{
+    ViewBackend *viewbackend = static_cast<ViewBackend*>(userdata);
+    if(viewbackend)
+        wpe_view_backend_dispatch_backend_stopped(viewbackend->backend);
+}
+
 ViewBackend::ViewBackend(struct wpe_view_backend* backend)
     : backend(backend)
     , input_handler(nullptr)
