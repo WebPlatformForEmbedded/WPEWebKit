@@ -80,6 +80,10 @@ private:
 
     WebKit::CompositingManagerProxy m_compositingManagerProxy;
     struct wpe_view_backend* m_backend;
+    friend class wpe_view_backend_client;
+    friend class wpe_view_backend_input_client;
+    bool m_pageInitialized {false};
+    std::vector<std::function<void()>> m_pendingTasks;
 };
 
 } // namespace WKWPE

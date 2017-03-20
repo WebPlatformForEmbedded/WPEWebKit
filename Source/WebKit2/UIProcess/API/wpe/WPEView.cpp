@@ -60,30 +60,38 @@ View::View(struct wpe_view_backend* backend, const API::PageConfiguration& baseC
         preferences->setDeveloperExtrasEnabled(true);
     }
 
-    auto* pool = configuration->processPool();
-    m_pageProxy = pool->createWebPage(*m_pageClient, WTFMove(configuration));
-
-#if PLATFORM(INTEL_CE)
-    m_pageProxy->setDrawsBackground(false);
-#endif
-
     m_backend = backend;
     if (!m_backend)
         m_backend = wpe_view_backend_create();
-    m_compositingManagerProxy.initialize();
+
 
     static struct wpe_view_backend_client s_backendClient = {
         // set_size
         [](void* data, uint32_t width, uint32_t height)
         {
             auto& view = *reinterpret_cast<View*>(data);
-            view.setSize(WebCore::IntSize(width, height));
+            auto task = std::bind(&View::setSize, &view, WebCore::IntSize(width, height));
+
+            if (!view.m_pageInitialized)
+            {
+                view.m_pendingTasks.emplace_back(std::move(task));
+                return;
+            }
+            task();
         },
         // frame_displayed
         [](void* data)
         {
+
             auto& view = *reinterpret_cast<View*>(data);
-            view.frameDisplayed();
+            auto task = std::bind(&View::frameDisplayed, &view);
+
+            if (!view.m_pageInitialized)
+            {
+                view.m_pendingTasks.emplace_back(std::move(task));
+                return;
+            }
+            task();
         }
     };
     wpe_view_backend_set_backend_client(m_backend, &s_backendClient, this);
@@ -93,32 +101,77 @@ View::View(struct wpe_view_backend* backend, const API::PageConfiguration& baseC
         [](void* data, struct wpe_input_keyboard_event* event)
         {
             auto& view = *reinterpret_cast<View*>(data);
-            view.page().handleKeyboardEvent(WebKit::NativeWebKeyboardEvent(event));
+            auto task = std::bind(&WebKit::WebPageProxy::handleKeyboardEvent, &view.page(), WebKit::NativeWebKeyboardEvent(event));
+
+            if (!view.m_pageInitialized)
+            {
+                view.m_pendingTasks.emplace_back(std::move(task));
+                return;
+            }
+            task();
         },
         // handle_pointer_event
         [](void* data, struct wpe_input_pointer_event* event)
         {
             auto& view = *reinterpret_cast<View*>(data);
-            view.page().handleMouseEvent(WebKit::NativeWebMouseEvent(event));
+            auto task = std::bind(&WebKit::WebPageProxy::handleMouseEvent, &view.page(), WebKit::NativeWebMouseEvent(event));
+
+            if (!view.m_pageInitialized)
+            {
+                view.m_pendingTasks.emplace_back(std::move(task));
+                return;
+            }
+            task();
         },
         // handle_axis_event
         [](void* data, struct wpe_input_axis_event* event)
         {
             auto& view = *reinterpret_cast<View*>(data);
-            view.page().handleWheelEvent(WebKit::NativeWebWheelEvent(event));
+            auto task = std::bind(&WebKit::WebPageProxy::handleWheelEvent, &view.page(), WebKit::NativeWebWheelEvent(event));
+
+            if (!view.m_pageInitialized)
+            {
+                view.m_pendingTasks.emplace_back(std::move(task));
+                return;
+            }
+            task();
         },
         // handle_touch_event
         [](void* data, struct wpe_input_touch_event* event)
         {
             auto& view = *reinterpret_cast<View*>(data);
-            view.page().handleTouchEvent(WebKit::NativeWebTouchEvent(event));
+            auto task = std::bind(&WebKit::WebPageProxy::handleTouchEvent, &view.page(), WebKit::NativeWebTouchEvent(event));
+
+            if (!view.m_pageInitialized)
+            {
+                view.m_pendingTasks.emplace_back(std::move(task));
+                return;
+            }
+            task();
         },
     };
     wpe_view_backend_set_input_client(m_backend, &s_inputClient, this);
 
     wpe_view_backend_initialize(m_backend);
 
+    auto* pool = configuration->processPool();
+
+    m_pageProxy = pool->createWebPage(*m_pageClient, WTFMove(configuration));
+
+#if PLATFORM(INTEL_CE)
+    m_pageProxy->setDrawsBackground(false);
+#endif
+
+    m_compositingManagerProxy.initialize();
+
     m_pageProxy->initializeWebPage();
+
+    m_pageInitialized = true;
+    for (auto& task : m_pendingTasks)
+    {
+        task();
+    }
+    m_pendingTasks.clear();
 }
 
 View::~View()
