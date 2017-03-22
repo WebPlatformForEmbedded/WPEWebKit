@@ -72,6 +72,7 @@ struct SourceBuffer::TrackBuffer {
     MediaTime highestPresentationTimestamp;
     MediaTime lastEnqueuedPresentationTime;
     MediaTime lastEnqueuedDecodeEndTime;
+    MediaTime fudgeRoom;
     bool needRandomAccessFlag { true };
     bool enabled { false };
     bool needsReenqueueing { false };
@@ -86,6 +87,7 @@ struct SourceBuffer::TrackBuffer {
         , highestPresentationTimestamp(MediaTime::invalidTime())
         , lastEnqueuedPresentationTime(MediaTime::invalidTime())
         , lastEnqueuedDecodeEndTime(MediaTime::invalidTime())
+        , fudgeRoom(MediaTime::invalidTime())
     {
     }
 };
@@ -1704,15 +1706,18 @@ void SourceBuffer::sourceBufferPrivateDidReceiveSample(SourceBufferPrivate*, Med
         if (m_shouldGenerateTimestamps)
             m_timestampOffset = frameEndTimestamp;
 
+        if (trackBuffer.fudgeRoom.isInvalid() || trackBuffer.fudgeRoom < frameDuration)
+            trackBuffer.fudgeRoom = frameDuration;
+
         // Eliminate small gaps between buffered ranges by coalescing
         // disjoint ranges separated by less than a "fudge factor".
         auto presentationEndTime = presentationTimestamp + frameDuration;
         auto nearestToPresentationStartTime = trackBuffer.buffered.nearest(presentationTimestamp);
-        if (nearestToPresentationStartTime.isValid() && (presentationTimestamp - nearestToPresentationStartTime).isBetween(MediaTime::zeroTime(), MediaSource::currentTimeFudgeFactor()))
+        if (nearestToPresentationStartTime.isValid() && (presentationTimestamp - nearestToPresentationStartTime).isBetween(MediaTime::zeroTime(), trackBuffer.fudgeRoom))
             presentationTimestamp = nearestToPresentationStartTime;
 
         auto nearestToPresentationEndTime = trackBuffer.buffered.nearest(presentationEndTime);
-        if (nearestToPresentationStartTime.isValid() && (nearestToPresentationEndTime - presentationEndTime).isBetween(MediaTime::zeroTime(), MediaSource::currentTimeFudgeFactor()))
+        if (nearestToPresentationStartTime.isValid() && (nearestToPresentationEndTime - presentationEndTime).isBetween(MediaTime::zeroTime(), trackBuffer.fudgeRoom))
             presentationEndTime = nearestToPresentationEndTime;
 
         trackBuffer.buffered.add(presentationTimestamp, presentationEndTime);
@@ -1929,7 +1934,7 @@ void SourceBuffer::reenqueueMediaForTime(TrackBuffer& trackBuffer, AtomicString 
         currentSamplePTSIterator = trackBuffer.samples.presentationOrder().findSampleOnOrAfterPresentationTime(time);
 
     if (currentSamplePTSIterator == trackBuffer.samples.presentationOrder().end()
-        || (currentSamplePTSIterator->first - time) > MediaSource::currentTimeFudgeFactor())
+        || (currentSamplePTSIterator->first - time) > trackBuffer.fudgeRoom)
         return;
 
     // Seach backward for the previous sync sample.
