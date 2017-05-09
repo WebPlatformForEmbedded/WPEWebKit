@@ -21,12 +21,10 @@
 #include "config.h"
 #include "JSTestEventTarget.h"
 
-#include "ExceptionCode.h"
 #include "JSDOMBinding.h"
 #include "JSDOMConstructor.h"
 #include "JSDOMConvert.h"
 #include "JSNode.h"
-#include "Node.h"
 #include "wtf/text/AtomicString.h"
 #include <runtime/Error.h>
 #include <runtime/PropertyNameArray.h>
@@ -47,7 +45,7 @@ bool setJSTestEventTargetConstructor(JSC::ExecState*, JSC::EncodedJSValue, JSC::
 
 class JSTestEventTargetPrototype : public JSC::JSNonFinalObject {
 public:
-    typedef JSC::JSNonFinalObject Base;
+    using Base = JSC::JSNonFinalObject;
     static JSTestEventTargetPrototype* create(JSC::VM& vm, JSC::JSGlobalObject* globalObject, JSC::Structure* structure)
     {
         JSTestEventTargetPrototype* ptr = new (NotNull, JSC::allocateCell<JSTestEventTargetPrototype>(vm.heap)) JSTestEventTargetPrototype(vm, globalObject, structure);
@@ -70,7 +68,7 @@ private:
     void finishCreation(JSC::VM&);
 };
 
-typedef JSDOMConstructorNotConstructable<JSTestEventTarget> JSTestEventTargetConstructor;
+using JSTestEventTargetConstructor = JSDOMConstructorNotConstructable<JSTestEventTarget>;
 
 template<> JSValue JSTestEventTargetConstructor::prototypeForStructure(JSC::VM& vm, const JSDOMGlobalObject& globalObject)
 {
@@ -107,6 +105,13 @@ const ClassInfo JSTestEventTarget::s_info = { "TestEventTarget", &Base::s_info, 
 JSTestEventTarget::JSTestEventTarget(Structure* structure, JSDOMGlobalObject& globalObject, Ref<TestEventTarget>&& impl)
     : JSEventTarget(structure, globalObject, WTFMove(impl))
 {
+}
+
+void JSTestEventTarget::finishCreation(VM& vm)
+{
+    Base::finishCreation(vm);
+    ASSERT(inherits(info()));
+
 }
 
 JSObject* JSTestEventTarget::createPrototype(VM& vm, JSGlobalObject* globalObject)
@@ -158,20 +163,29 @@ bool JSTestEventTarget::getOwnPropertySlotByIndex(JSObject* object, ExecState* s
     return Base::getOwnPropertySlotByIndex(thisObject, state, index, slot);
 }
 
+template<> inline JSTestEventTarget* BindingCaller<JSTestEventTarget>::castForOperation(ExecState& state)
+{
+    return jsDynamicDowncast<JSTestEventTarget*>(state.thisValue());
+}
+
 EncodedJSValue jsTestEventTargetConstructor(ExecState* state, EncodedJSValue thisValue, PropertyName)
 {
-    JSTestEventTargetPrototype* domObject = jsDynamicCast<JSTestEventTargetPrototype*>(JSValue::decode(thisValue));
+    VM& vm = state->vm();
+    auto throwScope = DECLARE_THROW_SCOPE(vm);
+    JSTestEventTargetPrototype* domObject = jsDynamicDowncast<JSTestEventTargetPrototype*>(JSValue::decode(thisValue));
     if (UNLIKELY(!domObject))
-        return throwVMTypeError(state);
+        return throwVMTypeError(state, throwScope);
     return JSValue::encode(JSTestEventTarget::getConstructor(state->vm(), domObject->globalObject()));
 }
 
 bool setJSTestEventTargetConstructor(ExecState* state, EncodedJSValue thisValue, EncodedJSValue encodedValue)
 {
+    VM& vm = state->vm();
+    auto throwScope = DECLARE_THROW_SCOPE(vm);
     JSValue value = JSValue::decode(encodedValue);
-    JSTestEventTargetPrototype* domObject = jsDynamicCast<JSTestEventTargetPrototype*>(JSValue::decode(thisValue));
+    JSTestEventTargetPrototype* domObject = jsDynamicDowncast<JSTestEventTargetPrototype*>(JSValue::decode(thisValue));
     if (UNLIKELY(!domObject)) {
-        throwVMTypeError(state);
+        throwVMTypeError(state, throwScope);
         return false;
     }
     // Shadowing a built-in constructor
@@ -196,21 +210,23 @@ JSValue JSTestEventTarget::getConstructor(VM& vm, const JSGlobalObject* globalOb
     return getDOMConstructor<JSTestEventTargetConstructor>(vm, *jsCast<const JSDOMGlobalObject*>(globalObject));
 }
 
+static inline JSC::EncodedJSValue jsTestEventTargetPrototypeFunctionItemCaller(JSC::ExecState*, JSTestEventTarget*, JSC::ThrowScope&);
+
 EncodedJSValue JSC_HOST_CALL jsTestEventTargetPrototypeFunctionItem(ExecState* state)
 {
-    JSValue thisValue = state->thisValue();
-    auto castedThis = jsDynamicCast<JSTestEventTarget*>(thisValue);
-    if (UNLIKELY(!castedThis))
-        return throwThisTypeError(*state, "TestEventTarget", "item");
-    ASSERT_GC_OBJECT_INHERITS(castedThis, JSTestEventTarget::info());
+    return BindingCaller<JSTestEventTarget>::callOperation<jsTestEventTargetPrototypeFunctionItemCaller>(state, "item");
+}
+
+static inline JSC::EncodedJSValue jsTestEventTargetPrototypeFunctionItemCaller(JSC::ExecState* state, JSTestEventTarget* castedThis, JSC::ThrowScope& throwScope)
+{
+    UNUSED_PARAM(state);
+    UNUSED_PARAM(throwScope);
     auto& impl = castedThis->wrapped();
     if (UNLIKELY(state->argumentCount() < 1))
-        return throwVMError(state, createNotEnoughArgumentsError(state));
-    auto index = convert<uint32_t>(*state, state->argument(0), NormalConversion);
-    if (UNLIKELY(state->hadException()))
-        return JSValue::encode(jsUndefined());
-    JSValue result = toJS(state, castedThis->globalObject(), impl.item(WTFMove(index)));
-    return JSValue::encode(result);
+        return throwVMError(state, throwScope, createNotEnoughArgumentsError(state));
+    auto index = convert<IDLUnsignedLong>(*state, state->uncheckedArgument(0), IntegerConversionConfiguration::Normal);
+    RETURN_IF_EXCEPTION(throwScope, encodedJSValue());
+    return JSValue::encode(toJS<IDLInterface<Node>>(*state, *castedThis->globalObject(), impl.item(WTFMove(index))));
 }
 
 void JSTestEventTarget::visitChildren(JSCell* cell, SlotVisitor& visitor)
@@ -251,7 +267,7 @@ JSC::JSValue toJSNewlyCreated(JSC::ExecState*, JSDOMGlobalObject* globalObject, 
     // by adding the SkipVTableValidation attribute to the interface IDL definition
     RELEASE_ASSERT(actualVTablePointer == expectedVTablePointer);
 #endif
-    return createWrapper<JSTestEventTarget, TestEventTarget>(globalObject, WTFMove(impl));
+    return createWrapper<TestEventTarget>(globalObject, WTFMove(impl));
 }
 
 JSC::JSValue toJS(JSC::ExecState* state, JSDOMGlobalObject* globalObject, TestEventTarget& impl)
@@ -261,7 +277,7 @@ JSC::JSValue toJS(JSC::ExecState* state, JSDOMGlobalObject* globalObject, TestEv
 
 TestEventTarget* JSTestEventTarget::toWrapped(JSC::JSValue value)
 {
-    if (auto* wrapper = jsDynamicCast<JSTestEventTarget*>(value))
+    if (auto* wrapper = jsDynamicDowncast<JSTestEventTarget*>(value))
         return &wrapper->wrapped();
     return nullptr;
 }

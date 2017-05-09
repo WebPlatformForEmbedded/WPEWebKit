@@ -36,11 +36,9 @@
 
 namespace WebCore {
 
-void WorkerGlobalScopeFetch::fetch(WorkerGlobalScope& scope, FetchRequest& request, DeferredWrapper&& promise)
+void WorkerGlobalScopeFetch::fetch(WorkerGlobalScope& scope, FetchRequest& request, Ref<DeferredPromise>&& promise)
 {
-    if (!scope.scriptExecutionContext())
-        return;
-    FetchResponse::fetch(*scope.scriptExecutionContext(), request, WTFMove(promise));
+    FetchResponse::fetch(scope, request, WTFMove(promise));
 }
 
 } // namespace WebCore

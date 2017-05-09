@@ -128,12 +128,22 @@ void RenderTableRow::addChild(RenderObject* child, RenderObject* beforeChild)
             }
         }
 
-        // If beforeChild is inside an anonymous cell, insert into the cell.
-        if (last && !is<RenderTableCell>(*last) && last->parent() && last->parent()->isAnonymous() && !last->parent()->isBeforeOrAfterContent()) {
-            last->parent()->addChild(child, beforeChild);
-            return;
+        // Try to find an anonymous container for the child.
+        if (last && last->parent() && last->parent()->isAnonymous() && !last->parent()->isBeforeOrAfterContent()) {
+            // If beforeChild is inside an anonymous cell, insert into the cell.
+            if (!is<RenderTableCell>(*last)) {
+                last->parent()->addChild(child, beforeChild);
+                return;
+            }
+            // If beforeChild is inside an anonymous row, insert into the row.
+            auto& parent = *last->parent();
+            if (is<RenderTableRow>(parent)) {
+                auto* cell = RenderTableCell::createAnonymousWithParentRenderer(*this).release();
+                parent.addChild(cell, beforeChild);
+                cell->addChild(child);
+                return;
+            }
         }
-
         auto* cell = RenderTableCell::createAnonymousWithParentRenderer(*this).release();
         addChild(cell, beforeChild);
         cell->addChild(child);
@@ -270,6 +280,46 @@ std::unique_ptr<RenderTableRow> RenderTableRow::createTableRowWithStyle(Document
 std::unique_ptr<RenderTableRow> RenderTableRow::createAnonymousWithParentRenderer(const RenderTableSection& parent)
 {
     return RenderTableRow::createTableRowWithStyle(parent.document(), parent.style());
+}
+
+void RenderTableRow::destroyAndCollapseAnonymousSiblingRows()
+{
+    auto collapseAnonymousSiblingRows = [&] {
+        auto* section = this->section();
+        if (!section)
+            return;
+
+        // All siblings generated?
+        for (auto* current = section->firstRow(); current; current = current->nextRow()) {
+            if (current == this)
+                continue;
+            if (!current->isAnonymous())
+                return;
+        }
+
+        RenderTableRow* rowToInsertInto = nullptr;
+        auto* currentRow = section->firstRow();
+        while (currentRow) {
+            if (currentRow == this) {
+                currentRow = currentRow->nextRow();
+                continue;
+            }
+            if (!rowToInsertInto) {
+                rowToInsertInto = currentRow;
+                currentRow = currentRow->nextRow();
+                continue;
+            }
+            currentRow->moveAllChildrenTo(rowToInsertInto);
+            auto* destroyThis = currentRow;
+            currentRow = currentRow->nextRow();
+            destroyThis->destroy();
+        }
+        if (rowToInsertInto)
+            rowToInsertInto->setNeedsLayout();
+    };
+
+    collapseAnonymousSiblingRows();
+    destroy();
 }
 
 } // namespace WebCore

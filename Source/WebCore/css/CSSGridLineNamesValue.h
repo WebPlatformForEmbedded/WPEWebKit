@@ -28,15 +28,15 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef CSSGridLineNamesValue_h
-#define CSSGridLineNamesValue_h
+#pragma once
 
 #if ENABLE(CSS_GRID_LAYOUT)
+
 #include "CSSValueList.h"
 
 namespace WebCore {
 
-class CSSGridLineNamesValue : public CSSValueList {
+class CSSGridLineNamesValue final : public CSSValueList {
 public:
     static Ref<CSSGridLineNamesValue> create()
     {
@@ -56,4 +56,3 @@ private:
 SPECIALIZE_TYPE_TRAITS_CSS_VALUE(CSSGridLineNamesValue, isGridLineNamesValue());
 
 #endif // ENABLE(CSS_GRID_LAYOUT)
-#endif // CSSGridLineNamesValue_h

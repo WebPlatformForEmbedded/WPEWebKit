@@ -25,7 +25,7 @@
 
 #include "config.h"
 
-#if ENABLE(ENCRYPTED_MEDIA)
+#if ENABLE(LEGACY_ENCRYPTED_MEDIA_V1)
 
 #include "MediaKeyEvent.h"
 
@@ -33,7 +33,7 @@
 
 namespace WebCore {
 
-MediaKeyEvent::MediaKeyEvent(const AtomicString& type, const String& keySystem, const String& sessionId, RefPtr<Uint8Array>&& initData, RefPtr<Uint8Array>&& message, const String& defaultURL, RefPtr<MediaKeyError>&& errorCode, uint32_t systemCode)
+MediaKeyEvent::MediaKeyEvent(const AtomicString& type, const String& keySystem, const String& sessionId, RefPtr<Uint8Array>&& initData, RefPtr<Uint8Array>&& message, const String& defaultURL, RefPtr<WebKitMediaKeyError>&& errorCode, uint32_t systemCode)
     : Event(type, false, false)
     , m_keySystem(keySystem)
     , m_sessionId(sessionId)
@@ -46,7 +46,7 @@ MediaKeyEvent::MediaKeyEvent(const AtomicString& type, const String& keySystem, 
 }
 
 MediaKeyEvent::MediaKeyEvent(const AtomicString& type, const MediaKeyEventInit& initializer)
-    : Event(type, initializer)
+    : Event(type, initializer, IsTrusted::No)
     , m_keySystem(initializer.keySystem)
     , m_sessionId(initializer.sessionId)
     , m_initData(initializer.initData)

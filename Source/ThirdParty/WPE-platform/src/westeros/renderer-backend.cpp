@@ -25,12 +25,80 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#define WL_EGL_PLATFORM 1
+
 #include <wpe/renderer-backend-egl.h>
 
 #include <cstring>
 #include <glib.h>
 #include <wayland-client.h>
 #include <wayland-egl.h>
+
+#if defined(WPE_BACKEND_MESA)
+#include <gbm.h>
+#include <fcntl.h>
+#include <unistd.h>
+
+#define DEFAULT_CARD "/dev/dri/card0"
+#define DEFAULT_MODE_WIDTH (1280)
+#define DEFAULT_MODE_HEIGHT (720)
+
+namespace GBM{
+
+struct EGLOffscreenTarget {
+    ~EGLOffscreenTarget()
+    {
+        if (surface)
+            gbm_surface_destroy(surface);
+    }
+
+    struct gbm_surface* surface;
+
+    void initialize(struct gbm_device* device, uint32_t width, uint32_t height)
+    {
+       if (device)
+           surface = gbm_surface_create(device, width, height, GBM_FORMAT_XRGB8888, GBM_BO_USE_SCANOUT | GBM_BO_USE_RENDERING);
+       else{
+           printf("EGLOffscreenTarget: gbm device is null\n");
+           return;
+       }
+
+       if (!surface)
+           printf("EGLOffscreenTarget: gbm surface created failed\n");
+    }
+};
+
+struct Backend {
+    Backend()
+    {
+        fd = open(DEFAULT_CARD, O_RDWR | O_CLOEXEC | O_NOCTTY | O_NONBLOCK);
+        if (fd < 0){
+            printf("Backend: DRM device open failure\n");
+            return;
+        }
+
+        device = gbm_create_device(fd);
+        if (!device) {
+            printf("Backend: gbm device not created\n");
+            close(fd);
+            return;
+        }
+    }
+
+    ~Backend()
+    {
+        if (device)
+            gbm_device_destroy(device);
+
+        if (fd >= 0)
+            close(fd);
+    }
+
+    int fd { -1 };
+    struct gbm_device* device;
+};
+}
+#endif
 
 namespace Westeros {
 
@@ -90,13 +158,15 @@ public:
     struct wl_display* display() const { return m_display; }
     struct wl_compositor* compositor() const { return m_compositor; }
 
+    void initialize();
+
 private:
     static struct wl_registry_listener s_registryListener;
 
-    struct wl_display* m_display;
-    struct wl_registry* m_registry;
-    struct wl_compositor* m_compositor;
-    GSource* m_eventSource;
+    struct wl_display* m_display { nullptr };
+    struct wl_registry* m_registry { nullptr };
+    struct wl_compositor* m_compositor { nullptr };
+    GSource* m_eventSource { nullptr };
 };
 
 Backend::Backend()
@@ -108,20 +178,6 @@ Backend::Backend()
     m_registry = wl_display_get_registry(m_display);
     wl_registry_add_listener(m_registry, &s_registryListener, this);
     wl_display_roundtrip(m_display);
-
-    m_eventSource = g_source_new(&EventSource::sourceFuncs, sizeof(EventSource));
-    auto& source = *reinterpret_cast<EventSource*>(m_eventSource);
-    source.display = m_display;
-
-    source.pfd.fd = wl_display_get_fd(m_display);
-    source.pfd.events = G_IO_IN | G_IO_ERR | G_IO_HUP;
-    source.pfd.revents = 0;
-    g_source_add_poll(m_eventSource, &source.pfd);
-
-    g_source_set_name(m_eventSource, "[WPE] WaylandDisplay");
-    g_source_set_priority(m_eventSource, G_PRIORITY_HIGH + 30);
-    g_source_set_can_recurse(m_eventSource, TRUE);
-    g_source_attach(m_eventSource, g_main_context_get_thread_default());
 }
 
 Backend::~Backend()
@@ -135,6 +191,27 @@ Backend::~Backend()
         wl_registry_destroy(m_registry);
     if (m_display)
         wl_display_disconnect(m_display);
+}
+
+void Backend::initialize()
+{
+    if (m_eventSource != nullptr)
+        return;
+
+    m_eventSource = g_source_new(&EventSource::sourceFuncs, sizeof(EventSource));
+    auto& source = *reinterpret_cast<EventSource*>(m_eventSource);
+    source.display = m_display;
+
+    source.pfd.fd = wl_display_get_fd(m_display);
+    source.pfd.events = G_IO_IN | G_IO_ERR | G_IO_HUP;
+    source.pfd.revents = 0;
+    g_source_add_poll(m_eventSource, &source.pfd);
+
+    g_source_set_name(m_eventSource, "[WPE] WaylandDisplay");
+    g_source_set_priority(m_eventSource, G_PRIORITY_HIGH + 30);
+    g_source_set_can_recurse(m_eventSource, TRUE);
+
+    g_source_attach(m_eventSource, g_main_context_get_thread_default());
 }
 
 struct wl_registry_listener Backend::s_registryListener = {
@@ -192,6 +269,7 @@ EGLTarget::~EGLTarget()
 
 void EGLTarget::initialize(const Backend& backend, uint32_t width, uint32_t height)
 {
+    const_cast<Backend&>(backend).initialize();
     m_backend = &backend;
     m_surface = wl_compositor_create_surface(backend.compositor());
     if (m_surface)
@@ -303,20 +381,39 @@ struct wpe_renderer_backend_egl_offscreen_target_interface westeros_renderer_bac
     // create
     []() -> void*
     {
+#if defined(WPE_BACKEND_MESA)        
+        return new GBM::EGLOffscreenTarget;
+#else
         return nullptr;
+#endif        
     },
     // destroy
     [](void* data)
     {
+#if defined(WPE_BACKEND_MESA)        
+        auto* target = static_cast<GBM::EGLOffscreenTarget*>(data);
+        delete target;
+#endif        
     },
     // initialize
     [](void* data, void* backend_data)
     {
+#if defined(WPE_BACKEND_MESA)        
+        auto* backend = new GBM::Backend;
+        auto* target = static_cast<GBM::EGLOffscreenTarget*>(data);
+        target->initialize(backend->device, DEFAULT_MODE_WIDTH, DEFAULT_MODE_HEIGHT);
+#endif        
     },
     // get_native_window
     [](void* data) -> EGLNativeWindowType
     {
+#if defined(WPE_BACKEND_MESA)        
+        auto* target = static_cast<GBM::EGLOffscreenTarget*>(data);
+        printf("westeros_renderer_backend_egl_offscreen_target_interface: native window %x\n", target->surface);`        
+        return (EGLNativeWindowType)target->surface;
+#else
         return (EGLNativeWindowType)nullptr;
+#endif        
     },
 };
 

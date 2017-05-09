@@ -1,3 +1,208 @@
+2016-11-10  Geoffrey Garen  <ggaren@apple.com>
+
+        bmalloc threads should have a non-default QoS
+        https://bugs.webkit.org/show_bug.cgi?id=164612
+
+        Reviewed by Filip Pizlo.
+
+        * bmalloc/AsyncTask.h:
+        (bmalloc::Function>::threadEntryPoint): Request user-interactive quality
+        of service because user-interactive tasks use malloc.
+
+2016-10-20  Mark Lam  <mark.lam@apple.com>
+
+        bmalloc api should crash on failure to allocate when !isBmallocEnabled.
+        https://bugs.webkit.org/show_bug.cgi?id=163766
+
+        Reviewed by Keith Miller and Filip Pizlo.
+
+        We want to crash in bmalloc on failure to allocate even when !isBmallocEnabled.
+        This is so that failures to allocate memory will manifest as crashes with a
+        unique signature (i.e. as a SIGTRAP on release builds, or as a write to illegal
+        address 0xbbadbeef on debug builds) and the crash will manifest inside bmalloc.
+        This distinguishes allocation failures from other crashing bugs that manifest as
+        SIGSEGVs due to random pointer dereferences in the clients of bmalloc.
+
+        * bmalloc/Allocator.cpp:
+        (bmalloc::Allocator::allocateImpl):
+        (bmalloc::Allocator::reallocate):
+        (bmalloc::Allocator::allocateSlowCase):
+
+2016-09-26  Yoshiaki Jitsukawa  <Yoshiaki.Jitsukawa@sony.com>
+
+        Avoid implicit conversion from iterator to pointer
+        https://bugs.webkit.org/show_bug.cgi?id=162482
+
+        Reviewed by Geoffrey Garen.
+
+        Not every STL supporting such conversion, we should get a pointer explicitly.
+
+        * bmalloc/Chunk.h:
+        (bmalloc::Chunk::lines):
+        (bmalloc::Chunk::pages):
+        * bmalloc/FixedVector.h:
+        (bmalloc::FixedVector::begin):
+
+2016-08-31  Filip Pizlo  <fpizlo@apple.com>
+
+        Butterflies should be allocated in Auxiliary MarkedSpace instead of CopiedSpace and we should rewrite as much of the GC as needed to make this not a regression
+        https://bugs.webkit.org/show_bug.cgi?id=160125
+
+        Reviewed by Geoffrey Garen and Keith Miller.
+        
+        I needed to tryMemalign, so I added such a thing.
+
+        * bmalloc/Allocator.cpp:
+        (bmalloc::Allocator::allocate):
+        (bmalloc::Allocator::tryAllocate):
+        (bmalloc::Allocator::allocateImpl):
+        * bmalloc/Allocator.h:
+        * bmalloc/Cache.h:
+        (bmalloc::Cache::tryAllocate):
+        * bmalloc/bmalloc.h:
+        (bmalloc::api::tryMemalign):
+
+2016-08-30  Yusuke Suzuki  <utatane.tea@gmail.com>
+
+        Unreviewed, build fix for GCC ports
+
+        std::forward is declared in <utility> header.
+
+        * bmalloc/ScopeExit.h:
+
+2016-08-30  Geoffrey Garen  <ggaren@apple.com>
+
+        bmalloc: speed up the lock slow path
+        https://bugs.webkit.org/show_bug.cgi?id=161058
+
+        Unreviewed roll-in - with regression fixed.
+
+        Revert to using yield() instead of swtch() because very low priority
+        background tasks can cause priority inversion and deadlock. In the
+        network process, that happened with com.apple.WebKit.Cache.Storage.serialBackground.
+
+        Still a big speedup on MallocBench.
+
+        * bmalloc.xcodeproj/project.pbxproj:
+        * bmalloc/ScopeExit.h: Added.
+        (bmalloc::ScopeExit::ScopeExit):
+        (bmalloc::ScopeExit::~ScopeExit):
+        (bmalloc::makeScopeExit):
+        * bmalloc/StaticMutex.cpp:
+        (bmalloc::StaticMutex::lockSlowCase):
+        * bmalloc/StaticMutex.h:
+        (bmalloc::StaticMutex::init):
+
+2016-08-26  Geoffrey Garen  <ggaren@apple.com>
+
+        Unreviewed build fix.
+
+        Fix the CMake build.
+
+        * CMakeLists.txt:
+
+2016-08-26  Geoffrey Garen  <ggaren@apple.com>
+
+        Renamed XLarge* => Large*
+        https://bugs.webkit.org/show_bug.cgi?id=161261
+
+        Reviewed by Andreas Kling.
+
+        XLarge is not a thing anymore: We just have Small and Large.
+
+        * bmalloc.xcodeproj/project.pbxproj:
+        * bmalloc/Heap.cpp:
+        (bmalloc::Heap::splitAndAllocate):
+        (bmalloc::Heap::tryAllocateLarge):
+        (bmalloc::Heap::shrinkLarge):
+        (bmalloc::Heap::deallocateLarge):
+        * bmalloc/Heap.h:
+        * bmalloc/LargeMap.cpp: Copied from Source/bmalloc/bmalloc/XLargeMap.cpp.
+        (bmalloc::LargeMap::remove):
+        (bmalloc::LargeMap::add):
+        (bmalloc::XLargeMap::remove): Deleted.
+        (bmalloc::XLargeMap::add): Deleted.
+        * bmalloc/LargeMap.h: Copied from Source/bmalloc/bmalloc/XLargeMap.h.
+        (bmalloc::LargeMap::ranges):
+        (bmalloc::XLargeMap::ranges): Deleted.
+        * bmalloc/LargeRange.h: Copied from Source/bmalloc/bmalloc/XLargeRange.h.
+        (bmalloc::LargeRange::LargeRange):
+        (bmalloc::LargeRange::operator<):
+        (bmalloc::canMerge):
+        (bmalloc::merge):
+        (bmalloc::LargeRange::split):
+        (bmalloc::XLargeRange::XLargeRange): Deleted.
+        (bmalloc::XLargeRange::operator<): Deleted.
+        (bmalloc::XLargeRange::split): Deleted.
+        * bmalloc/VMHeap.cpp:
+        (bmalloc::VMHeap::tryAllocateLargeChunk):
+        * bmalloc/VMHeap.h:
+        * bmalloc/XLargeMap.cpp: Removed.
+        * bmalloc/XLargeMap.h: Removed.
+        * bmalloc/XLargeRange.h: Removed.
+
+2016-08-26  Gavin Barraclough  <barraclough@apple.com>
+
+        bmalloc: speed up the lock slow path
+        https://bugs.webkit.org/show_bug.cgi?id=161058
+
+        Unreviewed rollout - this caused regressions <rdar://problem/28026089>.
+
+        * bmalloc.xcodeproj/project.pbxproj:
+        * bmalloc/ScopeExit.h: Removed.
+        * bmalloc/StaticMutex.cpp:
+        (bmalloc::StaticMutex::lockSlowCase):
+        * bmalloc/StaticMutex.h:
+        (bmalloc::StaticMutex::init):
+        * bmalloc/ThreadSwitch.h: Removed.
+
+2016-08-24  Andreas Kling  <akling@apple.com>
+
+        Add bmalloc::api::isEnabled().
+        <https://webkit.org/b/160534>
+
+        Reviewed by Joseph Pecoraro.
+
+        * bmalloc/bmalloc.h:
+        (bmalloc::api::isEnabled):
+
+2016-08-24  Filip Pizlo  <fpizlo@apple.com>
+
+        Unreviewed, roll out r204901, r204897, r204866, r204856, r204854.
+
+        * bmalloc/Allocator.cpp:
+        (bmalloc::Allocator::allocate):
+        (bmalloc::Allocator::tryAllocate): Deleted.
+        (bmalloc::Allocator::allocateImpl): Deleted.
+        * bmalloc/Allocator.h:
+        * bmalloc/Cache.h:
+        (bmalloc::Cache::tryAllocate): Deleted.
+        * bmalloc/bmalloc.h:
+        (bmalloc::api::tryMemalign): Deleted.
+
+2016-08-12  Filip Pizlo  <fpizlo@apple.com>
+
+        Butterflies should be allocated in Auxiliary MarkedSpace instead of CopiedSpace and we should rewrite as much of the GC as needed to make this not a regression
+        https://bugs.webkit.org/show_bug.cgi?id=160125
+
+        Reviewed by Geoffrey Garen.
+        
+        I needed to tryMemalign, so I added such a thing.
+
+        * bmalloc/Allocator.cpp:
+        (bmalloc::Allocator::allocate):
+        (bmalloc::Allocator::tryAllocate):
+        (bmalloc::Allocator::allocateImpl):
+        (bmalloc::Allocator::reallocate):
+        * bmalloc/Allocator.h:
+        * bmalloc/Cache.h:
+        (bmalloc::Cache::allocate):
+        (bmalloc::Cache::tryAllocate):
+        * bmalloc/bmalloc.h:
+        (bmalloc::api::malloc):
+        (bmalloc::api::tryMemalign):
+        (bmalloc::api::memalign):
+
 2016-08-22  Yusuke Suzuki  <utatane.tea@gmail.com>
 
         Unreviewed, build fix on GCC environment

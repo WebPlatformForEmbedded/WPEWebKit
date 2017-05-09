@@ -51,6 +51,7 @@
 #import <WebCore/PlatformScreen.h>
 #import <WebCore/SharedBuffer.h>
 #import <WebCore/TextIndicator.h>
+#import <WebCore/ValidationBubble.h>
 
 #define MESSAGE_CHECK(assertion) MESSAGE_CHECK_BASE(assertion, m_webView->_page->process().connection())
 
@@ -698,7 +699,6 @@ void PageClientImpl::didRemoveNavigationGestureSnapshot()
 
 void PageClientImpl::didFirstVisuallyNonEmptyLayoutForMainFrame()
 {
-    [m_webView _didFirstVisuallyNonEmptyLayoutForMainFrame];
 }
 
 void PageClientImpl::didFinishLoadForMainFrame()
@@ -742,6 +742,11 @@ WebCore::UserInterfaceLayoutDirection PageClientImpl::userInterfaceLayoutDirecti
     if (!m_webView)
         return WebCore::UserInterfaceLayoutDirection::LTR;
     return ([UIView userInterfaceLayoutDirectionForSemanticContentAttribute:[m_webView semanticContentAttribute]] == UIUserInterfaceLayoutDirectionLeftToRight) ? WebCore::UserInterfaceLayoutDirection::LTR : WebCore::UserInterfaceLayoutDirection::RTL;
+}
+
+std::unique_ptr<ValidationBubble> PageClientImpl::createValidationBubble(const String& message)
+{
+    return std::make_unique<ValidationBubble>(m_contentView, message);
 }
 
 } // namespace WebKit

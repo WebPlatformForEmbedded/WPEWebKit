@@ -29,9 +29,15 @@
 #include "SessionID.h"
 #include <wtf/text/WTFString.h>
 
-#if PLATFORM(COCOA) || USE(CFNETWORK)
+#if PLATFORM(COCOA) || USE(CFURLCONNECTION)
 #include "CFNetworkSPI.h"
 #include <wtf/RetainPtr.h>
+#endif
+
+#if USE(SOUP)
+#include <wtf/Function.h>
+#include <wtf/glib/GRefPtr.h>
+typedef struct _SoupCookieJar SoupCookieJar;
 #endif
 
 namespace WebCore {
@@ -54,7 +60,7 @@ public:
     SessionID sessionID() const { return m_sessionID; }
     CredentialStorage& credentialStorage() { return m_credentialStorage; }
 
-#if PLATFORM(COCOA) || USE(CFNETWORK)
+#if PLATFORM(COCOA) || USE(CFURLCONNECTION)
     NetworkStorageSession(SessionID, RetainPtr<CFURLStorageSessionRef>);
 
     // May be null, in which case a Foundation default should be used.
@@ -62,11 +68,16 @@ public:
     WEBCORE_EXPORT RetainPtr<CFHTTPCookieStorageRef> cookieStorage() const;
     WEBCORE_EXPORT static void setCookieStoragePartitioningEnabled(bool);
 #elif USE(SOUP)
-    NetworkStorageSession(SessionID, std::unique_ptr<SoupNetworkSession>);
+    NetworkStorageSession(SessionID, std::unique_ptr<SoupNetworkSession>&&);
     ~NetworkStorageSession();
 
-    SoupNetworkSession& soupNetworkSession() const;
-    void setSoupNetworkSession(std::unique_ptr<SoupNetworkSession>);
+    SoupNetworkSession* soupNetworkSession() const { return m_session.get(); };
+    SoupNetworkSession& getOrCreateSoupNetworkSession() const;
+    SoupCookieJar* cookieStorage() const;
+    void setCookieStorage(SoupCookieJar*);
+    void setCookieObserverHandler(Function<void ()>&&);
+    void getCredentialFromPersistentStorage(const ProtectionSpace&, Function<void (Credential&&)> completionHandler);
+    void saveCredentialToPersistentStorage(const ProtectionSpace&, const Credential&);
 #else
     NetworkStorageSession(SessionID, NetworkingContext*);
     ~NetworkStorageSession();
@@ -78,10 +89,18 @@ private:
     static HashMap<SessionID, std::unique_ptr<NetworkStorageSession>>& globalSessionMap();
     SessionID m_sessionID;
 
-#if PLATFORM(COCOA) || USE(CFNETWORK)
+#if PLATFORM(COCOA) || USE(CFURLCONNECTION)
     RetainPtr<CFURLStorageSessionRef> m_platformSession;
 #elif USE(SOUP)
-    std::unique_ptr<SoupNetworkSession> m_session;
+    static void cookiesDidChange(NetworkStorageSession*);
+
+    mutable std::unique_ptr<SoupNetworkSession> m_session;
+    GRefPtr<SoupCookieJar> m_cookieStorage;
+    Function<void ()> m_cookieObserverHandler;
+#if USE(LIBSECRET)
+    Function<void (Credential&&)> m_persisentStorageCompletionHandler;
+    GRefPtr<GCancellable> m_persisentStorageCancellable;
+#endif
 #else
     RefPtr<NetworkingContext> m_context;
 #endif

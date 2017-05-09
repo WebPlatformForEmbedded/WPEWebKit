@@ -25,6 +25,8 @@ DrawingAreaWPE::DrawingAreaWPE(WebPage& webPage, const WebPageCreationParameters
 
 DrawingAreaWPE::~DrawingAreaWPE()
 {
+    if (m_layerTreeHost)
+        m_layerTreeHost->invalidate();
 }
 
 void DrawingAreaWPE::layerHostDidFlushLayers()
@@ -69,6 +71,9 @@ bool DrawingAreaWPE::forceRepaintAsync(uint64_t callbackID)
 void DrawingAreaWPE::setLayerTreeStateIsFrozen(bool frozen)
 {
     m_layerTreeStateIsFrozen = frozen;
+
+    if (m_layerTreeHost)
+        m_layerTreeHost->setLayerFlushSchedulingEnabled(!frozen);
 }
 
 void DrawingAreaWPE::setPaintingEnabled(bool)

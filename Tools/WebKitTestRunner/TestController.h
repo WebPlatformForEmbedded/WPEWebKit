@@ -57,7 +57,7 @@ public:
     static const unsigned w3cSVGViewWidth;
     static const unsigned w3cSVGViewHeight;
 
-    static const double shortTimeout;
+    static const double defaultShortTimeout;
     static const double noTimeout;
 
     TestController(int argc, const char* argv[]);
@@ -141,6 +141,8 @@ public:
 
     void setNavigationGesturesEnabled(bool value);
     void setIgnoresViewportScaleLimits(bool);
+
+    void setShouldDownloadUndisplayableMIMETypes(bool value) { m_shouldDownloadUndisplayableMIMETypes = value; }
 
 private:
     WKRetainPtr<WKPageConfigurationRef> generatePageConfiguration(WKContextConfigurationRef);
@@ -324,6 +326,7 @@ private:
 
     bool m_policyDelegateEnabled { false };
     bool m_policyDelegatePermissive { false };
+    bool m_shouldDownloadUndisplayableMIMETypes { false };
 
     bool m_rejectsProtectionSpaceAndContinueForAuthenticationChallenges { false };
     bool m_handlesAuthenticationChallenges { false };

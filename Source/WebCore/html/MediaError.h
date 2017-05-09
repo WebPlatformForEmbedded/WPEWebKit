@@ -23,8 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. 
  */
 
-#ifndef MediaError_h
-#define MediaError_h
+#pragma once
 
 #if ENABLE(VIDEO)
 
@@ -39,7 +38,7 @@ public:
         MEDIA_ERR_NETWORK,
         MEDIA_ERR_DECODE,
         MEDIA_ERR_SRC_NOT_SUPPORTED
-#if ENABLE(ENCRYPTED_MEDIA) || ENABLE(ENCRYPTED_MEDIA_V2)
+#if ENABLE(LEGACY_ENCRYPTED_MEDIA_V1) || ENABLE(LEGACY_ENCRYPTED_MEDIA)
         , MEDIA_ERR_ENCRYPTED
 #endif
     };
@@ -56,5 +55,4 @@ private:
 
 } // namespace WebCore
 
-#endif
-#endif
+#endif // ENABLE(VIDEO)

@@ -34,6 +34,10 @@
 #include <wtf/NeverDestroyed.h>
 #include <wtf/WorkQueue.h>
 
+#if USE(GLIB_EVENT_LOOP)
+#include <glib.h>
+#endif
+
 namespace WebKit {
 
 class WorkQueuePool {
@@ -72,7 +76,7 @@ public:
 private:
     WorkQueuePool()
     {
-#if PLATFORM(GTK)
+#if PLATFORM(GTK) || PLATFORM(WPE)
         m_threadCountLimit = 1;
 #else
         m_threadCountLimit = std::numeric_limits<unsigned>::max();
@@ -107,6 +111,9 @@ private:
 
 CompositingRunLoop::CompositingRunLoop(std::function<void ()>&& updateFunction)
     : m_updateTimer(WorkQueuePool::singleton().runLoop(this), this, &CompositingRunLoop::updateTimerFired)
+#ifndef NDEBUG
+    , m_runLoop(WorkQueuePool::singleton().runLoop(this))
+#endif
     , m_updateFunction(WTFMove(updateFunction))
 {
     m_updateState.store(UpdateState::Completed);
@@ -146,12 +153,12 @@ bool CompositingRunLoop::isActive()
 
 void CompositingRunLoop::scheduleUpdate()
 {
-    if (m_updateState.compareExchangeStrong(UpdateState::Completed, UpdateState::InProgress)) {
+    if (m_updateState.compareExchangeStrong(UpdateState::Completed, UpdateState::InProgress) == UpdateState::Completed) {
         m_updateTimer.startOneShot(0);
         return;
     }
 
-    if (m_updateState.compareExchangeStrong(UpdateState::InProgress, UpdateState::PendingAfterCompletion))
+    if (m_updateState.compareExchangeStrong(UpdateState::InProgress, UpdateState::PendingAfterCompletion) == UpdateState::InProgress)
         return;
 }
 
@@ -163,10 +170,10 @@ void CompositingRunLoop::stopUpdates()
 
 void CompositingRunLoop::updateCompleted()
 {
-    if (m_updateState.compareExchangeStrong(UpdateState::InProgress, UpdateState::Completed))
+    if (m_updateState.compareExchangeStrong(UpdateState::InProgress, UpdateState::Completed) == UpdateState::InProgress)
         return;
 
-    if (m_updateState.compareExchangeStrong(UpdateState::PendingAfterCompletion, UpdateState::InProgress)) {
+    if (m_updateState.compareExchangeStrong(UpdateState::PendingAfterCompletion, UpdateState::InProgress) == UpdateState::PendingAfterCompletion) {
         m_updateTimer.startOneShot(0);
         return;
     }
@@ -178,6 +185,13 @@ void CompositingRunLoop::updateTimerFired()
 {
     m_updateFunction();
 }
+
+#ifndef NDEBUG
+bool CompositingRunLoop::isCurrent()
+{
+    return &RunLoop::current() == &m_runLoop;
+}
+#endif
 
 } // namespace WebKit
 

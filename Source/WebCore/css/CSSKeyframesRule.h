@@ -23,8 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef CSSKeyframesRule_h
-#define CSSKeyframesRule_h
+#pragma once
 
 #include "CSSRule.h"
 #include "StyleRule.h"
@@ -38,7 +37,7 @@ class CSSRuleList;
 class StyleKeyframe;
 class CSSKeyframeRule;
 
-class StyleRuleKeyframes : public StyleRuleBase {
+class StyleRuleKeyframes final : public StyleRuleBase {
 public:
     static Ref<StyleRuleKeyframes> create() { return adoptRef(*new StyleRuleKeyframes()); }
     
@@ -71,9 +70,9 @@ public:
 
     virtual ~CSSKeyframesRule();
 
-    CSSRule::Type type() const override { return KEYFRAMES_RULE; }
-    String cssText() const override;
-    void reattach(StyleRuleBase&) override;
+    CSSRule::Type type() const final { return KEYFRAMES_RULE; }
+    String cssText() const final;
+    void reattach(StyleRuleBase&) final;
 
     String name() const { return m_keyframesRule->name(); }
     void setName(const String&);
@@ -104,5 +103,3 @@ SPECIALIZE_TYPE_TRAITS_CSS_RULE(CSSKeyframesRule, CSSRule::KEYFRAMES_RULE)
 SPECIALIZE_TYPE_TRAITS_BEGIN(WebCore::StyleRuleKeyframes)
     static bool isType(const WebCore::StyleRuleBase& rule) { return rule.isKeyframesRule(); }
 SPECIALIZE_TYPE_TRAITS_END()
-
-#endif // CSSKeyframesRule_h

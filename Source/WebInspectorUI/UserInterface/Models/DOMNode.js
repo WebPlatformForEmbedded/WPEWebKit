@@ -83,6 +83,11 @@ WebInspector.DOMNode = class DOMNode extends WebInspector.Object
             }
         }
 
+        if (this._nodeType === Node.ELEMENT_NODE)
+            this._customElementState = payload.customElementState || WebInspector.DOMNode.CustomElementState.Builtin;
+        else
+            this._customElementState = null;
+
         if (payload.templateContent) {
             this._templateContent = new WebInspector.DOMNode(this._domTreeManager, this.ownerDocument, false, payload.templateContent);
             this._templateContent.parentNode = this;
@@ -263,6 +268,16 @@ WebInspector.DOMNode = class DOMNode extends WebInspector.Object
         return this._isInShadowTree && this.ancestorShadowRoot().isUserAgentShadowRoot();
     }
 
+    isCustomElement()
+    {
+        return this._customElementState === WebInspector.DOMNode.CustomElementState.Custom;
+    }
+
+    customElementState()
+    {
+        return this._customElementState;
+    }
+
     isShadowRoot()
     {
         return !!this._shadowRootType;
@@ -397,7 +412,7 @@ WebInspector.DOMNode = class DOMNode extends WebInspector.Object
         {
             if (!error) {
                 delete this._attributesMap[name];
-                for (var i = 0;  i < this._attributes.length; ++i) {
+                for (var i = 0; i < this._attributes.length; ++i) {
                     if (this._attributes[i].name === name) {
                         this._attributes.splice(i, 1);
                         break;
@@ -408,6 +423,36 @@ WebInspector.DOMNode = class DOMNode extends WebInspector.Object
             this._makeUndoableCallback(callback)(error);
         }
         DOMAgent.removeAttribute(this.id, name, mycallback.bind(this));
+    }
+
+    toggleClass(className, flag)
+    {
+        if (!className || !className.length)
+            return;
+
+        if (this.isPseudoElement()) {
+            this.parentNode.toggleClass(className, flag);
+            return;
+        }
+
+        if (this.nodeType() !== Node.ELEMENT_NODE)
+            return;
+
+        function resolvedNode(object)
+        {
+            if (!object)
+                return;
+
+            function inspectedPage_node_toggleClass(className, flag)
+            {
+                this.classList.toggle(className, flag);
+            }
+
+            object.callFunction(inspectedPage_node_toggleClass, [className, flag]);
+            object.release();
+        }
+
+        WebInspector.RemoteObject.resolveNode(this, "", resolvedNode);
     }
 
     getChildNodes(callback)
@@ -487,6 +532,9 @@ WebInspector.DOMNode = class DOMNode extends WebInspector.Object
                     ignored: accessibilityProperties.ignored,
                     ignoredByDefault: accessibilityProperties.ignoredByDefault,
                     invalid: accessibilityProperties.invalid,
+                    isPopupButton: accessibilityProperties.isPopUpButton,
+                    headingLevel: accessibilityProperties.headingLevel,
+                    hierarchyLevel: accessibilityProperties.hierarchyLevel,
                     hidden: accessibilityProperties.hidden,
                     label: accessibilityProperties.label,
                     liveRegionAtomic: accessibilityProperties.liveRegionAtomic,
@@ -520,28 +568,62 @@ WebInspector.DOMNode = class DOMNode extends WebInspector.Object
         return path.join(",");
     }
 
+    get escapedIdSelector()
+    {
+        let id = this.getAttribute("id");
+        if (!id)
+            return "";
+
+        id = id.trim();
+        if (!id.length)
+            return "";
+
+        id = CSS.escape(id);
+        if (/[\s'"]/.test(id))
+            return `[id=\"${id}\"]`;
+
+        return `#${id}`;
+    }
+
+    get escapedClassSelector()
+    {
+        let classes = this.getAttribute("class");
+        if (!classes)
+            return "";
+
+        classes = classes.trim();
+        if (!classes.length)
+            return "";
+
+        let foundClasses = new Set;
+        return classes.split(/\s+/).reduce((selector, className) => {
+            if (!className.length || foundClasses.has(className))
+                return selector;
+
+            foundClasses.add(className);
+            return `${selector}.${CSS.escape(className)}`;
+        }, "");
+    }
+
+    get displayName()
+    {
+        return this.nodeNameInCorrectCase() + this.escapedIdSelector + this.escapedClassSelector;
+    }
+
     appropriateSelectorFor(justSelector)
     {
         if (this.isPseudoElement())
             return this.parentNode.appropriateSelectorFor() + "::" + this._pseudoType;
 
-        var lowerCaseName = this.localName() || this.nodeName().toLowerCase();
+        let lowerCaseName = this.localName() || this.nodeName().toLowerCase();
 
-        var id = this.getAttribute("id");
-        if (id) {
-            if (/[\s'"]/.test(id)) {
-                id = id.replace(/\\/g, "\\\\").replace(/\"/g, "\\\"");
-                selector = lowerCaseName + "[id=\"" + id + "\"]";
-            } else
-                selector = "#" + id;
-            return (justSelector ? selector : lowerCaseName + selector);
-        }
+        let id = this.escapedIdSelector;
+        if (id.length)
+            return justSelector ? id : lowerCaseName + id;
 
-        var className = this.getAttribute("class");
-        if (className) {
-            var selector = "." + className.trim().replace(/\s+/g, ".");
-            return (justSelector ? selector : lowerCaseName + selector);
-        }
+        let classes = this.escapedClassSelector;
+        if (classes.length)
+            return justSelector ? classes : lowerCaseName + classes;
 
         if (lowerCaseName === "input" && this.getAttribute("type"))
             return lowerCaseName + "[type=\"" + this.getAttribute("type") + "\"]";
@@ -741,4 +823,11 @@ WebInspector.DOMNode.ShadowRootType = {
     UserAgent: "user-agent",
     Closed: "closed",
     Open: "open",
+};
+                     
+WebInspector.DOMNode.CustomElementState = {
+    Builtin: "builtin",
+    Custom: "custom",
+    Waiting: "waiting",
+    Failed: "failed",
 };

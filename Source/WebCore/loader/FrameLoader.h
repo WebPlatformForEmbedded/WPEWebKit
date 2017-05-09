@@ -36,7 +36,6 @@
 #include "FrameLoaderTypes.h"
 #include "LayoutMilestones.h"
 #include "MixedContentChecker.h"
-#include "PageThrottler.h"
 #include "ResourceHandleTypes.h"
 #include "ResourceLoadNotifier.h"
 #include "ResourceLoaderOptions.h"
@@ -50,6 +49,7 @@
 namespace WebCore {
 
 class Archive;
+class CachedFrame;
 class CachedFrameBase;
 class CachedPage;
 class CachedResource;
@@ -118,8 +118,7 @@ public:
     unsigned long loadResourceSynchronously(const ResourceRequest&, StoredCredentials, ClientCredentialPolicy, ResourceError&, ResourceResponse&, RefPtr<SharedBuffer>& data);
 
     void changeLocation(const FrameLoadRequest&);
-    WEBCORE_EXPORT void urlSelected(const URL&, const String& target, Event*, LockHistory, LockBackForwardList, ShouldSendReferrer, ShouldOpenExternalURLsPolicy, const AtomicString& downloadAttribute);
-    WEBCORE_EXPORT void urlSelected(const URL&, const String& target, Event*, LockHistory, LockBackForwardList, ShouldSendReferrer, ShouldOpenExternalURLsPolicy);
+    WEBCORE_EXPORT void urlSelected(const URL&, const String& target, Event*, LockHistory, LockBackForwardList, ShouldSendReferrer, ShouldOpenExternalURLsPolicy, Optional<NewFrameOpenerPolicy> = Nullopt, const AtomicString& downloadAttribute = nullAtom);
     void submitForm(PassRefPtr<FormSubmission>);
 
     WEBCORE_EXPORT void reload(bool endToEndReload = false, bool contentBlockersEnabled = true);
@@ -230,7 +229,7 @@ public:
 
     bool checkIfFormActionAllowedByCSP(const URL&, bool didReceiveRedirectResponse) const;
 
-    Frame* opener();
+    WEBCORE_EXPORT Frame* opener();
     WEBCORE_EXPORT void setOpener(Frame*);
 
     void resetMultipleFormSubmissionProtection();
@@ -310,16 +309,17 @@ private:
     bool allChildrenAreComplete() const; // immediate children, not all descendants
 
     void checkTimerFired();
-    
+
     void loadSameDocumentItem(HistoryItem&);
     void loadDifferentDocumentItem(HistoryItem&, FrameLoadType, FormSubmissionCacheLoadPolicy);
-    
+
     void loadProvisionalItemFromCachedPage();
 
     void updateFirstPartyForCookies();
     void setFirstPartyForCookies(const URL&);
-    
+
     void addExtraFieldsToRequest(ResourceRequest&, FrameLoadType, bool isMainResource);
+    ResourceRequestCachePolicy defaultRequestCachingPolicy(const ResourceRequest&, FrameLoadType, bool isMainResource);
 
     void clearProvisionalLoad();
     void transitionToCommitted(CachedPage*);
@@ -350,7 +350,7 @@ private:
 
     bool shouldReloadToHandleUnreachableURL(DocumentLoader*);
 
-    void dispatchDidCommitLoad();
+    void dispatchDidCommitLoad(Optional<HasInsecureContent> initialHasInsecureContent);
 
     void urlSelected(const FrameLoadRequest&, Event*);
 
@@ -458,7 +458,6 @@ private:
 
     URL m_previousURL;
     RefPtr<HistoryItem> m_requestedHistoryItem;
-    PageActivityAssertionToken m_activityAssertion;
 };
 
 // This function is called by createWindow() in JSDOMWindowBase.cpp, for example, for

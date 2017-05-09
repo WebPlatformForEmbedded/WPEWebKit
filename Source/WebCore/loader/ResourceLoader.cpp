@@ -48,7 +48,6 @@
 #include "ResourceError.h"
 #include "ResourceHandle.h"
 #include "SecurityOrigin.h"
-#include "Settings.h"
 #include "SharedBuffer.h"
 #include <wtf/Ref.h>
 
@@ -115,6 +114,8 @@ bool ResourceLoader::init(const ResourceRequest& r)
     ASSERT(!m_documentLoader->isSubstituteLoadPending(this));
     
     ResourceRequest clientRequest(r);
+
+    m_loadTiming.markStartTimeAndFetchStart();
 
 #if PLATFORM(IOS)
     // If the documentLoader was detached while this ResourceLoader was waiting its turn
@@ -257,6 +258,9 @@ void ResourceLoader::loadDataURL()
         auto dataSize = result.data ? result.data->size() : 0;
 
         ResourceResponse dataResponse { url, result.mimeType, dataSize, result.charset };
+        dataResponse.setHTTPStatusCode(200);
+        dataResponse.setHTTPStatusText(ASCIILiteral("OK"));
+        dataResponse.setHTTPHeaderField(HTTPHeaderName::ContentType, result.contentType);
         protectedThis->didReceiveResponse(dataResponse);
 
         if (!protectedThis->reachedTerminalState() && dataSize)
@@ -445,17 +449,13 @@ void ResourceLoader::didReceiveResponse(const ResourceResponse& r)
             didFail(error);
             return;
         }
-        if (!isDefaultPortForProtocol(url.port(), url.protocol())) {
+        if (url.port() && !isDefaultPortForProtocol(url.port().value(), url.protocol())) {
             String message = "Cancelled resource load from '" + url.string() + "' because it is using HTTP/0.9 on a non-default port.";
             m_frame->document()->addConsoleMessage(MessageSource::Security, MessageLevel::Error, message, identifier());
             ResourceError error(emptyString(), 0, url, message);
             didFail(error);
             return;
         }
-            
-        String message = "Sandboxing '" + m_response.url().string() + "' because it is using HTTP/0.9.";
-        m_frame->document()->addConsoleMessage(MessageSource::Security, MessageLevel::Error, message, m_identifier);
-        frameLoader()->forceSandboxFlags(SandboxScripts | SandboxPlugins);
     }
 
     if (FormData* data = m_request.httpBody())
@@ -708,14 +708,8 @@ void ResourceLoader::didReceiveAuthenticationChallenge(const AuthenticationChall
             return;
         }
     }
-    // Only these platforms provide a way to continue without credentials.
-    // If we can't continue with credentials, we need to cancel the load altogether.
-#if PLATFORM(COCOA) || USE(CFNETWORK) || USE(CURL) || PLATFORM(GTK) || PLATFORM(EFL)
     challenge.authenticationClient()->receivedRequestToContinueWithoutCredential(challenge);
     ASSERT(!m_handle || !m_handle->hasAuthenticationChallenge());
-#else
-    didFail(blockedError());
-#endif
 }
 
 #if USE(PROTECTION_SPACE_AUTH_CALLBACK)
@@ -742,7 +736,7 @@ void ResourceLoader::receivedCancellation(const AuthenticationChallenge&)
     cancel();
 }
 
-#if PLATFORM(COCOA) && !USE(CFNETWORK)
+#if PLATFORM(COCOA) && !USE(CFURLCONNECTION)
 
 void ResourceLoader::schedule(SchedulePair& pair)
 {

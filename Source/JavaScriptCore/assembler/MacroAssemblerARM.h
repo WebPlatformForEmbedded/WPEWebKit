@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008, 2013-2015 Apple Inc.
+ * Copyright (C) 2008, 2013-2016 Apple Inc.
  * Copyright (C) 2009, 2010 University of Szeged
  * All rights reserved.
  *
@@ -25,8 +25,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef MacroAssemblerARM_h
-#define MacroAssemblerARM_h
+#pragma once
 
 #if ENABLE(ASSEMBLER) && CPU(ARM_TRADITIONAL)
 
@@ -314,6 +313,11 @@ public:
         m_assembler.subs(dest, dest, src);
     }
 
+    void sub32(RegisterID left, RegisterID right, RegisterID dest)
+    {
+        m_assembler.subs(dest, left, right);
+    }
+
     void sub32(TrustedImm32 imm, RegisterID dest)
     {
         m_assembler.subs(dest, dest, m_assembler.getImm(imm.m_value, ARMRegisters::S0));
@@ -388,6 +392,11 @@ public:
     {
         move(TrustedImmPtr(address), ARMRegisters::S0);
         m_assembler.dataTransfer32(ARMAssembler::LoadUint8, dest, ARMRegisters::S0, 0);
+    }
+
+    void load8SignedExtendTo32(Address address, RegisterID dest)
+    {
+        m_assembler.dataTransfer16(ARMAssembler::LoadInt8, dest, address.base, address.offset);
     }
 
     void load8SignedExtendTo32(BaseIndex address, RegisterID dest)
@@ -628,24 +637,30 @@ public:
 
     Jump branch8(RelationalCondition cond, Address left, TrustedImm32 right)
     {
-        TrustedImm32 right8(static_cast<int8_t>(right.m_value));
-        load8(left, ARMRegisters::S1);
+        TrustedImm32 right8 = MacroAssemblerHelpers::mask8OnCondition(*this, cond, right);
+        MacroAssemblerHelpers::load8OnCondition(*this, cond, left, ARMRegisters::S1);
         return branch32(cond, ARMRegisters::S1, right8);
     }
 
     Jump branch8(RelationalCondition cond, BaseIndex left, TrustedImm32 right)
     {
-        TrustedImm32 right8(static_cast<int8_t>(right.m_value));
-        load8(left, ARMRegisters::S1);
+        TrustedImm32 right8 = MacroAssemblerHelpers::mask8OnCondition(*this, cond, right);
+        MacroAssemblerHelpers::load8OnCondition(*this, cond, left, ARMRegisters::S1);
         return branch32(cond, ARMRegisters::S1, right8);
     }
 
     Jump branch8(RelationalCondition cond, AbsoluteAddress left, TrustedImm32 right)
     {
-        TrustedImm32 right8(static_cast<int8_t>(right.m_value));
+        TrustedImm32 right8 = MacroAssemblerHelpers::mask8OnCondition(*this, cond, right);
         move(TrustedImmPtr(left.m_ptr), ARMRegisters::S1);
-        load8(Address(ARMRegisters::S1), ARMRegisters::S1);
+        MacroAssemblerHelpers::load8OnCondition(*this, cond, Address(ARMRegisters::S1), ARMRegisters::S1);
         return branch32(cond, ARMRegisters::S1, right8);
+    }
+
+    Jump branchPtr(RelationalCondition cond, BaseIndex left, RegisterID right)
+    {
+        load32(left, ARMRegisters::S1);
+        return branch32(cond, ARMRegisters::S1, right);
     }
 
     Jump branch32(RelationalCondition cond, RegisterID left, RegisterID right, int useConstantPool = 0)
@@ -692,23 +707,23 @@ public:
 
     Jump branchTest8(ResultCondition cond, Address address, TrustedImm32 mask = TrustedImm32(-1))
     {
-        TrustedImm32 mask8(static_cast<int8_t>(mask.m_value));
-        load8(address, ARMRegisters::S1);
+        TrustedImm32 mask8 = MacroAssemblerHelpers::mask8OnCondition(*this, cond, mask);
+        MacroAssemblerHelpers::load8OnCondition(*this, cond, address, ARMRegisters::S1);
         return branchTest32(cond, ARMRegisters::S1, mask8);
     }
 
     Jump branchTest8(ResultCondition cond, BaseIndex address, TrustedImm32 mask = TrustedImm32(-1))
     {
-        TrustedImm32 mask8(static_cast<int8_t>(mask.m_value));
-        load8(address, ARMRegisters::S1);
+        TrustedImm32 mask8 = MacroAssemblerHelpers::mask8OnCondition(*this, cond, mask);
+        MacroAssemblerHelpers::load8OnCondition(*this, cond, address, ARMRegisters::S1);
         return branchTest32(cond, ARMRegisters::S1, mask8);
     }
 
     Jump branchTest8(ResultCondition cond, AbsoluteAddress address, TrustedImm32 mask = TrustedImm32(-1))
     {
-        TrustedImm32 mask8(static_cast<int8_t>(mask.m_value));
+        TrustedImm32 mask8 = MacroAssemblerHelpers::mask8OnCondition(*this, cond, mask);
         move(TrustedImmPtr(address.m_ptr), ARMRegisters::S1);
-        load8(Address(ARMRegisters::S1), ARMRegisters::S1);
+        MacroAssemblerHelpers::load8OnCondition(*this, cond, Address(ARMRegisters::S1), ARMRegisters::S1);
         return branchTest32(cond, ARMRegisters::S1, mask8);
     }
 
@@ -975,8 +990,8 @@ public:
 
     void compare8(RelationalCondition cond, Address left, TrustedImm32 right, RegisterID dest)
     {
-        TrustedImm32 right8(static_cast<int8_t>(right.m_value));
-        load8(left, ARMRegisters::S1);
+        TrustedImm32 right8 = MacroAssemblerHelpers::mask8OnCondition(*this, cond, right);
+        MacroAssemblerHelpers::load8OnCondition(*this, cond, left, ARMRegisters::S1);
         compare32(cond, ARMRegisters::S1, right8, dest);
     }
 
@@ -998,8 +1013,8 @@ public:
 
     void test8(ResultCondition cond, Address address, TrustedImm32 mask, RegisterID dest)
     {
-        TrustedImm32 mask8(static_cast<int8_t>(mask.m_value));
-        load8(address, ARMRegisters::S1);
+        TrustedImm32 mask8 = MacroAssemblerHelpers::mask8OnCondition(*this, cond, mask);
+        MacroAssemblerHelpers::load8OnCondition(*this, cond, address, ARMRegisters::S1);
         test32(cond, ARMRegisters::S1, mask8, dest);
     }
 
@@ -1445,7 +1460,20 @@ public:
 
     void memoryFence()
     {
+#if WTF_ARM_ARCH_AT_LEAST(7)
         m_assembler.dmbSY();
+#else
+        m_assembler.arm6MemFence();
+#endif
+    }
+
+    void storeFence()
+    {
+#if WTF_ARM_ARCH_AT_LEAST(7)
+        m_assembler.dmbISHST();
+#else
+        m_assembler.arm6MemFence();
+#endif
     }
 
     static FunctionPtr readCallTarget(CodeLocationCall call)
@@ -1461,6 +1489,11 @@ public:
     static ptrdiff_t maxJumpReplacementSize()
     {
         return ARMAssembler::maxJumpReplacementSize();
+    }
+
+    static ptrdiff_t patchableJumpSize()
+    {
+        return ARMAssembler::patchableJumpSize();
     }
 
     static bool canJumpReplacePatchableBranchPtrWithPatch() { return false; }
@@ -1590,8 +1623,6 @@ private:
     static const bool s_isVFPPresent;
 };
 
-}
+} // namespace JSC
 
 #endif // ENABLE(ASSEMBLER) && CPU(ARM_TRADITIONAL)
-
-#endif // MacroAssemblerARM_h

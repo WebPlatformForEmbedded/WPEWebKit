@@ -27,6 +27,7 @@
 
 #if ENABLE(INDEXED_DATABASE)
 
+#include "ExceptionOr.h"
 #include "ScriptWrappable.h"
 #include <wtf/RefCounted.h>
 #include <wtf/RefPtr.h>
@@ -41,8 +42,6 @@ namespace WebCore {
 class IDBKey;
 class ScriptExecutionContext;
 
-typedef int ExceptionCode;
-
 class IDBKeyRange : public ScriptWrappable, public RefCounted<IDBKeyRange> {
 public:
     static Ref<IDBKeyRange> create(RefPtr<IDBKey>&& lower, RefPtr<IDBKey>&& upper, bool isLowerOpen, bool isUpperOpen);
@@ -54,13 +53,15 @@ public:
     bool lowerOpen() const { return m_isLowerOpen; }
     bool upperOpen() const { return m_isUpperOpen; }
 
-    static RefPtr<IDBKeyRange> only(RefPtr<IDBKey>&& value, ExceptionCode&);
-    static RefPtr<IDBKeyRange> only(JSC::ExecState&, JSC::JSValue key, ExceptionCode&);
+    static ExceptionOr<Ref<IDBKeyRange>> only(RefPtr<IDBKey>&& value);
+    static ExceptionOr<Ref<IDBKeyRange>> only(JSC::ExecState&, JSC::JSValue key);
 
-    static RefPtr<IDBKeyRange> lowerBound(JSC::ExecState&, JSC::JSValue bound, bool open, ExceptionCode&);
-    static RefPtr<IDBKeyRange> upperBound(JSC::ExecState&, JSC::JSValue bound, bool open, ExceptionCode&);
+    static ExceptionOr<Ref<IDBKeyRange>> lowerBound(JSC::ExecState&, JSC::JSValue bound, bool open);
+    static ExceptionOr<Ref<IDBKeyRange>> upperBound(JSC::ExecState&, JSC::JSValue bound, bool open);
 
-    static RefPtr<IDBKeyRange> bound(JSC::ExecState&, JSC::JSValue lower, JSC::JSValue upper, bool lowerOpen, bool upperOpen, ExceptionCode&);
+    static ExceptionOr<Ref<IDBKeyRange>> bound(JSC::ExecState&, JSC::JSValue lower, JSC::JSValue upper, bool lowerOpen, bool upperOpen);
+
+    ExceptionOr<bool> includes(JSC::ExecState&, JSC::JSValue key);
 
     WEBCORE_EXPORT bool isOnlyKey() const;
 

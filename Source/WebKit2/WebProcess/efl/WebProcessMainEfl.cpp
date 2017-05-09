@@ -32,6 +32,7 @@
 #include <Ecore_Evas.h>
 #include <Edje.h>
 #include <Efreet.h>
+#include <WebCore/NetworkStorageSession.h>
 #include <WebCore/SoupNetworkSession.h>
 #include <libsoup/soup.h>
 
@@ -98,17 +99,12 @@ public:
         if (!ecore_main_loop_glib_integrate())
             return false;
 
-        SoupNetworkSession::defaultSession().setupHTTPProxyFromEnvironment();
+        NetworkStorageSession::defaultStorageSession().getOrCreateSoupNetworkSession().setupHTTPProxyFromEnvironment();
         return true;
     }
 
     void platformFinalize() override
     {
-        if (SoupCache* soupCache = SoupNetworkSession::defaultSession().cache()) {
-            soup_cache_flush(soupCache);
-            soup_cache_dump(soupCache);
-        }
-
         edje_shutdown();
         ecore_evas_shutdown();
 #ifdef HAVE_ECORE_X

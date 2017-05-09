@@ -30,6 +30,7 @@
 #include "ChildProcessMain.h"
 #include "NetworkProcess.h"
 #include <Ecore.h>
+#include <WebCore/NetworkStorageSession.h>
 #include <WebCore/SoupNetworkSession.h>
 #include <libsoup/soup.h>
 
@@ -47,17 +48,12 @@ public:
         if (!ecore_main_loop_glib_integrate())
             return false;
 
-        SoupNetworkSession::defaultSession().setupHTTPProxyFromEnvironment();
+        NetworkStorageSession::defaultStorageSession().getOrCreateSoupNetworkSession().setupHTTPProxyFromEnvironment();
         return true;
     }
 
     void platformFinalize() override
     {
-        if (SoupCache* soupCache = SoupNetworkSession::defaultSession().cache()) {
-            soup_cache_flush(soupCache);
-            soup_cache_dump(soupCache);
-        }
-
         ecore_shutdown();
     }
 };

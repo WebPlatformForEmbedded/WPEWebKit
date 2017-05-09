@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012 Google Inc. All rights reserved.
+ * Copyright (C) 2016 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -34,32 +35,16 @@
 
 #include "MediaConstraintsImpl.h"
 
-#include "ArrayValue.h"
-#include "Dictionary.h"
-#include "ExceptionCode.h"
-#include "Logging.h"
-
 namespace WebCore {
-
-Ref<MediaConstraintsImpl> MediaConstraintsImpl::create()
-{
-    return adoptRef(*new MediaConstraintsImpl());
-}
-
-// FIXME: Remove after https://bugs.webkit.org/show_bug.cgi?id=160579
-void MediaConstraintsImpl::initialize(const Dictionary& constraints)
-{
-    if (constraints.isUndefinedOrNull())
-        return;
-}
 
 Ref<MediaConstraintsImpl> MediaConstraintsImpl::create(MediaTrackConstraintSetMap&& mandatoryConstraints, Vector<MediaTrackConstraintSetMap>&& advancedConstraints, bool isValid)
 {
     return adoptRef(*new MediaConstraintsImpl(WTFMove(mandatoryConstraints), WTFMove(advancedConstraints), isValid));
 }
 
-MediaConstraintsImpl::~MediaConstraintsImpl()
+Ref<MediaConstraintsImpl> MediaConstraintsImpl::create(const MediaConstraintsData& data)
 {
+    return adoptRef(*new MediaConstraintsImpl(data));
 }
 
 } // namespace WebCore

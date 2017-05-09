@@ -28,7 +28,7 @@ namespace WebCore {
 
 class JSTestNondeterministic : public JSDOMWrapper<TestNondeterministic> {
 public:
-    typedef JSDOMWrapper<TestNondeterministic> Base;
+    using Base = JSDOMWrapper<TestNondeterministic>;
     static JSTestNondeterministic* create(JSC::Structure* structure, JSDOMGlobalObject* globalObject, Ref<TestNondeterministic>&& impl)
     {
         JSTestNondeterministic* ptr = new (NotNull, JSC::allocateCell<JSTestNondeterministic>(globalObject->vm().heap)) JSTestNondeterministic(structure, *globalObject, WTFMove(impl));
@@ -52,12 +52,7 @@ public:
 protected:
     JSTestNondeterministic(JSC::Structure*, JSDOMGlobalObject&, Ref<TestNondeterministic>&&);
 
-    void finishCreation(JSC::VM& vm)
-    {
-        Base::finishCreation(vm);
-        ASSERT(inherits(info()));
-    }
-
+    void finishCreation(JSC::VM&);
 };
 
 class JSTestNondeterministicOwner : public JSC::WeakHandleOwner {
@@ -82,5 +77,9 @@ inline JSC::JSValue toJS(JSC::ExecState* state, JSDOMGlobalObject* globalObject,
 JSC::JSValue toJSNewlyCreated(JSC::ExecState*, JSDOMGlobalObject*, Ref<TestNondeterministic>&&);
 inline JSC::JSValue toJSNewlyCreated(JSC::ExecState* state, JSDOMGlobalObject* globalObject, RefPtr<TestNondeterministic>&& impl) { return impl ? toJSNewlyCreated(state, globalObject, impl.releaseNonNull()) : JSC::jsNull(); }
 
+template<> struct JSDOMWrapperConverterTraits<TestNondeterministic> {
+    using WrapperClass = JSTestNondeterministic;
+    using ToWrappedReturnType = TestNondeterministic*;
+};
 
 } // namespace WebCore

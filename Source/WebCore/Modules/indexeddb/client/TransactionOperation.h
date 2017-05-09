@@ -23,8 +23,7 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef TransactionOperation_h
-#define TransactionOperation_h
+#pragma once
 
 #if ENABLE(INDEXED_DATABASE)
 
@@ -130,9 +129,8 @@ public:
         RefPtr<TransactionOperation> protectedThis(this);
 
         ASSERT(performMethod);
-        auto performFunctionWrapper = std::bind(performMethod, m_transaction.ptr(), std::placeholders::_1, arguments...);
-        m_performFunction = [protectedThis, performFunctionWrapper] {
-            performFunctionWrapper(*protectedThis);
+        m_performFunction = [protectedThis, this, performMethod, arguments...] {
+            (&m_transaction.get()->*performMethod)(*this, arguments...);
         };
 
         if (completeMethod) {
@@ -149,9 +147,8 @@ public:
         RefPtr<TransactionOperation> protectedThis(this);
 
         ASSERT(performMethod);
-        auto performFunctionWrapper = std::bind(performMethod, m_transaction.ptr(), std::placeholders::_1, arguments...);
-        m_performFunction = [protectedThis, performFunctionWrapper] {
-            performFunctionWrapper(*protectedThis);
+        m_performFunction = [protectedThis, this, performMethod, arguments...] {
+            (&m_transaction.get()->*performMethod)(*this, arguments...);
         };
 
         if (completeMethod) {
@@ -193,6 +190,19 @@ RefPtr<TransactionOperation> createTransactionOperation(
     const P2& parameter2)
 {
     auto operation = new TransactionOperationImpl<MP1, MP2>(transaction, complete, perform, parameter1, parameter2);
+    return adoptRef(operation);
+}
+
+template<typename MP1, typename P1, typename MP2, typename P2, typename MP3, typename P3>
+RefPtr<TransactionOperation> createTransactionOperation(
+    IDBTransaction& transaction,
+    void (IDBTransaction::*complete)(const IDBResultData&),
+    void (IDBTransaction::*perform)(TransactionOperation&, MP1, MP2, MP3),
+    const P1& parameter1,
+    const P2& parameter2,
+    const P3& parameter3)
+{
+    auto operation = new TransactionOperationImpl<MP1, MP2, MP3>(transaction, complete, perform, parameter1, parameter2, parameter3);
     return adoptRef(operation);
 }
 
@@ -239,4 +249,3 @@ RefPtr<TransactionOperation> createTransactionOperation(
 } // namespace WebCore
 
 #endif // ENABLE(INDEXED_DATABASE)
-#endif // TransactionOperation_h

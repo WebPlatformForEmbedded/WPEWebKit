@@ -14,6 +14,7 @@ list(APPEND WebCore_INCLUDE_DIRECTORIES
     "${JAVASCRIPTCORE_DIR}/bytecompiler"
     "${JAVASCRIPTCORE_DIR}/dfg"
     "${JAVASCRIPTCORE_DIR}/disassembler"
+    "${JAVASCRIPTCORE_DIR}/domjit"
     "${JAVASCRIPTCORE_DIR}/heap"
     "${JAVASCRIPTCORE_DIR}/debugger"
     "${JAVASCRIPTCORE_DIR}/interpreter"
@@ -40,7 +41,6 @@ list(APPEND WebCore_INCLUDE_DIRECTORIES
     "${WEBCORE_DIR}/platform/mock/mediasource"
     "${WEBCORE_DIR}/platform/network/soup"
     "${WEBCORE_DIR}/platform/text/icu"
-    ${WPE_DIR}
     ${WTF_DIR}
 )
 
@@ -72,7 +72,6 @@ list(APPEND WebCore_SOURCES
     platform/graphics/WOFFFileFormat.cpp
 
     platform/graphics/cairo/BackingStoreBackendCairoImpl.cpp
-    platform/graphics/cairo/BitmapImageCairo.cpp
     platform/graphics/cairo/CairoUtilities.cpp
     platform/graphics/cairo/FloatRectCairo.cpp
     platform/graphics/cairo/FontCairo.cpp
@@ -82,6 +81,7 @@ list(APPEND WebCore_SOURCES
     platform/graphics/cairo/ImageBufferCairo.cpp
     platform/graphics/cairo/ImageCairo.cpp
     platform/graphics/cairo/IntRectCairo.cpp
+    platform/graphics/cairo/NativeImageCairo.cpp
     platform/graphics/cairo/PathCairo.cpp
     platform/graphics/cairo/PatternCairo.cpp
     platform/graphics/cairo/PlatformContextCairo.cpp
@@ -114,7 +114,7 @@ list(APPEND WebCore_SOURCES
 
     platform/image-encoders/JPEGImageEncoder.cpp
 
-    platform/image-decoders/cairo/ImageDecoderCairo.cpp
+    platform/image-decoders/cairo/ImageBackingStoreCairo.cpp
 
     platform/network/soup/AuthenticationChallengeSoup.cpp
     platform/network/soup/CertificateInfo.cpp
@@ -159,6 +159,7 @@ list(APPEND WebCore_SOURCES
 
     platform/graphics/freetype/FontPlatformDataFreeType.cpp
 
+    platform/graphics/wpe/GLContextWPE.cpp
     platform/graphics/wpe/IconWPE.cpp
     platform/graphics/wpe/ImageWPE.cpp
 
@@ -211,8 +212,9 @@ list(APPEND WebCore_LIBRARIES
     ${LIBSOUP_LIBRARIES}
     ${LIBXML2_LIBRARIES}
     ${LIBXSLT_LIBRARIES}
+    ${OCDM_LIBRARIES}
     ${SQLITE_LIBRARIES}
-    WPE
+    ${WPE_LIBRARIES}
 )
 
 list(APPEND WebCore_INCLUDE_DIRECTORIES
@@ -228,17 +230,18 @@ list(APPEND WebCore_INCLUDE_DIRECTORIES
     ${LIBSOUP_INCLUDE_DIRS}
     ${LIBXML2_INCLUDE_DIR}
     ${LIBXSLT_INCLUDE_DIR}
+    ${OCDM_INCLUDE_DIRS}
     ${SQLITE_INCLUDE_DIR}
-    ${WPE_DIR}
+    ${WPE_INCLUDE_DIRS}
 )
 
 if (ENABLE_SUBTLE_CRYPTO)
     list(APPEND WebCore_SOURCES
         crypto/CryptoAlgorithm.cpp
-        crypto/CryptoAlgorithmDescriptionBuilder.cpp
         crypto/CryptoAlgorithmRegistry.cpp
         crypto/CryptoKey.cpp
         crypto/CryptoKeyPair.cpp
+        crypto/SubtleCrypto.cpp
         crypto/WebKitSubtleCrypto.cpp
 
         crypto/algorithms/CryptoAlgorithmAES_CBC.cpp
@@ -268,6 +271,7 @@ if (ENABLE_SUBTLE_CRYPTO)
         crypto/keys/CryptoKeyDataRSAComponents.cpp
         crypto/keys/CryptoKeyHMAC.cpp
         crypto/keys/CryptoKeySerializationRaw.cpp
+        crypto/keys/CryptoKeyRSA.cpp
     )
 endif ()
 

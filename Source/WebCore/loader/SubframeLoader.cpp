@@ -42,7 +42,6 @@
 #include "FrameLoader.h"
 #include "FrameLoaderClient.h"
 #include "HTMLAppletElement.h"
-#include "HTMLAudioElement.h"
 #include "HTMLFrameElement.h"
 #include "HTMLIFrameElement.h"
 #include "HTMLNames.h"
@@ -248,9 +247,11 @@ PassRefPtr<Widget> SubframeLoader::createJavaAppletWidget(const IntSize& size, H
         }
 
         const char javaAppletMimeType[] = "application/x-java-applet";
-        bool isInUserAgentShadowTree = element.isInUserAgentShadowTree();
-        if (!element.document().contentSecurityPolicy()->allowObjectFromSource(codeBaseURL, isInUserAgentShadowTree)
-            || !element.document().contentSecurityPolicy()->allowPluginType(javaAppletMimeType, javaAppletMimeType, codeBaseURL, isInUserAgentShadowTree))
+        ASSERT(element.document().contentSecurityPolicy());
+        auto& contentSecurityPolicy = *element.document().contentSecurityPolicy();
+        // Elements in user agent show tree should load whatever the embedding document policy is.
+        if (!element.isInUserAgentShadowTree()
+            && (!contentSecurityPolicy.allowObjectFromSource(codeBaseURL) || !contentSecurityPolicy.allowPluginType(javaAppletMimeType, javaAppletMimeType, codeBaseURL)))
             return nullptr;
     }
 
@@ -419,7 +420,7 @@ bool SubframeLoader::loadPlugin(HTMLPlugInImageElement& pluginElement, const URL
     }
 
     pluginElement.subframeLoaderDidCreatePlugIn(*widget);
-    renderer->setWidget(widget);
+    renderer->setWidget(WTFMove(widget));
     m_containsPlugins = true;
     return true;
 }

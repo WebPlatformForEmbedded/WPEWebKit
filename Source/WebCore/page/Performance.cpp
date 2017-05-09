@@ -29,10 +29,11 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+
 #include "config.h"
+#include "Performance.h"
 
 #if ENABLE(WEB_TIMING)
-#include "Performance.h"
 
 #include "Document.h"
 #include "DocumentLoader.h"
@@ -48,15 +49,9 @@
 
 namespace WebCore {
 
-static const size_t defaultResourceTimingBufferSize = 150;
-
 Performance::Performance(Frame& frame)
     : DOMWindowProperty(&frame)
-    , m_resourceTimingBufferSize(defaultResourceTimingBufferSize)
     , m_referenceTime(frame.document()->loader() ? frame.document()->loader()->timing().referenceMonotonicTime() : monotonicallyIncreasingTime())
-#if ENABLE(USER_TIMING)
-    , m_userTiming(nullptr)
-#endif // ENABLE(USER_TIMING)
 {
     ASSERT(m_referenceTime);
 }
@@ -72,20 +67,18 @@ ScriptExecutionContext* Performance::scriptExecutionContext() const
     return frame()->document();
 }
 
-PerformanceNavigation* Performance::navigation() const
+PerformanceNavigation& Performance::navigation()
 {
     if (!m_navigation)
         m_navigation = PerformanceNavigation::create(m_frame);
-
-    return m_navigation.get();
+    return *m_navigation;
 }
 
-PerformanceTiming* Performance::timing() const
+PerformanceTiming& Performance::timing()
 {
     if (!m_timing)
         m_timing = PerformanceTiming::create(m_frame);
-
-    return m_timing.get();
+    return *m_timing;
 }
 
 Vector<RefPtr<PerformanceEntry>> Performance::getEntries() const
@@ -163,12 +156,12 @@ void Performance::setResourceTimingBufferSize(unsigned size)
         dispatchEvent(Event::create(eventNames().resourcetimingbufferfullEvent, false, false));
 }
 
-void Performance::addResourceTiming(const String& initiatorName, Document* initiatorDocument, const ResourceRequest& request, const ResourceResponse& response, double initiationTime, double finishTime)
+void Performance::addResourceTiming(const String& initiatorName, Document* initiatorDocument, const URL& originalURL, const ResourceResponse& response, const LoadTiming& loadTiming)
 {
     if (isResourceTimingBufferFull())
         return;
 
-    RefPtr<PerformanceEntry> entry = PerformanceResourceTiming::create(initiatorName, request, response, initiationTime, finishTime, initiatorDocument);
+    RefPtr<PerformanceEntry> entry = PerformanceResourceTiming::create(initiatorName, originalURL, response, loadTiming, initiatorDocument);
 
     m_resourceTimingBuffer.append(entry);
 
@@ -182,33 +175,32 @@ bool Performance::isResourceTimingBufferFull()
 }
 
 #if ENABLE(USER_TIMING)
-void Performance::webkitMark(const String& markName, ExceptionCode& ec)
+
+ExceptionOr<void> Performance::webkitMark(const String& markName)
 {
-    ec = 0;
     if (!m_userTiming)
-        m_userTiming = UserTiming::create(this);
-    m_userTiming->mark(markName, ec);
+        m_userTiming = std::make_unique<UserTiming>(*this);
+    return m_userTiming->mark(markName);
 }
 
 void Performance::webkitClearMarks(const String& markName)
 {
     if (!m_userTiming)
-        m_userTiming = UserTiming::create(this);
+        m_userTiming = std::make_unique<UserTiming>(*this);
     m_userTiming->clearMarks(markName);
 }
 
-void Performance::webkitMeasure(const String& measureName, const String& startMark, const String& endMark, ExceptionCode& ec)
+ExceptionOr<void> Performance::webkitMeasure(const String& measureName, const String& startMark, const String& endMark)
 {
-    ec = 0;
     if (!m_userTiming)
-        m_userTiming = UserTiming::create(this);
-    m_userTiming->measure(measureName, startMark, endMark, ec);
+        m_userTiming = std::make_unique<UserTiming>(*this);
+    return m_userTiming->measure(measureName, startMark, endMark);
 }
 
 void Performance::webkitClearMeasures(const String& measureName)
 {
     if (!m_userTiming)
-        m_userTiming = UserTiming::create(this);
+        m_userTiming = std::make_unique<UserTiming>(*this);
     m_userTiming->clearMeasures(measureName);
 }
 
@@ -223,12 +215,7 @@ double Performance::now() const
 double Performance::reduceTimeResolution(double seconds)
 {
     const double resolutionSeconds = 0.000005;
-    return floor(seconds / resolutionSeconds) * resolutionSeconds;
-}
-
-RefPtr<MemoryInfo> Performance::memory() const
-{
-    return MemoryInfo::create(m_frame);
+    return std::floor(seconds / resolutionSeconds) * resolutionSeconds;
 }
 
 } // namespace WebCore

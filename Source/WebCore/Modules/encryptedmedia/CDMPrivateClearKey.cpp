@@ -26,12 +26,11 @@
 #include "config.h"
 #include "CDMPrivateClearKey.h"
 
-#if ENABLE(ENCRYPTED_MEDIA_V2)
+#if ENABLE(LEGACY_ENCRYPTED_MEDIA)
 
 #include "CDM.h"
 #include "CDMSessionClearKey.h"
 #include "ContentType.h"
-#include "ExceptionCode.h"
 #include "MediaPlayer.h"
 
 namespace WebCore {

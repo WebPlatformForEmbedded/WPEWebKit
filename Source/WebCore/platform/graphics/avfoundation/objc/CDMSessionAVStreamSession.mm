@@ -26,12 +26,11 @@
 #import "config.h"
 #import "CDMSessionAVStreamSession.h"
 
-#if ENABLE(ENCRYPTED_MEDIA_V2) && ENABLE(MEDIA_SOURCE)
+#if ENABLE(LEGACY_ENCRYPTED_MEDIA) && ENABLE(MEDIA_SOURCE)
 
 #import "AVFoundationSPI.h"
 #import "CDM.h"
 #import "CDMPrivateMediaSourceAVFObjC.h"
-#import "ExceptionCode.h"
 #import "FileSystem.h"
 #import "Logging.h"
 #import "MediaPlayer.h"
@@ -260,6 +259,11 @@ bool CDMSessionAVStreamSession::update(Uint8Array* key, RefPtr<Uint8Array>& next
         return false;
     }
 
+    if (!protectedSourceBuffer) {
+        errorCode = MediaPlayer::InvalidPlayerState;
+        return false;
+    }
+
     ASSERT(!m_sourceBuffers.isEmpty());
     LOG(Media, "CDMSessionAVStreamSession::update(%p) - key data", this);
     errorCode = MediaPlayer::NoError;
@@ -303,7 +307,7 @@ void CDMSessionAVStreamSession::removeParser(AVStreamDataParser* parser)
         [m_streamSession removeStreamDataParser:parser];
 }
 
-PassRefPtr<Uint8Array> CDMSessionAVStreamSession::generateKeyReleaseMessage(unsigned short& errorCode, uint32_t systemCode)
+PassRefPtr<Uint8Array> CDMSessionAVStreamSession::generateKeyReleaseMessage(unsigned short& errorCode, uint32_t& systemCode)
 {
     ASSERT(m_mode == KeyRelease);
     m_certificate = m_initData;

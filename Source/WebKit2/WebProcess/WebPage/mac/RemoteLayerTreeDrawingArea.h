@@ -102,7 +102,7 @@ private:
 
     void mainFrameContentSizeChanged(const WebCore::IntSize&) override;
 
-    void viewStateDidChange(WebCore::ViewState::Flags changed, bool wantsDidUpdateViewState, const Vector<uint64_t>& callbackIDs) override;
+    void activityStateDidChange(WebCore::ActivityState::Flags changed, bool wantsDidUpdateActivityState, const Vector<uint64_t>& callbackIDs) override;
 
     bool adjustLayerFlushThrottling(WebCore::LayerFlushThrottleState::Flags) override;
 
@@ -163,7 +163,7 @@ private:
     uint64_t m_currentTransactionID;
     Vector<RemoteLayerTreeTransaction::TransactionCallbackID> m_pendingCallbackIDs;
 
-    WebCore::LayoutMilestones m_pendingNewlyReachedLayoutMilestones;
+    WebCore::LayoutMilestones m_pendingNewlyReachedLayoutMilestones { 0 };
 
     WebCore::GraphicsLayer* m_contentLayer;
     WebCore::GraphicsLayer* m_viewOverlayRootLayer;

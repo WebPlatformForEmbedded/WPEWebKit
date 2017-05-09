@@ -143,6 +143,18 @@ void printInternal(PrintStream& out, LocationKind kind)
     case RegExpObjectLastIndexLoc:
         out.print("RegExpObjectLastIndexLoc");
         return;
+    case MapBucketLoc:
+        out.print("MapBucketLoc");
+        return;
+    case JSMapGetLoc:
+        out.print("JSMapGetLoc");
+        return;
+    case MapHasLoc:
+        out.print("MapHasLoc");
+        return;
+    case DOMStateLoc:
+        out.print("DOMStateLoc");
+        return;
     }
     
     RELEASE_ASSERT_NOT_REACHED();

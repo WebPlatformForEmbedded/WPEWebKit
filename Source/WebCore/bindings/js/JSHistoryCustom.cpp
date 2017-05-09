@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008 Apple Inc. All rights reserved.
+ * Copyright (C) 2008, 2016 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -31,7 +31,7 @@
 
 #include "ExceptionCode.h"
 #include "Frame.h"
-#include "JSDOMBinding.h"
+#include "JSDOMConvert.h"
 #include "SerializedScriptValue.h"
 #include <runtime/JSFunction.h>
 
@@ -48,36 +48,34 @@ JSValue JSHistory::state(ExecState& state) const
         return cachedValue;
 
     RefPtr<SerializedScriptValue> serialized = history.state();
-    JSValue result = serialized ? serialized->deserialize(&state, globalObject(), 0) : jsNull();
+    JSValue result = serialized ? serialized->deserialize(state, globalObject()) : jsNull();
     m_state.set(state.vm(), this, result);
     return result;
 }
 
 JSValue JSHistory::pushState(ExecState& state)
 {
+    VM& vm = state.vm();
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
     auto argCount = state.argumentCount();
     if (UNLIKELY(argCount < 2))
-        return state.vm().throwException(&state, createNotEnoughArgumentsError(&state));
+        return throwException(&state, scope, createNotEnoughArgumentsError(&state));
 
-    auto historyState = SerializedScriptValue::create(&state, state.uncheckedArgument(0), 0, 0);
-    if (state.hadException())
-        return jsUndefined();
+    auto historyState = SerializedScriptValue::create(state, state.uncheckedArgument(0));
+    RETURN_IF_EXCEPTION(scope, JSValue());
 
     // FIXME: title should not be nullable.
-    String title = valueToStringWithUndefinedOrNullCheck(&state, state.uncheckedArgument(1));
-    if (state.hadException())
-        return jsUndefined();
+    String title = convert<IDLNullable<IDLDOMString>>(state, state.uncheckedArgument(1));
+    RETURN_IF_EXCEPTION(scope, JSValue());
 
     String url;
     if (argCount > 2) {
-        url = valueToUSVStringWithUndefinedOrNullCheck(&state, state.uncheckedArgument(2));
-        if (state.hadException())
-            return jsUndefined();
+        url = convert<IDLNullable<IDLUSVString>>(state, state.uncheckedArgument(2));
+        RETURN_IF_EXCEPTION(scope, JSValue());
     }
 
-    ExceptionCodeWithMessage ec;
-    wrapped().stateObjectAdded(WTFMove(historyState), title, url, History::StateObjectType::Push, ec);
-    setDOMException(&state, ec);
+    propagateException(state, scope, wrapped().stateObjectAdded(WTFMove(historyState), title, url, History::StateObjectType::Push));
 
     m_state.clear();
 
@@ -86,29 +84,27 @@ JSValue JSHistory::pushState(ExecState& state)
 
 JSValue JSHistory::replaceState(ExecState& state)
 {
+    VM& vm = state.vm();
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
     auto argCount = state.argumentCount();
     if (UNLIKELY(argCount < 2))
-        return state.vm().throwException(&state, createNotEnoughArgumentsError(&state));
+        return throwException(&state, scope, createNotEnoughArgumentsError(&state));
 
-    auto historyState = SerializedScriptValue::create(&state, state.uncheckedArgument(0), 0, 0);
-    if (state.hadException())
-        return jsUndefined();
+    auto historyState = SerializedScriptValue::create(state, state.uncheckedArgument(0));
+    RETURN_IF_EXCEPTION(scope, JSValue());
 
     // FIXME: title should not be nullable.
-    String title = valueToStringWithUndefinedOrNullCheck(&state, state.uncheckedArgument(1));
-    if (state.hadException())
-        return jsUndefined();
+    String title = convert<IDLNullable<IDLDOMString>>(state, state.uncheckedArgument(1));
+    RETURN_IF_EXCEPTION(scope, JSValue());
 
     String url;
     if (argCount > 2) {
-        url = valueToUSVStringWithUndefinedOrNullCheck(&state, state.uncheckedArgument(2));
-        if (state.hadException())
-            return jsUndefined();
+        url = convert<IDLNullable<IDLUSVString>>(state, state.uncheckedArgument(2));
+        RETURN_IF_EXCEPTION(scope, JSValue());
     }
 
-    ExceptionCodeWithMessage ec;
-    wrapped().stateObjectAdded(WTFMove(historyState), title, url, History::StateObjectType::Replace, ec);
-    setDOMException(&state, ec);
+    propagateException(state, scope, wrapped().stateObjectAdded(WTFMove(historyState), title, url, History::StateObjectType::Replace));
 
     m_state.clear();
 

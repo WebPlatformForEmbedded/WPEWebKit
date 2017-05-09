@@ -20,8 +20,7 @@
  *
  */
 
-#ifndef RenderInline_h
-#define RenderInline_h
+#pragma once
 
 #include "InlineFlowBox.h"
 #include "RenderBoxModelObject.h"
@@ -173,8 +172,7 @@ private:
     
     RenderPtr<RenderInline> clone() const;
 
-    void paintOutlineForLine(GraphicsContext&, const LayoutPoint&, const LayoutRect& prevLine, const LayoutRect& thisLine,
-                             const LayoutRect& nextLine, const Color);
+    void paintOutlineForLine(GraphicsContext&, const LayoutPoint&, const LayoutRect& prevLine, const LayoutRect& thisLine, const LayoutRect& nextLine, const Color&);
     RenderBoxModelObject* continuationBefore(RenderObject* beforeChild);
 
     bool willChangeCreatesStackingContext() const
@@ -188,5 +186,3 @@ private:
 } // namespace WebCore
 
 SPECIALIZE_TYPE_TRAITS_RENDER_OBJECT(RenderInline, isRenderInline())
-
-#endif // RenderInline_h

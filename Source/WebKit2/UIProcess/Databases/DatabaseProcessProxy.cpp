@@ -102,18 +102,14 @@ void DatabaseProcessProxy::deleteWebsiteData(WebCore::SessionID sessionID, Optio
     send(Messages::DatabaseProcess::DeleteWebsiteData(sessionID, dataTypes, modifiedSince, callbackID), 0);
 }
 
-void DatabaseProcessProxy::deleteWebsiteDataForOrigins(SessionID sessionID, OptionSet<WebsiteDataType> dataTypes, const Vector<RefPtr<WebCore::SecurityOrigin>>& origins, std::function<void ()> completionHandler)
+void DatabaseProcessProxy::deleteWebsiteDataForOrigins(SessionID sessionID, OptionSet<WebsiteDataType> dataTypes, const Vector<WebCore::SecurityOriginData>& origins, std::function<void()> completionHandler)
 {
     ASSERT(canSendMessage());
 
     uint64_t callbackID = generateCallbackID();
     m_pendingDeleteWebsiteDataForOriginsCallbacks.add(callbackID, WTFMove(completionHandler));
 
-    Vector<SecurityOriginData> originData;
-    for (auto& origin : origins)
-        originData.append(SecurityOriginData::fromSecurityOrigin(*origin));
-
-    send(Messages::DatabaseProcess::DeleteWebsiteDataForOrigins(sessionID, dataTypes, originData, callbackID), 0);
+    send(Messages::DatabaseProcess::DeleteWebsiteDataForOrigins(sessionID, dataTypes, origins, callbackID), 0);
 }
 
 void DatabaseProcessProxy::getDatabaseProcessConnection(PassRefPtr<Messages::WebProcessProxy::GetDatabaseProcessConnection::DelayedReply> reply)
@@ -125,7 +121,7 @@ void DatabaseProcessProxy::getDatabaseProcessConnection(PassRefPtr<Messages::Web
         return;
     }
 
-    connection()->send(Messages::DatabaseProcess::CreateDatabaseToWebProcessConnection(), 0, IPC::DispatchMessageEvenWhenWaitingForSyncReply);
+    connection()->send(Messages::DatabaseProcess::CreateDatabaseToWebProcessConnection(), 0, IPC::SendOption::DispatchMessageEvenWhenWaitingForSyncReply);
 }
 
 void DatabaseProcessProxy::didClose(IPC::Connection&)

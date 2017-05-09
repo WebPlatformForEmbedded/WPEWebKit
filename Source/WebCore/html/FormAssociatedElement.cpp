@@ -222,6 +222,11 @@ bool FormAssociatedElement::stepMismatch() const
     return false;
 }
 
+bool FormAssociatedElement::tooShort() const
+{
+    return false;
+}
+
 bool FormAssociatedElement::tooLong() const
 {
     return false;
@@ -232,10 +237,10 @@ bool FormAssociatedElement::typeMismatch() const
     return false;
 }
 
-bool FormAssociatedElement::valid() const
+bool FormAssociatedElement::isValid() const
 {
     bool someError = typeMismatch() || stepMismatch() || rangeUnderflow() || rangeOverflow()
-        || tooLong() || patternMismatch() || valueMissing() || hasBadInput() || customError();
+        || tooShort() || tooLong() || patternMismatch() || valueMissing() || hasBadInput() || customError();
     return !someError;
 }
 

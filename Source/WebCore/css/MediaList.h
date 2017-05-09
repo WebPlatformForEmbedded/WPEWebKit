@@ -20,10 +20,10 @@
 
 #pragma once
 
+#include "ExceptionOr.h"
 #include <memory>
 #include <wtf/Forward.h>
 #include <wtf/Vector.h>
-#include <wtf/text/WTFString.h>
 
 namespace WebCore {
 
@@ -33,9 +33,7 @@ class CSSStyleSheet;
 class Document;
 class MediaQuery;
 
-using ExceptionCode = int;
-
-class MediaQuerySet : public RefCounted<MediaQuerySet> {
+class MediaQuerySet final : public RefCounted<MediaQuerySet> {
 public:
     static Ref<MediaQuerySet> create()
     {
@@ -81,7 +79,7 @@ private:
     Vector<MediaQuery> m_queries;
 };
 
-class MediaList : public RefCounted<MediaList> {
+class MediaList final : public RefCounted<MediaList> {
 public:
     static Ref<MediaList> create(MediaQuerySet* mediaQueries, CSSStyleSheet* parentSheet)
     {
@@ -96,11 +94,11 @@ public:
 
     unsigned length() const { return m_mediaQueries->queryVector().size(); }
     WEBCORE_EXPORT String item(unsigned index) const;
-    WEBCORE_EXPORT void deleteMedium(const String& oldMedium, ExceptionCode&);
-    WEBCORE_EXPORT void appendMedium(const String& newMedium, ExceptionCode&);
+    WEBCORE_EXPORT ExceptionOr<void> deleteMedium(const String& oldMedium);
+    WEBCORE_EXPORT ExceptionOr<void> appendMedium(const String& newMedium);
 
     String mediaText() const { return m_mediaQueries->mediaText(); }
-    WEBCORE_EXPORT void setMediaText(const String&, ExceptionCode&);
+    WEBCORE_EXPORT ExceptionOr<void> setMediaText(const String&);
 
     CSSRule* parentRule() const { return m_parentRule; }
     CSSStyleSheet* parentStyleSheet() const { return m_parentStyleSheet; }

@@ -154,6 +154,12 @@ bool MacApplication::isSolidStateNetworksDownloader()
     return isSolidStateNetworksDownloader;
 }
 
+bool MacApplication::isAppStore()
+{
+    static bool isAppStore = applicationBundleIsEqualTo("com.apple.appstore");
+    return isAppStore;
+}
+
 #endif // PLATFORM(MAC)
 
 #if PLATFORM(IOS)
@@ -246,7 +252,13 @@ bool IOSApplication::isTheSecretSocietyHiddenMystery()
     static bool isTheSecretSocietyHiddenMystery = applicationBundleIsEqualTo("com.g5e.secretsociety");
     return isTheSecretSocietyHiddenMystery;
 }
-    
+
+bool IOSApplication::isBaiduNuomi()
+{
+    static bool isBaiduNuomi = applicationBundleIsEqualTo("com.renren-inc.nuomi");
+    return isBaiduNuomi;
+}
+
 #endif
 
 } // namespace WebCore

@@ -54,6 +54,7 @@ namespace API {
 class ExperimentalFeature;
 class FrameHandle;
 class FrameInfo;
+class HTTPCookieStorage;
 class HitTestResult;
 class Navigation;
 class NavigationAction;
@@ -81,9 +82,8 @@ class UserMediaPermissionCheckProxy;
 class UserMediaPermissionRequestProxy;
 class WebBackForwardList;
 class WebBackForwardListItem;
-class WebBatteryManagerProxy;
-class WebBatteryStatus;
 class WebColorPickerResultListenerProxy;
+class WebContextMenuListenerProxy;
 class WebCookie;
 class WebCookieManagerProxy;
 class WebCredential;
@@ -118,12 +118,11 @@ WK_ADD_API_MAPPING(WKAuthenticationChallengeRef, AuthenticationChallengeProxy)
 WK_ADD_API_MAPPING(WKAuthenticationDecisionListenerRef, AuthenticationDecisionListener)
 WK_ADD_API_MAPPING(WKBackForwardListItemRef, WebBackForwardListItem)
 WK_ADD_API_MAPPING(WKBackForwardListRef, WebBackForwardList)
-WK_ADD_API_MAPPING(WKBatteryManagerRef, WebBatteryManagerProxy)
-WK_ADD_API_MAPPING(WKBatteryStatusRef, WebBatteryStatus)
 WK_ADD_API_MAPPING(WKBundleHitTestResultMediaType, BundleHitTestResultMediaType)
 WK_ADD_API_MAPPING(WKColorPickerResultListenerRef, WebColorPickerResultListenerProxy)
 WK_ADD_API_MAPPING(WKContextRef, WebProcessPool)
 WK_ADD_API_MAPPING(WKContextConfigurationRef, API::ProcessPoolConfiguration)
+WK_ADD_API_MAPPING(WKContextMenuListenerRef, WebContextMenuListenerProxy)
 WK_ADD_API_MAPPING(WKCookieRef, WebCookie)
 WK_ADD_API_MAPPING(WKCookieManagerRef, WebCookieManagerProxy)
 WK_ADD_API_MAPPING(WKCredentialRef, WebCredential)
@@ -137,6 +136,7 @@ WK_ADD_API_MAPPING(WKGeolocationManagerRef, WebGeolocationManagerProxy)
 WK_ADD_API_MAPPING(WKGeolocationPermissionRequestRef, GeolocationPermissionRequestProxy)
 WK_ADD_API_MAPPING(WKGeolocationPositionRef, WebGeolocationPosition)
 WK_ADD_API_MAPPING(WKGrammarDetailRef, WebGrammarDetail)
+WK_ADD_API_MAPPING(WKHTTPCookieStorageRef, API::HTTPCookieStorage)
 WK_ADD_API_MAPPING(WKHitTestResultRef, API::HitTestResult)
 WK_ADD_API_MAPPING(WKIconDatabaseRef, WebIconDatabase)
 WK_ADD_API_MAPPING(WKInspectorRef, WebInspectorProxy)

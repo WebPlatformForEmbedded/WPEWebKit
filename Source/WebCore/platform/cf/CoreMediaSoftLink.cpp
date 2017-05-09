@@ -104,11 +104,16 @@ SOFT_LINK_CONSTANT_FOR_SOURCE(WebCore, CoreMedia, kCMSampleBufferAttachmentKey_D
 SOFT_LINK_CONSTANT_FOR_SOURCE(WebCore, CoreMedia, kCMSampleBufferAttachmentKey_DrainAfterDecoding, CFStringRef)
 SOFT_LINK_CONSTANT_FOR_SOURCE(WebCore, CoreMedia, kCMSampleBufferAttachmentKey_EmptyMedia, CFStringRef)
 SOFT_LINK_CONSTANT_FOR_SOURCE(WebCore, CoreMedia, kCMSampleBufferAttachmentKey_ResetDecoderBeforeDecoding, CFStringRef)
+SOFT_LINK_CONSTANT_FOR_SOURCE(WebCore, CoreMedia, kCMSampleAttachmentKey_DisplayImmediately, CFStringRef)
+
 SOFT_LINK_CONSTANT_FOR_SOURCE(WebCore, CoreMedia, kCMTimebaseNotification_EffectiveRateChanged, CFStringRef)
 SOFT_LINK_CONSTANT_FOR_SOURCE(WebCore, CoreMedia, kCMTimebaseNotification_TimeJumped, CFStringRef)
 SOFT_LINK_FUNCTION_FOR_SOURCE(WebCore, CoreMedia, CMAudioFormatDescriptionGetStreamBasicDescription, const AudioStreamBasicDescription *, (CMAudioFormatDescriptionRef desc), (desc))
 SOFT_LINK_FUNCTION_FOR_SOURCE(WebCore, CoreMedia, CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer, OSStatus, (CMSampleBufferRef sbuf, size_t *bufferListSizeNeededOut, AudioBufferList *bufferListOut, size_t bufferListSize, CFAllocatorRef bbufStructAllocator, CFAllocatorRef bbufMemoryAllocator, uint32_t flags, CMBlockBufferRef *blockBufferOut), (sbuf, bufferListSizeNeededOut, bufferListOut, bufferListSize, bbufStructAllocator, bbufMemoryAllocator, flags, blockBufferOut))
 SOFT_LINK_FUNCTION_FOR_SOURCE(WebCore, CoreMedia, CMSampleBufferGetNumSamples, CMItemCount, (CMSampleBufferRef sbuf), (sbuf))
+SOFT_LINK_FUNCTION_FOR_SOURCE(WebCore, CoreMedia, CMSampleBufferCallBlockForEachSample, OSStatus, (CMSampleBufferRef sbuf, OSStatus (^handler)(CMSampleBufferRef, CMItemCount)), (sbuf, handler))
+SOFT_LINK_FUNCTION_FOR_SOURCE(WebCore, CoreMedia, CMSampleBufferCopySampleBufferForRange, OSStatus, (CFAllocatorRef allocator, CMSampleBufferRef sbuf, CFRange sampleRange, CMSampleBufferRef* sBufOut), (allocator, sbuf, sampleRange, sBufOut))
+SOFT_LINK_FUNCTION_FOR_SOURCE(WebCore, CoreMedia, CMSampleBufferGetSampleSizeArray, OSStatus, (CMSampleBufferRef sbuf, CMItemCount sizeArrayEntries, size_t* sizeArrayOut, CMItemCount* sizeArrayEntriesNeededOut), (sbuf, sizeArrayEntries, sizeArrayOut, sizeArrayEntriesNeededOut))
 #endif // PLATFORM(COCOA)
 
 #if PLATFORM(IOS)

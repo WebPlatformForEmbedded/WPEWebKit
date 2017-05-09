@@ -287,8 +287,9 @@ struct wpe_input_key_mapper_interface libxkbcommon_input_key_mapper_interface = 
                 // VK_MENU (12) ALT key
 
             case XKB_KEY_Pause:
-            case XKB_KEY_XF86AudioPause:
                 return VK_PAUSE; // (13) PAUSE key
+            case XKB_KEY_XF86AudioPause:
+                return VK_MEDIA_PLAY_PAUSE; // (B3) Windows 2000/XP: Play/Pause Media key
             case XKB_KEY_Caps_Lock:
                 return VK_CAPITAL; // (14) CAPS LOCK key
             case XKB_KEY_Kana_Lock:
@@ -568,7 +569,8 @@ struct wpe_input_key_mapper_interface libxkbcommon_input_key_mapper_interface = 
                 // VK_CRSEL (F7) CrSel key
                 // VK_EXSEL (F8) ExSel key
                 // VK_EREOF (F9) Erase EOF key
-                // VK_PLAY (FA) Play key
+            case XKB_KEY_XF86AudioPlay:
+                return VK_MEDIA_PLAY_PAUSE; // (B3) Windows 2000/XP: Play/Pause Media key
                 // VK_ZOOM (FB) Zoom key
                 // VK_NONAME (FC) Reserved for future use
                 // VK_PA1 (FD) PA1 key
@@ -614,8 +616,6 @@ struct wpe_input_key_mapper_interface libxkbcommon_input_key_mapper_interface = 
                 return VK_HAVI_COLORED_KEY_3;
             case XKB_KEY_XF86PowerOff:
                 return VK_HAVI_POWER;
-            case XKB_KEY_XF86AudioPlay:
-                return VK_HAVI_PLAY;
             case XKB_KEY_XF86AudioRecord:
                 return VK_HAVI_RECORD;
             case XKB_KEY_XF86Display:

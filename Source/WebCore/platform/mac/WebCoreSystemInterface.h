@@ -77,7 +77,7 @@ typedef struct _NSRect NSRect;
 #include <CoreGraphics/CoreGraphics.h>
 #endif
 
-#if USE(CFNETWORK)
+#if USE(CFURLCONNECTION)
 typedef struct OpaqueCFHTTPCookieStorage*  CFHTTPCookieStorageRef;
 typedef struct _CFURLProtectionSpace* CFURLProtectionSpaceRef;
 typedef struct _CFURLCredential* WKCFURLCredentialRef;

@@ -28,9 +28,9 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef FileReaderLoader_h
-#define FileReaderLoader_h
+#pragma once
 
+#include "BlobResourceHandle.h"
 #include "FileError.h"
 #include "URL.h"
 #include "TextEncoding.h"
@@ -92,6 +92,7 @@ private:
     bool isCompleted() const;
 
     static FileError::ErrorCode httpStatusCodeToErrorCode(int);
+    static FileError::ErrorCode toErrorCode(BlobResourceHandle::Error);
 
     ReadType m_readType;
     FileReaderLoaderClient* m_client;
@@ -118,5 +119,3 @@ private:
 };
 
 } // namespace WebCore
-
-#endif // FileReaderLoader_h

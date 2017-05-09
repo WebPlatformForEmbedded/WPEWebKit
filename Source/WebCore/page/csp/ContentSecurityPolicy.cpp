@@ -451,26 +451,9 @@ bool ContentSecurityPolicy::allowPluginType(const String& type, const String& ty
     return allPoliciesAllow(WTFMove(handleViolatedDirective), &ContentSecurityPolicyDirectiveList::violatedDirectiveForPluginType, type, typeAttribute);
 }
 
-bool ContentSecurityPolicy::allowScriptFromSource(const URL& url, bool overrideContentSecurityPolicy, RedirectResponseReceived redirectResponseReceived) const
+bool ContentSecurityPolicy::allowObjectFromSource(const URL& url, RedirectResponseReceived redirectResponseReceived) const
 {
-    if (overrideContentSecurityPolicy)
-        return true;
-    if (SchemeRegistry::schemeShouldBypassContentSecurityPolicy(url.protocol()))
-        return true;
-    String sourceURL;
-    TextPosition sourcePosition(WTF::OrdinalNumber::beforeFirst(), WTF::OrdinalNumber());
-    auto handleViolatedDirective = [&] (const ContentSecurityPolicyDirective& violatedDirective) {
-        String consoleMessage = consoleMessageForViolation(ContentSecurityPolicyDirectiveNames::scriptSrc, violatedDirective, url, "Refused to load");
-        reportViolation(ContentSecurityPolicyDirectiveNames::scriptSrc, violatedDirective, url, consoleMessage, sourceURL, sourcePosition);
-    };
-    return allPoliciesAllow(WTFMove(handleViolatedDirective), &ContentSecurityPolicyDirectiveList::violatedDirectiveForScript, url, redirectResponseReceived == RedirectResponseReceived::Yes);
-}
-
-bool ContentSecurityPolicy::allowObjectFromSource(const URL& url, bool overrideContentSecurityPolicy, RedirectResponseReceived redirectResponseReceived) const
-{
-    if (overrideContentSecurityPolicy)
-        return true;
-    if (SchemeRegistry::schemeShouldBypassContentSecurityPolicy(url.protocol()))
+    if (SchemeRegistry::schemeShouldBypassContentSecurityPolicy(url.protocol().toStringWithoutCopying()))
         return true;
     // As per section object-src of the Content Security Policy Level 3 spec., <http://w3c.github.io/webappsec-csp> (Editor's Draft, 29 February 2016),
     // "If plugin content is loaded without an associated URL (perhaps an object element lacks a data attribute, but loads some default plugin based
@@ -484,11 +467,9 @@ bool ContentSecurityPolicy::allowObjectFromSource(const URL& url, bool overrideC
     return allPoliciesAllow(WTFMove(handleViolatedDirective), &ContentSecurityPolicyDirectiveList::violatedDirectiveForObjectSource, url, redirectResponseReceived == RedirectResponseReceived::Yes, ContentSecurityPolicySourceListDirective::ShouldAllowEmptyURLIfSourceListIsNotNone::Yes);
 }
 
-bool ContentSecurityPolicy::allowChildFrameFromSource(const URL& url, bool overrideContentSecurityPolicy, RedirectResponseReceived redirectResponseReceived) const
+bool ContentSecurityPolicy::allowChildFrameFromSource(const URL& url, RedirectResponseReceived redirectResponseReceived) const
 {
-    if (overrideContentSecurityPolicy)
-        return true;
-    if (SchemeRegistry::schemeShouldBypassContentSecurityPolicy(url.protocol()))
+    if (SchemeRegistry::schemeShouldBypassContentSecurityPolicy(url.protocol().toStringWithoutCopying()))
         return true;
     String sourceURL;
     TextPosition sourcePosition(WTF::OrdinalNumber::beforeFirst(), WTF::OrdinalNumber());
@@ -500,86 +481,52 @@ bool ContentSecurityPolicy::allowChildFrameFromSource(const URL& url, bool overr
     return allPoliciesAllow(WTFMove(handleViolatedDirective), &ContentSecurityPolicyDirectiveList::violatedDirectiveForFrame, url, redirectResponseReceived == RedirectResponseReceived::Yes);
 }
 
-bool ContentSecurityPolicy::allowChildContextFromSource(const URL& url, bool overrideContentSecurityPolicy, RedirectResponseReceived redirectResponseReceived) const
+bool ContentSecurityPolicy::allowResourceFromSource(const URL& url, RedirectResponseReceived redirectResponseReceived, const char* name, ResourcePredicate resourcePredicate) const
 {
-    if (overrideContentSecurityPolicy)
-        return true;
-    if (SchemeRegistry::schemeShouldBypassContentSecurityPolicy(url.protocol()))
+    if (SchemeRegistry::schemeShouldBypassContentSecurityPolicy(url.protocol().toStringWithoutCopying()))
         return true;
     String sourceURL;
     TextPosition sourcePosition(WTF::OrdinalNumber::beforeFirst(), WTF::OrdinalNumber());
     auto handleViolatedDirective = [&] (const ContentSecurityPolicyDirective& violatedDirective) {
-        String consoleMessage = consoleMessageForViolation(ContentSecurityPolicyDirectiveNames::childSrc, violatedDirective, url, "Refused to load");
-        reportViolation(ContentSecurityPolicyDirectiveNames::childSrc, violatedDirective, url, consoleMessage, sourceURL, sourcePosition);
+        String consoleMessage = consoleMessageForViolation(name, violatedDirective, url, "Refused to load");
+        reportViolation(name, violatedDirective, url, consoleMessage, sourceURL, sourcePosition);
     };
-    return allPoliciesAllow(WTFMove(handleViolatedDirective), &ContentSecurityPolicyDirectiveList::violatedDirectiveForChildContext, url, redirectResponseReceived == RedirectResponseReceived::Yes);
+    return allPoliciesAllow(WTFMove(handleViolatedDirective), resourcePredicate, url, redirectResponseReceived == RedirectResponseReceived::Yes);
 }
 
-bool ContentSecurityPolicy::allowImageFromSource(const URL& url, bool overrideContentSecurityPolicy, RedirectResponseReceived redirectResponseReceived) const
+bool ContentSecurityPolicy::allowChildContextFromSource(const URL& url, RedirectResponseReceived redirectResponseReceived) const
 {
-    if (overrideContentSecurityPolicy)
-        return true;
-    if (SchemeRegistry::schemeShouldBypassContentSecurityPolicy(url.protocol()))
-        return true;
-    String sourceURL;
-    TextPosition sourcePosition(WTF::OrdinalNumber::beforeFirst(), WTF::OrdinalNumber());
-    auto handleViolatedDirective = [&] (const ContentSecurityPolicyDirective& violatedDirective) {
-        String consoleMessage = consoleMessageForViolation(ContentSecurityPolicyDirectiveNames::imgSrc, violatedDirective, url, "Refused to load");
-        reportViolation(ContentSecurityPolicyDirectiveNames::imgSrc, violatedDirective, url, consoleMessage, sourceURL, sourcePosition);
-    };
-    return allPoliciesAllow(WTFMove(handleViolatedDirective), &ContentSecurityPolicyDirectiveList::violatedDirectiveForImage, url, redirectResponseReceived == RedirectResponseReceived::Yes);
+    return allowResourceFromSource(url, redirectResponseReceived, ContentSecurityPolicyDirectiveNames::childSrc, &ContentSecurityPolicyDirectiveList::violatedDirectiveForChildContext);
 }
 
-bool ContentSecurityPolicy::allowStyleFromSource(const URL& url, bool overrideContentSecurityPolicy, RedirectResponseReceived redirectResponseReceived) const
+bool ContentSecurityPolicy::allowScriptFromSource(const URL& url, RedirectResponseReceived redirectResponseReceived) const
 {
-    if (overrideContentSecurityPolicy)
-        return true;
-    if (SchemeRegistry::schemeShouldBypassContentSecurityPolicy(url.protocol()))
-        return true;
-    String sourceURL;
-    TextPosition sourcePosition(WTF::OrdinalNumber::beforeFirst(), WTF::OrdinalNumber());
-    auto handleViolatedDirective = [&] (const ContentSecurityPolicyDirective& violatedDirective) {
-        String consoleMessage = consoleMessageForViolation(ContentSecurityPolicyDirectiveNames::styleSrc, violatedDirective, url, "Refused to load");
-        reportViolation(ContentSecurityPolicyDirectiveNames::styleSrc, violatedDirective, url, consoleMessage, sourceURL, sourcePosition);
-    };
-    return allPoliciesAllow(WTFMove(handleViolatedDirective), &ContentSecurityPolicyDirectiveList::violatedDirectiveForStyle, url, redirectResponseReceived == RedirectResponseReceived::Yes);
+    return allowResourceFromSource(url, redirectResponseReceived, ContentSecurityPolicyDirectiveNames::scriptSrc, &ContentSecurityPolicyDirectiveList::violatedDirectiveForScript);
 }
 
-bool ContentSecurityPolicy::allowFontFromSource(const URL& url, bool overrideContentSecurityPolicy, RedirectResponseReceived redirectResponseReceived) const
+bool ContentSecurityPolicy::allowImageFromSource(const URL& url, RedirectResponseReceived redirectResponseReceived) const
 {
-    if (overrideContentSecurityPolicy)
-        return true;
-    if (SchemeRegistry::schemeShouldBypassContentSecurityPolicy(url.protocol()))
-        return true;
-    String sourceURL;
-    TextPosition sourcePosition(WTF::OrdinalNumber::beforeFirst(), WTF::OrdinalNumber());
-    auto handleViolatedDirective = [&] (const ContentSecurityPolicyDirective& violatedDirective) {
-        String consoleMessage = consoleMessageForViolation(ContentSecurityPolicyDirectiveNames::fontSrc, violatedDirective, url, "Refused to load");
-        reportViolation(ContentSecurityPolicyDirectiveNames::fontSrc, violatedDirective, url, consoleMessage, sourceURL, sourcePosition);
-    };
-    return allPoliciesAllow(WTFMove(handleViolatedDirective), &ContentSecurityPolicyDirectiveList::violatedDirectiveForFont, url, redirectResponseReceived == RedirectResponseReceived::Yes);
+    return allowResourceFromSource(url, redirectResponseReceived, ContentSecurityPolicyDirectiveNames::imgSrc, &ContentSecurityPolicyDirectiveList::violatedDirectiveForImage);
 }
 
-bool ContentSecurityPolicy::allowMediaFromSource(const URL& url, bool overrideContentSecurityPolicy, RedirectResponseReceived redirectResponseReceived) const
+bool ContentSecurityPolicy::allowStyleFromSource(const URL& url, RedirectResponseReceived redirectResponseReceived) const
 {
-    if (overrideContentSecurityPolicy)
-        return true;
-    if (SchemeRegistry::schemeShouldBypassContentSecurityPolicy(url.protocol()))
-        return true;
-    String sourceURL;
-    TextPosition sourcePosition(WTF::OrdinalNumber::beforeFirst(), WTF::OrdinalNumber());
-    auto handleViolatedDirective = [&] (const ContentSecurityPolicyDirective& violatedDirective) {
-        String consoleMessage = consoleMessageForViolation(ContentSecurityPolicyDirectiveNames::mediaSrc, violatedDirective, url, "Refused to load");
-        reportViolation(ContentSecurityPolicyDirectiveNames::mediaSrc, violatedDirective, url, consoleMessage, sourceURL, sourcePosition);
-    };
-    return allPoliciesAllow(WTFMove(handleViolatedDirective), &ContentSecurityPolicyDirectiveList::violatedDirectiveForMedia, url, redirectResponseReceived == RedirectResponseReceived::Yes);
+    return allowResourceFromSource(url, redirectResponseReceived, ContentSecurityPolicyDirectiveNames::styleSrc, &ContentSecurityPolicyDirectiveList::violatedDirectiveForStyle);
 }
 
-bool ContentSecurityPolicy::allowConnectToSource(const URL& url, bool overrideContentSecurityPolicy, RedirectResponseReceived redirectResponseReceived) const
+bool ContentSecurityPolicy::allowFontFromSource(const URL& url, RedirectResponseReceived redirectResponseReceived) const
 {
-    if (overrideContentSecurityPolicy)
-        return true;
-    if (SchemeRegistry::schemeShouldBypassContentSecurityPolicy(url.protocol()))
+    return allowResourceFromSource(url, redirectResponseReceived, ContentSecurityPolicyDirectiveNames::fontSrc, &ContentSecurityPolicyDirectiveList::violatedDirectiveForFont);
+}
+
+bool ContentSecurityPolicy::allowMediaFromSource(const URL& url, RedirectResponseReceived redirectResponseReceived) const
+{
+    return allowResourceFromSource(url, redirectResponseReceived, ContentSecurityPolicyDirectiveNames::mediaSrc, &ContentSecurityPolicyDirectiveList::violatedDirectiveForMedia);
+}
+
+bool ContentSecurityPolicy::allowConnectToSource(const URL& url, RedirectResponseReceived redirectResponseReceived) const
+{
+    if (SchemeRegistry::schemeShouldBypassContentSecurityPolicy(url.protocol().toStringWithoutCopying()))
         return true;
     String sourceURL;
     TextPosition sourcePosition(WTF::OrdinalNumber::beforeFirst(), WTF::OrdinalNumber());
@@ -590,26 +537,16 @@ bool ContentSecurityPolicy::allowConnectToSource(const URL& url, bool overrideCo
     return allPoliciesAllow(WTFMove(handleViolatedDirective), &ContentSecurityPolicyDirectiveList::violatedDirectiveForConnectSource, url, redirectResponseReceived == RedirectResponseReceived::Yes);
 }
 
-bool ContentSecurityPolicy::allowFormAction(const URL& url, bool overrideContentSecurityPolicy, RedirectResponseReceived redirectResponseReceived) const
+bool ContentSecurityPolicy::allowFormAction(const URL& url, RedirectResponseReceived redirectResponseReceived) const
 {
-    if (overrideContentSecurityPolicy)
-        return true;
-    if (SchemeRegistry::schemeShouldBypassContentSecurityPolicy(url.protocol()))
-        return true;
-    String sourceURL;
-    TextPosition sourcePosition(WTF::OrdinalNumber::beforeFirst(), WTF::OrdinalNumber());
-    auto handleViolatedDirective = [&] (const ContentSecurityPolicyDirective& violatedDirective) {
-        String consoleMessage = consoleMessageForViolation(ContentSecurityPolicyDirectiveNames::formAction, violatedDirective, url, "Refused to load");
-        reportViolation(ContentSecurityPolicyDirectiveNames::formAction, violatedDirective, url, consoleMessage, sourceURL, sourcePosition);
-    };
-    return allPoliciesAllow(WTFMove(handleViolatedDirective), &ContentSecurityPolicyDirectiveList::violatedDirectiveForFormAction, url, redirectResponseReceived == RedirectResponseReceived::Yes);
+    return allowResourceFromSource(url, redirectResponseReceived, ContentSecurityPolicyDirectiveNames::formAction, &ContentSecurityPolicyDirectiveList::violatedDirectiveForFormAction);
 }
 
 bool ContentSecurityPolicy::allowBaseURI(const URL& url, bool overrideContentSecurityPolicy) const
 {
     if (overrideContentSecurityPolicy)
         return true;
-    if (SchemeRegistry::schemeShouldBypassContentSecurityPolicy(url.protocol()))
+    if (SchemeRegistry::schemeShouldBypassContentSecurityPolicy(url.protocol().toStringWithoutCopying()))
         return true;
     String sourceURL;
     TextPosition sourcePosition(WTF::OrdinalNumber::beforeFirst(), WTF::OrdinalNumber());
@@ -625,7 +562,7 @@ static String stripURLForUseInReport(Document& document, const URL& url)
     if (!url.isValid())
         return String();
     if (!url.isHierarchical() || url.protocolIs("file"))
-        return url.protocol();
+        return url.protocol().toString();
     return document.securityOrigin()->canRequest(url) ? url.strippedForUseAsReferrer() : SecurityOrigin::create(url).get().toString();
 }
 
@@ -721,7 +658,7 @@ void ContentSecurityPolicy::reportViolation(const String& effectiveViolatedDirec
 
     RefPtr<FormData> report = FormData::create(reportObject->toJSONString().utf8());
     for (const auto& url : reportURIs)
-        PingLoader::sendViolationReport(*frame, document.completeURL(url), report.copyRef(), ViolationReportType::ContentSecurityPolicy);
+        PingLoader::sendViolationReport(*frame, is<Document>(m_scriptExecutionContext) ? document.completeURL(url) : document.completeURL(url, blockedURL), report.copyRef(), ViolationReportType::ContentSecurityPolicy);
 }
 
 void ContentSecurityPolicy::reportUnsupportedDirective(const String& name) const
@@ -860,7 +797,7 @@ void ContentSecurityPolicy::upgradeInsecureRequestIfNeeded(URL& url, InsecureReq
     else
         return;
     
-    if (url.port() == 80)
+    if (url.port() && url.port().value() == 80)
         url.setPort(443);
 }
 

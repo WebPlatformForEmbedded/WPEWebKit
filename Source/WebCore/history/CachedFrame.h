@@ -23,8 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. 
  */
  
-#ifndef CachedFrame_h
-#define CachedFrame_h
+#pragma once
 
 #include "DOMWindow.h"
 #include "URL.h"
@@ -39,6 +38,7 @@ class Document;
 class DocumentLoader;
 class FrameView;
 class Node;
+enum class HasInsecureContent;
 
 class CachedFrameBase {
 public:
@@ -61,7 +61,8 @@ protected:
     std::unique_ptr<CachedFramePlatformData> m_cachedFramePlatformData;
     bool m_isMainFrame;
     bool m_isComposited;
-    
+    Optional<HasInsecureContent> m_hasInsecureContent;
+
     Vector<std::unique_ptr<CachedFrame>> m_childFrames;
 };
 
@@ -77,6 +78,9 @@ public:
     WEBCORE_EXPORT void setCachedFramePlatformData(std::unique_ptr<CachedFramePlatformData>);
     WEBCORE_EXPORT CachedFramePlatformData* cachedFramePlatformData();
 
+    WEBCORE_EXPORT void setHasInsecureContent(HasInsecureContent);
+    Optional<HasInsecureContent> hasInsecureContent() const { return m_hasInsecureContent; }
+
     using CachedFrameBase::document;
     using CachedFrameBase::view;
     using CachedFrameBase::url;
@@ -86,5 +90,3 @@ public:
 };
 
 } // namespace WebCore
-
-#endif // CachedFrame_h

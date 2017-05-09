@@ -189,7 +189,7 @@ inline void AnotherGuardedInternalBuiltinBuiltinFunctions::visit(JSC::SlotVisito
 #if ENABLE(FETCH_API)
 
 #include "WebCoreJSClientData.h"
-#include <runtime/Executable.h>
+#include <heap/HeapInlines.h>
 #include <runtime/Intrinsic.h>
 #include <runtime/JSCJSValueInlines.h>
 #include <runtime/JSCellInlines.h>

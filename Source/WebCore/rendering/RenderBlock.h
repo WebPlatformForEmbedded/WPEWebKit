@@ -20,8 +20,7 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#ifndef RenderBlock_h
-#define RenderBlock_h
+#pragma once
 
 #include "GapRects.h"
 #include "LineWidth.h"
@@ -204,17 +203,19 @@ public:
     }
 
     static TextRun constructTextRun(StringView, const RenderStyle&,
-        ExpansionBehavior = AllowTrailingExpansion | ForbidLeadingExpansion, TextRunFlags = DefaultTextRunFlags);
+        ExpansionBehavior = DefaultExpansion, TextRunFlags = DefaultTextRunFlags);
     static TextRun constructTextRun(const String&, const RenderStyle&,
-        ExpansionBehavior = AllowTrailingExpansion | ForbidLeadingExpansion, TextRunFlags = DefaultTextRunFlags);
-    static TextRun constructTextRun(const RenderText*, const RenderStyle&,
-        ExpansionBehavior = AllowTrailingExpansion | ForbidLeadingExpansion);
-    static TextRun constructTextRun(const RenderText*, unsigned offset, unsigned length, const RenderStyle&,
-        ExpansionBehavior = AllowTrailingExpansion | ForbidLeadingExpansion);
-    static TextRun constructTextRun(const LChar* characters, int length, const RenderStyle&,
-        ExpansionBehavior = AllowTrailingExpansion | ForbidLeadingExpansion);
-    static TextRun constructTextRun(const UChar* characters, int length, const RenderStyle&,
-        ExpansionBehavior = AllowTrailingExpansion | ForbidLeadingExpansion);
+        ExpansionBehavior = DefaultExpansion, TextRunFlags = DefaultTextRunFlags);
+    static TextRun constructTextRun(const AtomicString&, const RenderStyle&,
+        ExpansionBehavior = DefaultExpansion, TextRunFlags = DefaultTextRunFlags);
+    static TextRun constructTextRun(const RenderText&, const RenderStyle&,
+        ExpansionBehavior = DefaultExpansion);
+    static TextRun constructTextRun(const RenderText&, unsigned offset, unsigned length, const RenderStyle&,
+        ExpansionBehavior = DefaultExpansion);
+    static TextRun constructTextRun(const LChar* characters, unsigned length, const RenderStyle&,
+        ExpansionBehavior = DefaultExpansion);
+    static TextRun constructTextRun(const UChar* characters, unsigned length, const RenderStyle&,
+        ExpansionBehavior = DefaultExpansion);
     
     LayoutUnit paginationStrut() const;
     void setPaginationStrut(LayoutUnit);
@@ -243,7 +244,8 @@ public:
     LayoutUnit collapsedMarginBeforeForChild(const RenderBox& child) const;
     LayoutUnit collapsedMarginAfterForChild(const RenderBox& child) const;
 
-    virtual void updateFirstLetter();
+    enum class RenderTreeMutationIsAllowed { Yes, No };
+    virtual void updateFirstLetter(RenderTreeMutationIsAllowed = RenderTreeMutationIsAllowed::Yes);
     void getFirstLetter(RenderObject*& firstLetter, RenderElement*& firstLetterContainer, RenderObject* skipObject = nullptr);
 
     virtual void scrollbarsChanged(bool /*horizontalScrollbarChanged*/, bool /*verticalScrollbarChanged*/) { }
@@ -304,6 +306,7 @@ public:
     RenderFlowThread* cachedFlowThreadContainingBlock() const;
     void setCachedFlowThreadContainingBlockNeedsUpdate();
     virtual bool cachedFlowThreadContainingBlockNeedsUpdate() const;
+    void resetFlowThreadContainingBlockAndChildInfoIncludingDescendants();
 
 protected:
     RenderFlowThread* locateFlowThreadContainingBlock() const override;
@@ -356,6 +359,7 @@ protected:
 
     virtual bool hasLineIfEmpty() const;
     
+    virtual bool canPerformSimplifiedLayout() const;
     bool simplifiedLayout();
     virtual void simplifiedNormalFlowLayout();
 
@@ -417,9 +421,6 @@ private:
     bool isSelfCollapsingBlock() const override;
     virtual bool childrenPreventSelfCollapsing() const;
     
-    // FIXME-BLOCKFLOW: Remove virtualizaion when all callers have moved to RenderBlockFlow
-    virtual bool hasLines() const { return false; }
-
     void createFirstLetterRenderer(RenderElement* firstLetterBlock, RenderText* currentTextChild);
     void updateFirstLetterStyle(RenderElement* firstLetterBlock, RenderObject* firstLetterContainer);
 
@@ -538,5 +539,3 @@ inline RenderBlock* RenderBlock::createAnonymousBlock(EDisplay display) const
 } // namespace WebCore
 
 SPECIALIZE_TYPE_TRAITS_RENDER_OBJECT(RenderBlock, isRenderBlock())
-
-#endif // RenderBlock_h

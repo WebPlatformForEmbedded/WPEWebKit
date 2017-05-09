@@ -18,14 +18,14 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#ifndef CSSValueList_h
-#define CSSValueList_h
+#pragma once
 
 #include "CSSValue.h"
 #include <wtf/Vector.h>
 
 namespace WebCore {
 
+class CSSCustomPropertyValue;
 struct CSSParserValue;
 class CSSParserValueList;
 
@@ -72,8 +72,6 @@ public:
     bool equals(const CSSValueList&) const;
     bool equals(const CSSValue&) const;
 
-    void addSubresourceStyleURLs(ListHashSet<URL>&, const StyleSheetContents*) const;
-
     bool traverseSubresources(const std::function<bool (const CachedResource&)>& handler) const;
     
     Ref<CSSValueList> cloneForCSSOM() const;
@@ -108,5 +106,3 @@ inline void CSSValueList::prepend(Ref<CSSValue>&& value)
 } // namespace WebCore
 
 SPECIALIZE_TYPE_TRAITS_CSS_VALUE(CSSValueList, isValueList())
-
-#endif // CSSValueList_h

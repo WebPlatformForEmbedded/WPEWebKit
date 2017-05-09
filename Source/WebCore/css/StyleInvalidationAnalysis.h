@@ -23,8 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef StyleInvalidationAnalysis_h
-#define StyleInvalidationAnalysis_h
+#pragma once
 
 #include <wtf/text/AtomicStringImpl.h>
 
@@ -35,6 +34,7 @@ class Element;
 class MediaQueryEvaluator;
 class RuleSet;
 class SelectorFilter;
+class ShadowRoot;
 class StyleSheetContents;
 
 class StyleInvalidationAnalysis {
@@ -45,6 +45,7 @@ public:
     bool dirtiesAllStyle() const { return m_dirtiesAllStyle; }
     bool hasShadowPseudoElementRulesInAuthorSheet() const { return m_hasShadowPseudoElementRulesInAuthorSheet; }
     void invalidateStyle(Document&);
+    void invalidateStyle(ShadowRoot&);
     void invalidateStyle(Element&);
 
 private:
@@ -56,8 +57,7 @@ private:
     const RuleSet& m_ruleSet;
     bool m_dirtiesAllStyle { false };
     bool m_hasShadowPseudoElementRulesInAuthorSheet { false };
+    bool m_didInvalidateHostChildren { false };
 };
 
-}
-
-#endif
+} // namespace WebCore

@@ -31,6 +31,7 @@
 #import "SandboxExtension.h"
 #import "SandboxInitializationParameters.h"
 #import "SecItemShim.h"
+#import "SessionTracker.h"
 #import "WKAPICast.h"
 #import "WKBrowsingContextHandleInternal.h"
 #import "WKFullKeyboardAccessWatcher.h"
@@ -48,12 +49,12 @@
 #import <WebCore/FontCache.h>
 #import <WebCore/FontCascade.h>
 #import <WebCore/LocalizedStrings.h>
-#import <WebCore/MemoryPressureHandler.h>
+#import <WebCore/MemoryRelease.h>
 #import <WebCore/NSAccessibilitySPI.h>
 #import <WebCore/RuntimeApplicationChecks.h>
-#import <WebCore/pthreadSPI.h>
 #import <WebCore/VNodeTracker.h>
 #import <WebCore/WebCoreNSURLExtras.h>
+#import <WebCore/pthreadSPI.h>
 #import <WebKitSystemInterface.h>
 #import <algorithm>
 #import <dispatch/dispatch.h>
@@ -90,6 +91,7 @@ static id NSApplicationAccessibilityFocusedUIElement(NSApplication*, SEL)
 void WebProcess::platformInitializeWebProcess(WebProcessCreationParameters&& parameters)
 {
     WebCore::setApplicationBundleIdentifier(parameters.uiProcessBundleIdentifier);
+    SessionTracker::setIdentifierBase(parameters.uiProcessBundleIdentifier);
 
 #if ENABLE(SANDBOX_EXTENSIONS)
     SandboxExtension::consumePermanently(parameters.uiProcessBundleResourcePathExtensionHandle);
@@ -118,6 +120,7 @@ void WebProcess::platformInitializeWebProcess(WebProcessCreationParameters&& par
     m_compositingRenderServerPort = WTFMove(parameters.acceleratedCompositingPort);
     m_presenterApplicationPid = parameters.presenterApplicationPid;
 
+    WebCore::registerMemoryReleaseNotifyCallbacks();
     MemoryPressureHandler::ReliefLogger::setLoggingEnabled(parameters.shouldEnableMemoryPressureReliefLogging);
 
 #if PLATFORM(IOS)
@@ -249,7 +252,7 @@ void WebProcess::platformInitializeProcess(const ChildProcessInitializationParam
 #endif
 
 #if ENABLE(SEC_ITEM_SHIM)
-    SecItemShim::singleton().initialize(this);
+    initializeSecItemShim(*this);
 #endif
 }
 
@@ -314,7 +317,7 @@ static NSURL *origin(WebPage& page)
     if (!mainFrameOrigin->isUnique())
         mainFrameOriginString = mainFrameOrigin->toRawString();
     else
-        mainFrameOriginString = mainFrameURL.protocol() + ':'; // toRawString() is not supposed to work with unique origins, and would just return "://".
+        mainFrameOriginString = makeString(mainFrameURL.protocol(), ':'); // toRawString() is not supposed to work with unique origins, and would just return "://".
 
     // +[NSURL URLWithString:] returns nil when its argument is malformed. It's unclear when we would have a malformed URL here,
     // but it happens in practice according to <rdar://problem/14173389>. Leaving an assertion in to catch a reproducible case.

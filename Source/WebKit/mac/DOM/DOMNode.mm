@@ -33,9 +33,11 @@
 #import "DOMNodeListInternal.h"
 #import "ExceptionHandlers.h"
 #import "ObjCEventListener.h"
+#import <WebCore/DOMImplementation.h>
 #import <WebCore/Element.h>
 #import <WebCore/JSMainThreadExecState.h>
 #import <WebCore/NodeList.h>
+#import <WebCore/SVGTests.h>
 #import <WebCore/ThreadCheck.h>
 #import <WebCore/WebCoreObjCExtras.h>
 #import <WebCore/WebScriptObjectPrivate.h>
@@ -95,9 +97,7 @@ DOMNode *kit(Node* value)
 - (void)setNodeValue:(NSString *)newNodeValue
 {
     JSMainThreadNullState state;
-    ExceptionCode ec = 0;
-    unwrap(*self).setNodeValue(newNodeValue, ec);
-    raiseOnDOMError(ec);
+    raiseOnDOMError(unwrap(*self).setNodeValue(newNodeValue));
 }
 
 - (unsigned short)nodeType
@@ -163,9 +163,7 @@ DOMNode *kit(Node* value)
 - (void)setPrefix:(NSString *)newPrefix
 {
     JSMainThreadNullState state;
-    ExceptionCode ec = 0;
-    unwrap(*self).setPrefix(newPrefix, ec);
-    raiseOnDOMError(ec);
+    raiseOnDOMError(unwrap(*self).setPrefix(newPrefix));
 }
 
 - (NSString *)localName
@@ -195,9 +193,7 @@ DOMNode *kit(Node* value)
 - (void)setTextContent:(NSString *)newTextContent
 {
     JSMainThreadNullState state;
-    ExceptionCode ec = 0;
-    unwrap(*self).setTextContent(newTextContent, ec);
-    raiseOnDOMError(ec);
+    raiseOnDOMError(unwrap(*self).setTextContent(newTextContent));
 }
 
 - (BOOL)isConnected
@@ -223,11 +219,8 @@ DOMNode *kit(Node* value)
     JSMainThreadNullState state;
     if (!newChild)
         raiseTypeErrorException();
-    ExceptionCode ec = 0;
-    if (unwrap(*self).insertBefore(*core(newChild), core(refChild), ec))
-        return newChild;
-    raiseOnDOMError(ec);
-    return nil;
+    raiseOnDOMError(unwrap(*self).insertBefore(*core(newChild), core(refChild)));
+    return newChild;
 }
 
 - (DOMNode *)replaceChild:(DOMNode *)newChild oldChild:(DOMNode *)oldChild
@@ -237,11 +230,8 @@ DOMNode *kit(Node* value)
         raiseTypeErrorException();
     if (!oldChild)
         raiseTypeErrorException();
-    ExceptionCode ec = 0;
-    if (unwrap(*self).replaceChild(*core(newChild), *core(oldChild), ec))
-        return oldChild;
-    raiseOnDOMError(ec);
-    return nil;
+    raiseOnDOMError(unwrap(*self).replaceChild(*core(newChild), *core(oldChild)));
+    return oldChild;
 }
 
 - (DOMNode *)removeChild:(DOMNode *)oldChild
@@ -249,11 +239,8 @@ DOMNode *kit(Node* value)
     JSMainThreadNullState state;
     if (!oldChild)
         raiseTypeErrorException();
-    ExceptionCode ec = 0;
-    if (unwrap(*self).removeChild(*core(oldChild), ec))
-        return oldChild;
-    raiseOnDOMError(ec);
-    return nil;
+    raiseOnDOMError(unwrap(*self).removeChild(*core(oldChild)));
+    return oldChild;
 }
 
 - (DOMNode *)appendChild:(DOMNode *)newChild
@@ -261,11 +248,8 @@ DOMNode *kit(Node* value)
     JSMainThreadNullState state;
     if (!newChild)
         raiseTypeErrorException();
-    ExceptionCode ec = 0;
-    if (unwrap(*self).appendChild(*core(newChild), ec))
-        return newChild;
-    raiseOnDOMError(ec);
-    return nil;
+    raiseOnDOMError(unwrap(*self).appendChild(*core(newChild)));
+    return newChild;
 }
 
 - (BOOL)hasChildNodes
@@ -277,10 +261,7 @@ DOMNode *kit(Node* value)
 - (DOMNode *)cloneNode:(BOOL)deep
 {
     JSMainThreadNullState state;
-    ExceptionCode ec = 0;
-    DOMNode *result = kit(unwrap(*self).cloneNodeForBindings(deep, ec).get());
-    raiseOnDOMError(ec);
-    return result;
+    return kit(raiseOnDOMError(unwrap(*self).cloneNodeForBindings(deep)).ptr());
 }
 
 - (void)normalize
@@ -291,8 +272,7 @@ DOMNode *kit(Node* value)
 
 - (BOOL)isSupported:(NSString *)feature version:(NSString *)version
 {
-    JSMainThreadNullState state;
-    return unwrap(*self).isSupportedForBindings(feature, version);
+    return SVGTests::hasFeatureForLegacyBindings(feature, version);
 }
 
 - (BOOL)hasAttributes
@@ -335,7 +315,7 @@ DOMNode *kit(Node* value)
 {
     JSMainThreadNullState state;
     if (!other)
-        raiseTypeErrorException();
+        return Node::DOCUMENT_POSITION_DISCONNECTED;
     return unwrap(*self).compareDocumentPosition(*core(other));
 }
 
@@ -354,25 +334,25 @@ DOMNode *kit(Node* value)
 - (void)addEventListener:(NSString *)type listener:(id <DOMEventListener>)listener useCapture:(BOOL)useCapture
 {
     JSMainThreadNullState state;
-    unwrap(*self).addEventListenerForBindings(type, ObjCEventListener::wrap(listener), useCapture);
+    unwrap(*self).addEventListenerForBindings(type, ObjCEventListener::wrap(listener), static_cast<bool>(useCapture));
 }
 
 - (void)addEventListener:(NSString *)type :(id <DOMEventListener>)listener :(BOOL)useCapture
 {
     JSMainThreadNullState state;
-    unwrap(*self).addEventListenerForBindings(type, ObjCEventListener::wrap(listener), useCapture);
+    unwrap(*self).addEventListenerForBindings(type, ObjCEventListener::wrap(listener), static_cast<bool>(useCapture));
 }
 
 - (void)removeEventListener:(NSString *)type listener:(id <DOMEventListener>)listener useCapture:(BOOL)useCapture
 {
     JSMainThreadNullState state;
-    unwrap(*self).removeEventListenerForBindings(type, ObjCEventListener::wrap(listener), useCapture);
+    unwrap(*self).removeEventListenerForBindings(type, ObjCEventListener::wrap(listener), static_cast<bool>(useCapture));
 }
 
 - (void)removeEventListener:(NSString *)type :(id <DOMEventListener>)listener :(BOOL)useCapture
 {
     JSMainThreadNullState state;
-    unwrap(*self).removeEventListenerForBindings(type, ObjCEventListener::wrap(listener), useCapture);
+    unwrap(*self).removeEventListenerForBindings(type, ObjCEventListener::wrap(listener), static_cast<bool>(useCapture));
 }
 
 - (BOOL)dispatchEvent:(DOMEvent *)event
@@ -380,10 +360,7 @@ DOMNode *kit(Node* value)
     JSMainThreadNullState state;
     if (!event)
         raiseTypeErrorException();
-    ExceptionCode ec = 0;
-    BOOL result = unwrap(*self).dispatchEventForBindings(*core(event), ec);
-    raiseOnDOMError(ec);
-    return result;
+    return raiseOnDOMError(unwrap(*self).dispatchEventForBindings(*core(event)));
 }
 
 @end

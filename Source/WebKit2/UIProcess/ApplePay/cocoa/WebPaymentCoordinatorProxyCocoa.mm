@@ -29,6 +29,7 @@
 #if ENABLE(APPLE_PAY)
 
 #import "WebPaymentCoordinatorProxy.h"
+#import "WebProcessPool.h"
 #import <WebCore/PassKitSPI.h>
 #import <WebCore/PaymentAuthorizationStatus.h>
 #import <WebCore/PaymentHeaders.h>
@@ -42,6 +43,7 @@ SOFT_LINK_PRIVATE_FRAMEWORK(PassKit)
 SOFT_LINK_FRAMEWORK(PassKit)
 #endif
 
+SOFT_LINK_CLASS(PassKit, PKPassLibrary);
 SOFT_LINK_CLASS(PassKit, PKPaymentAuthorizationViewController);
 SOFT_LINK_CLASS(PassKit, PKPaymentMerchantSession);
 SOFT_LINK_CLASS(PassKit, PKPaymentRequest);
@@ -222,6 +224,23 @@ void WebPaymentCoordinatorProxy::platformCanMakePaymentsWithActiveCard(const Str
     });
 }
 
+void WebPaymentCoordinatorProxy::platformOpenPaymentSetup(const String& merchantIdentifier, const String& domainName, std::function<void (bool)> completionHandler)
+{
+    auto passLibrary = adoptNS([allocPKPassLibraryInstance() init]);
+    if (![passLibrary respondsToSelector:@selector(openPaymentSetupForMerchantIdentifier:domain:completion:)]) {
+        RunLoop::main().dispatch([completionHandler] {
+            completionHandler(false);
+        });
+        return;
+    }
+
+    [passLibrary openPaymentSetupForMerchantIdentifier:merchantIdentifier domain:domainName completion:[completionHandler](BOOL result) {
+        RunLoop::main().dispatch([completionHandler, result] {
+            completionHandler(result);
+        });
+    }];
+}
+
 static PKAddressField toPKAddressField(const WebCore::PaymentRequest::ContactFields& contactFields)
 {
     PKAddressField result = 0;
@@ -341,7 +360,7 @@ static RetainPtr<PKShippingMethod> toPKShippingMethod(const WebCore::PaymentRequ
     return result;
 }
 
-RetainPtr<PKPaymentRequest> toPKPaymentRequest(const WebCore::URL& originatingURL, const Vector<WebCore::URL>& linkIconURLs, const WebCore::PaymentRequest& paymentRequest)
+RetainPtr<PKPaymentRequest> toPKPaymentRequest(WebPageProxy& webPageProxy, const WebCore::URL& originatingURL, const Vector<WebCore::URL>& linkIconURLs, const WebCore::PaymentRequest& paymentRequest)
 {
     auto result = adoptNS([allocPKPaymentRequestInstance() init]);
 
@@ -390,6 +409,20 @@ RetainPtr<PKPaymentRequest> toPKPaymentRequest(const WebCore::URL& originatingUR
         auto applicationData = adoptNS([[NSData alloc] initWithBase64EncodedString:paymentRequest.applicationData() options:0]);
         [result setApplicationData:applicationData.get()];
     }
+
+    // FIXME: Instead of using respondsToSelector, this should use a proper #if version check.
+    auto& configuration = webPageProxy.process().processPool().configuration();
+
+    if (!configuration.sourceApplicationBundleIdentifier().isEmpty() && [result respondsToSelector:@selector(setSourceApplicationBundleIdentifier:)])
+        [result setSourceApplicationBundleIdentifier:configuration.sourceApplicationBundleIdentifier()];
+
+    if (!configuration.sourceApplicationSecondaryIdentifier().isEmpty() && [result respondsToSelector:@selector(setSourceApplicationSecondaryIdentifier:)])
+        [result setSourceApplicationSecondaryIdentifier:configuration.sourceApplicationSecondaryIdentifier()];
+
+#if PLATFORM(IOS)
+    if (!configuration.ctDataConnectionServiceType().isEmpty() && [result respondsToSelector:@selector(setCTDataConnectionServiceType:)])
+        [result setCTDataConnectionServiceType:configuration.ctDataConnectionServiceType()];
+#endif
 
     return result;
 }

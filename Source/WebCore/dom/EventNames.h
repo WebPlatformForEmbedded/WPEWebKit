@@ -19,8 +19,7 @@
  *
  */
 
-#ifndef EventNames_h
-#define EventNames_h
+#pragma once
 
 #include "ThreadGlobalData.h"
 #include <array>
@@ -60,6 +59,7 @@ namespace WebCore {
     macro(autocompleteerror) \
     macro(beforecopy) \
     macro(beforecut) \
+    macro(beforeinput) \
     macro(beforeload) \
     macro(beforepaste) \
     macro(beforeunload) \
@@ -76,7 +76,6 @@ namespace WebCore {
     macro(chargingtimechange) \
     macro(checking) \
     macro(click) \
-    macro(clipboard) \
     macro(close) \
     macro(complete) \
     macro(compositionend) \
@@ -103,6 +102,7 @@ namespace WebCore {
     macro(drop) \
     macro(durationchange) \
     macro(emptied) \
+    macro(encrypted) \
     macro(end) \
     macro(endEvent) \
     macro(ended) \
@@ -131,7 +131,9 @@ namespace WebCore {
     macro(invalid) \
     macro(keydown) \
     macro(keypress) \
+    macro(keystatuseschange) \
     macro(keyup) \
+    macro(languagechange) \
     macro(levelchange) \
     macro(load) \
     macro(loadeddata) \
@@ -217,6 +219,7 @@ namespace WebCore {
     macro(textInput) \
     macro(timeout) \
     macro(timeupdate) \
+    macro(toggle) \
     macro(tonechange) \
     macro(touchcancel) \
     macro(touchend) \
@@ -237,6 +240,7 @@ namespace WebCore {
     macro(visibilitychange) \
     macro(volumechange) \
     macro(waiting) \
+    macro(waitingforkey) \
     macro(webglcontextcreationerror) \
     macro(webglcontextlost) \
     macro(webglcontextrestored) \
@@ -362,6 +366,4 @@ inline bool EventNames::isGamepadEventType(const AtomicString& eventType) const
 
 #endif
 
-}
-
-#endif
+} // namespace WebCore

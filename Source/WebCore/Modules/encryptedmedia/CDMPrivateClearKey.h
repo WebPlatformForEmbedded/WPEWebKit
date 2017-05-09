@@ -23,10 +23,9 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef CDMPrivateClearKey_h
-#define CDMPrivateClearKey_h
+#pragma once
 
-#if ENABLE(ENCRYPTED_MEDIA_V2)
+#if ENABLE(LEGACY_ENCRYPTED_MEDIA)
 
 #include "CDMPrivate.h"
 
@@ -53,8 +52,6 @@ protected:
     CDM* m_cdm;
 };
 
-}
+} // namespace WebCore
 
-#endif // ENABLE(ENCRYPTED_MEDIA_V2)
-
-#endif // CDMPrivateClearKey_h
+#endif // ENABLE(LEGACY_ENCRYPTED_MEDIA)

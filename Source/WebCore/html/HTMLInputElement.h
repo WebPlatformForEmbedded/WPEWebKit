@@ -22,8 +22,7 @@
  *
  */
 
-#ifndef HTMLInputElement_h
-#define HTMLInputElement_h
+#pragma once
 
 #include "FileChooser.h"
 #include "HTMLTextFormControlElement.h"
@@ -40,7 +39,6 @@ class DragData;
 class FileList;
 class HTMLDataListElement;
 class HTMLImageLoader;
-class HTMLOptionElement;
 class Icon;
 class InputType;
 class ListAttributeTargetObserver;
@@ -50,14 +48,9 @@ class URL;
 struct DateTimeChooserParameters;
 
 struct InputElementClickState {
-    InputElementClickState()
-        : stateful(false)
-        , checked(false)
-        , indeterminate(false)
-    { }
-    bool stateful;
-    bool checked;
-    bool indeterminate;
+    bool stateful { false };
+    bool checked { false };
+    bool indeterminate { false };
     RefPtr<HTMLInputElement> checkedRadioButton;
 };
 
@@ -74,9 +67,11 @@ public:
     bool rangeUnderflow() const final;
     bool rangeOverflow() const final;
     bool stepMismatch() const final;
+    bool tooShort() const final;
     bool tooLong() const final;
     bool typeMismatch() const final;
     bool valueMissing() const final;
+    bool isValid() const final;
     WEBCORE_EXPORT String validationMessage() const final;
 
     // Returns the minimum value for type=date, number, or range.  Don't call this for other types.
@@ -93,11 +88,9 @@ public:
     Optional<Decimal> findClosestTickMarkValue(const Decimal&);
 #endif
 
-    // Implementations of HTMLInputElement::stepUp() and stepDown().
-    WEBCORE_EXPORT void stepUp(int, ExceptionCode&);
-    WEBCORE_EXPORT void stepDown(int, ExceptionCode&);
-    void stepUp(ExceptionCode& ec) { stepUp(1, ec); }
-    void stepDown(ExceptionCode& ec) { stepDown(1, ec); }
+    WEBCORE_EXPORT ExceptionOr<void> stepUp(int = 1);
+    WEBCORE_EXPORT ExceptionOr<void> stepDown(int = 1);
+
     // stepUp()/stepDown() for user-interaction.
     bool isSteppable() const;
 
@@ -172,8 +165,7 @@ public:
     WEBCORE_EXPORT void setType(const AtomicString&);
 
     WEBCORE_EXPORT String value() const final;
-    void setValue(const String&, ExceptionCode&, TextFieldEventBehavior = DispatchNoEvent);
-    WEBCORE_EXPORT void setValue(const String&, TextFieldEventBehavior = DispatchNoEvent);
+    WEBCORE_EXPORT ExceptionOr<void> setValue(const String&, TextFieldEventBehavior = DispatchNoEvent);
     WEBCORE_EXPORT void setValueForUser(const String&);
     // Checks if the specified string would be a valid value.
     // We should not call this for types with no string value such as CHECKBOX and RADIO.
@@ -190,10 +182,10 @@ public:
     WEBCORE_EXPORT void setEditingValue(const String&);
 
     WEBCORE_EXPORT double valueAsDate() const;
-    WEBCORE_EXPORT void setValueAsDate(double, ExceptionCode&);
+    WEBCORE_EXPORT ExceptionOr<void> setValueAsDate(double);
 
     WEBCORE_EXPORT double valueAsNumber() const;
-    WEBCORE_EXPORT void setValueAsNumber(double, ExceptionCode&, TextFieldEventBehavior = DispatchNoEvent);
+    WEBCORE_EXPORT ExceptionOr<void> setValueAsNumber(double, TextFieldEventBehavior = DispatchNoEvent);
 
     String valueWithDefault() const;
 
@@ -231,12 +223,10 @@ public:
     String accept() const;
     WEBCORE_EXPORT String alt() const;
 
-    WEBCORE_EXPORT void setSize(unsigned);
-    void setSize(unsigned, ExceptionCode&);
+    WEBCORE_EXPORT ExceptionOr<void> setSize(unsigned);
 
     URL src() const;
 
-    int maxLengthForBindings() const { return m_maxLength; }
     unsigned effectiveMaxLength() const;
 
     bool multiple() const;
@@ -284,7 +274,7 @@ public:
     // Functions for InputType classes.
     void setValueInternal(const String&, TextFieldEventBehavior);
     bool isTextFormControlFocusable() const;
-    bool isTextFormControlKeyboardFocusable(KeyboardEvent*) const;
+    bool isTextFormControlKeyboardFocusable(KeyboardEvent&) const;
     bool isTextFormControlMouseFocusable() const;
     bool valueAttributeWasUpdatedAfterParsing() const { return m_valueAttributeWasUpdatedAfterParsing; }
 
@@ -318,8 +308,8 @@ public:
     static Vector<FileChooserFileInfo> filesFromFileInputFormControlState(const FormControlState&);
 
     bool matchesReadWritePseudoClass() const final;
-    WEBCORE_EXPORT void setRangeText(const String& replacement, ExceptionCode&) final;
-    WEBCORE_EXPORT void setRangeText(const String& replacement, unsigned start, unsigned end, const String& selectionMode, ExceptionCode&) final;
+    WEBCORE_EXPORT ExceptionOr<void> setRangeText(const String& replacement) final;
+    WEBCORE_EXPORT ExceptionOr<void> setRangeText(const String& replacement, unsigned start, unsigned end, const String& selectionMode) final;
 
     HTMLImageLoader* imageLoader() { return m_imageLoader.get(); }
     HTMLImageLoader& ensureImageLoader();
@@ -335,7 +325,7 @@ public:
 protected:
     HTMLInputElement(const QualifiedName&, Document&, HTMLFormElement*, bool createdByParser);
 
-    void defaultEventHandler(Event*) override;
+    void defaultEventHandler(Event&) override;
 
 private:
     enum AutoCompleteSetting { Uninitialized, On, Off };
@@ -350,7 +340,7 @@ private:
     void didMoveToNewDocument(Document* oldDocument) final;
 
     bool hasCustomFocusLogic() const final;
-    bool isKeyboardFocusable(KeyboardEvent*) const final;
+    bool isKeyboardFocusable(KeyboardEvent&) const final;
     bool isMouseFocusable() const final;
     bool isEnumeratable() const final;
     bool supportLabels() const final;
@@ -402,9 +392,11 @@ private:
     void registerForSuspensionCallbackIfNeeded();
     void unregisterForSuspensionCallbackIfNeeded();
 
+    bool supportsMinLength() const { return isTextType(); }
     bool supportsMaxLength() const { return isTextType(); }
     bool isTextType() const;
-    bool tooLong(const String&, NeedsToCheckDirtyFlag) const;
+    bool tooShort(StringView, NeedsToCheckDirtyFlag) const;
+    bool tooLong(StringView, NeedsToCheckDirtyFlag) const;
 
     bool supportsPlaceholder() const final;
     void updatePlaceholderText() final;
@@ -427,6 +419,7 @@ private:
     void resetListAttributeTargetObserver();
 #endif
     void maxLengthAttributeChanged(const AtomicString& newValue);
+    void minLengthAttributeChanged(const AtomicString& newValue);
     void updateValueIfNeeded();
 
     void addToRadioButtonGroup();
@@ -435,7 +428,6 @@ private:
     AtomicString m_name;
     String m_valueIfDirty;
     unsigned m_size;
-    int m_maxLength;
     short m_maxResults;
     bool m_isChecked : 1;
     bool m_reflectsCheckedAttribute : 1;
@@ -467,5 +459,4 @@ private:
 #endif
 };
 
-} //namespace
-#endif
+}

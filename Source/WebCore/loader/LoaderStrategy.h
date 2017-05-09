@@ -23,8 +23,7 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef LoaderStrategy_h
-#define LoaderStrategy_h
+#pragma once
 
 #include "ResourceHandleTypes.h"
 #include "ResourceLoadPriority.h"
@@ -33,7 +32,6 @@
 
 namespace WebCore {
 
-class BlobRegistry;
 class CachedResource;
 class Frame;
 class NetscapePlugInStreamLoader;
@@ -59,12 +57,10 @@ public:
     virtual void suspendPendingRequests() = 0;
     virtual void resumePendingRequests() = 0;
 
-    virtual void createPingHandle(NetworkingContext*, ResourceRequest&, bool shouldUseCredentialStorage) = 0;
+    virtual void createPingHandle(NetworkingContext*, ResourceRequest&, bool shouldUseCredentialStorage, bool shouldFollowRedirects) = 0;
 
 protected:
     virtual ~LoaderStrategy();
 };
 
 } // namespace WebCore
-
-#endif // LoaderStrategy_h

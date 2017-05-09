@@ -61,7 +61,6 @@
 #import <WebCore/CachedResourceLoader.h>
 #import <WebCore/Chrome.h>
 #import <WebCore/ColorMac.h>
-#import <WebCore/DOMImplementation.h>
 #import <WebCore/DatabaseManager.h>
 #import <WebCore/DocumentFragment.h>
 #import <WebCore/DocumentLoader.h>
@@ -80,6 +79,7 @@
 #import <WebCore/HitTestResult.h>
 #import <WebCore/JSNode.h>
 #import <WebCore/LegacyWebArchive.h>
+#import <WebCore/MIMETypeRegistry.h>
 #import <WebCore/MainFrame.h>
 #import <WebCore/Page.h>
 #import <WebCore/PlatformEventFactoryMac.h>
@@ -101,9 +101,9 @@
 #import <WebCore/markup.h>
 #import <WebKitSystemInterface.h>
 #import <bindings/ScriptValue.h>
+#import <runtime/JSCJSValue.h>
 #import <runtime/JSLock.h>
 #import <runtime/JSObject.h>
-#import <runtime/JSCJSValue.h>
 #import <wtf/CurrentTime.h>
 
 #if PLATFORM(IOS)
@@ -111,7 +111,6 @@
 #import "WebResource.h"
 #import "WebUIKitDelegate.h"
 #import <WebCore/Document.h>
-#import <WebCore/Editor.h>
 #import <WebCore/EditorClient.h>
 #import <WebCore/FocusController.h>
 #import <WebCore/Font.h>
@@ -847,42 +846,7 @@ static inline WebDataSource *dataSource(DocumentLoader* loader)
     return kit(_private->coreFrame->editor().mark().toNormalizedRange().get());
 }
 
-// Given proposedRange, returns an extended range that includes adjacent whitespace that should
-// be deleted along with the proposed range in order to preserve proper spacing and punctuation of
-// the text surrounding the deletion.
-- (DOMRange *)_smartDeleteRangeForProposedRange:(DOMRange *)proposedRange
-{
-    Node* startContainer = core([proposedRange startContainer]);
-    Node* endContainer = core([proposedRange endContainer]);
-    if (startContainer == nil || endContainer == nil)
-        return nil;
-
-    ASSERT(&startContainer->document() == &endContainer->document());
-    
-    _private->coreFrame->document()->updateLayoutIgnorePendingStylesheets();
-
-    Position start = Position(startContainer, [proposedRange startOffset], Position::PositionIsOffsetInAnchor);
-    Position end = Position(endContainer, [proposedRange endOffset], Position::PositionIsOffsetInAnchor);
-    Position newStart = start.upstream().leadingWhitespacePosition(DOWNSTREAM, true);
-    if (newStart.isNull())
-        newStart = start;
-    Position newEnd = end.downstream().trailingWhitespacePosition(DOWNSTREAM, true);
-    if (newEnd.isNull())
-        newEnd = end;
-
-    newStart = newStart.parentAnchoredEquivalent();
-    newEnd = newEnd.parentAnchoredEquivalent();
-
-    Ref<Range> range = _private->coreFrame->document()->createRange();
-    if (newStart.containerNode()) {
-        int exception = 0;
-        range->setStart(*newStart.containerNode(), newStart.offsetInContainerNode(), exception);
-        range->setEnd(*newStart.containerNode(), newStart.offsetInContainerNode(), exception);
-    }
-    return kit(range.ptr());
-}
-
-- (DOMDocumentFragment *)_documentFragmentWithMarkupString:(NSString *)markupString baseURLString:(NSString *)baseURLString 
+- (DOMDocumentFragment *)_documentFragmentWithMarkupString:(NSString *)markupString baseURLString:(NSString *)baseURLString
 {
     Frame* frame = _private->coreFrame;
     if (!frame)
@@ -988,7 +952,7 @@ static inline WebDataSource *dataSource(DocumentLoader* loader)
     String mimeType = frame->document()->loader()->writer().mimeType();
     PluginData* pluginData = frame->page() ? &frame->page()->pluginData() : 0;
 
-    if (WebCore::DOMImplementation::isTextMIMEType(mimeType)
+    if (WebCore::MIMETypeRegistry::isTextMIMEType(mimeType)
         || Image::supportsType(mimeType)
         || (pluginData && pluginData->supportsWebVisibleMimeType(mimeType, PluginData::AllPlugins) && frame->loader().subframeLoader().allowPlugins())
         || (pluginData && pluginData->supportsWebVisibleMimeType(mimeType, PluginData::OnlyApplicationPlugins)))
@@ -1917,7 +1881,7 @@ static WebFrameLoadType toWebFrameLoadType(FrameLoadType frameLoadType)
 
 #endif // PLATFORM(IOS)
 
-#if ENABLE(IOS_TEXT_AUTOSIZING)
+#if ENABLE(TEXT_AUTOSIZING)
 - (void)resetTextAutosizingBeforeLayout
 {
     id documentView = [_private->webFrameView documentView];    
@@ -1959,7 +1923,7 @@ static WebFrameLoadType toWebFrameLoadType(FrameLoadType frameLoadType)
 - (void)_setTextAutosizingWidth:(CGFloat)width
 {
 }
-#endif // ENABLE(IOS_TEXT_AUTOSIZING)
+#endif // ENABLE(TEXT_AUTOSIZING)
 
 - (void)_replaceSelectionWithFragment:(DOMDocumentFragment *)fragment selectReplacement:(BOOL)selectReplacement smartReplace:(BOOL)smartReplace matchStyle:(BOOL)matchStyle
 {
@@ -2074,7 +2038,7 @@ static WebFrameLoadType toWebFrameLoadType(FrameLoadType frameLoadType)
     }
     
     if (Document* document = _private->coreFrame->document()) {
-        if (DatabaseManager::singleton().hasOpenDatabases(document))
+        if (DatabaseManager::singleton().hasOpenDatabases(*document))
             [result setObject:[NSNumber numberWithBool:YES] forKey:WebFrameUsesDatabases];
         if (!document->canSuspendActiveDOMObjectsForDocumentSuspension())
             [result setObject:[NSNumber numberWithBool:YES] forKey:WebFrameCanSuspendActiveDOMObjects];

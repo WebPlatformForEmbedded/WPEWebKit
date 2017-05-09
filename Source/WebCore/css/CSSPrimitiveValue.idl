@@ -20,7 +20,6 @@
 [
     ImplementationLacksVTable,
 ] interface CSSPrimitiveValue : CSSValue {
-
     // UnitTypes
     const unsigned short CSS_UNKNOWN = 0;
     const unsigned short CSS_NUMBER = 1;
@@ -55,13 +54,13 @@
     
     readonly attribute unsigned short primitiveType;
 
-    [RaisesException] void setFloatValue(optional unsigned short unitType = 0, optional unrestricted float floatValue = NaN);
-    [RaisesException] unrestricted float getFloatValue(optional unsigned short unitType = 0);
+    [MayThrowException] void setFloatValue(optional unsigned short unitType = 0, optional unrestricted float floatValue = NaN);
+    [MayThrowException] unrestricted float getFloatValue(optional unsigned short unitType = 0);
 
-    // FIXME: Using "undefined" as default parameter value is wrong.
-    [RaisesException] void setStringValue(optional unsigned short stringType = 0, optional DOMString stringValue = "undefined");
-    [RaisesException] DOMString getStringValue();
-    [RaisesException] Counter getCounterValue();
-    [RaisesException] Rect getRectValue();
-    [RaisesException] RGBColor getRGBColorValue();
+    [MayThrowException] void setStringValue(optional unsigned short stringType = 0, optional DOMString stringValue);
+    [MayThrowException] DOMString getStringValue();
+
+    [MayThrowException] Counter getCounterValue();
+    [MayThrowException] Rect getRectValue();
+    [MayThrowException] RGBColor getRGBColorValue();
 };

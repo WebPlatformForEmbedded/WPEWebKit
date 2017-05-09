@@ -27,9 +27,9 @@
 #define AssistedNodeInformation_h
 
 #include "ArgumentCoders.h"
+#include <WebCore/AutocapitalizeTypes.h>
 #include <WebCore/Autofill.h>
 #include <WebCore/IntRect.h>
-#include <WebCore/WebAutocapitalize.h>
 #include <wtf/text/WTFString.h>
 
 namespace WebKit {
@@ -91,6 +91,7 @@ struct AssistedNodeInformation {
     WebCore::IntRect selectionRect;
     double minimumScaleFactor { -INFINITY };
     double maximumScaleFactor { INFINITY };
+    double maximumScaleFactorIgnoringAlwaysScalable { INFINITY };
     double nodeFontSize { 0 };
     bool hasNextNode { false };
     bool hasPreviousNode { false };
@@ -99,9 +100,9 @@ struct AssistedNodeInformation {
     bool isMultiSelect { false };
     bool isReadOnly {false };
     bool allowsUserScaling { false };
-    bool allowsUserScalingIgnoringForceAlwaysScaling { false };
+    bool allowsUserScalingIgnoringAlwaysScalable { false };
     bool insideFixedPosition { false };
-    WebAutocapitalizeType autocapitalizeType { WebAutocapitalizeTypeDefault };
+    AutocapitalizeType autocapitalizeType { AutocapitalizeTypeDefault };
     InputType elementType { InputType::None };
     String formAction;
     Vector<OptionItem> selectOptions;

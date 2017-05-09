@@ -26,13 +26,15 @@
 #include "EventNames.h"
 #include "EventPath.h"
 #include "EventTarget.h"
+#include "RuntimeApplicationChecks.h"
 #include "UserGestureIndicator.h"
 #include <wtf/CurrentTime.h>
 
 namespace WebCore {
 
-Event::Event()
-    : m_createTime(convertSecondsToDOMTimeStamp(currentTime()))
+Event::Event(IsTrusted isTrusted)
+    : m_isTrusted(isTrusted == IsTrusted::Yes)
+    , m_createTime(convertSecondsToDOMTimeStamp(currentTime()))
 {
 }
 
@@ -56,12 +58,13 @@ Event::Event(const AtomicString& eventType, bool canBubbleArg, bool cancelableAr
 {
 }
 
-Event::Event(const AtomicString& eventType, const EventInit& initializer)
+Event::Event(const AtomicString& eventType, const EventInit& initializer, IsTrusted isTrusted)
     : m_type(eventType)
     , m_isInitialized(true)
     , m_canBubble(initializer.bubbles)
     , m_cancelable(initializer.cancelable)
     , m_composed(initializer.composed)
+    , m_isTrusted(isTrusted == IsTrusted::Yes)
     , m_createTime(convertSecondsToDOMTimeStamp(currentTime()))
 {
 }
@@ -87,6 +90,23 @@ void Event::initEvent(const AtomicString& eventTypeArg, bool canBubbleArg, bool 
     m_cancelable = cancelableArg;
 }
 
+ExceptionOr<void> Event::initEventForBindings(ScriptExecutionContext& scriptExecutionContext, const AtomicString& type, bool bubbles)
+{
+#if PLATFORM(IOS)
+    // FIXME: Temporary quirk for Baidu Nuomi App which calls initEvent() with too few parameters (rdar://problem/28707838).
+    if (IOSApplication::isBaiduNuomi()) {
+        scriptExecutionContext.addConsoleMessage(MessageSource::JS, MessageLevel::Warning, ASCIILiteral("Calling Event.prototype.initEvent() with less than 3 parameters is deprecated."));
+        initEvent(type, bubbles, false);
+        return { };
+    }
+#else
+    UNUSED_PARAM(scriptExecutionContext);
+    UNUSED_PARAM(type);
+    UNUSED_PARAM(bubbles);
+#endif
+    return Exception { TypeError, ASCIILiteral("Not enough arguments") };
+}
+
 bool Event::composed() const
 {
     if (m_composed)
@@ -104,7 +124,8 @@ bool Event::composed() const
         || isFocusEvent()
         || isKeyboardEvent()
         || isMouseEvent()
-        || isTouchEvent();
+        || isTouchEvent()
+        || isInputEvent();
 }
 
 EventInterface Event::eventInterface() const
@@ -128,6 +149,11 @@ bool Event::isFocusEvent() const
 }
 
 bool Event::isKeyboardEvent() const
+{
+    return false;
+}
+
+bool Event::isInputEvent() const
 {
     return false;
 }

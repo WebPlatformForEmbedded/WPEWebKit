@@ -25,8 +25,7 @@
     JSCustomHeader,
     JSCustomMarkFunction,
     JSCustomPushEventHandlerScope,
-] interface Node : EventTarget
- {
+] interface Node : EventTarget {
     // NodeType
     const unsigned short ELEMENT_NODE = 1;
     const unsigned short ATTRIBUTE_NODE = 2;
@@ -43,37 +42,31 @@
 
     readonly attribute DOMString nodeName;
 
-    // FIXME: the spec says this can also raise on retrieval.
-    [SetterRaisesException] attribute DOMString? nodeValue;
+    [CEReactions, SetterMayThrowException] attribute DOMString? nodeValue;
 
-    readonly attribute unsigned short nodeType;
-    readonly attribute Node? parentNode;
+    [DOMJIT=Getter, CustomGetter] readonly attribute unsigned short nodeType;
+    [DOMJIT=Getter] readonly attribute Node? parentNode;
     readonly attribute NodeList childNodes;
-    readonly attribute Node? firstChild;
-    readonly attribute Node? lastChild;
-    readonly attribute Node? previousSibling;
-    readonly attribute Node? nextSibling;
-    readonly attribute Document? ownerDocument;
+    [DOMJIT=Getter] readonly attribute Node? firstChild;
+    [DOMJIT=Getter] readonly attribute Node? lastChild;
+    [DOMJIT=Getter] readonly attribute Node? previousSibling;
+    [DOMJIT=Getter] readonly attribute Node? nextSibling;
+    [DOMJIT=Getter] readonly attribute Document? ownerDocument;
 
-    [Custom, RaisesException] Node insertBefore([CustomReturn] Node newChild, Node? refChild);
-    [Custom, RaisesException] Node replaceChild(Node newChild, [CustomReturn] Node oldChild);
-    [Custom, RaisesException, CEReactions] Node removeChild([CustomReturn] Node oldChild);
-    [Custom, RaisesException, CEReactions] Node appendChild([CustomReturn] Node newChild);
+    [CEReactions, Custom, MayThrowException] Node insertBefore(Node newChild, Node? refChild);
+    [CEReactions, Custom, MayThrowException] Node replaceChild(Node newChild, Node oldChild);
+    [CEReactions, Custom, MayThrowException] Node removeChild(Node oldChild);
+    [CEReactions, Custom, MayThrowException] Node appendChild(Node newChild);
 
     boolean hasChildNodes();
 
-    [NewObject, RaisesException, ImplementedAs=cloneNodeForBindings, CEReactions] Node cloneNode(optional boolean deep = false);
+    [CEReactions, ImplementedAs=cloneNodeForBindings, MayThrowException, NewObject] Node cloneNode(optional boolean deep = false);
 
     void normalize();
 
-#if defined(LANGUAGE_GOBJECT) && LANGUAGE_GOBJECT
-    [ImplementedAs=isSupportedForBindings] boolean isSupported(optional DOMString feature, optional DOMString version);
-#endif
-
     readonly attribute USVString baseURI;
 
-    // FIXME: the spec says this can also raise on retrieval.
-    [SetterRaisesException] attribute DOMString? textContent;
+    [CEReactions, SetterMayThrowException] attribute DOMString? textContent;
 
     boolean isSameNode(Node? other);
     boolean isEqualNode(Node? other);
@@ -94,7 +87,12 @@
 
     boolean contains(Node? other);
 
+    [EnabledAtRuntime=ShadowDOM] Node getRootNode(optional GetRootNodeOptions options);
     [EnabledAtRuntime=ShadowDOM, ImplementedAs=inDocument] readonly attribute boolean isConnected;
 
     readonly attribute Element parentElement;
+};
+
+dictionary GetRootNodeOptions {
+    boolean composed = false;
 };

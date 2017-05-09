@@ -50,7 +50,8 @@ enum WKEditableLinkBehavior {
 typedef enum WKEditableLinkBehavior WKEditableLinkBehavior;
 
 enum WKJavaScriptRuntimeFlags {
-    kWKJavaScriptRuntimeFlagsAllEnabled = 0
+    kWKJavaScriptRuntimeFlagsSharedArrayBufferEnabled = 1 << 0,
+    kWKJavaScriptRuntimeFlagsAllEnabled = kWKJavaScriptRuntimeFlagsSharedArrayBufferEnabled
 };
 typedef unsigned WKJavaScriptRuntimeFlagSet;
 
@@ -155,10 +156,6 @@ WK_EXPORT bool WKPreferencesGetPaginateDuringLayoutEnabled(WKPreferencesRef pref
 WK_EXPORT void WKPreferencesSetDOMPasteAllowed(WKPreferencesRef preferences, bool enabled);
 WK_EXPORT bool WKPreferencesGetDOMPasteAllowed(WKPreferencesRef preferences);
 
-// Defaults to true.
-WK_EXPORT void WKPreferencesSetWebSecurityEnabled(WKPreferencesRef preferences, bool enabled);
-WK_EXPORT bool WKPreferencesGetWebSecurityEnabled(WKPreferencesRef preferences);
-
 // Defaults to false.
 WK_EXPORT void WKPreferencesSetUniversalAccessFromFileURLsAllowed(WKPreferencesRef preferences, bool allowed);
 WK_EXPORT bool WKPreferencesGetUniversalAccessFromFileURLsAllowed(WKPreferencesRef preferences);
@@ -166,6 +163,10 @@ WK_EXPORT bool WKPreferencesGetUniversalAccessFromFileURLsAllowed(WKPreferencesR
 // Defaults to false.
 WK_EXPORT void WKPreferencesSetFileAccessFromFileURLsAllowed(WKPreferencesRef preferences, bool allowed);
 WK_EXPORT bool WKPreferencesGetFileAccessFromFileURLsAllowed(WKPreferencesRef preferences);
+
+// Defaults to true
+WK_EXPORT void WKPreferencesSetNeedsStorageAccessFromFileURLsQuirk(WKPreferencesRef preferences, bool needsQuirk);
+WK_EXPORT bool WKPreferencesGetNeedsStorageAccessFromFileURLsQuirk(WKPreferencesRef preferences);
 
 // Defaults to true.
 WK_EXPORT void WKPreferencesSetHixie76WebSocketProtocolEnabled(WKPreferencesRef preferencesRef, bool enabled);
@@ -243,7 +244,7 @@ WK_EXPORT bool WKPreferencesGetArtificialPluginInitializationDelayEnabled(WKPref
 WK_EXPORT void WKPreferencesSetTabToLinksEnabled(WKPreferencesRef preferencesRef, bool enabled);
 WK_EXPORT bool WKPreferencesGetTabToLinksEnabled(WKPreferencesRef preferencesRef);
 
-// Defaults to false
+// Defaults to true
 WK_EXPORT void WKPreferencesSetInteractiveFormValidationEnabled(WKPreferencesRef preferencesRef, bool enabled);
 WK_EXPORT bool WKPreferencesGetInteractiveFormValidationEnabled(WKPreferencesRef preferencesRef);
 
@@ -324,6 +325,10 @@ WK_EXPORT void WKPreferencesSetNewBlockInsideInlineModelEnabled(WKPreferencesRef
 WK_EXPORT bool WKPreferencesGetNewBlockInsideInlineModelEnabled(WKPreferencesRef);
 
 // Defaults to false.
+WK_EXPORT void WKPreferencesSetNewCSSParserEnabled(WKPreferencesRef, bool);
+WK_EXPORT bool WKPreferencesGetNewCSSParserEnabled(WKPreferencesRef);
+
+// Defaults to false.
 WK_EXPORT void WKPreferencesSetSubpixelCSSOMElementMetricsEnabled(WKPreferencesRef, bool);
 WK_EXPORT bool WKPreferencesGetSubpixelCSSOMElementMetricsEnabled(WKPreferencesRef);
 
@@ -400,7 +405,11 @@ WK_EXPORT bool WKPreferencesGetResourceUsageOverlayVisible(WKPreferencesRef);
 // Defaults to false.
 WK_EXPORT void WKPreferencesSetMockCaptureDevicesEnabled(WKPreferencesRef, bool);
 WK_EXPORT bool WKPreferencesGetMockCaptureDevicesEnabled(WKPreferencesRef);
-    
+
+// Defaults to true.
+WK_EXPORT void WKPreferencesSetMediaCaptureRequiresSecureConnection(WKPreferencesRef, bool);
+WK_EXPORT bool WKPreferencesGetMediaCaptureRequiresSecureConnection(WKPreferencesRef);
+
 // Defaults to false
 WK_EXPORT void WKPreferencesSetFetchAPIEnabled(WKPreferencesRef, bool flag);
 WK_EXPORT bool WKPreferencesGetFetchAPIEnabled(WKPreferencesRef);

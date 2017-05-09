@@ -25,16 +25,12 @@
 
 #include "DOMWindow.h"
 #include "Event.h"
+#include "UIEventInit.h"
 
 namespace WebCore {
 
 // FIXME: Remove this when no one is depending on it anymore.
 typedef DOMWindow AbstractView;
-
-struct UIEventInit : public EventInit {
-    RefPtr<DOMWindow> view;
-    int detail { 0 };
-};
 
 class UIEvent : public Event {
 public:
@@ -46,9 +42,9 @@ public:
     {
         return adoptRef(*new UIEvent);
     }
-    static Ref<UIEvent> createForBindings(const AtomicString& type, const UIEventInit& initializer)
+    static Ref<UIEvent> create(const AtomicString& type, const UIEventInit& initializer, IsTrusted isTrusted = IsTrusted::No)
     {
-        return adoptRef(*new UIEvent(type, initializer));
+        return adoptRef(*new UIEvent(type, initializer, isTrusted));
     }
     virtual ~UIEvent();
 
@@ -74,7 +70,7 @@ protected:
     UIEvent();
     UIEvent(const AtomicString& type, bool canBubble, bool cancelable, DOMWindow*, int detail);
     UIEvent(const AtomicString& type, bool canBubble, bool cancelable, double timestamp, DOMWindow*, int detail);
-    UIEvent(const AtomicString&, const UIEventInit&);
+    UIEvent(const AtomicString&, const UIEventInit&, IsTrusted);
 
 private:
     bool isUIEvent() const final;

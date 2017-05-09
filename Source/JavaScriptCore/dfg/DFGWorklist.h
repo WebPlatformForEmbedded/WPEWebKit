@@ -23,13 +23,13 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. 
  */
 
-#ifndef DFGWorklist_h
-#define DFGWorklist_h
+#pragma once
 
 #if ENABLE(DFG_JIT)
 
 #include "DFGPlan.h"
 #include "DFGThreadData.h"
+#include <wtf/AutomaticThread.h>
 #include <wtf/Condition.h>
 #include <wtf/Deque.h>
 #include <wtf/HashMap.h>
@@ -84,6 +84,9 @@ private:
     Worklist(CString worklistName);
     void finishCreation(unsigned numberOfThreads, int);
     
+    class ThreadBody;
+    friend class ThreadBody;
+    
     void runThread(ThreadData*);
     static void threadFunction(void* argument);
     
@@ -109,8 +112,8 @@ private:
 
     Lock m_suspensionLock;
     
-    mutable Lock m_lock;
-    Condition m_planEnqueued;
+    Box<Lock> m_lock;
+    RefPtr<AutomaticThreadCondition> m_planEnqueued;
     Condition m_planCompiled;
     
     Vector<std::unique_ptr<ThreadData>> m_threads;
@@ -118,18 +121,30 @@ private:
 };
 
 // For DFGMode compilations.
-Worklist* ensureGlobalDFGWorklist();
+Worklist& ensureGlobalDFGWorklist();
 Worklist* existingGlobalDFGWorklistOrNull();
 
 // For FTLMode and FTLForOSREntryMode compilations.
-Worklist* ensureGlobalFTLWorklist();
+Worklist& ensureGlobalFTLWorklist();
 Worklist* existingGlobalFTLWorklistOrNull();
 
-Worklist* ensureGlobalWorklistFor(CompilationMode);
+Worklist& ensureGlobalWorklistFor(CompilationMode);
 
 // Simplify doing things for all worklists.
 inline unsigned numberOfWorklists() { return 2; }
-inline Worklist* worklistForIndexOrNull(unsigned index)
+inline Worklist& ensureWorklistForIndex(unsigned index)
+{
+    switch (index) {
+    case 0:
+        return ensureGlobalDFGWorklist();
+    case 1:
+        return ensureGlobalFTLWorklist();
+    default:
+        RELEASE_ASSERT_NOT_REACHED();
+        return ensureGlobalDFGWorklist();
+    }
+}
+inline Worklist* existingWorklistForIndexOrNull(unsigned index)
 {
     switch (index) {
     case 0:
@@ -141,6 +156,12 @@ inline Worklist* worklistForIndexOrNull(unsigned index)
         return 0;
     }
 }
+inline Worklist& existingWorklistForIndex(unsigned index)
+{
+    Worklist* result = existingWorklistForIndexOrNull(index);
+    RELEASE_ASSERT(result);
+    return *result;
+}
 
 void completeAllPlansForVM(VM&);
 void rememberCodeBlocks(VM&);
@@ -148,6 +169,3 @@ void rememberCodeBlocks(VM&);
 } } // namespace JSC::DFG
 
 #endif // ENABLE(DFG_JIT)
-
-#endif // DFGWorklist_h
-

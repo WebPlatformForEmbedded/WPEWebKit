@@ -29,6 +29,7 @@
 #include "EmptyClients.h"
 
 #include "ApplicationCacheStorage.h"
+#include "BackForwardClient.h"
 #include "ColorChooser.h"
 #include "DOMWrapperWorld.h"
 #include "DatabaseProvider.h"
@@ -48,6 +49,7 @@
 #include "StorageNamespaceProvider.h"
 #include "ThreadableWebSocketChannel.h"
 #include "UserContentProvider.h"
+#include <heap/HeapInlines.h>
 #include <wtf/NeverDestroyed.h>
 
 namespace WebCore {
@@ -57,6 +59,8 @@ class EmptyPaymentCoordinatorClient final : public PaymentCoordinatorClient {
     bool supportsVersion(unsigned) override { return false; }
     bool canMakePayments() override { return false; }
     void canMakePaymentsWithActiveCard(const String&, const String&, std::function<void (bool)> completionHandler) override { callOnMainThread([completionHandler] { completionHandler(false); }); }
+    void openPaymentSetup(const String&, const String&, std::function<void (bool)> completionHandler) override { callOnMainThread([completionHandler] { completionHandler(false); }); }
+
     bool showPaymentUI(const URL&, const Vector<URL>&, const PaymentRequest&) override { return false; }
     void completeMerchantValidation(const PaymentMerchantSession&) override { }
 
@@ -137,6 +141,15 @@ class EmptyVisitedLinkStore final : public VisitedLinkStore {
     void addVisitedLink(Page&, LinkHash) override { }
 };
 
+class EmptyBackForwardClient final : public BackForwardClient {
+    void addItem(Ref<HistoryItem>&&) override { }
+    void goToItem(HistoryItem*) override { }
+    HistoryItem* itemAtIndex(int) override { return nullptr; }
+    int backListCount() override { return 0; }
+    int forwardListCount() override { return 0; }
+    void close() override { }
+};
+
 void fillWithEmptyClients(PageConfiguration& pageConfiguration)
 {
     static NeverDestroyed<EmptyChromeClient> dummyChromeClient;
@@ -166,6 +179,7 @@ void fillWithEmptyClients(PageConfiguration& pageConfiguration)
     static NeverDestroyed<EmptyProgressTrackerClient> dummyProgressTrackerClient;
     pageConfiguration.progressTrackerClient = &dummyProgressTrackerClient.get();
 
+    pageConfiguration.backForwardClient = adoptRef(new EmptyBackForwardClient);
     pageConfiguration.diagnosticLoggingClient = std::make_unique<EmptyDiagnosticLoggingClient>();
 
     pageConfiguration.applicationCacheStorage = ApplicationCacheStorage::create(String(), String());

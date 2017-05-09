@@ -26,10 +26,10 @@
 #ifndef MediaKeyEvent_h
 #define MediaKeyEvent_h
 
-#if ENABLE(ENCRYPTED_MEDIA)
+#if ENABLE(LEGACY_ENCRYPTED_MEDIA_V1)
 
 #include "Event.h"
-#include "MediaKeyError.h"
+#include "WebKitMediaKeyError.h"
 
 namespace WebCore {
 
@@ -39,20 +39,22 @@ struct MediaKeyEventInit : public EventInit {
     RefPtr<Uint8Array> initData;
     RefPtr<Uint8Array> message;
     String defaultURL;
-    RefPtr<MediaKeyError> errorCode;
+    RefPtr<WebKitMediaKeyError> errorCode;
     uint32_t systemCode { 0 };
 };
 
 class MediaKeyEvent final : public Event {
 public:
+    using Init = MediaKeyEventInit;
+
     virtual ~MediaKeyEvent();
 
-    static Ref<MediaKeyEvent> create(const AtomicString& type, const String& keySystem, const String& sessionId, RefPtr<Uint8Array>&& initData, RefPtr<Uint8Array>&& message, const String& defaultURL, RefPtr<MediaKeyError>&& errorCode, uint32_t systemCode)
+    static Ref<MediaKeyEvent> create(const AtomicString& type, const String& keySystem, const String& sessionId, RefPtr<Uint8Array>&& initData, RefPtr<Uint8Array>&& message, const String& defaultURL, RefPtr<WebKitMediaKeyError>&& errorCode, uint32_t systemCode)
     {
         return adoptRef(*new MediaKeyEvent(type, keySystem, sessionId, WTFMove(initData), WTFMove(message), defaultURL, WTFMove(errorCode), systemCode));
     }
 
-    static Ref<MediaKeyEvent> createForBindings(const AtomicString& type, const MediaKeyEventInit& initializer)
+    static Ref<MediaKeyEvent> create(const AtomicString& type, const MediaKeyEventInit& initializer)
     {
         return adoptRef(*new MediaKeyEvent(type, initializer));
     }
@@ -64,11 +66,11 @@ public:
     Uint8Array* initData() const { return m_initData.get(); }
     Uint8Array* message() const { return m_message.get(); }
     String defaultURL() const { return m_defaultURL; }
-    MediaKeyError* errorCode() const { return m_errorCode.get(); }
+    WebKitMediaKeyError* errorCode() const { return m_errorCode.get(); }
     unsigned short systemCode() const { return m_systemCode; }
 
 private:
-    MediaKeyEvent(const AtomicString& type, const String& keySystem, const String& sessionId, RefPtr<Uint8Array>&& initData, RefPtr<Uint8Array>&& message, const String& defaultURL, RefPtr<MediaKeyError>&& errorCode, uint32_t systemCode);
+    MediaKeyEvent(const AtomicString& type, const String& keySystem, const String& sessionId, RefPtr<Uint8Array>&& initData, RefPtr<Uint8Array>&& message, const String& defaultURL, RefPtr<WebKitMediaKeyError>&& errorCode, uint32_t systemCode);
 
     MediaKeyEvent(const AtomicString& type, const MediaKeyEventInit& initializer);
 
@@ -77,7 +79,7 @@ private:
     RefPtr<Uint8Array> m_initData;
     RefPtr<Uint8Array> m_message;
     String m_defaultURL;
-    RefPtr<MediaKeyError> m_errorCode;
+    RefPtr<WebKitMediaKeyError> m_errorCode;
     unsigned short m_systemCode;
 };
 

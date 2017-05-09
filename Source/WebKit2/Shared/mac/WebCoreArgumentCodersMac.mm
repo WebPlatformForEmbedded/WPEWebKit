@@ -39,7 +39,7 @@
 #import <WebCore/ResourceError.h>
 #import <WebCore/ResourceRequest.h>
 
-#if USE(CFNETWORK)
+#if USE(CFURLCONNECTION)
 #import <CFNetwork/CFURLRequest.h>
 #endif
 
@@ -57,7 +57,7 @@ using namespace WebCore;
 
 namespace IPC {
 
-#if USE(CFNETWORK)
+#if USE(CFURLCONNECTION)
 void ArgumentCoder<ResourceRequest>::encodePlatformData(Encoder& encoder, const ResourceRequest& resourceRequest)
 {
     RetainPtr<CFURLRequestRef> requestToSerialize = resourceRequest.cfURLRequest(DoNotUpdateHTTPBody);
@@ -111,6 +111,7 @@ void ArgumentCoder<ResourceRequest>::encodePlatformData(Encoder& encoder, const 
     // The fallback array is part of NSURLRequest, but it is not encoded by WKNSURLRequestCreateSerializableRepresentation.
     encoder << resourceRequest.responseContentDispositionEncodingFallbackArray();
     encoder.encodeEnum(resourceRequest.requester());
+    encoder.encodeEnum(resourceRequest.cachePolicy());
 }
 #endif
 
@@ -129,7 +130,7 @@ bool ArgumentCoder<ResourceRequest>::decodePlatformData(Decoder& decoder, Resour
     if (!IPC::decode(decoder, dictionary))
         return false;
 
-#if USE(CFNETWORK)
+#if USE(CFURLCONNECTION)
     RetainPtr<CFURLRequestRef> cfURLRequest = adoptCF(WKCreateCFURLRequestFromSerializableRepresentation(dictionary.get(), IPC::tokenNullTypeRef()));
     if (!cfURLRequest)
         return false;
@@ -157,6 +158,11 @@ bool ArgumentCoder<ResourceRequest>::decodePlatformData(Decoder& decoder, Resour
     if (!decoder.decodeEnum(requester))
         return false;
     resourceRequest.setRequester(requester);
+
+    ResourceRequestCachePolicy cachePolicy;
+    if (!decoder.decodeEnum(cachePolicy))
+        return false;
+    resourceRequest.setCachePolicy(cachePolicy);
 
     return true;
 }

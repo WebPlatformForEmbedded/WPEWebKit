@@ -81,12 +81,9 @@ void JIT::compileSetupVarargsFrame(OpcodeID opcode, Instruction* instruction, Ca
 
     // Profile the argument count.
     load32(Address(regT1, CallFrameSlot::argumentCount * static_cast<int>(sizeof(Register)) + PayloadOffset), regT2);
-    load8(info->addressOfMaxNumArguments(), regT0);
+    load32(info->addressOfMaxNumArguments(), regT0);
     Jump notBiggest = branch32(Above, regT0, regT2);
-    Jump notSaturated = branch32(BelowOrEqual, regT2, TrustedImm32(255));
-    move(TrustedImm32(255), regT2);
-    notSaturated.link(this);
-    store8(regT2, info->addressOfMaxNumArguments());
+    store32(regT2, info->addressOfMaxNumArguments());
     notBiggest.link(this);
     
     // Initialize 'this'.
@@ -156,7 +153,7 @@ void JIT::compileOpCall(OpcodeID opcodeID, Instruction* instruction, unsigned ca
     COMPILE_ASSERT(OPCODE_LENGTH(op_call) == OPCODE_LENGTH(op_tail_call_varargs), call_and_tail_call_varargs_opcodes_must_be_same_length);
     COMPILE_ASSERT(OPCODE_LENGTH(op_call) == OPCODE_LENGTH(op_tail_call_forward_arguments), call_and_tail_call_forward_arguments_opcodes_must_be_same_length);
 
-    CallLinkInfo* info;
+    CallLinkInfo* info = nullptr;
     if (opcodeID != op_call_eval)
         info = m_codeBlock->addCallLinkInfo();
     if (opcodeID == op_call_varargs || opcodeID == op_construct_varargs || opcodeID == op_tail_call_varargs || opcodeID == op_tail_call_forward_arguments)

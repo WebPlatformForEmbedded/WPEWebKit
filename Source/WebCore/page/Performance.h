@@ -36,21 +36,17 @@
 
 #include "DOMWindowProperty.h"
 #include "EventTarget.h"
-#include "PerformanceNavigation.h"
-#include "PerformanceTiming.h"
-#include "ScriptWrappable.h"
-#include <wtf/RefCounted.h>
-#include <wtf/RefPtr.h>
-#include <wtf/text/WTFString.h>
-
-#include "MemoryInfo.h"
+#include "ExceptionOr.h"
 
 namespace WebCore {
 
 class Document;
+class LoadTiming;
 class PerformanceEntry;
-class ResourceRequest;
+class PerformanceNavigation;
+class PerformanceTiming;
 class ResourceResponse;
+class URL;
 class UserTiming;
 
 class Performance final : public RefCounted<Performance>, public DOMWindowProperty, public EventTargetWithInlineData {
@@ -58,14 +54,9 @@ public:
     static Ref<Performance> create(Frame& frame) { return adoptRef(*new Performance(frame)); }
     ~Performance();
 
-    EventTargetInterface eventTargetInterface() const override { return PerformanceEventTargetInterfaceType; }
-    ScriptExecutionContext* scriptExecutionContext() const override;
-
-    PerformanceNavigation* navigation() const;
-    PerformanceTiming* timing() const;
+    PerformanceNavigation& navigation();
+    PerformanceTiming& timing();
     double now() const;
-
-    RefPtr<MemoryInfo> memory() const;
 
     Vector<RefPtr<PerformanceEntry>> getEntries() const;
     Vector<RefPtr<PerformanceEntry>> getEntriesByType(const String& entryType) const;
@@ -74,39 +65,44 @@ public:
     void clearResourceTimings();
     void setResourceTimingBufferSize(unsigned);
 
-    void addResourceTiming(const String& initiatorName, Document*, const ResourceRequest&, const ResourceResponse&, double initiationTime, double finishTime);
+    void addResourceTiming(const String& initiatorName, Document*, const URL& originalURL, const ResourceResponse&, const LoadTiming&);
 
-    using RefCounted<Performance>::ref;
-    using RefCounted<Performance>::deref;
+    using RefCounted::ref;
+    using RefCounted::deref;
 
 #if ENABLE(USER_TIMING)
-    void webkitMark(const String& markName, ExceptionCode&);
+    ExceptionOr<void> webkitMark(const String& markName);
     void webkitClearMarks(const String& markName);
 
-    void webkitMeasure(const String& measureName, const String& startMark, const String& endMark, ExceptionCode&);
+    ExceptionOr<void> webkitMeasure(const String& measureName, const String& startMark, const String& endMark);
     void webkitClearMeasures(const String& measureName);
-#endif // ENABLE(USER_TIMING)
+#endif
 
     static double reduceTimeResolution(double seconds);
 
 private:
     explicit Performance(Frame&);
 
-    void refEventTarget() override { ref(); }
-    void derefEventTarget() override { deref(); }
+    EventTargetInterface eventTargetInterface() const final { return PerformanceEventTargetInterfaceType; }
+    ScriptExecutionContext* scriptExecutionContext() const final;
+
+    void refEventTarget() final { ref(); }
+    void derefEventTarget() final { deref(); }
+
     bool isResourceTimingBufferFull();
 
     mutable RefPtr<PerformanceNavigation> m_navigation;
     mutable RefPtr<PerformanceTiming> m_timing;
 
+    // https://w3c.github.io/resource-timing/#extensions-performance-interface recommends size of 150.
     Vector<RefPtr<PerformanceEntry>> m_resourceTimingBuffer;
-    unsigned m_resourceTimingBufferSize;
+    unsigned m_resourceTimingBufferSize { 150 };
 
     double m_referenceTime;
 
 #if ENABLE(USER_TIMING)
-    RefPtr<UserTiming> m_userTiming;
-#endif // ENABLE(USER_TIMING)
+    std::unique_ptr<UserTiming> m_userTiming;
+#endif
 };
 
 }

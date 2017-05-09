@@ -18,8 +18,7 @@
  *
  */
 
-#ifndef HTMLPlugInImageElement_h
-#define HTMLPlugInImageElement_h
+#pragma once
 
 #include "HTMLPlugInElement.h"
 
@@ -125,7 +124,7 @@ private:
     void prepareForDocumentSuspension() final;
     void resumeFromDocumentSuspension() final;
 
-    void defaultEventHandler(Event*) final;
+    void defaultEventHandler(Event&) final;
     void dispatchPendingMouseClick() final;
 
     void updateSnapshot(PassRefPtr<Image>) final;
@@ -162,5 +161,3 @@ SPECIALIZE_TYPE_TRAITS_BEGIN(WebCore::HTMLPlugInImageElement)
     static bool isType(const WebCore::HTMLPlugInElement& element) { return element.isPlugInImageElement(); }
     static bool isType(const WebCore::Node& node) { return is<WebCore::HTMLPlugInElement>(node) && isType(downcast<WebCore::HTMLPlugInElement>(node)); }
 SPECIALIZE_TYPE_TRAITS_END()
-
-#endif // HTMLPlugInImageElement_h

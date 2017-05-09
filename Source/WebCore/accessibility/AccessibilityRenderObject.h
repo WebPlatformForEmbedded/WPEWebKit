@@ -26,8 +26,7 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef AccessibilityRenderObject_h
-#define AccessibilityRenderObject_h
+#pragma once
 
 #include "AccessibilityNodeObject.h"
 #include "LayoutRect.h"
@@ -38,19 +37,14 @@ namespace WebCore {
 class AccessibilitySVGRoot;
 class AXObjectCache;
 class Element;
-class Frame;
 class FrameView;
-class HitTestResult;
-class HTMLAnchorElement;
 class HTMLAreaElement;
 class HTMLElement;
 class HTMLLabelElement;
 class HTMLMapElement;
-class HTMLSelectElement;
 class IntPoint;
 class IntSize;
 class Node;
-class RenderListBox;
 class RenderTextControl;
 class RenderView;
 class VisibleSelection;
@@ -173,6 +167,7 @@ public:
     IntRect boundsForRange(const RefPtr<Range>) const override;
     IntRect boundsForRects(LayoutRect&, LayoutRect&, RefPtr<Range>) const;
     void setSelectedVisiblePositionRange(const VisiblePositionRange&) const override;
+    bool isVisiblePositionRangeInDifferentDocument(const VisiblePositionRange&) const;
     bool ariaHasPopup() const override;
 
     bool supportsARIADropping() const override;
@@ -288,5 +283,3 @@ private:
 } // namespace WebCore
 
 SPECIALIZE_TYPE_TRAITS_ACCESSIBILITY(AccessibilityRenderObject, isAccessibilityRenderObject())
-
-#endif // AccessibilityRenderObject_h

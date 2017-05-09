@@ -31,7 +31,7 @@
 #include "IntRect.h"
 #include "LayoutRect.h"
 #include "Range.h"
-#include "ScrollBehavior.h"
+#include "ScrollAlignment.h"
 #include "Timer.h"
 #include "VisibleSelection.h"
 #include <wtf/Noncopyable.h>
@@ -50,7 +50,6 @@ class MutableStyleProperties;
 class RenderBlock;
 class RenderObject;
 class RenderView;
-class Settings;
 class VisiblePosition;
 
 enum EUserTriggered { NotUserTriggered = 0, UserTriggered = 1 };

@@ -21,7 +21,7 @@
 #define GLContext_h
 
 #include "GraphicsContext3D.h"
-#include "Widget.h"
+#include "PlatformDisplay.h"
 #include <memory>
 #include <wtf/Noncopyable.h>
 
@@ -36,10 +36,6 @@
 #include <EGL/eglplatform.h>
 #endif
 typedef EGLNativeWindowType GLNativeWindowType;
-#elif PLATFORM(GTK) && PLATFORM(WAYLAND) && !defined(GTK_API_VERSION_2)
-#include <wayland-egl.h>
-#include <EGL/eglplatform.h>
-typedef EGLNativeWindowType GLNativeWindowType;
 #else
 typedef uint64_t GLNativeWindowType;
 #endif
@@ -48,42 +44,32 @@ typedef uint64_t GLNativeWindowType;
 typedef struct _cairo_device cairo_device_t;
 #endif
 
-#if PLATFORM(X11)
-typedef struct _XDisplay Display;
-#endif
-
 namespace WebCore {
 
 class GLContext {
-    WTF_MAKE_NONCOPYABLE(GLContext);
+    WTF_MAKE_NONCOPYABLE(GLContext); WTF_MAKE_FAST_ALLOCATED;
 public:
-    static std::unique_ptr<GLContext> createContextForWindow(GLNativeWindowType windowHandle, GLContext* sharingContext);
-    static std::unique_ptr<GLContext> createOffscreenContext(GLContext* sharing = 0);
-    static GLContext* getCurrent();
-    static GLContext* sharingContext();
+    static std::unique_ptr<GLContext> createContextForWindow(GLNativeWindowType windowHandle, PlatformDisplay* = nullptr);
+    static std::unique_ptr<GLContext> createOffscreenContext(PlatformDisplay* = nullptr);
+    static std::unique_ptr<GLContext> createSharingContext(PlatformDisplay&);
+    static GLContext* current();
+    static bool isExtensionSupported(const char* extensionList, const char* extension);
 
-    GLContext();
+    PlatformDisplay& display() const { return m_display; }
+
     virtual ~GLContext();
     virtual bool makeContextCurrent();
     virtual void swapBuffers() = 0;
     virtual void waitNative() = 0;
     virtual bool canRenderToDefaultFramebuffer() = 0;
     virtual IntSize defaultFrameBufferSize() = 0;
+    virtual void swapInterval(int) = 0;
 
     virtual bool isEGLContext() const = 0;
 
 #if USE(CAIRO)
     virtual cairo_device_t* cairoDevice() = 0;
 #endif
-
-#if PLATFORM(X11)
-    static Display* sharedX11Display();
-    static void cleanupSharedX11Display();
-#endif
-
-    static void addActiveContext(GLContext*);
-    static void removeActiveContext(GLContext*);
-    static void cleanupActiveContextsAtExit();
 
 #if ENABLE(GRAPHICS_CONTEXT_3D)
     virtual PlatformGraphicsContext3D platformContext() = 0;
@@ -94,7 +80,17 @@ public:
         virtual ~Data() = default;
     };
 
+#if PLATFORM(X11)
+private:
+    static void addActiveContext(GLContext*);
+    static void removeActiveContext(GLContext*);
+    static void cleanupActiveContextsAtExit();
+#endif
+
 protected:
+    GLContext(PlatformDisplay&);
+
+    PlatformDisplay& m_display;
     std::unique_ptr<Data> m_contextData;
 };
 

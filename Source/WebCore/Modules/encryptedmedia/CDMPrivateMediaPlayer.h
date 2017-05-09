@@ -23,12 +23,11 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef CDMPrivateMediaPlayer_h
-#define CDMPrivateMediaPlayer_h
+#pragma once
 
 #include "CDMPrivate.h"
 
-#if ENABLE(ENCRYPTED_MEDIA_V2)
+#if ENABLE(LEGACY_ENCRYPTED_MEDIA)
 
 namespace WebCore {
 
@@ -54,8 +53,6 @@ protected:
     CDM* m_cdm;
 };
 
-}
+} // namespace WebCore
 
-#endif
-
-#endif // CDMPriavateMediaPlayer_h
+#endif // ENABLE(LEGACY_ENCRYPTED_MEDIA)

@@ -29,10 +29,13 @@
 #include "APIPageConfiguration.h"
 #include "NativeWebKeyboardEvent.h"
 #include "NativeWebMouseEvent.h"
+#if ENABLE(TOUCH_EVENTS)
 #include "NativeWebTouchEvent.h"
+#endif
 #include "NativeWebWheelEvent.h"
 #include "WebPageGroup.h"
 #include "WebProcessPool.h"
+#include <stdlib.h>
 #include <wpe/view-backend.h>
 
 using namespace WebKit;
@@ -42,7 +45,7 @@ namespace WKWPE {
 View::View(struct wpe_view_backend* backend, const API::PageConfiguration& baseConfiguration)
     : m_pageClient(std::make_unique<PageClientImpl>(*this))
     , m_size{ 800, 600 }
-    , m_viewStateFlags(WebCore::ViewState::WindowIsActive | WebCore::ViewState::IsFocused | WebCore::ViewState::IsVisible | WebCore::ViewState::IsInWindow)
+    , m_viewStateFlags(WebCore::ActivityState::WindowIsActive | WebCore::ActivityState::IsFocused | WebCore::ActivityState::IsVisible | WebCore::ActivityState::IsInWindow)
     , m_compositingManagerProxy(*this)
 {
     auto configuration = baseConfiguration.copy();
@@ -56,7 +59,6 @@ View::View(struct wpe_view_backend* backend, const API::PageConfiguration& baseC
         preferences->setForceCompositingMode(true);
         preferences->setAccelerated2dCanvasEnabled(true);
         preferences->setWebGLEnabled(true);
-        preferences->setWebSecurityEnabled(false);
         preferences->setDeveloperExtrasEnabled(true);
     }
 
@@ -70,6 +72,12 @@ View::View(struct wpe_view_backend* backend, const API::PageConfiguration& baseC
     m_backend = backend;
     if (!m_backend)
         m_backend = wpe_view_backend_create();
+
+    if (!m_backend) {
+        fprintf(stderr, "WPEView: failed to create backend\n");
+        abort();
+    }
+
     m_compositingManagerProxy.initialize();
 
     static struct wpe_view_backend_client s_backendClient = {
@@ -107,12 +115,14 @@ View::View(struct wpe_view_backend* backend, const API::PageConfiguration& baseC
             auto& view = *reinterpret_cast<View*>(data);
             view.page().handleWheelEvent(WebKit::NativeWebWheelEvent(event));
         },
+#if ENABLE(TOUCH_EVENTS)
         // handle_touch_event
         [](void* data, struct wpe_input_touch_event* event)
         {
             auto& view = *reinterpret_cast<View*>(data);
             view.page().handleTouchEvent(WebKit::NativeWebTouchEvent(event));
         },
+#endif
     };
     wpe_view_backend_set_input_client(m_backend, &s_inputClient, this);
 
@@ -143,15 +153,15 @@ void View::setSize(const WebCore::IntSize& size)
         m_pageProxy->drawingArea()->setSize(size, WebCore::IntSize(), WebCore::IntSize());
 }
 
-void View::setViewState(WebCore::ViewState::Flags flags)
+void View::setViewState(WebCore::ActivityState::Flags flags)
 {
-    static const WebCore::ViewState::Flags defaultFlags = WebCore::ViewState::WindowIsActive | WebCore::ViewState::IsFocused;
+    static const WebCore::ActivityState::Flags defaultFlags = WebCore::ActivityState::WindowIsActive | WebCore::ActivityState::IsFocused;
 
-    WebCore::ViewState::Flags changedFlags = m_viewStateFlags ^ (defaultFlags | flags);
+    WebCore::ActivityState::Flags changedFlags = m_viewStateFlags ^ (defaultFlags | flags);
     m_viewStateFlags = defaultFlags | flags;
 
     if (changedFlags)
-        m_pageProxy->viewStateDidChange(changedFlags);
+        m_pageProxy->activityStateDidChange(changedFlags);
 }
 
 } // namespace WKWPE

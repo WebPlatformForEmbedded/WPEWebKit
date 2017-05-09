@@ -36,7 +36,7 @@
 
 namespace WebCore {
 
-#if USE(CFNETWORK)
+#if USE(CFURLCONNECTION)
 
 CFCachedURLResponseRef ResourceLoader::willCacheResponse(ResourceHandle*, CFCachedURLResponseRef cachedResponse)
 {

@@ -67,7 +67,7 @@ CoordinatedGraphicsScene::CoordinatedGraphicsScene(CoordinatedGraphicsSceneClien
     : m_client(client)
     , m_isActive(false)
     , m_rootLayerID(InvalidCoordinatedLayerID)
-#if PLATFORM(INTEL_CE)
+#if PLATFORM(INTEL_CE) || PLATFORM(WESTEROS)
     , m_viewBackgroundColor(Color::transparent)
 #else
     , m_viewBackgroundColor(Color::black)
@@ -458,8 +458,7 @@ void CoordinatedGraphicsScene::createTilesIfNeeded(TextureMapperLayer* layer, co
         return;
 
     RefPtr<CoordinatedBackingStore> backingStore = m_backingStores.get(layer);
-    // FIXME: It would be better to keep an ASSERT here and fix the update producer
-    // to avoid committing tile creation and backing store removal updates together.
+    ASSERT(backingStore || !layerShouldHaveBackingStore(layer));
     if (!backingStore)
         return;
 
@@ -488,8 +487,7 @@ void CoordinatedGraphicsScene::updateTilesIfNeeded(TextureMapperLayer* layer, co
         return;
 
     RefPtr<CoordinatedBackingStore> backingStore = m_backingStores.get(layer);
-    // FIXME: It would be better to keep an ASSERT here and fix the update producer
-    // to avoid committing tile creation and backing store removal updates together.
+    ASSERT(backingStore || !layerShouldHaveBackingStore(layer));
     if (!backingStore)
         return;
 
@@ -629,6 +627,9 @@ void CoordinatedGraphicsScene::commitSceneState(const CoordinatedGraphicsState& 
 
     commitPendingBackingStoreOperations();
     removeReleasedImageBackingsIfNeeded();
+
+    // The pending tiles state is on its way for the screen, tell the web process to render the next one.
+    renderNextFrame();
 }
 
 void CoordinatedGraphicsScene::renderNextFrame()

@@ -35,6 +35,7 @@
 #include <WebCore/GraphicsContext.h>
 #include <WebCore/InspectorController.h>
 #include <WebCore/MainFrame.h>
+#include <WebCore/MemoryPressureHandler.h>
 #include <WebCore/Page.h>
 #include <wtf/TemporaryChange.h>
 #include "Extensions3DCache.h"
@@ -415,24 +416,19 @@ void CompositingCoordinator::scheduleReleaseInactiveAtlases()
 
 void CompositingCoordinator::releaseInactiveAtlasesTimerFired()
 {
-    // We always want to keep one atlas for root contents layer.
-    std::unique_ptr<UpdateAtlas> atlasToKeepAnyway;
-    bool foundActiveAtlasForRootContentsLayer = false;
+    releaseAtlases(MemoryPressureHandler::singleton().isUnderMemoryPressure() ? ReleaseUnused : ReleaseInactive);
+}
+
+void CompositingCoordinator::releaseAtlases(ReleaseAtlasPolicy policy)
+{
     for (int i = m_updateAtlases.size() - 1;  i >= 0; --i) {
         UpdateAtlas* atlas = m_updateAtlases[i].get();
-        if (!atlas->isInUse())
+        if (!atlas->isInUse()) {
             atlas->addTimeInactive(ReleaseInactiveAtlasesTimerInterval);
-        bool usableForRootContentsLayer = !atlas->supportsAlpha();
-        if (atlas->isInactive()) {
-            if (!foundActiveAtlasForRootContentsLayer && !atlasToKeepAnyway && usableForRootContentsLayer)
-                atlasToKeepAnyway = WTFMove(m_updateAtlases[i]);
-            m_updateAtlases.remove(i);
-        } else if (usableForRootContentsLayer)
-            foundActiveAtlasForRootContentsLayer = true;
+            if (atlas->isInactive() || policy == ReleaseUnused)
+                m_updateAtlases.remove(i);
+        }
     }
-
-    if (!foundActiveAtlasForRootContentsLayer && atlasToKeepAnyway)
-        m_updateAtlases.append(atlasToKeepAnyway.release());
 
     m_updateAtlases.shrinkToFit();
 

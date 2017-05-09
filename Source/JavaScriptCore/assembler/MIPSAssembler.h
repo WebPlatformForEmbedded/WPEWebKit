@@ -26,13 +26,13 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef MIPSAssembler_h
-#define MIPSAssembler_h
+#pragma once
 
 #if ENABLE(ASSEMBLER) && CPU(MIPS)
 
 #include "AssemblerBuffer.h"
 #include "JITCompilationEffort.h"
+#include <limits.h>
 #include <wtf/Assertions.h>
 #include <wtf/SegmentedVector.h>
 #include <limits.h>
@@ -144,12 +144,17 @@ typedef enum {
     f31
 } FPRegisterID;
 
+typedef enum {
+    fcsr = 31
+} CSRegisterID;
+
 } // namespace MIPSRegisters
 
 class MIPSAssembler {
 public:
     typedef MIPSRegisters::RegisterID RegisterID;
     typedef MIPSRegisters::FPRegisterID FPRegisterID;
+    typedef MIPSRegisters::CSRegisterID CSRegisterID;
     typedef SegmentedVector<AssemblerLabel, 64> Jumps;
 
     static constexpr RegisterID firstRegister() { return MIPSRegisters::r0; }
@@ -208,6 +213,9 @@ public:
     
     void sync()
     {
+        // FIXME: https://bugs.webkit.org/show_bug.cgi?id=169984
+        // We might get a performance improvements by using SYNC_MB in some or
+        // all cases.
         emitInst(0x0000000f);
     }
 
@@ -555,6 +563,12 @@ public:
         copDelayNop();
     }
 
+    void cfc1(RegisterID rt, CSRegisterID fs)
+    {
+        emitInst(0x44400000 | (rt << OP_SH_RT) | (fs << OP_SH_FS));
+        copDelayNop();
+    }
+
     void sqrtd(FPRegisterID fd, FPRegisterID fs)
     {
         emitInst(0x46200004 | (fd << OP_SH_FD) | (fs << OP_SH_FS));
@@ -829,6 +843,11 @@ public:
         cacheFlush(insn, flushSize);
     }
 
+    static void relinkJumpToNop(void* from)
+    {
+        relinkJump(from, from);
+    }
+
     static void relinkCall(void* from, void* to)
     {
         void* start;
@@ -900,6 +919,11 @@ public:
     static ptrdiff_t maxJumpReplacementSize()
     {
         return sizeof(MIPSWord) * 4;
+    }
+
+    static constexpr ptrdiff_t patchableJumpSize()
+    {
+        return sizeof(MIPSWord) * 8;
     }
 
     static void revertJumpToMove(void* instructionStart, RegisterID rt, int imm)
@@ -1109,5 +1133,3 @@ private:
 } // namespace JSC
 
 #endif // ENABLE(ASSEMBLER) && CPU(MIPS)
-
-#endif // MIPSAssembler_h

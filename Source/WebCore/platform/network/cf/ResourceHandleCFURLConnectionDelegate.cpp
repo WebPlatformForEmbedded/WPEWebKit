@@ -26,7 +26,7 @@
 #include "config.h"
 #include "ResourceHandleCFURLConnectionDelegate.h"
 
-#if USE(CFNETWORK)
+#if USE(CFURLCONNECTION)
 
 #include "CFNetworkSPI.h"
 #include "FormDataStreamCFNet.h"
@@ -218,4 +218,4 @@ CFURLConnectionClient_V6 ResourceHandleCFURLConnectionDelegate::makeConnectionCl
 
 } // namespace WebCore.
 
-#endif // USE(CFNETWORK)
+#endif // USE(CFURLCONNECTION)

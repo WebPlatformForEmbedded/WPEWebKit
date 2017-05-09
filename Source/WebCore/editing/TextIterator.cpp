@@ -28,7 +28,6 @@
 #include "TextIterator.h"
 
 #include "Document.h"
-#include "ExceptionCodePlaceholder.h"
 #include "FontCascade.h"
 #include "Frame.h"
 #include "HTMLBodyElement.h"
@@ -40,6 +39,7 @@
 #include "HTMLNames.h"
 #include "HTMLParagraphElement.h"
 #include "HTMLProgressElement.h"
+#include "HTMLTextAreaElement.h"
 #include "HTMLTextFormControlElement.h"
 #include "InlineTextBox.h"
 #include "NodeTraversal.h"
@@ -213,6 +213,11 @@ static inline bool fullyClipsContents(Node& node)
     auto& box = downcast<RenderBox>(*renderer);
     if (!box.hasOverflowClip())
         return false;
+
+    // Quirk to keep copy/paste in the CodeMirror editor version used in Jenkins working.
+    if (is<HTMLTextAreaElement>(node))
+        return box.size().isEmpty();
+
     return box.contentSize().isEmpty();
 }
 
@@ -2004,7 +2009,7 @@ inline SearchBuffer::SearchBuffer(const String& target, FindOptions options)
 
     if ((m_options & AtWordStarts) && targetLength) {
         UChar32 targetFirstCharacter;
-        U16_GET(m_target, 0, 0, targetLength, targetFirstCharacter);
+        U16_GET(m_target, 0, 0u, targetLength, targetFirstCharacter);
         // Characters in the separator category never really occur at the beginning of a word,
         // so if the target begins with such a character, we just ignore the AtWordStart option.
         if (isSeparator(targetFirstCharacter)) {
@@ -2555,7 +2560,7 @@ bool TextIterator::getLocationAndLengthFromRange(Node* scope, const Range* range
     ASSERT(&testRange->startContainer() == scope);
     location = TextIterator::rangeLength(testRange.ptr());
 
-    testRange->setEnd(range->endContainer(), range->endOffset(), IGNORE_EXCEPTION);
+    testRange->setEnd(range->endContainer(), range->endOffset());
     ASSERT(&testRange->startContainer() == scope);
     length = TextIterator::rangeLength(testRange.ptr()) - location;
     return true;

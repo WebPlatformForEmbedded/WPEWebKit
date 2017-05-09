@@ -30,36 +30,21 @@
     [Reflect] attribute DOMString name;
     [Reflect] attribute boolean required;
 
-#if defined(LANGUAGE_GOBJECT) && LANGUAGE_GOBJECT
-    attribute long size;
-#else
     attribute unsigned long size;
-#endif
 
     readonly attribute DOMString type;
 
     readonly attribute HTMLOptionsCollection options;
-    [SetterRaisesException] attribute unsigned long length;
+    [CEReactions, SetterMayThrowException] attribute unsigned long length;
 
-#if defined(LANGUAGE_GOBJECT) && LANGUAGE_GOBJECT
-    getter Node item(unsigned long index);
-    Node namedItem(DOMString name);
-#else
     getter HTMLOptionElement? item(unsigned long index);
     HTMLOptionElement? namedItem(DOMString name);
-#endif
 
-    [RaisesException] void add(HTMLElement element, optional HTMLElement? before = null);
-#if !(defined(LANGUAGE_GOBJECT) && LANGUAGE_GOBJECT)
-    // FIXME: Should be:
-    // void add((HTMLOptionElement or HTMLOptGroupElement) element, optional (HTMLElement or long)? before = null);
-    [RaisesException] void add(HTMLElement element, long index);
+    [CEReactions, MayThrowException] void add((HTMLOptionElement or HTMLOptGroupElement) element, optional (HTMLElement or long)? before = null);
 
-    [RaisesException] void remove(); // ChildNode overload
-    // FIXME: This overload is not in the specification and was dropped in Blink.
-    void remove(HTMLOptionElement option);
-#endif
-    [ImplementedAs=removeByIndex] void remove(long index);
+    [MayThrowException] void remove(); // ChildNode overload
+    [CEReactions] void remove(HTMLOptionElement option); // FIXME: This overload is not in the specification and was dropped in Blink
+    [CEReactions] void remove(long index);
 
     readonly attribute HTMLCollection selectedOptions;
     attribute long selectedIndex;
@@ -70,6 +55,7 @@
     readonly attribute ValidityState validity;
     readonly attribute DOMString validationMessage;
     boolean checkValidity();
+    [EnabledAtRuntime=InteractiveFormValidation] boolean reportValidity();
     void setCustomValidity(DOMString? error); // FIXME: Argument should not be nullable.
 
     readonly attribute NodeList labels;

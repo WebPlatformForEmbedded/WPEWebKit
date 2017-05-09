@@ -519,7 +519,7 @@ void RenderLayerBacking::updateCompositedBounds()
 
         LayoutRect clippingBounds;
         if (renderer().style().position() == FixedPosition && renderer().container() == &view)
-            clippingBounds = view.frameView().viewportConstrainedVisibleContentRect();
+            clippingBounds = view.frameView().rectForFixedPositionLayout();
         else
             clippingBounds = view.unscaledDocumentRect();
 
@@ -740,14 +740,18 @@ static SnappedRectInfo snappedGraphicsLayer(const LayoutSize& offset, const Layo
     return snappedGraphicsLayer;
 }
 
-static LayoutSize computeOffsetFromAncestorGraphicsLayer(RenderLayer* compositedAncestor, const LayoutPoint& location)
+static LayoutSize computeOffsetFromAncestorGraphicsLayer(RenderLayer* compositedAncestor, const LayoutPoint& location, float deviceScaleFactor)
 {
     if (!compositedAncestor)
         return toLayoutSize(location);
 
-    LayoutSize ancestorRenderLayerOffsetFromAncestorGraphicsLayer = -(LayoutSize(compositedAncestor->backing()->graphicsLayer()->offsetFromRenderer())
-        + compositedAncestor->backing()->subpixelOffsetFromRenderer());
-    return ancestorRenderLayerOffsetFromAncestorGraphicsLayer + toLayoutSize(location);
+    // FIXME: This is a workaround until after webkit.org/162634 gets fixed. ancestorSubpixelOffsetFromRenderer
+    // could be stale when a dynamic composited state change triggers a pre-order updateGeometry() traversal.
+    LayoutSize ancestorSubpixelOffsetFromRenderer = compositedAncestor->backing()->subpixelOffsetFromRenderer();
+    LayoutRect ancestorCompositedBounds = compositedAncestor->backing()->compositedBounds();
+    LayoutSize floored = toLayoutSize(LayoutPoint(floorPointToDevicePixels(ancestorCompositedBounds.location() - ancestorSubpixelOffsetFromRenderer, deviceScaleFactor)));
+    LayoutSize ancestorRendererOffsetFromAncestorGraphicsLayer = -(floored + ancestorSubpixelOffsetFromRenderer);
+    return ancestorRendererOffsetFromAncestorGraphicsLayer + toLayoutSize(location);
 }
 
 class ComputedOffsets {
@@ -757,6 +761,7 @@ public:
         , m_location(localRect.location())
         , m_parentGraphicsLayerOffset(toLayoutSize(parentGraphicsLayerRect.location()))
         , m_primaryGraphicsLayerOffset(toLayoutSize(primaryGraphicsLayerRect.location()))
+        , m_deviceScaleFactor(renderLayer.renderer().document().deviceScaleFactor())
     {
     }
 
@@ -780,7 +785,7 @@ private:
         if (!m_fromAncestorGraphicsLayer) {
             RenderLayer* compositedAncestor = m_renderLayer.ancestorCompositingLayer();
             LayoutPoint localPointInAncestorRenderLayerCoords = m_renderLayer.convertToLayerCoords(compositedAncestor, m_location, RenderLayer::AdjustForColumns);
-            m_fromAncestorGraphicsLayer = computeOffsetFromAncestorGraphicsLayer(compositedAncestor, localPointInAncestorRenderLayerCoords);
+            m_fromAncestorGraphicsLayer = computeOffsetFromAncestorGraphicsLayer(compositedAncestor, localPointInAncestorRenderLayerCoords, m_deviceScaleFactor);
         }
         return m_fromAncestorGraphicsLayer.value();
     }
@@ -794,6 +799,7 @@ private:
     const LayoutPoint m_location;
     const LayoutSize m_parentGraphicsLayerOffset;
     const LayoutSize m_primaryGraphicsLayerOffset;
+    float m_deviceScaleFactor;
 };
 
 LayoutRect RenderLayerBacking::computePrimaryGraphicsLayerRect(const LayoutRect& parentGraphicsLayerRect) const
@@ -821,7 +827,7 @@ LayoutRect RenderLayerBacking::computeParentGraphicsLayerRect(RenderLayer* compo
     if (ancestorBackingLayer->hasClippingLayer()) {
         // If the compositing ancestor has a layer to clip children, we parent in that, and therefore position relative to it.
         LayoutRect clippingBox = clipBox(downcast<RenderBox>(compositedAncestor->renderer()));
-        LayoutSize clippingBoxOffset = computeOffsetFromAncestorGraphicsLayer(compositedAncestor, clippingBox.location());
+        LayoutSize clippingBoxOffset = computeOffsetFromAncestorGraphicsLayer(compositedAncestor, clippingBox.location(), deviceScaleFactor());
         parentGraphicsLayerRect = snappedGraphicsLayer(clippingBoxOffset, clippingBox.size(), deviceScaleFactor()).m_snappedRect;
     }
 
@@ -850,7 +856,7 @@ LayoutRect RenderLayerBacking::computeParentGraphicsLayerRect(RenderLayer* compo
         RenderLayer::ClipRectsContext clipRectsContext(compositedAncestor, TemporaryClipRects, IgnoreOverlayScrollbarSize, shouldRespectOverflowClip);
         LayoutRect parentClipRect = m_owningLayer.backgroundClipRect(clipRectsContext).rect(); // FIXME: Incorrect for CSS regions.
         ASSERT(!parentClipRect.isInfinite());
-        LayoutSize clippingOffset = computeOffsetFromAncestorGraphicsLayer(compositedAncestor, parentClipRect.location());
+        LayoutSize clippingOffset = computeOffsetFromAncestorGraphicsLayer(compositedAncestor, parentClipRect.location(), deviceScaleFactor());
         LayoutRect snappedClippingLayerRect = snappedGraphicsLayer(clippingOffset, parentClipRect.size(), deviceScaleFactor()).m_snappedRect;
         // The primary layer is then parented in, and positioned relative to this clipping layer.
         ancestorClippingLayerOffset = snappedClippingLayerRect.location() - parentGraphicsLayerRect.location();
@@ -1763,7 +1769,7 @@ static bool canCreateTiledImage(const RenderStyle& style)
 
     // FIXME: Allow color+image compositing when it makes sense.
     // For now bailing out.
-    if (color.isValid() && color.alpha())
+    if (color.isVisible())
         return false;
 
     StyleImage* styleImage = fillLayer->image();
@@ -2427,7 +2433,7 @@ void RenderLayerBacking::paintContents(const GraphicsLayer* graphicsLayer, Graph
         || graphicsLayer == m_maskLayer.get()
         || graphicsLayer == m_childClippingMaskLayer.get()
         || graphicsLayer == m_scrollingContentsLayer.get()) {
-        InspectorInstrumentation::willPaint(&renderer());
+        InspectorInstrumentation::willPaint(renderer());
 
         if (!(paintingPhase & GraphicsLayerPaintOverflowContents))
             dirtyRect.intersect(enclosingIntRect(compositedBoundsIncludingMargin()));
@@ -2435,7 +2441,7 @@ void RenderLayerBacking::paintContents(const GraphicsLayer* graphicsLayer, Graph
         // We have to use the same root as for hit testing, because both methods can compute and cache clipRects.
         paintIntoLayer(graphicsLayer, context, dirtyRect, PaintBehaviorNormal, paintingPhase);
 
-        InspectorInstrumentation::didPaint(&renderer(), dirtyRect);
+        InspectorInstrumentation::didPaint(renderer(), dirtyRect);
     } else if (graphicsLayer == layerForHorizontalScrollbar()) {
         paintScrollbar(m_owningLayer.horizontalScrollbar(), context, dirtyRect);
     } else if (graphicsLayer == layerForVerticalScrollbar()) {

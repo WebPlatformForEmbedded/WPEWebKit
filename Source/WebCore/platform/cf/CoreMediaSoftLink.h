@@ -166,6 +166,8 @@ SOFT_LINK_CONSTANT_FOR_HEADER(WebCore, CoreMedia, kCMSampleAttachmentKey_DoNotDi
 #define kCMSampleAttachmentKey_DoNotDisplay get_CoreMedia_kCMSampleAttachmentKey_DoNotDisplay()
 SOFT_LINK_CONSTANT_FOR_HEADER(WebCore, CoreMedia, kCMSampleAttachmentKey_NotSync, CFStringRef)
 #define kCMSampleAttachmentKey_NotSync get_CoreMedia_kCMSampleAttachmentKey_NotSync()
+SOFT_LINK_CONSTANT_FOR_HEADER(WebCore, CoreMedia, kCMSampleAttachmentKey_DisplayImmediately, CFStringRef)
+#define kCMSampleAttachmentKey_DisplayImmediately get_CoreMedia_kCMSampleAttachmentKey_DisplayImmediately()
 SOFT_LINK_CONSTANT_FOR_HEADER(WebCore, CoreMedia, kCMSampleBufferAttachmentKey_DisplayEmptyMediaImmediately, CFStringRef)
 #define kCMSampleBufferAttachmentKey_DisplayEmptyMediaImmediately get_CoreMedia_kCMSampleBufferAttachmentKey_DisplayEmptyMediaImmediately()
 SOFT_LINK_CONSTANT_FOR_HEADER(WebCore, CoreMedia, kCMSampleBufferAttachmentKey_DrainAfterDecoding, CFStringRef)
@@ -184,6 +186,12 @@ SOFT_LINK_FUNCTION_FOR_HEADER(WebCore, CoreMedia, CMSampleBufferGetAudioBufferLi
 #define CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer softLink_CoreMedia_CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer
 SOFT_LINK_FUNCTION_FOR_HEADER(WebCore, CoreMedia, CMSampleBufferGetNumSamples, CMItemCount, (CMSampleBufferRef sbuf), (sbuf))
 #define CMSampleBufferGetNumSamples softLink_CoreMedia_CMSampleBufferGetNumSamples
+SOFT_LINK_FUNCTION_FOR_HEADER(WebCore, CoreMedia, CMSampleBufferCallBlockForEachSample, OSStatus, (CMSampleBufferRef sbuf, OSStatus (^handler)(CMSampleBufferRef, CMItemCount)), (sbuf, handler))
+#define CMSampleBufferCallBlockForEachSample softLink_CoreMedia_CMSampleBufferCallBlockForEachSample
+SOFT_LINK_FUNCTION_FOR_HEADER(WebCore, CoreMedia, CMSampleBufferCopySampleBufferForRange, OSStatus, (CFAllocatorRef allocator, CMSampleBufferRef sbuf, CFRange sampleRange, CMSampleBufferRef* sBufOut), (allocator, sbuf, sampleRange, sBufOut))
+#define CMSampleBufferCopySampleBufferForRange softLink_CoreMedia_CMSampleBufferCopySampleBufferForRange
+SOFT_LINK_FUNCTION_FOR_HEADER(WebCore, CoreMedia, CMSampleBufferGetSampleSizeArray, OSStatus, (CMSampleBufferRef sbuf, CMItemCount sizeArrayEntries, size_t* sizeArrayOut, CMItemCount* sizeArrayEntriesNeededOut), (sbuf, sizeArrayEntries, sizeArrayOut, sizeArrayEntriesNeededOut))
+#define CMSampleBufferGetSampleSizeArray softLink_CoreMedia_CMSampleBufferGetSampleSizeArray
 
 #endif // PLATFORM(COCOA)
 

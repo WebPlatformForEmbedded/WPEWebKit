@@ -24,8 +24,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef ARMAssembler_h
-#define ARMAssembler_h
+#pragma once
 
 #if ENABLE(ASSEMBLER) && CPU(ARM_TRADITIONAL)
 
@@ -213,9 +212,13 @@ namespace JSC {
 #if WTF_ARM_ARCH_AT_LEAST(7)
             MOVW = 0x03000000,
             MOVT = 0x03400000,
+            DMB_SY = 0xf57ff05f,
+            DMB_ISHST = 0xf57ff05a,
+#else
+            // mcr     15, 0, r6, cr7, cr10, {5}
+            ARM6_MEMFENCE = 0xee076fba,
 #endif
             NOP = 0xe1a00000,
-            DMB_SY = 0xf57ff05f,
 #if HAVE(ARM_IDIV_INSTRUCTIONS)
             SDIV = 0x0710f010,
             UDIV = 0x0730f010,
@@ -718,10 +721,22 @@ namespace JSC {
                 *ptr++ = insn;
         }
 
+#if WTF_ARM_ARCH_AT_LEAST(7)
         void dmbSY()
         {
             m_buffer.putInt(DMB_SY);
         }
+
+        void dmbISHST()
+        {
+            m_buffer.putInt(DMB_ISHST);
+        }
+#else
+        void arm6MemFence()
+        {
+            m_buffer.putInt(ARM6_MEMFENCE);
+        }
+#endif
 
         void bx(int rm, Condition cc = AL)
         {
@@ -961,6 +976,11 @@ namespace JSC {
             patchPointerInternal(getAbsoluteJumpAddress(from), to);
         }
 
+        static void relinkJumpToNop(void* from)
+        {
+            relinkJump(from, from);
+        }
+
         static void linkCall(void* code, AssemblerLabel from, void* to)
         {
             patchPointerInternal(getAbsoluteJumpAddress(code, from.m_offset), to);
@@ -1000,6 +1020,11 @@ namespace JSC {
         static ptrdiff_t maxJumpReplacementSize()
         {
             return sizeof(ARMWord) * 2;
+        }
+
+        static constexpr ptrdiff_t patchableJumpSize()
+        {
+            return sizeof(ARMWord) * 3;
         }
 
         static void replaceWithLoad(void* instructionStart)
@@ -1195,5 +1220,3 @@ namespace JSC {
 } // namespace JSC
 
 #endif // ENABLE(ASSEMBLER) && CPU(ARM_TRADITIONAL)
-
-#endif // ARMAssembler_h

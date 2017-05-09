@@ -20,8 +20,7 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#ifndef RenderElement_h
-#define RenderElement_h
+#pragma once
 
 #include "AnimationController.h"
 #include "LengthFunctions.h"
@@ -161,6 +160,11 @@ public:
     bool hasClipOrOverflowClip() const { return hasClip() || hasOverflowClip(); }
     bool hasClipPath() const { return style().clipPath(); }
     bool hasHiddenBackface() const { return style().backfaceVisibility() == BackfaceVisibilityHidden; }
+    bool hasOutlineAnnotation() const;
+    bool hasOutline() const { return style().hasOutline() || hasOutlineAnnotation(); }
+    bool hasSelfPaintingLayer() const;
+
+    bool checkForRepaintDuringLayout() const;
 
     // anchorRect() is conceptually similar to absoluteBoundingBoxRect(), but is intended for scrolling to an anchor.
     // For inline renderers, this gets the logical top left of the first leaf child and the logical bottom right of the
@@ -177,17 +181,14 @@ public:
 #endif
     }
 
+
 #if ENABLE(CSS_COMPOSITING)
     bool hasBlendMode() const { return style().hasBlendMode(); }
 #else
     bool hasBlendMode() const { return false; }
 #endif
 
-#if ENABLE(CSS_SHAPES)
     bool hasShapeOutside() const { return style().shapeOutside(); }
-#else
-    bool hasShapeOutside() const { return false; }
-#endif
 
     void registerForVisibleInViewportCallback();
     void unregisterForVisibleInViewportCallback();
@@ -196,8 +197,6 @@ public:
     bool repaintForPausedImageAnimationsIfNeeded(const IntRect& visibleRect);
     bool hasPausedImageAnimations() const { return m_hasPausedImageAnimations; }
     void setHasPausedImageAnimations(bool b) { m_hasPausedImageAnimations = b; }
-
-    RenderNamedFlowThread* renderNamedFlowThreadWrapper();
 
     void setRenderBoxNeedsLazyRepaint(bool b) { m_renderBoxNeedsLazyRepaint = b; }
     bool renderBoxNeedsLazyRepaint() const { return m_renderBoxNeedsLazyRepaint; }
@@ -214,12 +213,16 @@ public:
     bool childRequiresTable(const RenderObject& child) const;
     bool hasContinuation() const { return m_hasContinuation; }
 
-#if ENABLE(IOS_TEXT_AUTOSIZING)
+#if ENABLE(TEXT_AUTOSIZING)
     void adjustComputedFontSizesOnBlocks(float size, float visibleWidth);
     WEBCORE_EXPORT void resetTextAutosizing();
 #endif
     RenderBlock* containingBlockForFixedPosition() const;
     RenderBlock* containingBlockForAbsolutePosition() const;
+
+    RespectImageOrientationEnum shouldRespectImageOrientation() const;
+
+    void removeFromRenderFlowThread();
 
 protected:
     enum BaseTypeFlag {
@@ -276,6 +279,9 @@ protected:
     void paintOutline(PaintInfo&, const LayoutRect&);
     void updateOutlineAutoAncestor(bool hasOutlineAuto);
 
+    void removeFromRenderFlowThreadIncludingDescendants(bool shouldUpdateState);
+    void adjustFlowThreadStateOnContainingBlockChangeIfNeeded();
+
 private:
     RenderElement(ContainerNode&, RenderStyle&&, BaseTypeFlags);
     void node() const = delete;
@@ -298,9 +304,7 @@ private:
 
     void updateFillImages(const FillLayer*, const FillLayer*);
     void updateImage(StyleImage*, StyleImage*);
-#if ENABLE(CSS_SHAPES)
     void updateShapeImage(const ShapeValue*, const ShapeValue*);
-#endif
 
     StyleDifference adjustStyleDifference(StyleDifference, unsigned contextSensitiveProperties) const;
     const RenderStyle* cachedFirstLineStyle() const;
@@ -331,8 +335,6 @@ private:
     unsigned m_renderBlockShouldForceRelayoutChildren : 1;
     unsigned m_renderBlockFlowHasMarkupTruncation : 1;
     unsigned m_renderBlockFlowLineLayoutPath : 2;
-
-    VisibleInViewportState m_visibleInViewportState { VisibilityUnknown };
 
     RenderObject* m_firstChild;
     RenderObject* m_lastChild;
@@ -487,5 +489,3 @@ inline LayoutUnit adjustLayoutUnitForAbsoluteZoom(LayoutUnit value, const Render
 } // namespace WebCore
 
 SPECIALIZE_TYPE_TRAITS_RENDER_OBJECT(RenderElement, isRenderElement())
-
-#endif // RenderElement_h

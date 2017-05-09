@@ -29,7 +29,6 @@
 #include "CDATASection.h"
 #include "CachedScript.h"
 #include "Comment.h"
-#include "CachedResourceLoader.h"
 #include "Document.h"
 #include "DocumentFragment.h"
 #include "DocumentType.h"
@@ -48,6 +47,7 @@
 #include "SVGStyleElement.h"
 #include "ScriptElement.h"
 #include "ScriptSourceCode.h"
+#include "StyleScope.h"
 #include "TextResourceDecoder.h"
 #include "TreeDepthLimit.h"
 #include <wtf/Ref.h>
@@ -128,7 +128,7 @@ void XMLDocumentParser::append(RefPtr<StringImpl>&& inputSource)
 void XMLDocumentParser::handleError(XMLErrors::ErrorType type, const char* m, TextPosition position)
 {
     if (!m_xmlErrors)
-        m_xmlErrors = std::make_unique<XMLErrors>(document());
+        m_xmlErrors = std::make_unique<XMLErrors>(*document());
     m_xmlErrors->handleError(type, m, position);
     if (type != XMLErrors::warning)
         m_sawError = true;
@@ -199,7 +199,7 @@ void XMLDocumentParser::end()
         insertErrorMessageBlock();
     else {
         updateLeafTextNode();
-        document()->styleResolverChanged(RecalcStyleImmediately);
+        document()->styleScope().didChangeStyleSheetEnvironment();
     }
 
     if (isParsing())
@@ -227,16 +227,16 @@ void XMLDocumentParser::insertErrorMessageBlock()
     m_xmlErrors->insertErrorMessageBlock();
 }
 
-void XMLDocumentParser::notifyFinished(CachedResource* unusedResource)
+void XMLDocumentParser::notifyFinished(CachedResource& unusedResource)
 {
-    ASSERT_UNUSED(unusedResource, unusedResource == m_pendingScript);
+    ASSERT_UNUSED(unusedResource, &unusedResource == m_pendingScript);
     ASSERT(m_pendingScript->accessCount() > 0);
 
     ScriptSourceCode sourceCode(m_pendingScript.get());
     bool errorOccurred = m_pendingScript->errorOccurred();
     bool wasCanceled = m_pendingScript->wasCanceled();
 
-    m_pendingScript->removeClient(this);
+    m_pendingScript->removeClient(*this);
     m_pendingScript = nullptr;
 
     RefPtr<Element> e = m_scriptElement;

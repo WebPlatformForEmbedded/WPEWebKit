@@ -26,6 +26,8 @@
 #include "config.h"
 #include "PlatformDisplayX11.h"
 
+#include "GLContext.h"
+
 #if PLATFORM(X11)
 #include <X11/Xlib.h>
 #include <X11/extensions/Xcomposite.h>
@@ -35,6 +37,7 @@
 
 #if USE(EGL)
 #include <EGL/egl.h>
+#include <EGL/eglext.h>
 #endif
 
 namespace WebCore {
@@ -53,6 +56,10 @@ PlatformDisplayX11::PlatformDisplayX11(Display* display)
 
 PlatformDisplayX11::~PlatformDisplayX11()
 {
+#if USE(EGL) || USE(GLX)
+    // Clear the sharing context before releasing the display.
+    m_sharingGLContext = nullptr;
+#endif
     if (m_ownedDisplay)
         XCloseDisplay(m_display);
 }
@@ -60,16 +67,30 @@ PlatformDisplayX11::~PlatformDisplayX11()
 #if USE(EGL)
 void PlatformDisplayX11::initializeEGLDisplay()
 {
-    m_eglDisplay = eglGetDisplay(m_display);
+#if defined(EGL_KHR_platform_x11)
+    const char* extensions = eglQueryString(nullptr, EGL_EXTENSIONS);
+    if (GLContext::isExtensionSupported(extensions, "EGL_KHR_platform_base")) {
+        if (auto* getPlatformDisplay = reinterpret_cast<PFNEGLGETPLATFORMDISPLAYEXTPROC>(eglGetProcAddress("eglGetPlatformDisplay")))
+            m_eglDisplay = getPlatformDisplay(EGL_PLATFORM_X11_KHR, m_display, nullptr);
+    } else if (GLContext::isExtensionSupported(extensions, "EGL_EXT_platform_base")) {
+        if (auto* getPlatformDisplay = reinterpret_cast<PFNEGLGETPLATFORMDISPLAYEXTPROC>(eglGetProcAddress("eglGetPlatformDisplayEXT")))
+            m_eglDisplay = getPlatformDisplay(EGL_PLATFORM_X11_KHR, m_display, nullptr);
+    } else
+#endif
+        m_eglDisplay = eglGetDisplay(m_display);
+
     PlatformDisplay::initializeEGLDisplay();
 }
-#endif
+#endif // USE(EGL)
 
 bool PlatformDisplayX11::supportsXComposite() const
 {
     if (!m_supportsXComposite) {
-        int eventBase, errorBase;
-        m_supportsXComposite = XCompositeQueryExtension(m_display, &eventBase, &errorBase);
+        if (m_display) {
+            int eventBase, errorBase;
+            m_supportsXComposite = XCompositeQueryExtension(m_display, &eventBase, &errorBase);
+        } else
+            m_supportsXComposite = false;
     }
     return m_supportsXComposite.value();
 }
@@ -77,13 +98,14 @@ bool PlatformDisplayX11::supportsXComposite() const
 bool PlatformDisplayX11::supportsXDamage(Optional<int>& damageEventBase) const
 {
     if (!m_supportsXDamage) {
-#if PLATFORM(GTK)
-        int eventBase, errorBase;
-        m_supportsXDamage = XDamageQueryExtension(m_display, &eventBase, &errorBase);
-        if (m_supportsXDamage.value())
-            m_damageEventBase = eventBase;
-#else
         m_supportsXDamage = false;
+#if PLATFORM(GTK)
+        if (m_display) {
+            int eventBase, errorBase;
+            m_supportsXDamage = XDamageQueryExtension(m_display, &eventBase, &errorBase);
+            if (m_supportsXDamage.value())
+                m_damageEventBase = eventBase;
+        }
 #endif
     }
 

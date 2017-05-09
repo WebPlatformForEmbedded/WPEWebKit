@@ -24,8 +24,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef TouchEvent_h
-#define TouchEvent_h
+#pragma once
 
 #if ENABLE(IOS_TOUCH_EVENTS)
 #include <WebKitAdditions/TouchEventIOS.h>
@@ -35,12 +34,6 @@
 #include "TouchList.h"
 
 namespace WebCore {
-
-struct TouchEventInit : public MouseRelatedEventInit {
-    RefPtr<TouchList> touches;
-    RefPtr<TouchList> targetTouches;
-    RefPtr<TouchList> changedTouches;
-};
 
 class TouchEvent final : public MouseRelatedEvent {
 public:
@@ -60,9 +53,16 @@ public:
     {
         return adoptRef(*new TouchEvent);
     }
-    static Ref<TouchEvent> createForBindings(const AtomicString& type, const TouchEventInit& initializer)
+
+    struct Init : MouseRelatedEventInit {
+        RefPtr<TouchList> touches;
+        RefPtr<TouchList> targetTouches;
+        RefPtr<TouchList> changedTouches;
+    };
+
+    static Ref<TouchEvent> create(const AtomicString& type, const Init& initializer, IsTrusted isTrusted = IsTrusted::No)
     {
-        return adoptRef(*new TouchEvent(type, initializer));
+        return adoptRef(*new TouchEvent(type, initializer, isTrusted));
     }
 
     void initTouchEvent(TouchList* touches, TouchList* targetTouches,
@@ -90,7 +90,7 @@ private:
             DOMWindow*, int screenX, int screenY, int pageX,
             int pageY,
             bool ctrlKey, bool altKey, bool shiftKey, bool metaKey);
-    TouchEvent(const AtomicString&, const TouchEventInit&);
+    TouchEvent(const AtomicString&, const Init&, IsTrusted);
 
     RefPtr<TouchList> m_touches;
     RefPtr<TouchList> m_targetTouches;
@@ -102,5 +102,3 @@ private:
 SPECIALIZE_TYPE_TRAITS_EVENT(TouchEvent)
 
 #endif // ENABLE(TOUCH_EVENTS)
-
-#endif // TouchEvent_h

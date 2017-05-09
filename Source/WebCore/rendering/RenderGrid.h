@@ -24,8 +24,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef RenderGrid_h
-#define RenderGrid_h
+#pragma once
 
 #if ENABLE(CSS_GRID_LAYOUT)
 
@@ -43,6 +42,15 @@ class GridItemWithSpan;
 struct ContentAlignmentData;
 
 enum GridAxisPosition {GridAxisStart, GridAxisEnd, GridAxisCenter};
+
+enum TrackSizeComputationPhase {
+    ResolveIntrinsicMinimums,
+    ResolveContentBasedMinimums,
+    ResolveMaxContentMinimums,
+    ResolveIntrinsicMaximums,
+    ResolveMaxContentMaximums,
+    MaximizeTracks,
+};
 
 class RenderGrid final : public RenderBlock {
 public:
@@ -75,14 +83,15 @@ private:
     class GridSizingData;
     enum SizingOperation { TrackSizing, IntrinsicSizeComputation };
     void computeUsedBreadthOfGridTracks(GridTrackSizingDirection, GridSizingData&, LayoutUnit& baseSizesWithoutMaximization, LayoutUnit& growthLimitsWithoutMaximization) const;
-    LayoutUnit computeUsedBreadthOfMinLength(const GridLength&, LayoutUnit maxSize) const;
-    LayoutUnit computeUsedBreadthOfMaxLength(const GridLength&, LayoutUnit usedBreadth, LayoutUnit maxSize) const;
+    void computeFlexSizedTracksGrowth(GridTrackSizingDirection, SizingOperation, Vector<GridTrack>&, const Vector<unsigned>& flexibleSizedTracksIndex, double flexFraction, Vector<LayoutUnit>& increments, LayoutUnit& totalGrowth) const;
+    LayoutUnit computeUsedBreadthOfMinLength(const GridTrackSize&, LayoutUnit maxSize) const;
+    LayoutUnit computeUsedBreadthOfMaxLength(const GridTrackSize&, LayoutUnit usedBreadth, LayoutUnit maxSize) const;
     void resolveContentBasedTrackSizingFunctions(GridTrackSizingDirection, GridSizingData&) const;
 
     void ensureGridSize(unsigned maximumRowSize, unsigned maximumColumnSize);
     void insertItemIntoGrid(RenderBox&, const GridArea&);
 
-    unsigned computeAutoRepeatTracksCount(GridTrackSizingDirection) const;
+    unsigned computeAutoRepeatTracksCount(GridTrackSizingDirection, SizingOperation) const;
 
     typedef ListHashSet<size_t> OrderedTrackIndexSet;
     std::unique_ptr<OrderedTrackIndexSet> computeEmptyTracksForAutoRepeat(GridTrackSizingDirection) const;
@@ -90,7 +99,7 @@ private:
     bool hasAutoRepeatEmptyTracks(GridTrackSizingDirection) const;
     bool isEmptyAutoRepeatTrack(GridTrackSizingDirection, unsigned track) const;
 
-    void placeItemsOnGrid();
+    void placeItemsOnGrid(SizingOperation);
     void populateExplicitGridAndOrderIterator();
     std::unique_ptr<GridArea> createEmptyGridAreaAtSpecifiedPositionsOutsideGrid(const RenderBox&, GridTrackSizingDirection, const GridSpan&) const;
     void placeSpecifiedMajorAxisItemsOnGrid(const Vector<RenderBox*>&);
@@ -100,6 +109,7 @@ private:
     GridTrackSizingDirection autoPlacementMajorAxisDirection() const;
     GridTrackSizingDirection autoPlacementMinorAxisDirection() const;
 
+    bool canPerformSimplifiedLayout() const final;
     void prepareChildForPositionedLayout(RenderBox&);
     void layoutPositionedObject(RenderBox&, bool relayoutChildren, bool fixedPositionObjectsOnly) override;
     void offsetAndBreadthForPositionedChild(const RenderBox&, GridTrackSizingDirection, LayoutUnit& offset, LayoutUnit& breadth);
@@ -114,19 +124,6 @@ private:
     void populateGridPositionsForDirection(GridSizingData&, GridTrackSizingDirection);
     void clearGrid();
 
-    enum TrackSizeRestriction {
-        AllowInfinity,
-        ForbidInfinity,
-    };
-    enum TrackSizeComputationPhase {
-        ResolveIntrinsicMinimums,
-        ResolveContentBasedMinimums,
-        ResolveMaxContentMinimums,
-        ResolveIntrinsicMaximums,
-        ResolveMaxContentMaximums,
-        MaximizeTracks,
-    };
-    static const LayoutUnit& trackSizeForTrackSizeComputationPhase(TrackSizeComputationPhase, GridTrack&, TrackSizeRestriction);
     static bool shouldProcessTrackForTrackSizeComputationPhase(TrackSizeComputationPhase, const GridTrackSize&);
     static bool trackShouldGrowBeyondGrowthLimitsForTrackSizeComputationPhase(TrackSizeComputationPhase, const GridTrackSize&);
     static void markAsInfinitelyGrowableForTrackSizeComputationPhase(TrackSizeComputationPhase, GridTrack&);
@@ -136,7 +133,7 @@ private:
     typedef struct GridItemsSpanGroupRange GridItemsSpanGroupRange;
     void resolveContentBasedTrackSizingFunctionsForNonSpanningItems(GridTrackSizingDirection, const GridSpan&, RenderBox& gridItem, GridTrack&, GridSizingData&) const;
     template <TrackSizeComputationPhase> void resolveContentBasedTrackSizingFunctionsForItems(GridTrackSizingDirection, GridSizingData&, const GridItemsSpanGroupRange&) const;
-    template <TrackSizeComputationPhase> void distributeSpaceToTracks(Vector<GridTrack*>&, const Vector<GridTrack*>* growBeyondGrowthLimitsTracks, LayoutUnit& availableLogicalSpace) const;
+    template <TrackSizeComputationPhase> void distributeSpaceToTracks(Vector<GridTrack*>&, Vector<GridTrack*>* growBeyondGrowthLimitsTracks, LayoutUnit& availableLogicalSpace) const;
 
     typedef HashSet<unsigned, DefaultHash<unsigned>::Hash, WTF::UnsignedWithZeroKeyHashTraits<unsigned>> TrackIndexSet;
     double computeFlexFactorUnitSize(const Vector<GridTrack>&, GridTrackSizingDirection, SizingOperation, double flexFactorSum, LayoutUnit leftOverSpace, const Vector<unsigned, 8>& flexibleTracksIndexes, std::unique_ptr<TrackIndexSet> tracksToTreatAsInflexible = nullptr) const;
@@ -235,6 +232,4 @@ size_t inline RenderGrid::autoRepeatCountForDirection(GridTrackSizingDirection d
 
 SPECIALIZE_TYPE_TRAITS_RENDER_OBJECT(RenderGrid, isRenderGrid())
 
-#endif /* ENABLE(CSS_GRID_LAYOUT) */
-
-#endif // RenderGrid_h
+#endif // ENABLE(CSS_GRID_LAYOUT)

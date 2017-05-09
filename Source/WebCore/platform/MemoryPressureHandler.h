@@ -32,6 +32,7 @@
 #include <functional>
 #include <wtf/FastMalloc.h>
 #include <wtf/Forward.h>
+#include <wtf/NeverDestroyed.h>
 
 #if PLATFORM(IOS)
 #include <wtf/Lock.h>
@@ -66,13 +67,11 @@ public:
 
     WEBCORE_EXPORT void install();
 
-    void setLowMemoryHandler(LowMemoryHandler handler)
+    void setLowMemoryHandler(LowMemoryHandler&& handler)
     {
         ASSERT(!m_installed);
-        m_lowMemoryHandler = handler;
+        m_lowMemoryHandler = WTFMove(handler);
     }
-
-    void jettisonExpensiveObjectsOnTopLevelNavigation();
 
     bool isUnderMemoryPressure() const { return m_underMemoryPressure || m_isSimulatingMemoryPressure; }
     void setUnderMemoryPressure(bool b) { m_underMemoryPressure = b; }
@@ -85,10 +84,8 @@ public:
     WEBCORE_EXPORT bool shouldWaitForMemoryClearMessage();
     void respondToMemoryPressureIfNeeded();
 #elif OS(LINUX)
-#if 0 && ENABLE(QUIQUE)
     static void waitForMemoryPressureEvent(void*);
     static void pollMemoryPressure(void*);
-#endif
     void setMemoryPressureMonitorHandle(int fd);
 #endif
 
@@ -96,22 +93,13 @@ public:
     public:
         explicit ReliefLogger(const char *log)
             : m_logString(log)
-#if !RELEASE_LOG_DISABLED
-            , m_initialMemory(platformMemoryUsage())
-#else
             , m_initialMemory(s_loggingEnabled ? platformMemoryUsage() : 0)
-#endif
         {
         }
 
         ~ReliefLogger()
         {
-#if !RELEASE_LOG_DISABLED
             logMemoryUsageChange();
-#else
-            if (s_loggingEnabled)
-                logMemoryUsageChange();
-#endif
         }
 
         const char* logString() const { return m_logString; }
@@ -134,10 +122,6 @@ public:
     WEBCORE_EXPORT void endSimulatedMemoryPressure();
 
 private:
-    void platformInitialize();
-    void releaseNoncriticalMemory();
-    void releaseCriticalMemory(Synchronous);
-
     void uninstall();
 
     void holdOff(unsigned);
@@ -162,24 +146,24 @@ private:
         std::function<void ()> m_notifyHandler;
 #if USE(GLIB)
         GRefPtr<GSource> m_source;
-#else
-        ThreadIdentifier m_threadID;
 #endif
+        ThreadIdentifier m_threadID { 0 };
     };
 #endif
 
-    bool m_installed;
-    time_t m_lastRespondTime;
+    bool m_installed { false };
+    time_t m_lastRespondTime { 0 };
     LowMemoryHandler m_lowMemoryHandler;
 
     std::atomic<bool> m_underMemoryPressure;
     bool m_isSimulatingMemoryPressure { false };
 
 #if PLATFORM(IOS)
-    uint32_t m_memoryPressureReason;
-    bool m_clearPressureOnMemoryRelease;
-    void (^m_releaseMemoryBlock)();
-    CFRunLoopObserverRef m_observer;
+    // FIXME: Can we share more of this with OpenSource?
+    uint32_t m_memoryPressureReason { MemoryPressureReasonNone };
+    bool m_clearPressureOnMemoryRelease { true };
+    void (^m_releaseMemoryBlock)() { nullptr };
+    CFRunLoopObserverRef m_observer { nullptr };
     Lock m_observerMutex;
 #elif OS(LINUX)
     Optional<int> m_eventFD;

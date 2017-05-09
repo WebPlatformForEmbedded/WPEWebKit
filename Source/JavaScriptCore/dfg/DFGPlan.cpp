@@ -64,6 +64,7 @@
 #include "DFGSSALoweringPhase.h"
 #include "DFGStackLayoutPhase.h"
 #include "DFGStaticExecutionCountEstimationPhase.h"
+#include "DFGStoreBarrierClusteringPhase.h"
 #include "DFGStoreBarrierInsertionPhase.h"
 #include "DFGStrengthReductionPhase.h"
 #include "DFGStructureRegistrationPhase.h"
@@ -182,7 +183,7 @@ void Plan::compileInThread(LongLivedState& longLivedState, ThreadData* threadDat
     
     CompilationScope compilationScope;
 
-    if (logCompilationChanges(mode))
+    if (logCompilationChanges(mode) || Options::reportDFGPhaseTimes())
         dataLog("DFG(Plan) compiling ", *codeBlock, " with ", mode, ", number of instructions = ", codeBlock->instructionCount(), "\n");
 
     CompilationPath path = compileInThreadImpl(longLivedState);
@@ -362,6 +363,7 @@ Plan::CompilationPath Plan::compileInThreadImpl(LongLivedState& longLivedState)
         performTierUpCheckInjection(dfg);
 
         performFastStoreBarrierInsertion(dfg);
+        performStoreBarrierClustering(dfg);
         performCleanUp(dfg);
         performCPSRethreading(dfg);
         performDCE(dfg);
@@ -451,6 +453,7 @@ Plan::CompilationPath Plan::compileInThreadImpl(LongLivedState& longLivedState)
         performLivenessAnalysis(dfg);
         performCFA(dfg);
         performGlobalStoreBarrierInsertion(dfg);
+        performStoreBarrierClustering(dfg);
         if (Options::useMovHintRemoval())
             performMovHintRemoval(dfg);
         performCleanUp(dfg);
@@ -691,7 +694,7 @@ void Plan::cleanMustHandleValuesIfNecessary()
     FastBitVector liveness = codeBlock->alternative()->livenessAnalysis().getLivenessInfoAtBytecodeOffset(osrEntryBytecodeIndex);
     
     for (unsigned local = mustHandleValues.numberOfLocals(); local--;) {
-        if (!liveness.get(local))
+        if (!liveness[local])
             mustHandleValues.local(local) = jsUndefined();
     }
 }

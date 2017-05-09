@@ -111,7 +111,9 @@ private:
     void respondToChangedContents() final;
     void respondToChangedSelection(WebCore::Frame*) final;
     void didChangeSelectionAndUpdateLayout() final { }
+    void updateEditorStateAfterLayoutIfEditabilityChanged() final;
     void discardedComposition(WebCore::Frame*) final;
+    void canceledComposition() final;
 
     void registerUndoStep(PassRefPtr<WebCore::UndoStep>) final;
     void registerRedoStep(PassRefPtr<WebCore::UndoStep>) final;
@@ -191,6 +193,9 @@ private:
     NSRange m_rangeForCandidates;
     NSInteger m_lastCandidateRequestSequenceNumber;
 #endif
+
+    enum class EditorStateIsContentEditable { No, Yes, Unset };
+    EditorStateIsContentEditable m_lastEditorStateWasContentEditable { EditorStateIsContentEditable::Unset };
 
     WeakPtrFactory<WebEditorClient> m_weakPtrFactory;
 };

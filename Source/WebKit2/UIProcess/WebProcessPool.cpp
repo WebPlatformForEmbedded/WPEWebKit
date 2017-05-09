@@ -69,15 +69,13 @@
 #include <WebCore/LogInitialization.h>
 #include <WebCore/ResourceRequest.h>
 #include <WebCore/SessionID.h>
+#include <WebCore/URLParser.h>
 #include <runtime/JSCInlines.h>
 #include <wtf/CurrentTime.h>
 #include <wtf/MainThread.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/RunLoop.h>
-
-#if ENABLE(BATTERY_STATUS)
-#include "WebBatteryManagerProxy.h"
-#endif
+#include <wtf/text/StringBuilder.h>
 
 #if ENABLE(DATABASE_PROCESS)
 #include "DatabaseProcessCreationParameters.h"
@@ -98,6 +96,11 @@
 
 #if OS(LINUX)
 #include "MemoryPressureMonitor.h"
+#endif
+
+#if PLATFORM(WAYLAND)
+#include "WaylandCompositor.h"
+#include <WebCore/PlatformDisplay.h>
 #endif
 
 #ifndef NDEBUG
@@ -170,6 +173,7 @@ WebProcessPool::WebProcessPool(API::ProcessPoolConfiguration& configuration)
     , m_canHandleHTTPSServerTrustEvaluation(true)
     , m_didNetworkProcessCrash(false)
     , m_memoryCacheDisabled(false)
+    , m_alwaysRunsAtBackgroundPriority(m_configuration->alwaysRunsAtBackgroundPriority())
     , m_userObservablePageCounter([this](RefCounterEvent) { updateProcessSuppressionState(); })
     , m_processSuppressionDisabledForPageCounter([this](RefCounterEvent) { updateProcessSuppressionState(); })
     , m_hiddenPageThrottlingAutoIncreasesCounter([this](RefCounterEvent) { m_hiddenPageThrottlingTimer.startOneShot(0); })
@@ -196,9 +200,6 @@ WebProcessPool::WebProcessPool(API::ProcessPoolConfiguration& configuration)
 #if USE(SOUP)
     addSupplement<WebSoupCustomProtocolRequestManager>();
 #endif
-#if ENABLE(BATTERY_STATUS)
-    addSupplement<WebBatteryManagerProxy>();
-#endif
 #if ENABLE(MEDIA_SESSION)
     addSupplement<WebMediaSessionFocusManager>();
 #endif
@@ -207,10 +208,10 @@ WebProcessPool::WebProcessPool(API::ProcessPoolConfiguration& configuration)
 
     addLanguageChangeObserver(this, languageChanged);
 
-#if !LOG_DISABLED
+#if !LOG_DISABLED || !RELEASE_LOG_DISABLED
     WebCore::initializeLogChannelsIfNecessary();
     WebKit::initializeLogChannelsIfNecessary();
-#endif // !LOG_DISABLED
+#endif // !LOG_DISABLED || !RELEASE_LOG_DISABLED
 
 #ifndef NDEBUG
     processPoolCounter.increment();
@@ -232,11 +233,9 @@ WebProcessPool::~WebProcessPool()
 
     m_messageReceiverMap.invalidate();
 
-    WebContextSupplementMap::const_iterator it = m_supplements.begin();
-    WebContextSupplementMap::const_iterator end = m_supplements.end();
-    for (; it != end; ++it) {
-        it->value->processPoolDestroyed();
-        it->value->clearProcessPool();
+    for (auto& supplement : m_supplements.values()) {
+        supplement->processPoolDestroyed();
+        supplement->clearProcessPool();
     }
 
     m_iconDatabase->invalidate();
@@ -381,6 +380,8 @@ NetworkProcessProxy& WebProcessPool::ensureNetworkProcess()
 
     parameters.shouldUseTestingNetworkSession = m_shouldUseTestingNetworkSession;
 
+    parameters.urlParserEnabled = URLParser::enabled();
+    
     // Add any platform specific parameters
     platformInitializeNetworkProcess(parameters);
 
@@ -406,10 +407,8 @@ void WebProcessPool::networkProcessCrashed(NetworkProcessProxy* networkProcessPr
     ASSERT(networkProcessProxy == m_networkProcess.get());
     m_didNetworkProcessCrash = true;
 
-    WebContextSupplementMap::const_iterator it = m_supplements.begin();
-    WebContextSupplementMap::const_iterator end = m_supplements.end();
-    for (; it != end; ++it)
-        it->value->processDidClose(networkProcessProxy);
+    for (auto& supplement : m_supplements.values())
+        supplement->processDidClose(networkProcessProxy);
 
     m_client.networkProcessDidCrash(this);
 
@@ -463,8 +462,8 @@ void WebProcessPool::databaseProcessCrashed(DatabaseProcessProxy* databaseProces
     ASSERT(m_databaseProcess);
     ASSERT(databaseProcessProxy == m_databaseProcess.get());
 
-    for (auto& supplement : m_supplements)
-        supplement.value->processDidClose(databaseProcessProxy);
+    for (auto& supplement : m_supplements.values())
+        supplement->processDidClose(databaseProcessProxy);
 
     m_client.databaseProcessDidCrash(this);
     m_databaseProcess = nullptr;
@@ -542,6 +541,8 @@ WebProcessProxy& WebProcessPool::createNewWebProcess()
 
     WebProcessCreationParameters parameters;
 
+    parameters.urlParserEnabled = URLParser::enabled();
+    
     parameters.injectedBundlePath = injectedBundlePath();
     if (!parameters.injectedBundlePath.isEmpty())
         SandboxExtension::createHandle(parameters.injectedBundlePath, SandboxExtension::ReadOnly, parameters.injectedBundlePathExtensionHandle);
@@ -637,6 +638,11 @@ WebProcessProxy& WebProcessPool::createNewWebProcess()
     parameters.shouldEnableMemoryPressureReliefLogging = true;
     if (MemoryPressureMonitor::isEnabled())
         parameters.memoryPressureMonitorHandle = MemoryPressureMonitor::singleton().createHandle();
+#endif
+
+#if PLATFORM(WAYLAND) && USE(EGL)
+    if (PlatformDisplay::sharedDisplay().type() == PlatformDisplay::Type::Wayland)
+        parameters.waylandCompositorDisplayName = WaylandCompositor::singleton().displayName();
 #endif
 
     parameters.resourceLoadStatisticsEnabled = resourceLoadStatisticsEnabled();
@@ -801,7 +807,7 @@ Ref<WebPageProxy> WebProcessPool::createWebPage(PageClient& pageClient, Ref<API:
     return process->createWebPage(pageClient, WTFMove(pageConfiguration));
 }
 
-DownloadProxy* WebProcessPool::download(WebPageProxy* initiatingPage, const ResourceRequest& request)
+DownloadProxy* WebProcessPool::download(WebPageProxy* initiatingPage, const ResourceRequest& request, const String& suggestedFilename)
 {
     DownloadProxy* downloadProxy = createDownloadProxy(request);
     SessionID sessionID = initiatingPage ? initiatingPage->sessionID() : SessionID::defaultSessionID();
@@ -814,7 +820,7 @@ DownloadProxy* WebProcessPool::download(WebPageProxy* initiatingPage, const Reso
             updatedRequest.setFirstPartyForCookies(URL(URL(), initiatingPage->pageLoadState().url()));
         else
             updatedRequest.setFirstPartyForCookies(URL());
-        networkProcess()->send(Messages::NetworkProcess::DownloadRequest(sessionID, downloadProxy->downloadID(), updatedRequest), 0);
+        networkProcess()->send(Messages::NetworkProcess::DownloadRequest(sessionID, downloadProxy->downloadID(), updatedRequest, suggestedFilename), 0);
         return downloadProxy;
     }
 
@@ -1206,9 +1212,20 @@ void WebProcessPool::requestNetworkingStatistics(StatisticsRequest* request)
     m_networkProcess->send(Messages::NetworkProcess::GetNetworkProcessStatistics(requestID), 0);
 }
 
+static WebProcessProxy* webProcessProxyFromConnection(IPC::Connection& connection, const Vector<RefPtr<WebProcessProxy>>& processes)
+{
+    for (auto& process : processes) {
+        if (process->connection() == &connection)
+            return process.get();
+    }
+
+    // FIXME: Can this ever return null?
+    return nullptr;
+}
+
 void WebProcessPool::handleMessage(IPC::Connection& connection, const String& messageName, const WebKit::UserData& messageBody)
 {
-    auto* webProcessProxy = WebProcessProxy::fromConnection(&connection);
+    auto* webProcessProxy = webProcessProxyFromConnection(connection, m_processes);
     if (!webProcessProxy)
         return;
     m_injectedBundleClient.didReceiveMessageFromInjectedBundle(this, messageName, webProcessProxy->transformHandlesToObjects(messageBody.object()).get());
@@ -1216,7 +1233,7 @@ void WebProcessPool::handleMessage(IPC::Connection& connection, const String& me
 
 void WebProcessPool::handleSynchronousMessage(IPC::Connection& connection, const String& messageName, const UserData& messageBody, UserData& returnUserData)
 {
-    auto* webProcessProxy = WebProcessProxy::fromConnection(&connection);
+    auto* webProcessProxy = webProcessProxyFromConnection(connection, m_processes);
     if (!webProcessProxy)
         return;
 
@@ -1240,7 +1257,7 @@ void WebProcessPool::didGetStatistics(const StatisticsData& statisticsData, uint
 
 void WebProcessPool::startedUsingGamepads(IPC::Connection& connection)
 {
-    auto* proxy = WebProcessProxy::fromConnection(&connection);
+    auto* proxy = webProcessProxyFromConnection(connection, m_processes);
     if (!proxy)
         return;
 
@@ -1255,7 +1272,7 @@ void WebProcessPool::startedUsingGamepads(IPC::Connection& connection)
 
 void WebProcessPool::stoppedUsingGamepads(IPC::Connection& connection)
 {
-    auto* proxy = WebProcessProxy::fromConnection(&connection);
+    auto* proxy = webProcessProxyFromConnection(connection, m_processes);
     if (!proxy)
         return;
 
@@ -1277,7 +1294,7 @@ void WebProcessPool::processStoppedUsingGamepads(WebProcessProxy& process)
 void WebProcessPool::gamepadConnected(const UIGamepad& gamepad)
 {
     for (auto& process : m_processesUsingGamepads)
-        process->send(Messages::WebProcess::GamepadConnected(gamepad.gamepadData()), 0);
+        process->send(Messages::WebProcess::GamepadConnected(gamepad.fullGamepadData()), 0);
 }
 
 void WebProcessPool::gamepadDisconnected(const UIGamepad& gamepad)
@@ -1293,7 +1310,7 @@ void WebProcessPool::setInitialConnectedGamepads(const Vector<std::unique_ptr<UI
     for (size_t i = 0; i < gamepads.size(); ++i) {
         if (!gamepads[i])
             continue;
-        gamepadDatas[i] = gamepads[i]->gamepadData();
+        gamepadDatas[i] = gamepads[i]->fullGamepadData();
     }
 
     for (auto& process : m_processesUsingGamepads)

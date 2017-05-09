@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011, 2013-2015 Apple Inc. All rights reserved.
+ * Copyright (C) 2011, 2013-2016 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -23,8 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. 
  */
 
-#ifndef DFGBasicBlock_h
-#define DFGBasicBlock_h
+#pragma once
 
 #if ENABLE(DFG_JIT)
 
@@ -34,6 +33,7 @@
 #include "DFGBranchDirection.h"
 #include "DFGFlushedAt.h"
 #include "DFGNode.h"
+#include "DFGNodeAbstractValuePair.h"
 #include "DFGNodeOrigin.h"
 #include "DFGStructureClobberState.h"
 #include "Operands.h"
@@ -91,6 +91,7 @@ struct BasicBlock : RefCounted<BasicBlock> {
             case Switch:
             case Return:
             case TailCall:
+            case DirectTailCall:
             case TailCallVarargs:
             case TailCallForwardVarargs:
             case Unreachable:
@@ -248,12 +249,8 @@ struct BasicBlock : RefCounted<BasicBlock> {
         AvailabilityMap availabilityAtHead;
         AvailabilityMap availabilityAtTail;
 
-        Vector<Node*> liveAtHead;
-        Vector<Node*> liveAtTail;
-        struct NodeAbstractValuePair {
-            Node* node;
-            AbstractValue value;
-        };
+        Vector<NodeFlowProjection> liveAtHead;
+        Vector<NodeFlowProjection> liveAtTail;
         Vector<NodeAbstractValuePair> valuesAtHead;
         Vector<NodeAbstractValuePair> valuesAtTail;
         
@@ -297,6 +294,3 @@ static inline BasicBlock* blockForBytecodeOffset(Vector<BasicBlock*>& linkingTar
 } } // namespace JSC::DFG
 
 #endif // ENABLE(DFG_JIT)
-
-#endif // DFGBasicBlock_h
-

@@ -51,8 +51,6 @@ bool isOnAccessControlSimpleRequestHeaderWhitelist(HTTPHeaderName name, const St
     case HTTPHeaderName::Accept:
     case HTTPHeaderName::AcceptLanguage:
     case HTTPHeaderName::ContentLanguage:
-    case HTTPHeaderName::Origin:
-    case HTTPHeaderName::Referer:
         return true;
     case HTTPHeaderName::ContentType: {
         // Preflight is required for MIME types that can not be sent via form submission.
@@ -105,13 +103,15 @@ void updateRequestForAccessControl(ResourceRequest& request, SecurityOrigin& sec
     request.setHTTPOrigin(securityOrigin.toString());
 }
 
-ResourceRequest createAccessControlPreflightRequest(const ResourceRequest& request, SecurityOrigin& securityOrigin)
+ResourceRequest createAccessControlPreflightRequest(const ResourceRequest& request, SecurityOrigin& securityOrigin, const String& referrer)
 {
     ResourceRequest preflightRequest(request.url());
     updateRequestForAccessControl(preflightRequest, securityOrigin, DoNotAllowStoredCredentials);
     preflightRequest.setHTTPMethod("OPTIONS");
     preflightRequest.setHTTPHeaderField(HTTPHeaderName::AccessControlRequestMethod, request.httpMethod());
     preflightRequest.setPriority(request.priority());
+    if (!referrer.isNull())
+        preflightRequest.setHTTPReferrer(referrer);
 
     const HTTPHeaderMap& requestHeaderFields = request.httpHeaderFields();
 
@@ -130,9 +130,8 @@ ResourceRequest createAccessControlPreflightRequest(const ResourceRequest& reque
 
         bool appendComma = false;
         for (const auto& headerField : unsafeHeaders) {
-            // FIXME: header names should be separated by 0x2C, without space.
             if (appendComma)
-                headerBuffer.appendLiteral(", ");
+                headerBuffer.append(',');
             else
                 appendComma = true;
 
@@ -146,7 +145,7 @@ ResourceRequest createAccessControlPreflightRequest(const ResourceRequest& reque
 
 bool isValidCrossOriginRedirectionURL(const URL& redirectURL)
 {
-    return SchemeRegistry::shouldTreatURLSchemeAsCORSEnabled(redirectURL.protocol())
+    return SchemeRegistry::shouldTreatURLSchemeAsCORSEnabled(redirectURL.protocol().toStringWithoutCopying())
         && redirectURL.user().isEmpty()
         && redirectURL.pass().isEmpty();
 }

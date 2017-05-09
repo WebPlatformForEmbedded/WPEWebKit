@@ -27,6 +27,8 @@
 
 #if ENABLE(VIDEO_TRACK)
 
+#if !USE(DIRECT2D)
+
 #include "CaptionUserPreferencesMediaAF.h"
 
 #include "AudioTrackList.h"
@@ -49,6 +51,11 @@
 
 #if PLATFORM(IOS)
 #import "WebCoreThreadRun.h"
+#endif
+
+#if COMPILER(MSVC)
+// See https://msdn.microsoft.com/en-us/library/35bhkfb6.aspx
+#pragma warning(disable: 4273)
 #endif
 
 #if HAVE(MEDIA_ACCESSIBILITY_FRAMEWORK)
@@ -389,7 +396,7 @@ String CaptionUserPreferencesMediaAF::captionsTextEdgeCSS() const
     bool unused;
     Color color = captionsTextColor(unused);
     if (!color.isValid())
-        color.setNamedColor("black");
+        color = Color { Color::black };
     color = captionsEdgeColorForTextColor(color);
 
     MACaptionAppearanceBehavior behavior;
@@ -959,5 +966,7 @@ Vector<RefPtr<TextTrack>> CaptionUserPreferencesMediaAF::sortedTrackListForMenu(
 }
     
 }
+
+#endif
 
 #endif // ENABLE(VIDEO_TRACK)

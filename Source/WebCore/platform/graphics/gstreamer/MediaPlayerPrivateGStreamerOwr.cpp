@@ -115,7 +115,7 @@ float MediaPlayerPrivateGStreamerOwr::currentTime() const
     if (static_cast<GstClockTime>(position) != GST_CLOCK_TIME_NONE)
         result = static_cast<double>(position) / GST_SECOND;
 
-    GST_DEBUG("Position %" GST_TIME_FORMAT, GST_TIME_ARGS(position));
+    GST_LOG("Position %" GST_TIME_FORMAT, GST_TIME_ARGS(position));
     gst_query_unref(query);
 
     return result;
@@ -142,19 +142,19 @@ void MediaPlayerPrivateGStreamerOwr::load(MediaStreamPrivate& streamPrivate)
     if (!initializeGStreamer())
         return;
 
+    m_streamPrivate = &streamPrivate;
+    if (!m_streamPrivate->active()) {
+        loadingFailed(MediaPlayer::NetworkError);
+        return;
+    }
+
     if (streamPrivate.hasVideo() && !m_videoSink)
         createVideoSink();
 
     if (streamPrivate.hasAudio() && !m_audioSink)
         createGSTAudioSinkBin();
 
-    GST_DEBUG("Loading MediaStreamPrivate %p", &streamPrivate);
-
-    m_streamPrivate = &streamPrivate;
-    if (!m_streamPrivate->active()) {
-        loadingFailed(MediaPlayer::NetworkError);
-        return;
-    }
+    GST_DEBUG("Loading MediaStreamPrivate %p video: %s, audio: %s", &streamPrivate, streamPrivate.hasVideo() ? "yes":"no", streamPrivate.hasAudio() ? "yes":"no");
 
     m_readyState = MediaPlayer::HaveNothing;
     m_networkState = MediaPlayer::Loading;
@@ -188,6 +188,7 @@ void MediaPlayerPrivateGStreamerOwr::load(MediaStreamPrivate& streamPrivate)
 void MediaPlayerPrivateGStreamerOwr::loadingFailed(MediaPlayer::NetworkState error)
 {
     if (m_networkState != error) {
+        GST_WARNING("Loading failed, error: %d", error);
         m_networkState = error;
         m_player->networkStateChanged();
     }
@@ -259,11 +260,19 @@ void MediaPlayerPrivateGStreamerOwr::createGSTAudioSinkBin()
     GST_DEBUG("Creating audio sink");
     // FIXME: volume/mute support: https://webkit.org/b/153828.
 
-    GRefPtr<GstElement> sink = gst_element_factory_make("autoaudiosink", 0);
+    // Pre-roll an autoaudiosink so that the platform audio sink is created and
+    // can be retrieved from the autoaudiosink bin.
+    GRefPtr<GstElement> sink = gst_element_factory_make("autoaudiosink", nullptr);
     GstChildProxy* childProxy = GST_CHILD_PROXY(sink.get());
-    m_audioSink = adoptGRef(GST_ELEMENT(gst_child_proxy_get_child_by_index(childProxy, 0)));
+    gst_element_set_state(sink.get(), GST_STATE_READY);
+    GRefPtr<GstElement> platformSink = adoptGRef(GST_ELEMENT(gst_child_proxy_get_child_by_index(childProxy, 0)));
+    GstElementFactory* factory = gst_element_get_factory(platformSink.get());
+
+    // Dispose now un-needed autoaudiosink.
     gst_element_set_state(sink.get(), GST_STATE_NULL);
 
+    // Create a fresh new audio sink compatible with the platform.
+    m_audioSink = gst_element_factory_create(factory, nullptr);
     m_audioRenderer = adoptGRef(owr_gst_audio_renderer_new(m_audioSink.get()));
 }
 
@@ -294,6 +303,7 @@ void MediaPlayerPrivateGStreamerOwr::maybeHandleChangeMutedState(MediaStreamTrac
     auto realTimeMediaSource = reinterpret_cast<RealtimeMediaSourceOwr*>(&track.source());
     auto mediaSource = OWR_MEDIA_SOURCE(realTimeMediaSource->mediaSource());
 
+    GST_DEBUG("%s track now %s", track.type() == RealtimeMediaSource::Audio ? "audio":"video", realTimeMediaSource->muted() ? "muted":"un-muted");
     switch (track.type()) {
     case RealtimeMediaSource::Audio:
         if (!realTimeMediaSource->muted()) {
@@ -330,23 +340,37 @@ void MediaPlayerPrivateGStreamerOwr::trackEnabledChanged(MediaStreamTrackPrivate
 
 GstElement* MediaPlayerPrivateGStreamerOwr::createVideoSink()
 {
+    GstElement* sink;
 #if USE(GSTREAMER_GL)
     // No need to create glupload and glcolorconvert here because they are
     // already created by the video renderer.
-    GstElement* sink = MediaPlayerPrivateGStreamerBase::createGLAppSink();
+    // FIXME: This should probably return a RefPtr. See https://bugs.webkit.org/show_bug.cgi?id=164709.
+    sink = MediaPlayerPrivateGStreamerBase::createGLAppSink();
     m_videoSink = sink;
 #else
-    GstElement* sink = gst_bin_new(nullptr);
-    GstElement* gldownload = gst_element_factory_make("gldownload", nullptr);
-    GstElement* videoconvert = gst_element_factory_make("videoconvert", nullptr);
-    GstElement* webkitSink = MediaPlayerPrivateGStreamerBase::createVideoSink();
-    gst_bin_add_many(GST_BIN(sink), gldownload, videoconvert, webkitSink, nullptr);
-    gst_element_link_many(gldownload, videoconvert, webkitSink, nullptr);
-    GRefPtr<GstPad> pad = gst_element_get_static_pad(gldownload, "sink");
-    gst_element_add_pad(sink, gst_ghost_pad_new("sink", pad.get()));
+    if (m_streamPrivate->getVideoRenderer()) {
+        m_videoRenderer = m_streamPrivate->getVideoRenderer();
+        m_videoSink = m_streamPrivate->getVideoSinkElement();
+        g_signal_connect_swapped(m_videoSink.get(), "repaint-requested", G_CALLBACK(MediaPlayerPrivateGStreamerBase::repaintCallback), this);
+        g_object_get(m_videoRenderer.get(), "sink", &sink, nullptr);
+    } else {
+        GstElement* gldownload = gst_element_factory_make("gldownload", nullptr);
+        GstElement* videoconvert = gst_element_factory_make("videoconvert", nullptr);
+        GstElement* webkitSink = MediaPlayerPrivateGStreamerBase::createVideoSink();
+        sink = gst_bin_new(nullptr);
+        gst_bin_add_many(GST_BIN(sink), gldownload, videoconvert, webkitSink, nullptr);
+        gst_element_link_many(gldownload, videoconvert, webkitSink, nullptr);
+        GRefPtr<GstPad> pad = adoptGRef(gst_element_get_static_pad(gldownload, "sink"));
+        gst_element_add_pad(sink, gst_ghost_pad_new("sink", pad.get()));
+    }
 #endif
-    m_videoRenderer = adoptGRef(owr_gst_video_renderer_new(sink));
-
+    if (!m_videoRenderer) {
+        m_videoRenderer = adoptGRef(owr_gst_video_renderer_new(sink));
+#if USE(GSTREAMER_GL)
+        owr_video_renderer_set_request_context_callback(OWR_VIDEO_RENDERER(m_videoRenderer.get()), (OwrVideoRendererRequestContextCallback) MediaPlayerPrivateGStreamerBase::requestGLContext, this, nullptr);
+#endif
+        m_streamPrivate->setVideoRenderer(m_videoRenderer.get(), videoSink());
+    }
     return sink;
 }
 
@@ -356,7 +380,8 @@ void MediaPlayerPrivateGStreamerOwr::setSize(const IntSize& size)
         return;
 
     MediaPlayerPrivateGStreamerBase::setSize(size);
-    g_object_set(m_videoRenderer.get(), "width", size.width(), "height", size.height(), nullptr);
+    if (m_videoRenderer)
+        g_object_set(m_videoRenderer.get(), "width", size.width(), "height", size.height(), nullptr);
 }
 
 } // namespace WebCore

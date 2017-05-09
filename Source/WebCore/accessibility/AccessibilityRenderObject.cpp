@@ -54,7 +54,6 @@
 #include "HTMLMapElement.h"
 #include "HTMLMeterElement.h"
 #include "HTMLNames.h"
-#include "HTMLOptGroupElement.h"
 #include "HTMLOptionElement.h"
 #include "HTMLOptionsCollection.h"
 #include "HTMLSelectElement.h"
@@ -777,6 +776,11 @@ String AccessibilityRenderObject::stringValue() const
     if (isTextControl())
         return text();
     
+#if PLATFORM(IOS)
+    if (isInputTypePopupButton())
+        return textUnderElement();
+#endif
+    
     if (is<RenderFileUploadControl>(*m_renderer))
         return downcast<RenderFileUploadControl>(*m_renderer).fileTextValue();
     
@@ -1045,7 +1049,7 @@ void AccessibilityRenderObject::determineARIADropEffects(Vector<String>& effects
     
 bool AccessibilityRenderObject::exposesTitleUIElement() const
 {
-    if (!isControl())
+    if (!isControl() && !isFigure())
         return false;
 
     // If this control is ignored (because it's invisible), 
@@ -1057,12 +1061,16 @@ bool AccessibilityRenderObject::exposesTitleUIElement() const
     if (hasTextAlternative())
         return false;
     
-    // When <label> element has aria-label on it, we shouldn't expose it as the titleUIElement,
-    // otherwise its inner text will be announced by a screenreader.
-    if (is<HTMLInputElement>(*this->node()) || AccessibilityObject::isARIAInput(ariaRoleAttribute())) {
+    // When <label> element has aria-label or aria-labelledby on it, we shouldn't expose it as the
+    // titleUIElement, otherwise its inner text will be announced by a screenreader.
+    if (isLabelable()) {
         if (HTMLLabelElement* label = labelForElement(downcast<Element>(node()))) {
             if (!label->attributeWithoutSynchronization(aria_labelAttr).isEmpty())
                 return false;
+            if (AccessibilityObject* labelObject = axObjectCache()->getOrCreate(label)) {
+                if (!labelObject->ariaLabeledByAttribute().isEmpty())
+                    return false;
+            }
         }
     }
     
@@ -1077,6 +1085,9 @@ AccessibilityObject* AccessibilityRenderObject::titleUIElement() const
     // if isFieldset is true, the renderer is guaranteed to be a RenderFieldset
     if (isFieldset())
         return axObjectCache()->getOrCreate(downcast<RenderFieldset>(*m_renderer).findLegend(RenderFieldset::IncludeFloatingOrOutOfFlow));
+    
+    if (isFigure())
+        return captionForFigure();
     
     Node* node = m_renderer->node();
     if (!is<Element>(node))
@@ -1189,6 +1200,10 @@ bool AccessibilityRenderObject::computeAccessibilityIsIgnored() const
     AccessibilityObject* controlObject = correspondingControlForLabelElement();
     if (controlObject && !controlObject->exposesTitleUIElement() && controlObject->isCheckboxOrRadio())
         return true;
+    
+    // https://webkit.org/b/161276 Getting the controlObject might cause the m_renderer to be nullptr.
+    if (!m_renderer)
+        return true;
 
     if (m_renderer->isBR())
         return true;
@@ -1207,6 +1222,10 @@ bool AccessibilityRenderObject::computeAccessibilityIsIgnored() const
             if (parent->roleValue() == TextFieldRole)
                 return true;
         }
+        
+        // Walking up the parent chain might reset the m_renderer.
+        if (!m_renderer)
+            return true;
         
         // The alt attribute may be set on a text fragment through CSS, which should be honored.
         if (is<RenderTextFragment>(renderText)) {
@@ -1232,6 +1251,9 @@ bool AccessibilityRenderObject::computeAccessibilityIsIgnored() const
 
     // all controls are accessible
     if (isControl())
+        return false;
+    
+    if (isFigure())
         return false;
 
     switch (roleValue()) {
@@ -1436,15 +1458,22 @@ PlainTextRange AccessibilityRenderObject::documentBasedSelectedTextRange() const
     Node* node = m_renderer->node();
     if (!node)
         return PlainTextRange();
-    
+
     VisibleSelection visibleSelection = selection();
     RefPtr<Range> currentSelectionRange = visibleSelection.toNormalizedRange();
-    if (!currentSelectionRange || !currentSelectionRange->intersectsNode(*node, IGNORE_EXCEPTION))
+    if (!currentSelectionRange)
         return PlainTextRange();
-    
+    // FIXME: The reason this does the correct thing when the selection is in the
+    // shadow tree of an input element is that we get an exception below, and we
+    // choose to interpret all exceptions as "does not intersect". Seems likely
+    // that does not handle all cases correctly.
+    auto intersectsResult = currentSelectionRange->intersectsNode(*node);
+    if (!intersectsResult.hasException() && !intersectsResult.releaseReturnValue())
+        return PlainTextRange();
+
     int start = indexForVisiblePosition(visibleSelection.start());
     int end = indexForVisiblePosition(visibleSelection.end());
-    
+
     return PlainTextRange(start, end - start);
 }
 
@@ -2022,11 +2051,35 @@ IntRect AccessibilityRenderObject::boundsForRange(const RefPtr<Range> range) con
     
     return boundsForRects(rect1, rect2, range);
 }
+
+bool AccessibilityRenderObject::isVisiblePositionRangeInDifferentDocument(const VisiblePositionRange& range) const
+{
+    if (range.start.isNull() || range.end.isNull())
+        return false;
+    
+    VisibleSelection newSelection = VisibleSelection(range.start, range.end);
+    if (Document* newSelectionDocument = newSelection.base().document()) {
+        if (RefPtr<Frame> newSelectionFrame = newSelectionDocument->frame()) {
+            Frame* frame = this->frame();
+            if (!frame || (newSelectionFrame != frame && newSelectionDocument != frame->document()))
+                return true;
+        }
+    }
+    
+    return false;
+}
     
 void AccessibilityRenderObject::setSelectedVisiblePositionRange(const VisiblePositionRange& range) const
 {
     if (range.start.isNull() || range.end.isNull())
         return;
+    
+    // In WebKit1, when the top web area sets the selection to be an input element in an iframe, the caret will disappear.
+    // FrameSelection::setSelectionWithoutUpdatingAppearance is setting the selection on the new frame in this case, and causing this behavior.
+    if (isWebArea() && parentObject() && parentObject()->isAttachment()) {
+        if (isVisiblePositionRangeInDifferentDocument(range))
+            return;
+    }
 
     // make selection and tell the document to use it. if it's zero length, then move to that position
     if (range.start == range.end) {
@@ -2699,6 +2752,9 @@ AccessibilityRole AccessibilityRenderObject::determineAccessibilityRole()
 
     if (node && node->hasTagName(captionTag))
         return CaptionRole;
+    
+    if (node && node->hasTagName(markTag))
+        return MarkRole;
 
     if (node && node->hasTagName(preTag))
         return PreRole;
@@ -2707,6 +2763,11 @@ AccessibilityRole AccessibilityRenderObject::determineAccessibilityRole()
         return DetailsRole;
     if (is<HTMLSummaryElement>(node))
         return SummaryRole;
+    
+    // http://rawgit.com/w3c/aria/master/html-aam/html-aam.html
+    // Output elements should be mapped to status role.
+    if (isOutput())
+        return ApplicationStatusRole;
 
 #if ENABLE(VIDEO)
     if (is<HTMLVideoElement>(node))

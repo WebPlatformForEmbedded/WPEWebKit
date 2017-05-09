@@ -67,6 +67,7 @@
 #import <WebCore/TextIndicator.h>
 #import <WebCore/TextIndicatorWindow.h>
 #import <WebCore/TextUndoInsertionMarkupMac.h>
+#import <WebCore/ValidationBubble.h>
 #import <WebKitSystemInterface.h>
 #import <wtf/text/CString.h>
 #import <wtf/text/WTFString.h>
@@ -439,6 +440,11 @@ RefPtr<WebColorPicker> PageClientImpl::createColorPicker(WebPageProxy* page, con
 }
 #endif
 
+std::unique_ptr<ValidationBubble> PageClientImpl::createValidationBubble(const String& message)
+{
+    return std::make_unique<ValidationBubble>(m_view, message);
+}
+
 void PageClientImpl::setTextIndicator(Ref<TextIndicator> textIndicator, WebCore::TextIndicatorWindowLifetime lifetime)
 {
     m_impl->setTextIndicator(textIndicator.get(), lifetime);
@@ -750,6 +756,20 @@ void PageClientImpl::removeNavigationGestureSnapshot()
 {
     if (auto gestureController = m_impl->gestureController())
         gestureController->removeSwipeSnapshot();
+}
+
+void PageClientImpl::handleControlledElementIDResponse(const String& identifier)
+{
+#if WK_API_ENABLED
+    [m_webView _handleControlledElementIDResponse:nsStringFromWebCoreString(identifier)];
+#endif
+}
+
+void PageClientImpl::handleActiveNowPlayingSessionInfoResponse(bool hasActiveSession, const String& title, double duration, double elapsedTime)
+{
+#if WK_API_ENABLED
+    [m_webView _handleActiveNowPlayingSessionInfoResponse:hasActiveSession title:nsStringFromWebCoreString(title) duration:duration elapsedTime:elapsedTime];
+#endif
 }
 
 void PageClientImpl::didChangeBackgroundColor()

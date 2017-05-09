@@ -51,12 +51,13 @@ public:
 
     bool usesMenuList() const;
 
-    WEBCORE_EXPORT void add(HTMLElement&, HTMLElement* beforeElement, ExceptionCode&);
-    void add(HTMLElement&, int beforeIndex, ExceptionCode&);
+    using OptionOrOptGroupElement = Variant<RefPtr<HTMLOptionElement>, RefPtr<HTMLOptGroupElement>>;
+    using HTMLElementOrInt = Variant<RefPtr<HTMLElement>, int>;
+    WEBCORE_EXPORT ExceptionOr<void> add(const OptionOrOptGroupElement&, const Optional<HTMLElementOrInt>& before);
 
     using Node::remove;
-    void remove(HTMLOptionElement&);
-    WEBCORE_EXPORT void removeByIndex(int); // Should be remove(int) but that conflicts with Node::remove(ExceptionCode&).
+    ExceptionOr<void> remove(HTMLOptionElement&);
+    WEBCORE_EXPORT void remove(int);
 
     WEBCORE_EXPORT String value() const;
     WEBCORE_EXPORT void setValue(const String&);
@@ -79,8 +80,8 @@ public:
 
     WEBCORE_EXPORT void setSize(unsigned);
 
-    void setOption(unsigned index, HTMLOptionElement&, ExceptionCode&);
-    void setLength(unsigned, ExceptionCode&);
+    ExceptionOr<void> setOption(unsigned index, HTMLOptionElement&);
+    ExceptionOr<void> setLength(unsigned);
 
     WEBCORE_EXPORT HTMLOptionElement* namedItem(const AtomicString& name);
     WEBCORE_EXPORT HTMLOptionElement* item(unsigned index);
@@ -110,7 +111,7 @@ protected:
 private:
     const AtomicString& formControlType() const final;
     
-    bool isKeyboardFocusable(KeyboardEvent*) const final;
+    bool isKeyboardFocusable(KeyboardEvent&) const final;
     bool isMouseFocusable() const final;
 
     void dispatchFocusEvent(RefPtr<Element>&& oldFocusedElement, FocusDirection) final;
@@ -133,7 +134,7 @@ private:
 
     void reset() final;
 
-    void defaultEventHandler(Event*) final;
+    void defaultEventHandler(Event&) final;
     bool willRespondToMouseClickEvents() final;
 
     void dispatchChangeEventForMenuList();
@@ -164,9 +165,9 @@ private:
     void parseMultipleAttribute(const AtomicString&);
     int lastSelectedListIndex() const;
     void updateSelectedState(int listIndex, bool multi, bool shift);
-    void menuListDefaultEventHandler(Event*);
+    void menuListDefaultEventHandler(Event&);
     bool platformHandleKeydownEvent(KeyboardEvent*);
-    void listBoxDefaultEventHandler(Event*);
+    void listBoxDefaultEventHandler(Event&);
     void setOptionsChangedOnRenderer();
     size_t searchOptionsForValue(const String&, size_t listIndexStart, size_t listIndexEnd) const;
 

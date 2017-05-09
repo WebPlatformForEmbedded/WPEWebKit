@@ -24,16 +24,11 @@
  *
  */
 
-#ifndef CompositionEvent_h
-#define CompositionEvent_h
+#pragma once
 
 #include "UIEvent.h"
 
 namespace WebCore {
-
-struct CompositionEventInit : UIEventInit {
-    String data;
-};
 
 class CompositionEvent final : public UIEvent {
 public:
@@ -47,9 +42,13 @@ public:
         return adoptRef(*new CompositionEvent);
     }
 
-    static Ref<CompositionEvent> createForBindings(const AtomicString& type, const CompositionEventInit& initializer)
+    struct Init : UIEventInit {
+        String data;
+    };
+
+    static Ref<CompositionEvent> create(const AtomicString& type, const Init& initializer, IsTrusted isTrusted = IsTrusted::No)
     {
-        return adoptRef(*new CompositionEvent(type, initializer));
+        return adoptRef(*new CompositionEvent(type, initializer, isTrusted));
     }
 
     virtual ~CompositionEvent();
@@ -63,7 +62,7 @@ public:
 private:
     CompositionEvent();
     CompositionEvent(const AtomicString& type, DOMWindow*, const String&);
-    CompositionEvent(const AtomicString& type, const CompositionEventInit&);
+    CompositionEvent(const AtomicString& type, const Init&, IsTrusted);
 
     bool isCompositionEvent() const override;
 
@@ -71,5 +70,3 @@ private:
 };
 
 } // namespace WebCore
-
-#endif // CompositionEvent_h

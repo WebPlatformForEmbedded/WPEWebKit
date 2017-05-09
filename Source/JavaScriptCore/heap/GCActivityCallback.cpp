@@ -50,12 +50,7 @@ const double timerSlop = 2.0; // Fudge factor to avoid performance cost of reset
 
 #if USE(CF)
 GCActivityCallback::GCActivityCallback(Heap* heap)
-    : GCActivityCallback(heap->vm(), CFRunLoopGetCurrent())
-{
-}
-
-GCActivityCallback::GCActivityCallback(Heap* heap, CFRunLoopRef runLoop)
-    : GCActivityCallback(heap->vm(), runLoop)
+    : GCActivityCallback(heap->vm())
 {
 }
 #elif PLATFORM(EFL)
@@ -134,7 +129,8 @@ void GCActivityCallback::scheduleTimer(double newDelay)
     }
 
     auto delayDuration = std::chrono::duration<double>(m_delay);
-    auto safeDelayDuration = std::chrono::microseconds::max();
+    std::chrono::microseconds safeDelayDuration =
+        Options::maxDelayForGCTimers() ? std::chrono::seconds(Options::maxDelayForGCTimers()) : std::chrono::microseconds::max();
     if (delayDuration < safeDelayDuration)
         safeDelayDuration = std::chrono::duration_cast<std::chrono::microseconds>(delayDuration);
     gint64 currentTime = g_get_monotonic_time();

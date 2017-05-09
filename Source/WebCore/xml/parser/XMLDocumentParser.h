@@ -22,8 +22,7 @@
  *
  */
 
-#ifndef XMLDocumentParser_h
-#define XMLDocumentParser_h
+#pragma once
 
 #include "CachedResourceClient.h"
 #include "CachedResourceHandle.h"
@@ -108,7 +107,7 @@ class Text;
         bool shouldAssociateConsoleMessagesWithTextPosition() const override;
 
         // from CachedResourceClient
-        void notifyFinished(CachedResource*) override;
+        void notifyFinished(CachedResource&) final;
 
         void end();
 
@@ -198,5 +197,3 @@ void* xmlDocPtrForString(CachedResourceLoader&, const String& source, const Stri
 HashMap<String, String> parseAttributes(const String&, bool& attrsOK);
 
 } // namespace WebCore
-
-#endif // XMLDocumentParser_h

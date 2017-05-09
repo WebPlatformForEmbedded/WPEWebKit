@@ -51,6 +51,7 @@ WEBCORE_EXPORT bool isSafari();
 bool isSolidStateNetworksDownloader();
 WEBCORE_EXPORT bool isVersions();
 WEBCORE_EXPORT bool isHRBlock();
+WEBCORE_EXPORT bool isAppStore();
 
 } // MacApplication
 
@@ -74,6 +75,7 @@ WEBCORE_EXPORT bool isTheEconomistOnIphone();
 WEBCORE_EXPORT bool isWebProcess();
 bool isIBooks();
 WEBCORE_EXPORT bool isTheSecretSocietyHiddenMystery();
+bool isBaiduNuomi();
 
 } // IOSApplication
 

@@ -20,8 +20,7 @@
  *
  */
 
-#ifndef InlineIterator_h
-#define InlineIterator_h
+#pragma once
 
 #include "BidiRun.h"
 #include "RenderBlockFlow.h"
@@ -68,7 +67,7 @@ public:
     {
         setRenderer(nullptr);
         setOffset(0);
-        setNextBreakablePosition(-1);
+        setNextBreakablePosition(std::numeric_limits<unsigned>::max());
     }
     void moveToStartOf(RenderObject& object)
     {
@@ -588,6 +587,4 @@ inline void InlineBidiResolver::appendRunInternal()
     m_status.eor = U_OTHER_NEUTRAL;
 }
 
-}
-
-#endif // InlineIterator_h
+} // namespace WebCore

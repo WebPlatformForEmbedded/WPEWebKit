@@ -40,6 +40,7 @@ class AuthenticationChallenge;
 class ProtectionSpace;
 class ResourceRequest;
 class SecurityOrigin;
+struct SecurityOriginData;
 class SessionID;
 }
 
@@ -51,19 +52,20 @@ class WebProcessPool;
 enum class WebsiteDataFetchOption;
 enum class WebsiteDataType;
 struct NetworkProcessCreationParameters;
+struct WebsiteData;
 
 class NetworkProcessProxy : public ChildProcessProxy, private ProcessThrottlerClient {
 public:
     static Ref<NetworkProcessProxy> create(WebProcessPool&);
     ~NetworkProcessProxy();
 
-    void getNetworkProcessConnection(PassRefPtr<Messages::WebProcessProxy::GetNetworkProcessConnection::DelayedReply>);
+    void getNetworkProcessConnection(RefPtr<Messages::WebProcessProxy::GetNetworkProcessConnection::DelayedReply>&&);
 
     DownloadProxy* createDownloadProxy(const WebCore::ResourceRequest&);
 
-    void fetchWebsiteData(WebCore::SessionID, OptionSet<WebsiteDataType>, OptionSet<WebsiteDataFetchOption>, std::function<void (WebsiteData)> completionHandler);
-    void deleteWebsiteData(WebCore::SessionID, OptionSet<WebsiteDataType>, std::chrono::system_clock::time_point modifiedSince, std::function<void ()> completionHandler);
-    void deleteWebsiteDataForOrigins(WebCore::SessionID, OptionSet<WebKit::WebsiteDataType>, const Vector<RefPtr<WebCore::SecurityOrigin>>& origins, const Vector<String>& cookieHostNames, std::function<void ()> completionHandler);
+    void fetchWebsiteData(WebCore::SessionID, OptionSet<WebsiteDataType>, OptionSet<WebsiteDataFetchOption>, std::function<void(WebsiteData)> completionHandler);
+    void deleteWebsiteData(WebCore::SessionID, OptionSet<WebsiteDataType>, std::chrono::system_clock::time_point modifiedSince, std::function<void()> completionHandler);
+    void deleteWebsiteDataForOrigins(WebCore::SessionID, OptionSet<WebKit::WebsiteDataType>, const Vector<WebCore::SecurityOriginData>& origins, const Vector<String>& cookieHostNames, std::function<void()> completionHandler);
 
 #if PLATFORM(COCOA)
     void setProcessSuppressionEnabled(bool);
@@ -90,6 +92,7 @@ private:
     void sendPrepareToSuspend() override;
     void sendCancelPrepareToSuspend() override;
     void sendProcessDidResume() override;
+    bool alwaysRunsAtBackgroundPriority() override;
     void didSetAssertionState(AssertionState) override;
 
     // IPC::Connection::Client
@@ -97,8 +100,6 @@ private:
     void didReceiveSyncMessage(IPC::Connection&, IPC::Decoder&, std::unique_ptr<IPC::Encoder>&) override;
     void didClose(IPC::Connection&) override;
     void didReceiveInvalidMessage(IPC::Connection&, IPC::StringReference messageReceiverName, IPC::StringReference messageName) override;
-    IPC::ProcessType localProcessType() override { return IPC::ProcessType::UI; }
-    IPC::ProcessType remoteProcessType() override { return IPC::ProcessType::Network; }
 
     // Message handlers
     void didReceiveNetworkProcessProxyMessage(IPC::Connection&, IPC::Decoder&);

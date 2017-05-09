@@ -30,6 +30,7 @@
 
 #import "APIUIClient.h"
 #import "EditingRange.h"
+#import "Logging.h"
 #import "ManagedConfigurationSPI.h"
 #import "NativeWebKeyboardEvent.h"
 #import "NativeWebTouchEvent.h"
@@ -73,6 +74,7 @@
 #import <WebCore/Scrollbar.h>
 #import <WebCore/SoftLinking.h>
 #import <WebCore/TextIndicator.h>
+#import <WebCore/TextStream.h>
 #import <WebCore/WebCoreNSURLExtras.h>
 #import <WebCore/WebEvent.h>
 #import <WebKit/WebSelectionRect.h> // FIXME: WK2 should not include WebKit headers!
@@ -148,6 +150,26 @@ inline bool operator==(const WKSelectionDrawingInfo& a, const WKSelectionDrawing
 inline bool operator!=(const WKSelectionDrawingInfo& a, const WKSelectionDrawingInfo& b)
 {
     return !(a == b);
+}
+
+static WebCore::TextStream& operator<<(WebCore::TextStream& stream, WKSelectionDrawingInfo::SelectionType type)
+{
+    switch (type) {
+    case WKSelectionDrawingInfo::SelectionType::None: stream << "none"; break;
+    case WKSelectionDrawingInfo::SelectionType::Plugin: stream << "plugin"; break;
+    case WKSelectionDrawingInfo::SelectionType::Range: stream << "range"; break;
+    }
+    
+    return stream;
+}
+
+WebCore::TextStream& operator<<(WebCore::TextStream& stream, const WKSelectionDrawingInfo& info)
+{
+    TextStream::GroupScope group(stream);
+    stream.dumpProperty("type", info.type);
+    stream.dumpProperty("caret rect", info.caretRect);
+    stream.dumpProperty("selection rects", info.selectionRects);
+    return stream;
 }
 
 } // namespace WebKit
@@ -941,7 +963,7 @@ static NSValue *nsSizeForTapHighlightBorderRadius(WebCore::IntSize borderRadius,
         RetainPtr<NSMutableArray> quads = adoptNS([[NSMutableArray alloc] initWithCapacity:static_cast<const NSUInteger>(quadCount)]);
         for (size_t i = 0; i < quadCount; ++i) {
             FloatQuad quad = highlightedQuads[i];
-            quad.scale(selfScale, selfScale);
+            quad.scale(selfScale);
             FloatQuad extendedQuad = inflateQuad(quad, minimumTapHighlightRadius);
             [quads addObject:[NSValue valueWithCGPoint:extendedQuad.p1()]];
             [quads addObject:[NSValue valueWithCGPoint:extendedQuad.p2()]];
@@ -1080,8 +1102,8 @@ static NSValue *nsSizeForTapHighlightBorderRadius(WebCore::IntSize borderRadius,
              selectionRect: _didAccessoryTabInitiateFocus ? IntRect() : _assistedNodeInformation.selectionRect
                   fontSize:_assistedNodeInformation.nodeFontSize
               minimumScale:_assistedNodeInformation.minimumScaleFactor
-              maximumScale:_assistedNodeInformation.maximumScaleFactor
-              allowScaling:(_assistedNodeInformation.allowsUserScalingIgnoringForceAlwaysScaling && !UICurrentUserInterfaceIdiomIsPad())
+              maximumScale:_assistedNodeInformation.maximumScaleFactorIgnoringAlwaysScalable
+              allowScaling:(_assistedNodeInformation.allowsUserScalingIgnoringAlwaysScalable && !UICurrentUserInterfaceIdiomIsPad())
                forceScroll:[self requiresAccessoryView]];
 
     _didAccessoryTabInitiateFocus = NO;
@@ -1105,7 +1127,7 @@ static NSValue *nsSizeForTapHighlightBorderRadius(WebCore::IntSize borderRadius,
 - (CGRect)_selectionClipRect
 {
     if (_assistedNodeInformation.elementType == InputType::None)
-        return CGRectZero;
+        return CGRectNull;
     return _page->editorState().postLayoutData().selectionClipRect;
 }
 
@@ -1569,10 +1591,13 @@ static void cancelPotentialTapIfNecessary(WKContentView* contentView)
 {
     [_webSelectionAssistant willStartScrollingOrZoomingPage];
     [_textSelectionAssistant willStartScrollingOverflow];
+    _page->setIsScrollingOrZooming(true);
 }
 
 - (void)scrollViewWillStartPanOrPinchGesture
 {
+    _page->hideValidationMessage();
+
     _canSendTouchEventsAsynchronously = YES;
 }
 
@@ -1580,6 +1605,7 @@ static void cancelPotentialTapIfNecessary(WKContentView* contentView)
 {
     [_webSelectionAssistant didEndScrollingOrZoomingPage];
     [_textSelectionAssistant didEndScrollingOverflow];
+    _page->setIsScrollingOrZooming(false);
 }
 
 - (BOOL)requiresAccessoryView
@@ -1840,12 +1866,7 @@ static void cancelPotentialTapIfNecessary(WKContentView* contentView)
         if (_page->editorState().isInPasswordField || !(hasWebSelection || _page->editorState().selectionIsRange))
             return NO;
 
-        NSUInteger textLength = _page->editorState().postLayoutData().selectedTextLength;
-        // See FIXME above for _define.
-        if (!textLength || textLength > 200)
-            return NO;
-        
-        return YES;
+        return _page->editorState().postLayoutData().selectedTextLength > 0;
     }
 
     if (action == @selector(_addShortcut:)) {
@@ -2873,18 +2894,18 @@ static void selectionChangedWithTouch(WKContentView *view, const WebCore::IntPoi
 
 // end of UITextInput protocol implementation
 
-static UITextAutocapitalizationType toUITextAutocapitalize(WebAutocapitalizeType webkitType)
+static UITextAutocapitalizationType toUITextAutocapitalize(AutocapitalizeType webkitType)
 {
     switch (webkitType) {
-    case WebAutocapitalizeTypeDefault:
+    case AutocapitalizeTypeDefault:
         return UITextAutocapitalizationTypeSentences;
-    case WebAutocapitalizeTypeNone:
+    case AutocapitalizeTypeNone:
         return UITextAutocapitalizationTypeNone;
-    case WebAutocapitalizeTypeWords:
+    case AutocapitalizeTypeWords:
         return UITextAutocapitalizationTypeWords;
-    case WebAutocapitalizeTypeSentences:
+    case AutocapitalizeTypeSentences:
         return UITextAutocapitalizationTypeSentences;
-    case WebAutocapitalizeTypeAllCharacters:
+    case AutocapitalizeTypeAllCharacters:
         return UITextAutocapitalizationTypeAllCharacters;
     }
 
@@ -3678,6 +3699,8 @@ static bool isAssistableInputType(InputType type)
     if (!force && selectionDrawingInfo == _lastSelectionDrawingInfo)
         return;
 
+    LOG_WITH_STREAM(Selection, stream << "_updateChangedSelection " << selectionDrawingInfo);
+
     _lastSelectionDrawingInfo = selectionDrawingInfo;
 
     // FIXME: We need to figure out what to do if the selection is changed by Javascript.
@@ -3823,6 +3846,21 @@ static bool isAssistableInputType(InputType type)
 {
     if ([_inputPeripheral isKindOfClass:[WKFormSelectControl self]])
         [(WKFormSelectControl *)_inputPeripheral selectRow:rowIndex inComponent:0 extendingSelection:NO];
+}
+
+- (NSDictionary *)_contentsOfUserInterfaceItem:(NSString *)userInterfaceItem
+{
+    if ([userInterfaceItem isEqualToString:@"actionSheet"])
+        return @{ userInterfaceItem: [_actionSheetAssistant currentAvailableActionTitles] };
+
+#if HAVE(LINK_PREVIEW)
+    if ([userInterfaceItem isEqualToString:@"linkPreviewPopoverContents"]) {
+        NSString *url = [_previewItemController previewData][UIPreviewDataLink];
+        return @{ userInterfaceItem: @{ @"pageURL": url } };
+    }
+#endif
+    
+    return nil;
 }
 
 @end
@@ -3995,6 +4033,8 @@ static NSString *previewIdentifierForElementAction(_WKElementAction *action)
 - (UIViewController *)_presentedViewControllerForPreviewItemController:(UIPreviewItemController *)controller
 {
     id <WKUIDelegatePrivate> uiDelegate = static_cast<id <WKUIDelegatePrivate>>([_webView UIDelegate]);
+    
+    [_webView _didShowForcePressPreview];
 
     NSURL *targetURL = controller.previewData[UIPreviewDataLink];
     URL coreTargetURL = targetURL;
@@ -4101,13 +4141,15 @@ static NSString *previewIdentifierForElementAction(_WKElementAction *action)
         [uiDelegate _webView:_webView didDismissPreviewViewController:viewController committing:committing];
     else if ([uiDelegate respondsToSelector:@selector(_webView:didDismissPreviewViewController:)])
         [uiDelegate _webView:_webView didDismissPreviewViewController:viewController];
+    
+    [_webView _didDismissForcePressPreview];
 }
 
 - (UIImage *)_presentationSnapshotForPreviewItemController:(UIPreviewItemController *)controller
 {
     if (!_positionInformation.linkIndicator.contentImage)
         return nullptr;
-    return [[[UIImage alloc] initWithCGImage:_positionInformation.linkIndicator.contentImage->getCGImageRef()] autorelease];
+    return [[[UIImage alloc] initWithCGImage:_positionInformation.linkIndicator.contentImage->nativeImage().get()] autorelease];
 }
 
 - (NSArray *)_presentationRectsForPreviewItemController:(UIPreviewItemController *)controller
@@ -4134,6 +4176,8 @@ static NSString *previewIdentifierForElementAction(_WKElementAction *action)
 - (void)_previewItemControllerDidCancelPreview:(UIPreviewItemController *)controller
 {
     _highlightLongPressCanClick = NO;
+    
+    [_webView _didDismissForcePressPreview];
 }
 
 @end

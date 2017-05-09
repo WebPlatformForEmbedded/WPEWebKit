@@ -24,6 +24,9 @@
  */
 
 #include "config.h"
+
+#if USE(CG)
+
 #include "TileGrid.h"
 
 #include "GraphicsContext.h"
@@ -695,7 +698,7 @@ void TileGrid::platformCALayerPaintContents(PlatformCALayer* platformCALayer, Gr
 
         FloatPoint3D layerOrigin = platformCALayer->position();
         context.translate(-layerOrigin.x(), -layerOrigin.y());
-        context.scale(FloatSize(m_scale, m_scale));
+        context.scale(m_scale);
 
         PlatformCALayer::RepaintRectList dirtyRects = PlatformCALayer::collectRectsToPaint(context.platformContext(), platformCALayer);
         PlatformCALayer::drawLayerContents(context.platformContext(), &m_controller.rootLayer(), dirtyRects);
@@ -762,3 +765,5 @@ void TileGrid::removeUnparentedTilesNow()
 #endif
 
 } // namespace WebCore
+
+#endif

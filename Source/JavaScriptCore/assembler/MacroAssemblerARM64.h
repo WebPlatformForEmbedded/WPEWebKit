@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012, 2014, 2015 Apple Inc. All rights reserved.
+ * Copyright (C) 2012, 2014-2016 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -23,8 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. 
  */
 
-#ifndef MacroAssemblerARM64_h
-#define MacroAssemblerARM64_h
+#pragma once
 
 #if ENABLE(ASSEMBLER)
 
@@ -166,7 +165,10 @@ public:
             m_assembler.add<32>(dest, src, UInt12(imm.m_value));
         else if (isUInt12(-imm.m_value))
             m_assembler.sub<32>(dest, src, UInt12(-imm.m_value));
-        else {
+        else if (src != dest) {
+            move(imm, dest);
+            add32(src, dest);
+        } else {
             move(imm, getCachedDataTempRegisterIDAndInvalidate());
             m_assembler.add<32>(dest, src, dataTempRegister);
         }
@@ -702,6 +704,11 @@ public:
         m_assembler.sub<32>(dest, dest, src);
     }
 
+    void sub32(RegisterID left, RegisterID right, RegisterID dest)
+    {
+        m_assembler.sub<32>(dest, left, right);
+    }
+
     void sub32(TrustedImm32 imm, RegisterID dest)
     {
         if (isUInt12(imm.m_value)) {
@@ -938,6 +945,11 @@ public:
     void not64(RegisterID src, RegisterID dest)
     {
         m_assembler.mvn<64>(dest, src);
+    }
+
+    void not64(RegisterID srcDst)
+    {
+        m_assembler.mvn<64>(srcDst, srcDst);
     }
 
     // Memory access operations:
@@ -1186,6 +1198,14 @@ public:
         signExtend32ToPtr(TrustedImm32(address.offset), getCachedMemoryTempRegisterIDAndInvalidate());
         m_assembler.add<64>(memoryTempRegister, memoryTempRegister, address.index, ARM64Assembler::UXTX, address.scale);
         m_assembler.ldrsb<32>(dest, address.base, memoryTempRegister);
+    }
+
+    void load8SignedExtendTo32(const void* address, RegisterID dest)
+    {
+        moveToCachedReg(TrustedImmPtr(address), cachedMemoryTempRegister());
+        m_assembler.ldrsb<32>(dest, memoryTempRegister, ARM64Registers::zr);
+        if (dest == memoryTempRegister)
+            cachedMemoryTempRegister().invalidate();
     }
 
     void zeroExtend8To32(RegisterID src, RegisterID dest)
@@ -2412,22 +2432,22 @@ public:
 
     Jump branch8(RelationalCondition cond, Address left, TrustedImm32 right)
     {
-        TrustedImm32 right8(static_cast<int8_t>(right.m_value));
-        load8(left, getCachedMemoryTempRegisterIDAndInvalidate());
+        TrustedImm32 right8 = MacroAssemblerHelpers::mask8OnCondition(*this, cond, right);
+        MacroAssemblerHelpers::load8OnCondition(*this, cond, left, getCachedMemoryTempRegisterIDAndInvalidate());
         return branch32(cond, memoryTempRegister, right8);
     }
 
     Jump branch8(RelationalCondition cond, BaseIndex left, TrustedImm32 right)
     {
-        TrustedImm32 right8(static_cast<int8_t>(right.m_value));
-        load8(left, getCachedMemoryTempRegisterIDAndInvalidate());
+        TrustedImm32 right8 = MacroAssemblerHelpers::mask8OnCondition(*this, cond, right);
+        MacroAssemblerHelpers::load8OnCondition(*this, cond, left, getCachedMemoryTempRegisterIDAndInvalidate());
         return branch32(cond, memoryTempRegister, right8);
     }
     
     Jump branch8(RelationalCondition cond, AbsoluteAddress left, TrustedImm32 right)
     {
-        TrustedImm32 right8(static_cast<int8_t>(right.m_value));
-        load8(left.m_ptr, getCachedMemoryTempRegisterIDAndInvalidate());
+        TrustedImm32 right8 = MacroAssemblerHelpers::mask8OnCondition(*this, cond, right);
+        MacroAssemblerHelpers::load8OnCondition(*this, cond, left.m_ptr, getCachedMemoryTempRegisterIDAndInvalidate());
         return branch32(cond, memoryTempRegister, right8);
     }
     
@@ -2571,30 +2591,35 @@ public:
 
     Jump branchTest8(ResultCondition cond, Address address, TrustedImm32 mask = TrustedImm32(-1))
     {
-        TrustedImm32 mask8(static_cast<int8_t>(mask.m_value));
-        load8(address, getCachedDataTempRegisterIDAndInvalidate());
+        TrustedImm32 mask8 = MacroAssemblerHelpers::mask8OnCondition(*this, cond, mask);
+        MacroAssemblerHelpers::load8OnCondition(*this, cond, address, getCachedDataTempRegisterIDAndInvalidate());
         return branchTest32(cond, dataTempRegister, mask8);
     }
 
     Jump branchTest8(ResultCondition cond, AbsoluteAddress address, TrustedImm32 mask = TrustedImm32(-1))
     {
-        TrustedImm32 mask8(static_cast<int8_t>(mask.m_value));
-        load8(address.m_ptr, getCachedDataTempRegisterIDAndInvalidate());
+        TrustedImm32 mask8 = MacroAssemblerHelpers::mask8OnCondition(*this, cond, mask);
+        MacroAssemblerHelpers::load8OnCondition(*this, cond, address.m_ptr, getCachedDataTempRegisterIDAndInvalidate());
         return branchTest32(cond, dataTempRegister, mask8);
     }
 
     Jump branchTest8(ResultCondition cond, ExtendedAddress address, TrustedImm32 mask = TrustedImm32(-1))
     {
-        TrustedImm32 mask8(static_cast<int8_t>(mask.m_value));
+        TrustedImm32 mask8 = MacroAssemblerHelpers::mask8OnCondition(*this, cond, mask);
         move(TrustedImmPtr(reinterpret_cast<void*>(address.offset)), getCachedDataTempRegisterIDAndInvalidate());
-        m_assembler.ldrb(dataTempRegister, address.base, dataTempRegister);
+
+        if (MacroAssemblerHelpers::isUnsigned<MacroAssemblerARM64>(cond))
+            m_assembler.ldrb(dataTempRegister, address.base, dataTempRegister);
+        else
+            m_assembler.ldrsb<32>(dataTempRegister, address.base, dataTempRegister);
+
         return branchTest32(cond, dataTempRegister, mask8);
     }
 
     Jump branchTest8(ResultCondition cond, BaseIndex address, TrustedImm32 mask = TrustedImm32(-1))
     {
-        TrustedImm32 mask8(static_cast<int8_t>(mask.m_value));
-        load8(address, getCachedDataTempRegisterIDAndInvalidate());
+        TrustedImm32 mask8 = MacroAssemblerHelpers::mask8OnCondition(*this, cond, mask);
+        MacroAssemblerHelpers::load8OnCondition(*this, cond, address, getCachedDataTempRegisterIDAndInvalidate());
         return branchTest32(cond, dataTempRegister, mask8);
     }
 
@@ -3011,8 +3036,8 @@ public:
 
     void compare8(RelationalCondition cond, Address left, TrustedImm32 right, RegisterID dest)
     {
-        TrustedImm32 right8(static_cast<int8_t>(right.m_value));
-        load8(left, getCachedMemoryTempRegisterIDAndInvalidate());
+        TrustedImm32 right8 = MacroAssemblerHelpers::mask8OnCondition(*this, cond, right);
+        MacroAssemblerHelpers::load8OnCondition(*this, cond, left, getCachedMemoryTempRegisterIDAndInvalidate());
         move(right8, getCachedDataTempRegisterIDAndInvalidate());
         compare32(cond, memoryTempRegister, dataTempRegister, dest);
     }
@@ -3037,8 +3062,8 @@ public:
 
     void test8(ResultCondition cond, Address address, TrustedImm32 mask, RegisterID dest)
     {
-        TrustedImm32 mask8(static_cast<int8_t>(mask.m_value));
-        load8(address, getCachedMemoryTempRegisterIDAndInvalidate());
+        TrustedImm32 mask8 = MacroAssemblerHelpers::mask8OnCondition(*this, cond, mask);
+        MacroAssemblerHelpers::load8OnCondition(*this, cond, address, getCachedMemoryTempRegisterIDAndInvalidate());
         test32(cond, memoryTempRegister, mask8, dest);
     }
 
@@ -3203,11 +3228,26 @@ public:
         m_assembler.nop();
     }
     
+    // We take memoryFence to mean acqrel. This has acqrel semantics on ARM64.
     void memoryFence()
     {
-        m_assembler.dmbSY();
+        m_assembler.dmbISH();
     }
 
+    // We take this to mean that it prevents motion of normal stores. That's a store fence on ARM64 (hence the "ST").
+    void storeFence()
+    {
+        m_assembler.dmbISHST();
+    }
+
+    // We take this to mean that it prevents motion of normal loads. Ideally we'd have expressed this
+    // using dependencies or half fences, but there are cases where this is as good as it gets. The only
+    // way to get a standalone load fence instruction on ARM is to use the ISH fence, which is just like
+    // the memoryFence().
+    void loadFence()
+    {
+        m_assembler.dmbISH();
+    }
 
     // Misc helper functions.
 
@@ -3247,6 +3287,11 @@ public:
     static ptrdiff_t maxJumpReplacementSize()
     {
         return ARM64Assembler::maxJumpReplacementSize();
+    }
+
+    static ptrdiff_t patchableJumpSize()
+    {
+        return ARM64Assembler::patchableJumpSize();
     }
 
     RegisterID scratchRegisterForBlinding()
@@ -3820,5 +3865,3 @@ ALWAYS_INLINE void MacroAssemblerARM64::storeUnscaledImmediate<16>(RegisterID rt
 } // namespace JSC
 
 #endif // ENABLE(ASSEMBLER)
-
-#endif // MacroAssemblerARM64_h

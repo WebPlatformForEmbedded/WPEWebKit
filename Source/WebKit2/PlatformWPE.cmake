@@ -20,7 +20,7 @@ list(APPEND WebProcess_SOURCES
     WebProcess/EntryPoint/unix/WebProcessMain.cpp
 )
 
-if (USE_WPE_BACKEND_WESTEROS)
+if (USE_WPEWEBKIT_BACKEND_WESTEROS)
     list(INSERT WebProcess_LIBRARIES  0 ${WAYLAND_EGL_LIBRARIES})
     list(INSERT WebProcess_LIBRARIES  0 ${WAYLAND_LIBRARIES})
     list(REMOVE_ITEM WebProcess_LIBRARIES  wayland-server)
@@ -44,16 +44,16 @@ list(APPEND WebKit2_SOURCES
     NetworkProcess/CustomProtocols/soup/CustomProtocolManagerImpl.cpp
     NetworkProcess/CustomProtocols/soup/CustomProtocolManagerSoup.cpp
 
-    NetworkProcess/Downloads/soup/DownloadSoup.cpp
-
     NetworkProcess/Downloads/wpe/DownloadSoupErrorsWPE.cpp
 
     NetworkProcess/cache/NetworkCacheCodersSoup.cpp
     NetworkProcess/cache/NetworkCacheDataSoup.cpp
     NetworkProcess/cache/NetworkCacheIOChannelSoup.cpp
 
+    NetworkProcess/soup/NetworkDataTaskSoup.cpp
     NetworkProcess/soup/NetworkProcessMainSoup.cpp
     NetworkProcess/soup/NetworkProcessSoup.cpp
+    NetworkProcess/soup/NetworkSessionSoup.cpp
     NetworkProcess/soup/RemoteNetworkingContextSoup.cpp
 
     Platform/glib/ModuleGlib.cpp
@@ -99,11 +99,13 @@ list(APPEND WebKit2_SOURCES
     Shared/wpe/NativeWebWheelEventWPE.cpp
     Shared/wpe/ProcessExecutablePathWPE.cpp
     Shared/wpe/WebEventFactory.cpp
+    Shared/wpe/WebKit2InitializeWPE.cpp
 
     UIProcess/API/C/cairo/WKIconDatabaseCairo.cpp
 
     UIProcess/API/C/soup/WKCookieManagerSoup.cpp
     UIProcess/API/C/soup/WKSoupCustomProtocolRequestManager.cpp
+    UIProcess/API/C/soup/WKSoupSession.cpp
 
     UIProcess/API/C/wpe/WKView.cpp
     UIProcess/API/C/wpe/WKWebAutomation.cpp
@@ -120,6 +122,8 @@ list(APPEND WebKit2_SOURCES
     UIProcess/DefaultUndoController.cpp
     UIProcess/LegacySessionStateCodingNone.cpp
     UIProcess/WebResourceLoadStatisticsStore.cpp
+    UIProcess/WebTextChecker.cpp
+    UIProcess/WebTextCheckerClient.cpp
 
     UIProcess/InspectorServer/wpe/WebInspectorServerWPE.cpp
 
@@ -169,6 +173,7 @@ list(APPEND WebKit2_SOURCES
     WebProcess/WebCoreSupport/wpe/WebErrorsWPE.cpp
     WebProcess/WebCoreSupport/wpe/WebPopupMenuWPE.cpp
 
+    WebProcess/WebPage/CoordinatedGraphics/AcceleratedSurface.cpp
     WebProcess/WebPage/CoordinatedGraphics/AreaAllocator.cpp
     WebProcess/WebPage/CoordinatedGraphics/CompositingCoordinator.cpp
     WebProcess/WebPage/CoordinatedGraphics/CoordinatedLayerTreeHost.cpp
@@ -232,6 +237,7 @@ list(APPEND WebKit2_INCLUDE_DIRECTORIES
     "${WEBKIT2_DIR}/DatabaseProcess/unix"
     "${WEBKIT2_DIR}/NetworkProcess/CustomProtocols/soup"
     "${WEBKIT2_DIR}/NetworkProcess/Downloads/soup"
+    "${WEBKIT2_DIR}/NetworkProcess/soup"
     "${WEBKIT2_DIR}/NetworkProcess/unix"
     "${WEBKIT2_DIR}/Platform/IPC/glib"
     "${WEBKIT2_DIR}/Shared/API/c/wpe"
@@ -263,7 +269,7 @@ list(APPEND WebKit2_INCLUDE_DIRECTORIES
     ${GSTREAMER_INCLUDE_DIRS}
     ${HARFBUZZ_INCLUDE_DIRS}
     ${LIBSOUP_INCLUDE_DIRS}
-    ${WPE_DIR}
+    ${WPE_INCLUDE_DIRS}
 )
 
 list(APPEND WebKit2_LIBRARIES
@@ -274,7 +280,7 @@ list(APPEND WebKit2_LIBRARIES
     ${GSTREAMER_LIBRARIES}
     ${HARFBUZZ_LIBRARIES}
     ${LIBSOUP_LIBRARIES}
-    WPE
+    ${WPE_LIBRARIES}
 )
 
 if (ENABLE_BREAKPAD)
@@ -450,6 +456,7 @@ set(WPE_INSTALLED_WEBKIT_HEADERS
     ${WEBKIT2_DIR}/UIProcess/API/C/WKFrame.h
     ${WEBKIT2_DIR}/UIProcess/API/C/WKFrameInfoRef.h
     ${WEBKIT2_DIR}/UIProcess/API/C/WKFramePolicyListener.h
+    ${WEBKIT2_DIR}/UIProcess/API/C/WKHTTPCookieStorageRef.h
     ${WEBKIT2_DIR}/UIProcess/API/C/WKHitTestResult.h
     ${WEBKIT2_DIR}/UIProcess/API/C/WKNativeEvent.h
     ${WEBKIT2_DIR}/UIProcess/API/C/WKNavigationActionRef.h
@@ -472,7 +479,6 @@ set(WPE_INSTALLED_WEBKIT_HEADERS
     ${WEBKIT2_DIR}/UIProcess/API/C/WKPageUIClient.h
     ${WEBKIT2_DIR}/UIProcess/API/C/WKPluginLoadPolicy.h
     ${WEBKIT2_DIR}/UIProcess/API/C/WKPreferencesRef.h
-    ${WEBKIT2_DIR}/UIProcess/API/C/WKSessionRef.h
     ${WEBKIT2_DIR}/UIProcess/API/C/WKSessionStateRef.h
     ${WEBKIT2_DIR}/UIProcess/API/C/WKUserContentControllerRef.h
     ${WEBKIT2_DIR}/UIProcess/API/C/WKUserScriptRef.h
@@ -492,6 +498,7 @@ set(WPE_INSTALLED_WEBKIT_HEADERS
     ${WEBKIT2_DIR}/UIProcess/API/C/wpe/WKWebAutomation.h
 
     ${WEBKIT2_DIR}/UIProcess/API/C/soup/WKCookieManagerSoup.h
+    ${WEBKIT2_DIR}/UIProcess/API/C/soup/WKSoupSession.h
 )
 
 install(FILES ${WPE_INSTALLED_WEBKIT_HEADERS}

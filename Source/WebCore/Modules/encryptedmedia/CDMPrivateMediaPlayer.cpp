@@ -26,12 +26,11 @@
 #include "config.h"
 #include "CDMPrivateMediaPlayer.h"
 
-#if ENABLE(ENCRYPTED_MEDIA_V2)
+#if ENABLE(LEGACY_ENCRYPTED_MEDIA)
 
 #include "CDM.h"
 #include "CDMSession.h"
 #include "ContentType.h"
-#include "ExceptionCode.h"
 #include "MediaPlayer.h"
 
 #if PLATFORM(IOS)

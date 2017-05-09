@@ -25,8 +25,7 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#ifndef Frame_h
-#define Frame_h
+#pragma once
 
 #include "AdjustViewSizeOrNot.h"
 #include "FrameLoader.h"
@@ -135,7 +134,7 @@ namespace WebCore {
         void disconnectOwnerElement();
 
         MainFrame& mainFrame() const;
-        WEBCORE_EXPORT bool isMainFrame() const;
+        bool isMainFrame() const { return this == static_cast<void*>(&m_mainFrame); }
 
         Page* page() const;
         HTMLFrameOwnerElement* ownerElement() const;
@@ -264,7 +263,7 @@ namespace WebCore {
         bool activeDOMObjectsAndAnimationsSuspended() const { return m_activeDOMObjectsAndAnimationsSuspendedCount > 0; }
 
         bool isURLAllowed(const URL&) const;
-        bool isAlwaysOnLoggingAllowed() const;
+        WEBCORE_EXPORT bool isAlwaysOnLoggingAllowed() const;
 
     // ========
 
@@ -411,5 +410,3 @@ namespace WebCore {
     }
 
 } // namespace WebCore
-
-#endif // Frame_h

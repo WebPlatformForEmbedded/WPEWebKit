@@ -28,8 +28,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef MediaSourceRegistry_h
-#define MediaSourceRegistry_h
+#pragma once
 
 #if ENABLE(MEDIA_SOURCE)
 
@@ -50,7 +49,7 @@ public:
     static MediaSourceRegistry& registry();
 
     // Registers a blob URL referring to the specified media source.
-    void registerURL(SecurityOrigin*, const URL&, URLRegistrable*) override;
+    void registerURL(SecurityOrigin*, const URL&, URLRegistrable&) override;
     void unregisterURL(const URL&) override;
     URLRegistrable* lookup(const String&) const override;
 
@@ -61,5 +60,4 @@ private:
 
 } // namespace WebCore
 
-#endif
-#endif
+#endif // ENABLE(MEDIA_SOURCE)

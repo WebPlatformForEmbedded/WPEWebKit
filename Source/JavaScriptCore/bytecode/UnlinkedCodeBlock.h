@@ -40,14 +40,15 @@
 #include "UnlinkedFunctionExecutable.h"
 #include "VariableEnvironment.h"
 #include "VirtualRegister.h"
+#include <wtf/BitVector.h>
 #include <wtf/TriState.h>
 #include <wtf/Vector.h>
 
 namespace JSC {
 
-class FunctionMetadataNode;
+class BytecodeRewriter;
+class Debugger;
 class FunctionExecutable;
-class JSScope;
 class ParserError;
 class ScriptExecutable;
 class SourceCode;
@@ -65,7 +66,11 @@ typedef unsigned UnlinkedObjectAllocationProfile;
 typedef unsigned UnlinkedLLIntCallLinkInfo;
 
 struct UnlinkedStringJumpTable {
-    typedef HashMap<RefPtr<StringImpl>, int32_t> StringOffsetTable;
+    struct OffsetLocation {
+        int32_t branchOffset;
+    };
+
+    typedef HashMap<RefPtr<StringImpl>, OffsetLocation> StringOffsetTable;
     StringOffsetTable offsetTable;
 
     inline int32_t offsetForValue(StringImpl* value, int32_t defaultOffset)
@@ -74,7 +79,7 @@ struct UnlinkedStringJumpTable {
         StringOffsetTable::const_iterator loc = offsetTable.find(value);
         if (loc == end)
             return defaultOffset;
-        return loc->value;
+        return loc->value.branchOffset;
     }
 
 };
@@ -111,11 +116,14 @@ public:
 
     enum { CallFunction, ApplyFunction };
 
+    typedef UnlinkedInstruction Instruction;
+    typedef Vector<UnlinkedInstruction, 0, UnsafeVectorOverflow> UnpackedInstructions;
+
     bool isConstructor() const { return m_isConstructor; }
     bool isStrictMode() const { return m_isStrictMode; }
     bool usesEval() const { return m_usesEval; }
     SourceParseMode parseMode() const { return m_parseMode; }
-    bool isArrowFunction() const { return m_parseMode == SourceParseMode::ArrowFunctionMode; }
+    bool isArrowFunction() const { return isArrowFunctionParseMode(parseMode()); }
     DerivedContextType derivedContextType() const { return static_cast<DerivedContextType>(m_derivedContextType); }
     EvalContextType evalContextType() const { return static_cast<EvalContextType>(m_evalContextType); }
     bool isArrowFunctionContext() const { return m_isArrowFunctionContext; }
@@ -164,6 +172,14 @@ public:
     const Identifier& identifier(int index) const { return m_identifiers[index]; }
     const Vector<Identifier>& identifiers() const { return m_identifiers; }
 
+    const Vector<BitVector>& bitVectors() const { return m_bitVectors; }
+    BitVector& bitVector(size_t i) { return m_bitVectors[i]; }
+    unsigned addBitVector(BitVector&& bitVector)
+    {
+        m_bitVectors.append(WTFMove(bitVector));
+        return m_bitVectors.size() - 1;
+    }
+
     unsigned addConstant(JSValue v, SourceCodeRepresentation sourceCodeRepresentation = SourceCodeRepresentation::Other)
     {
         unsigned result = m_constantRegisters.size();
@@ -200,16 +216,20 @@ public:
     unsigned jumpTarget(int index) const { return m_jumpTargets[index]; }
     unsigned lastJumpTarget() const { return m_jumpTargets.last(); }
 
+    UnlinkedHandlerInfo* handlerForBytecodeOffset(unsigned bytecodeOffset, RequiredHandler = RequiredHandler::AnyHandler);
+    UnlinkedHandlerInfo* handlerForIndex(unsigned, RequiredHandler = RequiredHandler::AnyHandler);
+
     bool isBuiltinFunction() const { return m_isBuiltinFunction; }
 
     ConstructorKind constructorKind() const { return static_cast<ConstructorKind>(m_constructorKind); }
     SuperBinding superBinding() const { return static_cast<SuperBinding>(m_superBinding); }
-    JSParserCommentMode commentMode() const { return static_cast<JSParserCommentMode>(m_commentMode); }
+    JSParserScriptMode scriptMode() const { return static_cast<JSParserScriptMode>(m_scriptMode); }
 
     void shrinkToFit()
     {
         m_jumpTargets.shrinkToFit();
         m_identifiers.shrinkToFit();
+        m_bitVectors.shrinkToFit();
         m_constantRegisters.shrinkToFit();
         m_constantsSourceCodeRepresentation.shrinkToFit();
         m_functionDecls.shrinkToFit();
@@ -229,6 +249,8 @@ public:
 
     void setInstructions(std::unique_ptr<UnlinkedInstructionStream>);
     const UnlinkedInstructionStream& instructions() const;
+
+    int numCalleeLocals() const { return m_numCalleeLocals; }
 
     int m_numVars;
     int m_numCapturedVars;
@@ -267,8 +289,6 @@ public:
     size_t numberOfExceptionHandlers() const { return m_rareData ? m_rareData->m_exceptionHandlers.size() : 0; }
     void addExceptionHandler(const UnlinkedHandlerInfo& handler) { createRareDataIfNecessary(); return m_rareData->m_exceptionHandlers.append(handler); }
     UnlinkedHandlerInfo& exceptionHandler(int index) { ASSERT(m_rareData); return m_rareData->m_exceptionHandlers[index]; }
-
-    VM* vm() const;
 
     UnlinkedArrayProfile addArrayProfile() { return m_arrayProfileCount++; }
     unsigned numberOfArrayProfiles() { return m_arrayProfileCount; }
@@ -381,6 +401,8 @@ protected:
     }
 
 private:
+    friend class BytecodeRewriter;
+    void applyModification(BytecodeRewriter&);
 
     void createRareDataIfNecessary()
     {
@@ -407,7 +429,7 @@ private:
     unsigned m_hasCapturedVariables : 1;
     unsigned m_isBuiltinFunction : 1;
     unsigned m_superBinding : 1;
-    unsigned m_commentMode: 1;
+    unsigned m_scriptMode: 1;
     unsigned m_isArrowFunctionContext : 1;
     unsigned m_isClassContext : 1;
     unsigned m_wasCompiledWithDebuggingOpcodes : 1;
@@ -429,6 +451,7 @@ private:
 
     // Constant Pools
     Vector<Identifier> m_identifiers;
+    Vector<BitVector> m_bitVectors;
     Vector<WriteBarrier<Unknown>> m_constantRegisters;
     Vector<SourceCodeRepresentation> m_constantsSourceCodeRepresentation;
     typedef Vector<WriteBarrier<UnlinkedFunctionExecutable>> FunctionExpressionVector;
@@ -477,197 +500,6 @@ protected:
     static size_t estimatedSize(JSCell*);
 
 public:
-    DECLARE_INFO;
-};
-
-class UnlinkedGlobalCodeBlock : public UnlinkedCodeBlock {
-public:
-    typedef UnlinkedCodeBlock Base;
-
-protected:
-    UnlinkedGlobalCodeBlock(VM* vm, Structure* structure, CodeType codeType, const ExecutableInfo& info, DebuggerMode debuggerMode)
-        : Base(vm, structure, codeType, info, debuggerMode)
-    {
-    }
-
-    DECLARE_INFO;
-};
-
-class UnlinkedProgramCodeBlock final : public UnlinkedGlobalCodeBlock {
-private:
-    friend class CodeCache;
-    static UnlinkedProgramCodeBlock* create(VM* vm, const ExecutableInfo& info, DebuggerMode debuggerMode)
-    {
-        UnlinkedProgramCodeBlock* instance = new (NotNull, allocateCell<UnlinkedProgramCodeBlock>(vm->heap)) UnlinkedProgramCodeBlock(vm, vm->unlinkedProgramCodeBlockStructure.get(), info, debuggerMode);
-        instance->finishCreation(*vm);
-        return instance;
-    }
-
-public:
-    typedef UnlinkedGlobalCodeBlock Base;
-    static const unsigned StructureFlags = Base::StructureFlags | StructureIsImmortal;
-
-    static void destroy(JSCell*);
-
-    void setVariableDeclarations(const VariableEnvironment& environment) { m_varDeclarations = environment; }
-    const VariableEnvironment& variableDeclarations() const { return m_varDeclarations; }
-
-    void setLexicalDeclarations(const VariableEnvironment& environment) { m_lexicalDeclarations = environment; }
-    const VariableEnvironment& lexicalDeclarations() const { return m_lexicalDeclarations; }
-
-    static void visitChildren(JSCell*, SlotVisitor&);
-
-private:
-    UnlinkedProgramCodeBlock(VM* vm, Structure* structure, const ExecutableInfo& info, DebuggerMode debuggerMode)
-        : Base(vm, structure, GlobalCode, info, debuggerMode)
-    {
-    }
-
-    VariableEnvironment m_varDeclarations;
-    VariableEnvironment m_lexicalDeclarations;
-
-public:
-    static Structure* createStructure(VM& vm, JSGlobalObject* globalObject, JSValue proto)
-    {
-        return Structure::create(vm, globalObject, proto, TypeInfo(UnlinkedProgramCodeBlockType, StructureFlags), info());
-    }
-
-    DECLARE_INFO;
-};
-
-class UnlinkedModuleProgramCodeBlock final : public UnlinkedGlobalCodeBlock {
-private:
-    friend class CodeCache;
-    static UnlinkedModuleProgramCodeBlock* create(VM* vm, const ExecutableInfo& info, DebuggerMode debuggerMode)
-    {
-        UnlinkedModuleProgramCodeBlock* instance = new (NotNull, allocateCell<UnlinkedModuleProgramCodeBlock>(vm->heap)) UnlinkedModuleProgramCodeBlock(vm, vm->unlinkedModuleProgramCodeBlockStructure.get(), info, debuggerMode);
-        instance->finishCreation(*vm);
-        return instance;
-    }
-
-public:
-    typedef UnlinkedGlobalCodeBlock Base;
-    static const unsigned StructureFlags = Base::StructureFlags | StructureIsImmortal;
-
-    static void destroy(JSCell*);
-
-    static void visitChildren(JSCell*, SlotVisitor&);
-
-    // This offset represents the constant register offset to the stored symbol table that represents the layout of the
-    // module environment. This symbol table is created by the byte code generator since the module environment includes
-    // the top-most lexical captured variables inside the module code. This means that, once the module environment is
-    // allocated and instantiated from this symbol table, it is titely coupled with the specific unlinked module program
-    // code block and the stored symbol table. So before executing the module code, we should not clear the unlinked module
-    // program code block in the module executable. This requirement is met because the garbage collector only clears
-    // unlinked code in (1) unmarked executables and (2) function executables.
-    //
-    // Since the function code may be executed repeatedly and the environment of each function execution is different,
-    // the function code need to allocate and instantiate the environment in the prologue of the function code. On the
-    // other hand, the module code is executed only once. So we can instantiate the module environment outside the module
-    // code. At that time, we construct the module environment by using the symbol table that is held by the module executable.
-    // The symbol table held by the executable is the cloned one from one in the unlinked code block. Instantiating the module
-    // environment before executing and linking the module code is required to link the imported bindings between the modules.
-    //
-    // The unlinked module program code block only holds the pre-cloned symbol table in its constant register pool. It does
-    // not hold the instantiated module environment. So while the module environment requires the specific unlinked module
-    // program code block, the unlinked module code block can be used for the module environment instantiated from this
-    // unlinked code block. There is 1:N relation between the unlinked module code block and the module environments. So the
-    // unlinked module program code block can be cached.
-    //
-    // On the other hand, the linked code block for the module environment includes the resolved references to the imported
-    // bindings. The imported binding references the other module environment, so the linked code block is titly coupled
-    // with the specific set of the module environments. Thus, the linked code block should not be cached.
-    int moduleEnvironmentSymbolTableConstantRegisterOffset() { return m_moduleEnvironmentSymbolTableConstantRegisterOffset; }
-    void setModuleEnvironmentSymbolTableConstantRegisterOffset(int offset)
-    {
-        m_moduleEnvironmentSymbolTableConstantRegisterOffset = offset;
-    }
-
-private:
-    UnlinkedModuleProgramCodeBlock(VM* vm, Structure* structure, const ExecutableInfo& info, DebuggerMode debuggerMode)
-        : Base(vm, structure, ModuleCode, info, debuggerMode)
-    {
-    }
-
-    int m_moduleEnvironmentSymbolTableConstantRegisterOffset { 0 };
-
-public:
-    static Structure* createStructure(VM& vm, JSGlobalObject* globalObject, JSValue proto)
-    {
-        return Structure::create(vm, globalObject, proto, TypeInfo(UnlinkedModuleProgramCodeBlockType, StructureFlags), info());
-    }
-
-    DECLARE_INFO;
-};
-
-class UnlinkedEvalCodeBlock final : public UnlinkedGlobalCodeBlock {
-private:
-    friend class CodeCache;
-
-    static UnlinkedEvalCodeBlock* create(VM* vm, const ExecutableInfo& info, DebuggerMode debuggerMode)
-    {
-        UnlinkedEvalCodeBlock* instance = new (NotNull, allocateCell<UnlinkedEvalCodeBlock>(vm->heap)) UnlinkedEvalCodeBlock(vm, vm->unlinkedEvalCodeBlockStructure.get(), info, debuggerMode);
-        instance->finishCreation(*vm);
-        return instance;
-    }
-
-public:
-    typedef UnlinkedGlobalCodeBlock Base;
-    static const unsigned StructureFlags = Base::StructureFlags | StructureIsImmortal;
-
-    static void destroy(JSCell*);
-
-    const Identifier& variable(unsigned index) { return m_variables[index]; }
-    unsigned numVariables() { return m_variables.size(); }
-    void adoptVariables(Vector<Identifier, 0, UnsafeVectorOverflow>& variables)
-    {
-        ASSERT(m_variables.isEmpty());
-        m_variables.swap(variables);
-    }
-
-private:
-    UnlinkedEvalCodeBlock(VM* vm, Structure* structure, const ExecutableInfo& info, DebuggerMode debuggerMode)
-        : Base(vm, structure, EvalCode, info, debuggerMode)
-    {
-    }
-
-    Vector<Identifier, 0, UnsafeVectorOverflow> m_variables;
-
-public:
-    static Structure* createStructure(VM& vm, JSGlobalObject* globalObject, JSValue proto)
-    {
-        return Structure::create(vm, globalObject, proto, TypeInfo(UnlinkedEvalCodeBlockType, StructureFlags), info());
-    }
-
-    DECLARE_INFO;
-};
-
-class UnlinkedFunctionCodeBlock final : public UnlinkedCodeBlock {
-public:
-    typedef UnlinkedCodeBlock Base;
-    static const unsigned StructureFlags = Base::StructureFlags | StructureIsImmortal;
-
-    static UnlinkedFunctionCodeBlock* create(VM* vm, CodeType codeType, const ExecutableInfo& info, DebuggerMode debuggerMode)
-    {
-        UnlinkedFunctionCodeBlock* instance = new (NotNull, allocateCell<UnlinkedFunctionCodeBlock>(vm->heap)) UnlinkedFunctionCodeBlock(vm, vm->unlinkedFunctionCodeBlockStructure.get(), codeType, info, debuggerMode);
-        instance->finishCreation(*vm);
-        return instance;
-    }
-
-    static void destroy(JSCell*);
-
-private:
-    UnlinkedFunctionCodeBlock(VM* vm, Structure* structure, CodeType codeType, const ExecutableInfo& info, DebuggerMode debuggerMode)
-        : Base(vm, structure, codeType, info, debuggerMode)
-    {
-    }
-    
-public:
-    static Structure* createStructure(VM& vm, JSGlobalObject* globalObject, JSValue proto)
-    {
-        return Structure::create(vm, globalObject, proto, TypeInfo(UnlinkedFunctionCodeBlockType, StructureFlags), info());
-    }
-
     DECLARE_INFO;
 };
 

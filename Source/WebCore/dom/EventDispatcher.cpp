@@ -33,46 +33,11 @@
 #include "HTMLInputElement.h"
 #include "MouseEvent.h"
 #include "NoEventDispatchAssertion.h"
-#include "PseudoElement.h"
 #include "ScopedEventQueue.h"
 #include "ShadowRoot.h"
 #include "TouchEvent.h"
 
 namespace WebCore {
-
-class WindowEventContext {
-public:
-    WindowEventContext(Node*, const EventContext*);
-
-    DOMWindow* window() const { return m_window.get(); }
-    EventTarget* target() const { return m_target.get(); }
-    bool handleLocalEvents(Event&);
-
-private:
-    RefPtr<DOMWindow> m_window;
-    RefPtr<EventTarget> m_target;
-};
-
-WindowEventContext::WindowEventContext(Node* node, const EventContext* topEventContext)
-{
-    Node* topLevelContainer = topEventContext ? topEventContext->node() : node;
-    if (!is<Document>(*topLevelContainer))
-        return;
-
-    m_window = downcast<Document>(*topLevelContainer).domWindow();
-    m_target = topEventContext ? topEventContext->target() : node;
-}
-
-bool WindowEventContext::handleLocalEvents(Event& event)
-{
-    if (!m_window)
-        return false;
-
-    event.setTarget(m_target.copyRef());
-    event.setCurrentTarget(m_window.get());
-    m_window->fireEventListeners(event);
-    return true;
-}
 
 void EventDispatcher::dispatchScopedEvent(Node& node, Event& event)
 {
@@ -87,7 +52,7 @@ static void callDefaultEventHandlersInTheBubblingOrder(Event& event, const Event
         return;
 
     // Non-bubbling events call only one default event handler, the one for the target.
-    path.contextAt(0).node()->defaultEventHandler(&event);
+    path.contextAt(0).node()->defaultEventHandler(event);
     ASSERT(!event.defaultPrevented());
 
     if (event.defaultHandled() || !event.bubbles())
@@ -95,23 +60,17 @@ static void callDefaultEventHandlersInTheBubblingOrder(Event& event, const Event
 
     size_t size = path.size();
     for (size_t i = 1; i < size; ++i) {
-        path.contextAt(i).node()->defaultEventHandler(&event);
+        path.contextAt(i).node()->defaultEventHandler(event);
         ASSERT(!event.defaultPrevented());
         if (event.defaultHandled())
             return;
     }
 }
 
-static void dispatchEventInDOM(Event& event, const EventPath& path, WindowEventContext& windowEventContext)
+static void dispatchEventInDOM(Event& event, const EventPath& path)
 {
     // Trigger capturing event handlers, starting at the top and working our way down.
     event.setEventPhase(Event::CAPTURING_PHASE);
-
-    // We don't dispatch load events to the window. This quirk was originally
-    // added because Mozilla doesn't propagate load events to the window object.
-    bool shouldFireEventAtWindow = event.type() != eventNames().loadEvent;
-    if (shouldFireEventAtWindow && windowEventContext.handleLocalEvents(event) && event.propagationStopped())
-        return;
 
     for (size_t i = path.size() - 1; i > 0; --i) {
         const EventContext& eventContext = path.contextAt(i);
@@ -141,11 +100,6 @@ static void dispatchEventInDOM(Event& event, const EventPath& path, WindowEventC
         if (event.propagationStopped())
             return;
     }
-    if (event.bubbles() && !event.cancelBubble()) {
-        event.setEventPhase(Event::BUBBLING_PHASE);
-        if (shouldFireEventAtWindow)
-            windowEventContext.handleLocalEvents(event);
-    }
 }
 
 bool EventDispatcher::dispatchEvent(Node* origin, Event& event)
@@ -172,18 +126,17 @@ bool EventDispatcher::dispatchEvent(Node* origin, Event& event)
 
     ASSERT_WITH_SECURITY_IMPLICATION(!NoEventDispatchAssertion::isEventDispatchForbidden());
 
-    WindowEventContext windowEventContext(node.get(), eventPath.lastContextIfExists());
-
     InputElementClickState clickHandlingState;
     if (is<HTMLInputElement>(*node))
         downcast<HTMLInputElement>(*node).willDispatchEvent(event, clickHandlingState);
 
     if (!event.propagationStopped() && !eventPath.isEmpty()) {
         event.setEventPath(eventPath);
-        dispatchEventInDOM(event, eventPath, windowEventContext);
+        dispatchEventInDOM(event, eventPath);
         event.clearEventPath();
     }
 
+    auto* finalTarget = event.target();
     event.setTarget(EventPath::eventTargetRespectingTargetRules(*node));
     event.setCurrentTarget(nullptr);
     event.resetPropagationFlags();
@@ -198,9 +151,7 @@ bool EventDispatcher::dispatchEvent(Node* origin, Event& event)
     if (!event.defaultPrevented() && !event.defaultHandled())
         callDefaultEventHandlersInTheBubblingOrder(event, eventPath);
 
-    // Ensure that after event dispatch, the event's target object is the
-    // outermost shadow DOM boundary.
-    event.setTarget(windowEventContext.target());
+    event.setTarget(finalTarget);
     event.setCurrentTarget(nullptr);
 
     return !event.defaultPrevented();

@@ -18,15 +18,15 @@
  */
 
 interface CharacterData : Node {
-    [TreatNullAs=EmptyString] attribute DOMString data;
+    [CEReactions, TreatNullAs=EmptyString] attribute DOMString data;
     readonly attribute unsigned long length;
 
-    [RaisesException] DOMString? substringData(unsigned long offset, unsigned long length);
+    [MayThrowException] DOMString? substringData(unsigned long offset, unsigned long length);
 
-    void appendData(DOMString data);
-    [RaisesException] void insertData(unsigned long offset, DOMString data);
-    [RaisesException] void deleteData(unsigned long offset, unsigned long length);
-    [RaisesException] void replaceData(unsigned long offset, unsigned long length, DOMString data);
+    [CEReactions] void appendData(DOMString data);
+    [CEReactions, MayThrowException] void insertData(unsigned long offset, DOMString data);
+    [CEReactions, MayThrowException] void deleteData(unsigned long offset, unsigned long length);
+    [CEReactions, MayThrowException] void replaceData(unsigned long offset, unsigned long length, DOMString data);
 };
 
 CharacterData implements ChildNode;

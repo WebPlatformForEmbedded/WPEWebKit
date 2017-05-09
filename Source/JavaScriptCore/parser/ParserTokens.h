@@ -23,8 +23,7 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef ParserTokens_h
-#define ParserTokens_h
+#pragma once
 
 #include "ParserModes.h"
 #include <limits.h>
@@ -83,6 +82,7 @@ enum JSTokenType {
     CLASSTOKEN,
     EXTENDS,
     SUPER,
+    AWAIT,
     OPENBRACE = 0,
     CLOSEBRACE,
     OPENPAREN,
@@ -96,6 +96,7 @@ enum JSTokenType {
     IDENT,
     STRING,
     TEMPLATE,
+    REGEXP,
     SEMICOLON,
     COLON,
     DOT,
@@ -166,7 +167,8 @@ enum JSTokenType {
     UNTERMINATED_HEX_NUMBER_ERRORTOK = 11 | ErrorTokenFlag | UnterminatedErrorTokenFlag,
     UNTERMINATED_BINARY_NUMBER_ERRORTOK = 12 | ErrorTokenFlag | UnterminatedErrorTokenFlag,
     UNTERMINATED_TEMPLATE_LITERAL_ERRORTOK = 13 | ErrorTokenFlag | UnterminatedErrorTokenFlag,
-    INVALID_TEMPLATE_LITERAL_ERRORTOK = 14 | ErrorTokenFlag,
+    UNTERMINATED_REGEXP_LITERAL_ERRORTOK = 14 | ErrorTokenFlag | UnterminatedErrorTokenFlag,
+    INVALID_TEMPLATE_LITERAL_ERRORTOK = 15 | ErrorTokenFlag,
 };
 
 struct JSTextPosition {
@@ -198,6 +200,10 @@ union JSTokenData {
         const Identifier* cooked;
         const Identifier* raw;
         bool isTail;
+    };
+    struct {
+        const Identifier* pattern;
+        const Identifier* flags;
     };
 };
 
@@ -236,5 +242,3 @@ ALWAYS_INLINE bool isUnaryOp(JSTokenType token)
 }
 
 } // namespace JSC
-
-#endif // ParserTokens_h

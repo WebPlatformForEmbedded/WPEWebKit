@@ -26,7 +26,7 @@
 #import "config.h"
 #import "WebCoreResourceHandleAsOperationQueueDelegate.h"
 
-#if !USE(CFNETWORK)
+#if !USE(CFURLCONNECTION)
 
 #import "AuthenticationChallenge.h"
 #import "AuthenticationMac.h"
@@ -330,5 +330,5 @@ using namespace WebCore;
 
 @end
 
-#endif // !USE(CFNETWORK)
+#endif // !USE(CFURLCONNECTION)
 

@@ -35,7 +35,6 @@
 #include "Document.h"
 #include "DocumentFragment.h"
 #include "DocumentType.h"
-#include "ExceptionCodePlaceholder.h"
 #include "Frame.h"
 #include "FrameLoader.h"
 #include "FrameView.h"
@@ -45,6 +44,7 @@
 #include "HTMLNames.h"
 #include "HTMLStyleElement.h"
 #include "HTMLTemplateElement.h"
+#include "LoadableClassicScript.h"
 #include "Page.h"
 #include "ProcessingInstruction.h"
 #include "ResourceError.h"
@@ -54,6 +54,7 @@
 #include "ScriptSourceCode.h"
 #include "SecurityOrigin.h"
 #include "Settings.h"
+#include "StyleScope.h"
 #include "TextResourceDecoder.h"
 #include "TransformSource.h"
 #include "XMLNSNames.h"
@@ -97,25 +98,23 @@ static inline bool hasNoStyleInformation(Document* document)
 class PendingCallbacks {
     WTF_MAKE_NONCOPYABLE(PendingCallbacks); WTF_MAKE_FAST_ALLOCATED;
 public:
-    PendingCallbacks() { }
-    ~PendingCallbacks() { }
+    PendingCallbacks() = default;
 
-    void appendStartElementNSCallback(const xmlChar* xmlLocalName, const xmlChar* xmlPrefix, const xmlChar* xmlURI, int nb_namespaces,
-                                      const xmlChar** namespaces, int nb_attributes, int nb_defaulted, const xmlChar** attributes)
+    void appendStartElementNSCallback(const xmlChar* xmlLocalName, const xmlChar* xmlPrefix, const xmlChar* xmlURI, int numNamespaces, const xmlChar** namespaces, int numAttributes, int numDefaulted, const xmlChar** attributes)
     {
         auto callback = std::make_unique<PendingStartElementNSCallback>();
 
         callback->xmlLocalName = xmlStrdup(xmlLocalName);
         callback->xmlPrefix = xmlStrdup(xmlPrefix);
         callback->xmlURI = xmlStrdup(xmlURI);
-        callback->nb_namespaces = nb_namespaces;
-        callback->namespaces = static_cast<xmlChar**>(xmlMalloc(sizeof(xmlChar*) * nb_namespaces * 2));
-        for (int i = 0; i < nb_namespaces * 2 ; i++)
+        callback->numNamespaces = numNamespaces;
+        callback->namespaces = static_cast<xmlChar**>(xmlMalloc(sizeof(xmlChar*) * numNamespaces * 2));
+        for (int i = 0; i < numNamespaces * 2 ; i++)
             callback->namespaces[i] = xmlStrdup(namespaces[i]);
-        callback->nb_attributes = nb_attributes;
-        callback->nb_defaulted = nb_defaulted;
-        callback->attributes = static_cast<xmlChar**>(xmlMalloc(sizeof(xmlChar*) * nb_attributes * 5));
-        for (int i = 0; i < nb_attributes; i++) {
+        callback->numAttributes = numAttributes;
+        callback->numDefaulted = numDefaulted;
+        callback->attributes = static_cast<xmlChar**>(xmlMalloc(sizeof(xmlChar*) * numAttributes * 5));
+        for (int i = 0; i < numAttributes; i++) {
             // Each attribute has 5 elements in the array:
             // name, prefix, uri, value and an end pointer.
 
@@ -218,29 +217,28 @@ private:
             xmlFree(xmlLocalName);
             xmlFree(xmlPrefix);
             xmlFree(xmlURI);
-            for (int i = 0; i < nb_namespaces * 2; i++)
+            for (int i = 0; i < numNamespaces * 2; i++)
                 xmlFree(namespaces[i]);
             xmlFree(namespaces);
-            for (int i = 0; i < nb_attributes; i++)
+            for (int i = 0; i < numAttributes; i++) {
                 for (int j = 0; j < 4; j++)
                     xmlFree(attributes[i * 5 + j]);
+            }
             xmlFree(attributes);
         }
 
         void call(XMLDocumentParser* parser) override
         {
-            parser->startElementNs(xmlLocalName, xmlPrefix, xmlURI,
-                                      nb_namespaces, const_cast<const xmlChar**>(namespaces),
-                                      nb_attributes, nb_defaulted, const_cast<const xmlChar**>(attributes));
+            parser->startElementNs(xmlLocalName, xmlPrefix, xmlURI, numNamespaces, const_cast<const xmlChar**>(namespaces), numAttributes, numDefaulted, const_cast<const xmlChar**>(attributes));
         }
 
         xmlChar* xmlLocalName;
         xmlChar* xmlPrefix;
         xmlChar* xmlURI;
-        int nb_namespaces;
+        int numNamespaces;
         xmlChar** namespaces;
-        int nb_attributes;
-        int nb_defaulted;
+        int numAttributes;
+        int numDefaulted;
         xmlChar** attributes;
     };
 
@@ -664,7 +662,7 @@ XMLDocumentParser::~XMLDocumentParser()
 
     // FIXME: m_pendingScript handling should be moved into XMLDocumentParser.cpp!
     if (m_pendingScript)
-        m_pendingScript->removeClient(this);
+        m_pendingScript->removeClient(*this);
 }
 
 void XMLDocumentParser::doWrite(const String& parseString)
@@ -728,21 +726,22 @@ struct _xmlSAX2Namespace {
 };
 typedef struct _xmlSAX2Namespace xmlSAX2Namespace;
 
-static inline void handleNamespaceAttributes(Vector<Attribute>& prefixedAttributes, const xmlChar** libxmlNamespaces, int nb_namespaces, ExceptionCode& ec)
+static inline bool handleNamespaceAttributes(Vector<Attribute>& prefixedAttributes, const xmlChar** libxmlNamespaces, int numNamespaces)
 {
     xmlSAX2Namespace* namespaces = reinterpret_cast<xmlSAX2Namespace*>(libxmlNamespaces);
-    for (int i = 0; i < nb_namespaces; i++) {
+    for (int i = 0; i < numNamespaces; i++) {
         AtomicString namespaceQName = xmlnsAtom;
         AtomicString namespaceURI = toAtomicString(namespaces[i].uri);
         if (namespaces[i].prefix)
             namespaceQName = "xmlns:" + toString(namespaces[i].prefix);
 
-        QualifiedName parsedName = anyName;
-        if (!Element::parseAttributeName(parsedName, XMLNSNames::xmlnsNamespaceURI, namespaceQName, ec))
-            return;
-        
-        prefixedAttributes.append(Attribute(parsedName, namespaceURI));
+        auto result = Element::parseAttributeName(XMLNSNames::xmlnsNamespaceURI, namespaceQName);
+        if (result.hasException())
+            return false;
+
+        prefixedAttributes.append(Attribute(result.releaseReturnValue(), namespaceURI));
     }
+    return true;
 }
 
 struct _xmlSAX2Attributes {
@@ -754,22 +753,23 @@ struct _xmlSAX2Attributes {
 };
 typedef struct _xmlSAX2Attributes xmlSAX2Attributes;
 
-static inline void handleElementAttributes(Vector<Attribute>& prefixedAttributes, const xmlChar** libxmlAttributes, int nb_attributes, ExceptionCode& ec)
+static inline bool handleElementAttributes(Vector<Attribute>& prefixedAttributes, const xmlChar** libxmlAttributes, int numAttributes)
 {
     xmlSAX2Attributes* attributes = reinterpret_cast<xmlSAX2Attributes*>(libxmlAttributes);
-    for (int i = 0; i < nb_attributes; i++) {
+    for (int i = 0; i < numAttributes; i++) {
         int valueLength = static_cast<int>(attributes[i].end - attributes[i].value);
         AtomicString attrValue = toAtomicString(attributes[i].value, valueLength);
         String attrPrefix = toString(attributes[i].prefix);
         AtomicString attrURI = attrPrefix.isEmpty() ? nullAtom : toAtomicString(attributes[i].uri);
         AtomicString attrQName = attrPrefix.isEmpty() ? toAtomicString(attributes[i].localname) : attrPrefix + ":" + toString(attributes[i].localname);
 
-        QualifiedName parsedName = anyName;
-        if (!Element::parseAttributeName(parsedName, attrURI, attrQName, ec))
-            return;
+        auto result = Element::parseAttributeName(attrURI, attrQName);
+        if (result.hasException())
+            return false;
 
-        prefixedAttributes.append(Attribute(parsedName, attrValue));
+        prefixedAttributes.append(Attribute(result.releaseReturnValue(), attrValue));
     }
+    return true;
 }
 
 // This is a hack around https://bugzilla.gnome.org/show_bug.cgi?id=502960
@@ -785,15 +785,13 @@ static inline bool hackAroundLibXMLEntityParsingBug()
 #endif
 }
 
-void XMLDocumentParser::startElementNs(const xmlChar* xmlLocalName, const xmlChar* xmlPrefix, const xmlChar* xmlURI, int nb_namespaces,
-                                  const xmlChar** libxmlNamespaces, int nb_attributes, int nb_defaulted, const xmlChar** libxmlAttributes)
+void XMLDocumentParser::startElementNs(const xmlChar* xmlLocalName, const xmlChar* xmlPrefix, const xmlChar* xmlURI, int numNamespaces, const xmlChar** libxmlNamespaces, int numAttributes, int numDefaulted, const xmlChar** libxmlAttributes)
 {
     if (isStopped())
         return;
 
     if (m_parserPaused) {
-        m_pendingCallbacks->appendStartElementNSCallback(xmlLocalName, xmlPrefix, xmlURI, nb_namespaces, libxmlNamespaces,
-                                                         nb_attributes, nb_defaulted, libxmlAttributes);
+        m_pendingCallbacks->appendStartElementNSCallback(xmlLocalName, xmlPrefix, xmlURI, numNamespaces, libxmlNamespaces, numAttributes, numDefaulted, libxmlAttributes);
         return;
     }
 
@@ -823,17 +821,15 @@ void XMLDocumentParser::startElementNs(const xmlChar* xmlLocalName, const xmlCha
     auto newElement = m_currentNode->document().createElement(qName, true);
 
     Vector<Attribute> prefixedAttributes;
-    ExceptionCode ec = 0;
-    handleNamespaceAttributes(prefixedAttributes, libxmlNamespaces, nb_namespaces, ec);
-    if (ec) {
+    if (!handleNamespaceAttributes(prefixedAttributes, libxmlNamespaces, numNamespaces)) {
         setAttributes(newElement.ptr(), prefixedAttributes, parserContentPolicy());
         stopParsing();
         return;
     }
 
-    handleElementAttributes(prefixedAttributes, libxmlAttributes, nb_attributes, ec);
+    bool success = handleElementAttributes(prefixedAttributes, libxmlAttributes, numAttributes);
     setAttributes(newElement.ptr(), prefixedAttributes, parserContentPolicy());
-    if (ec) {
+    if (!success) {
         stopParsing();
         return;
     }
@@ -886,7 +882,7 @@ void XMLDocumentParser::endElementNs()
 
     if (!scriptingContentIsAllowed(parserContentPolicy()) && is<Element>(*node) && toScriptElementIfPossible(downcast<Element>(node.get()))) {
         popCurrentNode();
-        node->remove(IGNORE_EXCEPTION);
+        node->remove();
         return;
     }
 
@@ -920,10 +916,12 @@ void XMLDocumentParser::endElementNs()
 
         if (scriptElement->readyToBeParserExecuted())
             scriptElement->executeScript(ScriptSourceCode(scriptElement->scriptContent(), document()->url(), m_scriptStartPosition));
-        else if (scriptElement->willBeParserExecuted()) {
-            m_pendingScript = scriptElement->cachedScript();
+        else if (scriptElement->willBeParserExecuted() && scriptElement->loadableScript() && is<LoadableClassicScript>(*scriptElement->loadableScript())) {
+            // FIXME: Allow "module" scripts for XML documents.
+            // https://bugs.webkit.org/show_bug.cgi?id=161651
+            m_pendingScript = &downcast<LoadableClassicScript>(*scriptElement->loadableScript()).cachedScript();
             m_scriptElement = &element;
-            m_pendingScript->addClient(this);
+            m_pendingScript->addClient(*this);
 
             // m_pendingScript will be 0 if script was already loaded and addClient() executed it.
             if (m_pendingScript)
@@ -992,12 +990,10 @@ void XMLDocumentParser::processingInstruction(const xmlChar* target, const xmlCh
     if (!updateLeafTextNode())
         return;
 
-    // ### handle exceptions
-    ExceptionCode ec = 0;
-    Ref<ProcessingInstruction> pi = *m_currentNode->document().createProcessingInstruction(
-        toString(target), toString(data), ec);
-    if (ec)
+    auto result = m_currentNode->document().createProcessingInstruction(toString(target), toString(data));
+    if (result.hasException())
         return;
+    auto pi = result.releaseReturnValue();
 
     pi->setCreatedByParser(true);
 
@@ -1007,6 +1003,7 @@ void XMLDocumentParser::processingInstruction(const xmlChar* target, const xmlCh
 
     if (pi->isCSS())
         m_sawCSS = true;
+
 #if ENABLE(XSLT)
     m_sawXSLTransform = !m_sawFirstElement && pi->isXSL();
     if (m_sawXSLTransform && !document()->transformSourceDocument())
@@ -1062,9 +1059,9 @@ void XMLDocumentParser::startDocument(const xmlChar* version, const xmlChar* enc
     }
 
     if (version)
-        document()->setXMLVersion(toString(version), ASSERT_NO_EXCEPTION);
+        document()->setXMLVersion(toString(version));
     if (standalone != StandaloneUnspecified)
-        document()->setXMLStandalone(standaloneInfo == StandaloneYes, ASSERT_NO_EXCEPTION);
+        document()->setXMLStandalone(standaloneInfo == StandaloneYes);
     if (encoding)
         document()->setXMLEncoding(toString(encoding));
     document()->setHasXMLDeclaration(true);
@@ -1100,21 +1097,20 @@ static inline XMLDocumentParser* getParser(void* closure)
 static inline bool hackAroundLibXMLEntityBug(void* closure)
 {
 #if LIBXML_VERSION >= 20627
-    UNUSED_PARAM(closure);
-
     // This bug has been fixed in libxml 2.6.27.
+    UNUSED_PARAM(closure);
     return false;
 #else
     return static_cast<xmlParserCtxtPtr>(closure)->node;
 #endif
 }
 
-static void startElementNsHandler(void* closure, const xmlChar* localname, const xmlChar* prefix, const xmlChar* uri, int nb_namespaces, const xmlChar** namespaces, int nb_attributes, int nb_defaulted, const xmlChar** libxmlAttributes)
+static void startElementNsHandler(void* closure, const xmlChar* localname, const xmlChar* prefix, const xmlChar* uri, int numNamespaces, const xmlChar** namespaces, int numAttributes, int numDefaulted, const xmlChar** libxmlAttributes)
 {
     if (hackAroundLibXMLEntityBug(closure))
         return;
 
-    getParser(closure)->startElementNs(localname, prefix, uri, nb_namespaces, namespaces, nb_attributes, nb_defaulted, libxmlAttributes);
+    getParser(closure)->startElementNs(localname, prefix, uri, numNamespaces, namespaces, numAttributes, numDefaulted, libxmlAttributes);
 }
 
 static void endElementNsHandler(void* closure, const xmlChar*, const xmlChar*, const xmlChar*)
@@ -1210,7 +1206,7 @@ static size_t convertUTF16EntityToUTF8(const UChar* utf16Entity, size_t numberOf
         return 0;
 
     // Even though we must pass the length, libxml expects the entity string to be null terminated.
-    ASSERT(target > originalTarget + 1);
+    ASSERT(target >= originalTarget + 1);
     *target = '\0';
     return target - originalTarget;
 }
@@ -1308,6 +1304,7 @@ static void externalSubsetHandler(void* closure, const xmlChar*, const xmlChar* 
         || (extId == "-//W3C//DTD XHTML Basic 1.0//EN")
         || (extId == "-//W3C//DTD XHTML 1.1 plus MathML 2.0//EN")
         || (extId == "-//W3C//DTD XHTML 1.1 plus MathML 2.0 plus SVG 1.1//EN")
+        || (extId == "-//W3C//DTD MathML 2.0//EN")
         || (extId == "-//WAPFORUM//DTD XHTML Mobile 1.0//EN")
         || (extId == "-//WAPFORUM//DTD XHTML Mobile 1.1//EN")
         || (extId == "-//WAPFORUM//DTD XHTML Mobile 1.2//EN"))
@@ -1382,7 +1379,7 @@ void XMLDocumentParser::doEnd()
         document()->setTransformSource(std::make_unique<TransformSource>(doc));
 
         document()->setParsing(false); // Make the document think it's done, so it will apply XSL stylesheets.
-        document()->styleResolverChanged(RecalcStyleImmediately);
+        document()->styleScope().didChangeActiveStyleSheetCandidates();
 
         // styleResolverChanged() call can detach the parser and null out its document.
         // In that case, we just bail out.
@@ -1510,9 +1507,7 @@ struct AttributeParseState {
     bool gotAttributes;
 };
 
-static void attributesStartElementNsHandler(void* closure, const xmlChar* xmlLocalName, const xmlChar* /*xmlPrefix*/,
-                                            const xmlChar* /*xmlURI*/, int /*nb_namespaces*/, const xmlChar** /*namespaces*/,
-                                            int nb_attributes, int /*nb_defaulted*/, const xmlChar** libxmlAttributes)
+static void attributesStartElementNsHandler(void* closure, const xmlChar* xmlLocalName, const xmlChar* /*xmlPrefix*/, const xmlChar* /*xmlURI*/, int /*numNamespaces*/, const xmlChar** /*namespaces*/, int numAttributes, int /*numDefaulted*/, const xmlChar** libxmlAttributes)
 {
     if (strcmp(reinterpret_cast<const char*>(xmlLocalName), "attrs") != 0)
         return;
@@ -1523,7 +1518,7 @@ static void attributesStartElementNsHandler(void* closure, const xmlChar* xmlLoc
     state->gotAttributes = true;
 
     xmlSAX2Attributes* attributes = reinterpret_cast<xmlSAX2Attributes*>(libxmlAttributes);
-    for (int i = 0; i < nb_attributes; i++) {
+    for (int i = 0; i < numAttributes; i++) {
         String attrLocalName = toString(attributes[i].localname);
         int valueLength = (int) (attributes[i].end - attributes[i].value);
         String attrValue = toString(attributes[i].value, valueLength);

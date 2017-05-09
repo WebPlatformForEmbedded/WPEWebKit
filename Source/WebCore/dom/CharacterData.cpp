@@ -63,11 +63,10 @@ void CharacterData::setData(const String& data)
     document().textRemoved(this, 0, oldLength);
 }
 
-String CharacterData::substringData(unsigned offset, unsigned count, ExceptionCode& ec)
+ExceptionOr<String> CharacterData::substringData(unsigned offset, unsigned count)
 {
-    checkCharDataOperation(offset, ec);
-    if (ec)
-        return String();
+    if (offset > length())
+        return Exception { INDEX_SIZE_ERR };
 
     return m_data.substring(offset, count);
 }
@@ -103,18 +102,7 @@ unsigned CharacterData::parserAppendData(const String& string, unsigned offset, 
     if (is<Text>(*this) && parentNode())
         downcast<Text>(*this).updateRendererAfterContentChange(oldLength, 0);
 
-    document().incDOMTreeVersion();
-    // We don't call dispatchModifiedEvent here because we don't want the
-    // parser to dispatch DOM mutation events.
-    if (parentNode()) {
-        ContainerNode::ChildChange change = {
-            ContainerNode::TextChanged,
-            ElementTraversal::previousSibling(*this),
-            ElementTraversal::nextSibling(*this),
-            ContainerNode::ChildChangeSourceParser
-        };
-        parentNode()->childrenChanged(change);
-    }
+    notifyParentAfterChange(ContainerNode::ChildChangeSourceParser);
 
     return characterLengthLimit;
 }
@@ -129,11 +117,10 @@ void CharacterData::appendData(const String& data)
     // FIXME: Should we call textInserted here?
 }
 
-void CharacterData::insertData(unsigned offset, const String& data, ExceptionCode& ec)
+ExceptionOr<void> CharacterData::insertData(unsigned offset, const String& data)
 {
-    checkCharDataOperation(offset, ec);
-    if (ec)
-        return;
+    if (offset > length())
+        return Exception { INDEX_SIZE_ERR };
 
     String newStr = m_data;
     newStr.insert(data, offset);
@@ -141,13 +128,14 @@ void CharacterData::insertData(unsigned offset, const String& data, ExceptionCod
     setDataAndUpdate(newStr, offset, 0, data.length());
 
     document().textInserted(this, offset, data.length());
+
+    return { };
 }
 
-void CharacterData::deleteData(unsigned offset, unsigned count, ExceptionCode& ec)
+ExceptionOr<void> CharacterData::deleteData(unsigned offset, unsigned count)
 {
-    checkCharDataOperation(offset, ec);
-    if (ec)
-        return;
+    if (offset > length())
+        return Exception { INDEX_SIZE_ERR };
 
     count = std::min(count, length() - offset);
 
@@ -157,13 +145,14 @@ void CharacterData::deleteData(unsigned offset, unsigned count, ExceptionCode& e
     setDataAndUpdate(newStr, offset, count, 0);
 
     document().textRemoved(this, offset, count);
+
+    return { };
 }
 
-void CharacterData::replaceData(unsigned offset, unsigned count, const String& data, ExceptionCode& ec)
+ExceptionOr<void> CharacterData::replaceData(unsigned offset, unsigned count, const String& data)
 {
-    checkCharDataOperation(offset, ec);
-    if (ec)
-        return;
+    if (offset > length())
+        return Exception { INDEX_SIZE_ERR };
 
     count = std::min(count, length() - offset);
 
@@ -176,6 +165,8 @@ void CharacterData::replaceData(unsigned offset, unsigned count, const String& d
     // update the markers for spell checking and grammar checking
     document().textRemoved(this, offset, count);
     document().textInserted(this, offset, data.length());
+
+    return { };
 }
 
 String CharacterData::nodeValue() const
@@ -188,9 +179,10 @@ bool CharacterData::containsOnlyWhitespace() const
     return m_data.containsOnlyWhitespace();
 }
 
-void CharacterData::setNodeValue(const String& nodeValue, ExceptionCode&)
+ExceptionOr<void> CharacterData::setNodeValue(const String& nodeValue)
 {
     setData(nodeValue);
+    return { };
 }
 
 void CharacterData::setDataAndUpdate(const String& newData, unsigned offsetOfReplacedData, unsigned oldLength, unsigned newLength)
@@ -208,8 +200,25 @@ void CharacterData::setDataAndUpdate(const String& newData, unsigned offsetOfRep
     if (document().frame())
         document().frame()->selection().textWasReplaced(this, offsetOfReplacedData, oldLength, newLength);
 
-    document().incDOMTreeVersion();
+    notifyParentAfterChange(ContainerNode::ChildChangeSourceAPI);
+
     dispatchModifiedEvent(oldData);
+}
+
+void CharacterData::notifyParentAfterChange(ContainerNode::ChildChangeSource source)
+{
+    document().incDOMTreeVersion();
+
+    if (!parentNode())
+        return;
+
+    ContainerNode::ChildChange change = {
+        ContainerNode::TextChanged,
+        ElementTraversal::previousSibling(*this),
+        ElementTraversal::nextSibling(*this),
+        source
+    };
+    parentNode()->childrenChanged(change);
 }
 
 void CharacterData::dispatchModifiedEvent(const String& oldData)
@@ -218,33 +227,12 @@ void CharacterData::dispatchModifiedEvent(const String& oldData)
         mutationRecipients->enqueueMutationRecord(MutationRecord::createCharacterData(*this, oldData));
 
     if (!isInShadowTree()) {
-        if (parentNode()) {
-            ContainerNode::ChildChange change = {
-                ContainerNode::TextChanged,
-                ElementTraversal::previousSibling(*this),
-                ElementTraversal::nextSibling(*this),
-                ContainerNode::ChildChangeSourceAPI
-            };
-            parentNode()->childrenChanged(change);
-        }
         if (document().hasListenerType(Document::DOMCHARACTERDATAMODIFIED_LISTENER))
             dispatchScopedEvent(MutationEvent::create(eventNames().DOMCharacterDataModifiedEvent, true, nullptr, oldData, m_data));
         dispatchSubtreeModifiedEvent();
     }
 
     InspectorInstrumentation::characterDataModified(document(), *this);
-}
-
-void CharacterData::checkCharDataOperation(unsigned offset, ExceptionCode& ec)
-{
-    ec = 0;
-
-    // INDEX_SIZE_ERR: Raised if the specified offset is negative or greater than the number of 16-bit
-    // units in data.
-    if (offset > length()) {
-        ec = INDEX_SIZE_ERR;
-        return;
-    }
 }
 
 int CharacterData::maxCharacterOffset() const

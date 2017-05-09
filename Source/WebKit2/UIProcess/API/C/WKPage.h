@@ -31,6 +31,7 @@
 #include <WebKit/WKEvent.h>
 #include <WebKit/WKFindOptions.h>
 #include <WebKit/WKGeometry.h>
+#include <WebKit/WKHTTPCookieStorageRef.h>
 #include <WebKit/WKNativeEvent.h>
 #include <WebKit/WKPageContextMenuClient.h>
 #include <WebKit/WKPageDiagnosticLoggingClient.h>
@@ -44,7 +45,6 @@
 #include <WebKit/WKPagePolicyClient.h>
 #include <WebKit/WKPageUIClient.h>
 #include <WebKit/WKPageVisibilityTypes.h>
-#include <WebKit/WKSessionRef.h>
 
 #ifndef __cplusplus
 #include <stdbool.h>
@@ -233,8 +233,6 @@ WK_EXPORT void WKPageSetPageLoaderClient(WKPageRef page, const WKPageLoaderClien
 WK_EXPORT void WKPageSetPagePolicyClient(WKPageRef page, const WKPagePolicyClientBase* client);
 WK_EXPORT void WKPageSetPageNavigationClient(WKPageRef page, const WKPageNavigationClientBase* client);
 
-WK_EXPORT void WKPageSetSession(WKPageRef page, WKSessionRef session);
-
 typedef void (*WKPageRunJavaScriptFunction)(WKSerializedScriptValueRef, WKErrorRef, void*);
 WK_EXPORT void WKPageRunJavaScriptInMainFrame(WKPageRef page, WKStringRef script, void* context, WKPageRunJavaScriptFunction function);
 #ifdef __BLOCKS__
@@ -278,7 +276,7 @@ WK_EXPORT void WKPagePostSynchronousMessageToInjectedBundle(WKPageRef page, WKSt
 
 WK_EXPORT void WKPageSelectContextMenuItem(WKPageRef page, WKContextMenuItemRef item);
 
-
+WK_EXPORT WKHTTPCookieStorageRef WKPageGetHTTPCookieStorage(WKPageRef page);
 
 /* DEPRECATED -  Please use constants from WKPluginInformation instead. */
 

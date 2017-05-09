@@ -83,6 +83,9 @@ static NSString * const WebKitNetworkCacheEfficacyLoggingEnabledDefaultsKey = @"
 #endif
 
 static NSString * const WebKitSuppressMemoryPressureHandlerDefaultsKey = @"WebKitSuppressMemoryPressureHandler";
+static NSString * const WebKitNetworkLoadThrottleLatencyMillisecondsDefaultsKey = @"WebKitNetworkLoadThrottleLatencyMilliseconds";
+
+static NSString * const WebKitVariationFontsEnabledDefaultsKey = @"ExperimentalVariationFontsEnabled";
 
 namespace WebKit {
 
@@ -105,6 +108,8 @@ static void registerUserDefaultsIfNeeded()
     [registrationDictionary setObject:[NSNumber numberWithBool:YES] forKey:WebKitNetworkCacheEnabledDefaultsKey];
     [registrationDictionary setObject:[NSNumber numberWithBool:NO] forKey:WebKitNetworkCacheEfficacyLoggingEnabledDefaultsKey];
 #endif
+
+    [registrationDictionary setObject:[NSNumber numberWithBool:YES] forKey:WebKitVariationFontsEnabledDefaultsKey];
 
     [[NSUserDefaults standardUserDefaults] registerDefaults:registrationDictionary];
 }
@@ -241,7 +246,14 @@ void WebProcessPool::platformInitializeNetworkProcess(NetworkProcessCreationPara
     parameters.shouldEnableNetworkCacheEfficacyLogging = [defaults boolForKey:WebKitNetworkCacheEfficacyLoggingEnabledDefaultsKey];
 #endif
 
+    parameters.sourceApplicationBundleIdentifier = m_configuration->sourceApplicationBundleIdentifier();
+    parameters.sourceApplicationSecondaryIdentifier = m_configuration->sourceApplicationSecondaryIdentifier();
+#if PLATFORM(IOS)
+    parameters.ctDataConnectionServiceType = m_configuration->ctDataConnectionServiceType();
+#endif
+
     parameters.shouldSuppressMemoryPressureHandler = [defaults boolForKey:WebKitSuppressMemoryPressureHandlerDefaultsKey];
+    parameters.loadThrottleLatency = std::chrono::milliseconds([defaults integerForKey:WebKitNetworkLoadThrottleLatencyMillisecondsDefaultsKey]);
 
 #if PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101100
     RetainPtr<CFDataRef> cookieStorageData = adoptCF(CFHTTPCookieStorageCreateIdentifyingData(kCFAllocatorDefault, [[NSHTTPCookieStorage sharedHTTPCookieStorage] _cookieStorage]));

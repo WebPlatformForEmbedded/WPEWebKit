@@ -97,18 +97,13 @@ public:
     void logDiagnosticMessageWithResult(uint64_t webPageID, const String& message, const String& description, WebCore::DiagnosticLoggingResultType, WebCore::ShouldSample);
     void logDiagnosticMessageWithValue(uint64_t webPageID, const String& message, const String& description, const String& value, WebCore::ShouldSample);
 
-#if USE(CFURLCACHE)
-    static Vector<Ref<WebCore::SecurityOrigin>> cfURLCacheOrigins();
-    static void clearCFURLCacheForOrigins(const Vector<WebCore::SecurityOriginData>&);
-#endif
-
 #if PLATFORM(COCOA)
     RetainPtr<CFDataRef> sourceApplicationAuditData() const;
     void clearHSTSCache(WebCore::NetworkStorageSession&, std::chrono::system_clock::time_point modifiedSince);
 #endif
 
 #if USE(NETWORK_SESSION)
-    void findPendingDownloadLocation(NetworkDataTask&, ResponseCompletionHandler&&, const WebCore::ResourceRequest&, const WebCore::ResourceResponse&);
+    void findPendingDownloadLocation(NetworkDataTask&, ResponseCompletionHandler&&, const WebCore::ResourceResponse&);
 #endif
 
 #if USE(PROTECTION_SPACE_AUTH_CALLBACK)
@@ -120,6 +115,8 @@ public:
     void ensurePrivateBrowsingSession(WebCore::SessionID);
 
     void grantSandboxExtensionsToDatabaseProcessForBlobs(const Vector<String>& filenames, Function<void ()>&& completionHandler);
+
+    std::chrono::milliseconds loadThrottleLatency() const { return m_loadThrottleLatency; }
 
 private:
     NetworkProcess();
@@ -145,8 +142,6 @@ private:
     void didReceiveSyncMessage(IPC::Connection&, IPC::Decoder&, std::unique_ptr<IPC::Encoder>&) override;
     void didClose(IPC::Connection&) override;
     void didReceiveInvalidMessage(IPC::Connection&, IPC::StringReference messageReceiverName, IPC::StringReference messageName) override;
-    IPC::ProcessType localProcessType() override { return IPC::ProcessType::Network; }
-    IPC::ProcessType remoteProcessType() override { return IPC::ProcessType::UI; }
 
     // DownloadManager::Client
     void didCreateDownload() override;
@@ -173,17 +168,20 @@ private:
     // FIXME: This should take a session ID so we can identify which disk cache to delete.
     void clearDiskCache(std::chrono::system_clock::time_point modifiedSince, std::function<void ()> completionHandler);
 
-    void downloadRequest(WebCore::SessionID, DownloadID, const WebCore::ResourceRequest&);
+    void downloadRequest(WebCore::SessionID, DownloadID, const WebCore::ResourceRequest&, const String& suggestedFilename);
     void resumeDownload(WebCore::SessionID, DownloadID, const IPC::DataReference& resumeData, const String& path, const SandboxExtension::Handle&);
     void cancelDownload(DownloadID);
 #if USE(PROTECTION_SPACE_AUTH_CALLBACK)
     void continueCanAuthenticateAgainstProtectionSpace(uint64_t resourceLoadIdentifier, bool canAuthenticate);
 #endif
 #if USE(NETWORK_SESSION)
+#if USE(PROTECTION_SPACE_AUTH_CALLBACK)
     void continueCanAuthenticateAgainstProtectionSpaceDownload(DownloadID, bool canAuthenticate);
-    void continueWillSendRequest(DownloadID, WebCore::ResourceRequest&&);
-    void continueDecidePendingDownloadDestination(DownloadID, String destination, const SandboxExtension::Handle& sandboxExtensionHandle, bool allowOverwrite);
 #endif
+    void continueWillSendRequest(DownloadID, WebCore::ResourceRequest&&);
+#endif
+    void continueDecidePendingDownloadDestination(DownloadID, String destination, const SandboxExtension::Handle& sandboxExtensionHandle, bool allowOverwrite);
+
     void setCacheModel(uint32_t);
     void allowSpecificHTTPSCertificateForHost(const WebCore::CertificateInfo&, const String& host);
     void setCanHandleHTTPSServerTrustEvaluation(bool);
@@ -211,6 +209,7 @@ private:
     bool m_suppressMemoryPressureHandler { false };
     bool m_diskCacheIsDisabledForTesting;
     bool m_canHandleHTTPSServerTrustEvaluation;
+    std::chrono::milliseconds m_loadThrottleLatency;
 
     typedef HashMap<const char*, std::unique_ptr<NetworkProcessSupplement>, PtrHash<const char*>> NetworkProcessSupplementMap;
     NetworkProcessSupplementMap m_supplements;

@@ -28,13 +28,11 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef WorkerThreadableLoader_h
-#define WorkerThreadableLoader_h
+#pragma once
 
 #include "ThreadableLoader.h"
 #include "ThreadableLoaderClient.h"
 #include "ThreadableLoaderClientWrapper.h"
-
 #include <wtf/Threading.h>
 #include <wtf/text/WTFString.h>
 
@@ -50,9 +48,9 @@ namespace WebCore {
         WTF_MAKE_FAST_ALLOCATED;
     public:
         static void loadResourceSynchronously(WorkerGlobalScope&, ResourceRequest&&, ThreadableLoaderClient&, const ThreadableLoaderOptions&);
-        static Ref<WorkerThreadableLoader> create(WorkerGlobalScope& workerGlobalScope, ThreadableLoaderClient& client, const String& taskMode, ResourceRequest&& request, const ThreadableLoaderOptions& options)
+        static Ref<WorkerThreadableLoader> create(WorkerGlobalScope& workerGlobalScope, ThreadableLoaderClient& client, const String& taskMode, ResourceRequest&& request, const ThreadableLoaderOptions& options, const String& referrer)
         {
-            return adoptRef(*new WorkerThreadableLoader(workerGlobalScope, client, taskMode, WTFMove(request), options));
+            return adoptRef(*new WorkerThreadableLoader(workerGlobalScope, client, taskMode, WTFMove(request), options, referrer));
         }
 
         ~WorkerThreadableLoader();
@@ -120,7 +118,7 @@ namespace WebCore {
             String m_taskMode;
         };
 
-        WorkerThreadableLoader(WorkerGlobalScope&, ThreadableLoaderClient&, const String& taskMode, ResourceRequest&&, const ThreadableLoaderOptions&);
+        WorkerThreadableLoader(WorkerGlobalScope&, ThreadableLoaderClient&, const String& taskMode, ResourceRequest&&, const ThreadableLoaderOptions&, const String& referrer);
 
         Ref<WorkerGlobalScope> m_workerGlobalScope;
         Ref<ThreadableLoaderClientWrapper> m_workerClientWrapper;
@@ -128,5 +126,3 @@ namespace WebCore {
     };
 
 } // namespace WebCore
-
-#endif // WorkerThreadableLoader_h

@@ -2,8 +2,9 @@
  * Copyright (C) 2007, 2009 Apple Inc.  All rights reserved.
  * Copyright (C) 2007 Collabora Ltd. All rights reserved.
  * Copyright (C) 2007 Alp Toker <alp@atoker.com>
- * Copyright (C) 2009, 2010 Igalia S.L
+ * Copyright (C) 2009, 2010, 2011, 2012, 2013, 2015, 2016 Igalia S.L
  * Copyright (C) 2014 Cable Television Laboratories, Inc.
+ * Copyright (C) 2015, 2016 Metrological Group B.V.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -112,7 +113,6 @@ public:
     void loadStateChanged();
     void timeChanged();
     void didEnd();
-    void notifyDurationChanged();
     virtual void durationChanged();
     void loadingFailed(MediaPlayer::NetworkState);
 
@@ -130,6 +130,8 @@ public:
 #endif
 
     bool isLiveStream() const override { return m_isStreaming; }
+
+    bool handleSyncMessage(GstMessage*) override;
 
 private:
     static void getSupportedTypes(HashSet<String, ASCIICaseInsensitiveHash>&);
@@ -176,7 +178,7 @@ protected:
     bool m_downloadFinished;
     bool m_errorOccured;
     mutable bool m_isStreaming;
-    mutable gfloat m_durationAtEOS;
+    mutable gdouble m_durationAtEOS;
     bool m_paused;
     float m_playbackRate;
     GstState m_requestedState;
@@ -213,6 +215,7 @@ protected:
 #endif
     static gboolean durationChangedCallback(MediaPlayerPrivateGStreamer*);
 
+private:
     WeakPtrFactory<MediaPlayerPrivateGStreamer> m_weakPtrFactory;
 
 #if ENABLE(VIDEO_TRACK)
@@ -251,9 +254,6 @@ protected:
     HashMap<AtomicString, RefPtr<InbandMetadataTextTrackPrivateGStreamer>> m_metadataTracks;
 #endif
     virtual bool isMediaSource() const { return false; }
-
-    Mutex m_pendingAsyncOperationsLock;
-    GList* m_pendingAsyncOperations;
 };
 }
 

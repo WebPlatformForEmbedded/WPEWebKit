@@ -29,8 +29,7 @@
  *
  */
 
-#ifndef PingLoader_h
-#define PingLoader_h
+#pragma once
 
 #include <wtf/RefPtr.h>
 
@@ -53,9 +52,8 @@ public:
     static void sendViolationReport(Frame&, const URL& reportURL, RefPtr<FormData>&& report, ViolationReportType);
 
 protected:
-    static void startPingLoad(Frame&, ResourceRequest&);
+    enum class ShouldFollowRedirects { No, Yes };
+    static void startPingLoad(Frame&, ResourceRequest&, ShouldFollowRedirects);
 };
 
-}
-
-#endif
+} // namespace WebCore

@@ -36,8 +36,6 @@
 #include "URL.h"
 #include <wtf/NeverDestroyed.h>
 
-#define LOG_STATISTICS_TO_FILE 0
-
 namespace WebCore {
 
 static const unsigned minimumOriginsLoadedForProcessing = 100;
@@ -153,5 +151,15 @@ void ResourceLoadStatisticsStore::processStatistics(std::function<void(ResourceL
     ASSERT(hasEnoughDataForStatisticsProcessing());
     for (auto& resourceStatistic : m_resourceStatisticsMap.values())
         processFunction(resourceStatistic);
+}
+
+Vector<String> ResourceLoadStatisticsStore::prevalentResourceDomainsWithoutUserInteraction()
+{
+    Vector<String> prevalentResources;
+    for (auto& resourceStatistic : m_resourceStatisticsMap.values()) {
+        if (resourceStatistic.isPrevalentResource && !resourceStatistic.hadUserInteraction)
+            prevalentResources.append(resourceStatistic.highLevelDomain);
+    }
+    return prevalentResources;
 }
 }

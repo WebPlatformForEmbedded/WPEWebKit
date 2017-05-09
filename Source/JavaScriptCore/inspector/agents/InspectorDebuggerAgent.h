@@ -47,7 +47,6 @@ class InjectedScript;
 class InjectedScriptManager;
 class InspectorArray;
 class InspectorObject;
-class InspectorValue;
 class ScriptDebugServer;
 typedef String ErrorString;
 
@@ -78,6 +77,7 @@ public:
     void stepInto(ErrorString&) final;
     void stepOut(ErrorString&) final;
     void setPauseOnExceptions(ErrorString&, const String& pauseState) final;
+    void setPauseOnAssertions(ErrorString&, bool enabled) final;
     void evaluateOnCallFrame(ErrorString&, const String& callFrameId, const String& expression, const String* objectGroup, const bool* includeCommandLineAPI, const bool* doNotPauseOnExceptionsAndMuteConsole, const bool* returnByValue, const bool* generatePreview, const bool* saveResult, RefPtr<Inspector::Protocol::Runtime::RemoteObject>& result, Inspector::Protocol::OptOutput<bool>* wasThrown, Inspector::Protocol::OptOutput<int>* savedResultIndex) final;
     void setOverlayMessage(ErrorString&, const String*) override;
 
@@ -98,7 +98,6 @@ public:
         virtual ~Listener() { }
         virtual void debuggerWasEnabled() = 0;
         virtual void debuggerWasDisabled() = 0;
-        virtual void stepInto() = 0;
         virtual void didPause() = 0;
     };
     void setListener(Listener* listener) { m_listener = listener; }
@@ -132,12 +131,19 @@ private:
     void breakpointActionSound(int breakpointActionIdentifier) final;
     void breakpointActionProbe(JSC::ExecState&, const ScriptBreakpointAction&, unsigned batchId, unsigned sampleId, JSC::JSValue sample) final;
 
-    RefPtr<Inspector::Protocol::Debugger::Location> resolveBreakpoint(const String& breakpointIdentifier, JSC::SourceID, const ScriptBreakpoint&);
+    void resolveBreakpoint(const Script&, JSC::Breakpoint&);
+    void setBreakpoint(JSC::Breakpoint&, bool& existing);    
+    void didSetBreakpoint(const JSC::Breakpoint&, const String&, const ScriptBreakpoint&);
+
     bool assertPaused(ErrorString&);
     void clearDebuggerBreakpointState();
     void clearInspectorBreakpointState();
     void clearBreakDetails();
     void clearExceptionValue();
+
+    enum class ShouldDispatchResumed { No, WhenIdle, WhenContinued };
+    void willStepAndMayBecomeIdle();
+    void didBecomeIdleAfterStepping();
 
     RefPtr<InspectorObject> buildBreakpointPauseReason(JSC::BreakpointID);
     RefPtr<InspectorObject> buildExceptionPauseReason(JSC::JSValue exception, const InjectedScript&);
@@ -163,10 +169,13 @@ private:
     JSC::BreakpointID m_continueToLocationBreakpointID;
     DebuggerFrontendDispatcher::Reason m_breakReason;
     RefPtr<InspectorObject> m_breakAuxData;
+    ShouldDispatchResumed m_conditionToDispatchResumed { ShouldDispatchResumed::No };
     bool m_enabled { false };
     bool m_javaScriptPauseScheduled { false };
     bool m_hasExceptionValue { false };
     bool m_didPauseStopwatch { false };
+    bool m_pauseOnAssertionFailures { false };
+    bool m_registeredIdleCallback { false };
 };
 
 } // namespace Inspector

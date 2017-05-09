@@ -23,8 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. 
  */
 
-#ifndef MacroAssemblerX86_64_h
-#define MacroAssemblerX86_64_h
+#pragma once
 
 #if ENABLE(ASSEMBLER) && CPU(X86_64)
 
@@ -45,6 +44,7 @@ public:
 
     using MacroAssemblerX86Common::add32;
     using MacroAssemblerX86Common::and32;
+    using MacroAssemblerX86Common::branch32;
     using MacroAssemblerX86Common::branchAdd32;
     using MacroAssemblerX86Common::or32;
     using MacroAssemblerX86Common::sub32;
@@ -828,6 +828,12 @@ public:
         m_assembler.cmpq_rm(right, address.offset, address.base, address.index, address.scale);
         return Jump(m_assembler.jCC(x86Condition(cond)));
     }
+    
+    Jump branch32(RelationalCondition cond, AbsoluteAddress left, RegisterID right)
+    {
+        load32(left.m_ptr, scratchRegister());
+        return branch32(cond, scratchRegister(), right);
+    }
 
     Jump branchPtr(RelationalCondition cond, BaseIndex left, RegisterID right)
     {
@@ -1214,9 +1220,8 @@ public:
     using MacroAssemblerX86Common::branch8;
     Jump branch8(RelationalCondition cond, AbsoluteAddress left, TrustedImm32 right)
     {
-        TrustedImm32 right8(static_cast<int8_t>(right.m_value));
         MacroAssemblerX86Common::move(TrustedImmPtr(left.m_ptr), scratchRegister());
-        return MacroAssemblerX86Common::branch8(cond, Address(scratchRegister()), right8);
+        return MacroAssemblerX86Common::branch8(cond, Address(scratchRegister()), right);
     }
     
     using MacroAssemblerX86Common::branchTest8;
@@ -1356,5 +1361,3 @@ private:
 } // namespace JSC
 
 #endif // ENABLE(ASSEMBLER)
-
-#endif // MacroAssemblerX86_64_h

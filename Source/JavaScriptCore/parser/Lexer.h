@@ -20,8 +20,7 @@
  *
  */
 
-#ifndef Lexer_h
-#define Lexer_h
+#pragma once
 
 #include "Lookup.h"
 #include "ParserArena.h"
@@ -48,7 +47,7 @@ class Lexer {
     WTF_MAKE_FAST_ALLOCATED;
 
 public:
-    Lexer(VM*, JSParserBuiltinMode, JSParserCommentMode);
+    Lexer(VM*, JSParserBuiltinMode, JSParserScriptMode);
     ~Lexer();
 
     // Character manipulation functions.
@@ -76,10 +75,9 @@ public:
     void setLastLineNumber(int lastLineNumber) { m_lastLineNumber = lastLineNumber; }
     int lastLineNumber() const { return m_lastLineNumber; }
     bool prevTerminator() const { return m_terminator; }
-    bool scanRegExp(const Identifier*& pattern, const Identifier*& flags, UChar patternPrefix = 0);
+    JSTokenType scanRegExp(JSToken*, UChar patternPrefix = 0);
     enum class RawStringsBuildMode { BuildRawStrings, DontBuildRawStrings };
     JSTokenType scanTrailingTemplateString(JSToken*, RawStringsBuildMode);
-    bool skipRegExp();
 
     // Functions for use after parsing.
     bool sawError() const { return m_error; }
@@ -115,6 +113,13 @@ public:
     }
 
     JSTokenType lexExpectIdentifier(JSToken*, unsigned, bool strictMode);
+
+    ALWAYS_INLINE StringView getToken(const JSToken& token)
+    {
+        SourceProvider* sourceProvider = m_source->provider();
+        ASSERT_WITH_MESSAGE(token.m_location.startOffset <= token.m_location.endOffset, "Calling this function with the baked token.");
+        return sourceProvider->getRange(token.m_location.startOffset, token.m_location.endOffset);
+    }
 
 private:
     void record8(int);
@@ -182,6 +187,8 @@ private:
     template <unsigned length>
     ALWAYS_INLINE bool consume(const char (&input)[length]);
 
+    void fillTokenInfo(JSToken*, JSTokenType, int lineNumber, int endOffset, int lineStartOffset, JSTextPosition endPosition);
+
     static const size_t initialReadBufferCapacity = 32;
 
     int m_lineNumber;
@@ -216,7 +223,7 @@ private:
 
     VM* m_vm;
     bool m_parsingBuiltinFunction;
-    JSParserCommentMode m_commentMode;
+    JSParserScriptMode m_scriptMode;
 };
 
 template <>
@@ -393,5 +400,3 @@ slowCase:
 }
 
 } // namespace JSC
-
-#endif // Lexer_h

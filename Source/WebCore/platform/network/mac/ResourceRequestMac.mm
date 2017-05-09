@@ -37,7 +37,7 @@
 
 namespace WebCore {
 
-#if USE(CFNETWORK)
+#if USE(CFURLCONNECTION)
 
 ResourceRequest::ResourceRequest(NSURLRequest *nsRequest)
     : ResourceRequestBase()

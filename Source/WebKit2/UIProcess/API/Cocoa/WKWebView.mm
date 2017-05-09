@@ -34,6 +34,7 @@
 #import "CompletionHandlerCallChecker.h"
 #import "DiagnosticLoggingClient.h"
 #import "FindClient.h"
+#import "FullscreenClient.h"
 #import "LegacySessionStateCoding.h"
 #import "Logging.h"
 #import "NavigationState.h"
@@ -67,6 +68,7 @@
 #import "WebBackForwardList.h"
 #import "WebCertificateInfo.h"
 #import "WebFormSubmissionListenerProxy.h"
+#import "WebFullScreenManagerProxy.h"
 #import "WebKitSystemInterface.h"
 #import "WebPageGroup.h"
 #import "WebPageProxy.h"
@@ -77,6 +79,7 @@
 #import "_WKDiagnosticLoggingDelegate.h"
 #import "_WKFindDelegate.h"
 #import "_WKFrameHandleInternal.h"
+#import "_WKFullscreenDelegate.h"
 #import "_WKHitTestResultInternal.h"
 #import "_WKInputDelegate.h"
 #import "_WKRemoteObjectRegistryInternal.h"
@@ -90,6 +93,7 @@
 #import <WebCore/RuntimeApplicationChecks.h>
 #import <WebCore/Settings.h>
 #import <WebCore/TextStream.h>
+#import <WebCore/ValidationBubble.h>
 #import <WebCore/WritingMode.h>
 #import <wtf/HashMap.h>
 #import <wtf/MathExtras.h>
@@ -163,16 +167,6 @@ enum class DynamicViewportUpdateMode {
 static const uint32_t firstSDKVersionWithLinkPreviewEnabledByDefault = 0xA0000;
 #endif
 
-#if USE(APPLE_INTERNAL_SDK)
-#import <WebKitAdditions/WKWebViewAdditionsBefore.mm>
-#else
-@implementation WKWebView (Additions)
-- (void)_setIsBlankBeforeFirstNonEmptyLayout:(BOOL)isBlank
-{
-}
-@end
-#endif
-
 #if PLATFORM(MAC)
 #import "WKTextFinderClient.h"
 #import "WKViewInternal.h"
@@ -180,7 +174,12 @@ static const uint32_t firstSDKVersionWithLinkPreviewEnabledByDefault = 0xA0000;
 
 @interface WKWebView () <WebViewImplDelegate, NSTextInputClient>
 @end
-#endif
+
+#if HAVE(TOUCH_BAR)
+@interface WKWebView () <NSTouchBarProvider>
+@end
+#endif // HAVE(TOUCH_BAR)
+#endif // PLATFORM(MAC)
 
 static HashMap<WebKit::WebPageProxy*, WKWebView *>& pageToViewMap()
 {
@@ -336,6 +335,16 @@ static bool shouldAllowPictureInPictureMediaPlayback()
 
 #endif
 
+static bool shouldRequireUserGestureToLoadVideo()
+{
+#if PLATFORM(IOS)
+    static bool shouldRequireUserGestureToLoadVideo = dyld_get_program_sdk_version() >= DYLD_IOS_VERSION_10_0;
+    return shouldRequireUserGestureToLoadVideo;
+#else
+    return true;
+#endif
+}
+
 #if ENABLE(DATA_DETECTION) && PLATFORM(IOS)
 static WebCore::DataDetectorTypes fromWKDataDetectorTypes(uint64_t types)
 {
@@ -438,6 +447,7 @@ static uint32_t convertSystemLayoutDirection(NSUserInterfaceLayoutDirection dire
     pageConfiguration->preferenceValues().set(WebKit::WebPreferencesKey::httpEquivEnabledKey(), WebKit::WebPreferencesStore::Value(!![_configuration _allowsMetaRefresh]));
     pageConfiguration->preferenceValues().set(WebKit::WebPreferencesKey::allowUniversalAccessFromFileURLsKey(), WebKit::WebPreferencesStore::Value(!![_configuration _allowUniversalAccessFromFileURLs]));
     pageConfiguration->setInitialCapitalizationEnabled([_configuration _initialCapitalizationEnabled]);
+    pageConfiguration->setWaitsForPaintAfterViewDidMoveToWindow([_configuration _waitsForPaintAfterViewDidMoveToWindow]);
 
 #if PLATFORM(MAC)
     pageConfiguration->preferenceValues().set(WebKit::WebPreferencesKey::showsURLsInToolTipsEnabledKey(), WebKit::WebPreferencesStore::Value(!![_configuration _showsURLsInToolTips]));
@@ -465,6 +475,7 @@ static uint32_t convertSystemLayoutDirection(NSUserInterfaceLayoutDirection dire
     WKAudiovisualMediaTypes mediaTypesRequiringUserGesture = [_configuration mediaTypesRequiringUserActionForPlayback];
     pageConfiguration->preferenceValues().set(WebKit::WebPreferencesKey::requiresUserGestureForVideoPlaybackKey(), WebKit::WebPreferencesStore::Value((mediaTypesRequiringUserGesture & WKAudiovisualMediaTypeVideo) == WKAudiovisualMediaTypeVideo));
     pageConfiguration->preferenceValues().set(WebKit::WebPreferencesKey::requiresUserGestureForAudioPlaybackKey(), WebKit::WebPreferencesStore::Value(((mediaTypesRequiringUserGesture & WKAudiovisualMediaTypeAudio) == WKAudiovisualMediaTypeAudio)));
+    pageConfiguration->preferenceValues().set(WebKit::WebPreferencesKey::requiresUserGestureToLoadVideoKey(), WebKit::WebPreferencesStore::Value(shouldRequireUserGestureToLoadVideo()));
     pageConfiguration->preferenceValues().set(WebKit::WebPreferencesKey::mainContentUserGestureOverrideEnabledKey(), WebKit::WebPreferencesStore::Value(!![_configuration _mainContentUserGestureOverrideEnabled]));
     pageConfiguration->preferenceValues().set(WebKit::WebPreferencesKey::invisibleAutoplayNotPermittedKey(), WebKit::WebPreferencesStore::Value(!![_configuration _invisibleAutoplayNotPermitted]));
     pageConfiguration->preferenceValues().set(WebKit::WebPreferencesKey::mediaDataLoadsAutomaticallyKey(), WebKit::WebPreferencesStore::Value(!![_configuration _mediaDataLoadsAutomatically]));
@@ -487,13 +498,13 @@ static uint32_t convertSystemLayoutDirection(NSUserInterfaceLayoutDirection dire
     pageConfiguration->preferenceValues().set(WebKit::WebPreferencesKey::applePayEnabledKey(), WebKit::WebPreferencesStore::Value(!![_configuration _applePayEnabled]));
 #endif
 
+    pageConfiguration->preferenceValues().set(WebKit::WebPreferencesKey::needsStorageAccessFromFileURLsQuirkKey(), WebKit::WebPreferencesStore::Value(!![_configuration _needsStorageAccessFromFileURLsQuirk]));
+
 #if PLATFORM(IOS)
     CGRect bounds = self.bounds;
     _scrollView = adoptNS([[WKScrollView alloc] initWithFrame:bounds]);
     [_scrollView setInternalDelegate:self];
     [_scrollView setBouncesZoom:YES];
-
-    [self _setIsBlankBeforeFirstNonEmptyLayout:YES];
 
     [self addSubview:_scrollView.get()];
 
@@ -521,6 +532,7 @@ static uint32_t convertSystemLayoutDirection(NSUserInterfaceLayoutDirection dire
     [center addObserver:self selector:@selector(_keyboardWillChangeFrame:) name:UIKeyboardWillChangeFrameNotification object:nil];
     [center addObserver:self selector:@selector(_keyboardDidChangeFrame:) name:UIKeyboardDidChangeFrameNotification object:nil];
     [center addObserver:self selector:@selector(_keyboardWillShow:) name:UIKeyboardWillShowNotification object:nil];
+    [center addObserver:self selector:@selector(_keyboardDidShow:) name:UIKeyboardDidShowNotification object:nil];
     [center addObserver:self selector:@selector(_keyboardWillHide:) name:UIKeyboardWillHideNotification object:nil];
     [center addObserver:self selector:@selector(_windowDidRotate:) name:UIWindowDidRotateNotification object:nil];
     [center addObserver:self selector:@selector(_contentSizeCategoryDidChange:) name:UIContentSizeCategoryDidChangeNotification object:nil];
@@ -549,6 +561,10 @@ static uint32_t convertSystemLayoutDirection(NSUserInterfaceLayoutDirection dire
     _uiDelegate = std::make_unique<WebKit::UIDelegate>(self);
     _page->setFindClient(std::make_unique<WebKit::FindClient>(self));
     _page->setDiagnosticLoggingClient(std::make_unique<WebKit::DiagnosticLoggingClient>(self));
+
+#if ENABLE(FULLSCREEN_API)
+    _page->setFullscreenClient(std::make_unique<WebKit::FullscreenClient>(self));
+#endif
 
     pageToViewMap().add(_page.get(), self);
 }
@@ -1128,7 +1144,7 @@ static WebCore::Color scrollViewBackgroundColor(WKWebView *webView)
     // Update the indicator style based on the lightness/darkness of the background color.
     double hue, saturation, lightness;
     color.getHSL(hue, saturation, lightness);
-    if (lightness <= .5 && color.alpha() > 0)
+    if (lightness <= .5 && color.isVisible())
         [_scrollView setIndicatorStyle:UIScrollViewIndicatorStyleWhite];
     else
         [_scrollView setIndicatorStyle:UIScrollViewIndicatorStyleDefault];
@@ -1280,7 +1296,7 @@ static inline bool areEssentiallyEqualAsFloat(float a, float b)
 
         if (areEssentiallyEqualAsFloat(contentZoomScale(self), _scaleToRestore)) {
             WebCore::FloatPoint scaledScrollOffset = _scrollOffsetToRestore;
-            scaledScrollOffset.scale(_scaleToRestore, _scaleToRestore);
+            scaledScrollOffset.scale(_scaleToRestore);
             WebCore::FloatPoint contentOffsetInScrollViewCoordinates = scaledScrollOffset - _obscuredInsetWhenSaved;
 
             changeContentOffsetBoundedInValidRange(_scrollView.get(), contentOffsetInScrollViewCoordinates);
@@ -1300,7 +1316,7 @@ static inline bool areEssentiallyEqualAsFloat(float a, float b)
             WebCore::FloatSize unobscuredContentSizeAtNewScale(unobscuredRect.size.width / _scaleToRestore, unobscuredRect.size.height / _scaleToRestore);
             WebCore::FloatPoint topLeftInDocumentCoordinates(_unobscuredCenterToRestore.x() - unobscuredContentSizeAtNewScale.width() / 2, _unobscuredCenterToRestore.y() - unobscuredContentSizeAtNewScale.height() / 2);
 
-            topLeftInDocumentCoordinates.scale(_scaleToRestore, _scaleToRestore);
+            topLeftInDocumentCoordinates.scale(_scaleToRestore);
             topLeftInDocumentCoordinates.moveBy(WebCore::FloatPoint(-_obscuredInsets.left, -_obscuredInsets.top));
 
             changeContentOffsetBoundedInValidRange(_scrollView.get(), topLeftInDocumentCoordinates);
@@ -1382,7 +1398,7 @@ static inline bool areEssentiallyEqualAsFloat(float a, float b)
 {
     float deviceScale = WebCore::screenScaleFactor();
     WebCore::FloatSize snapshotSize(self.bounds.size);
-    snapshotSize.scale(deviceScale, deviceScale);
+    snapshotSize.scale(deviceScale);
 
     CATransform3D transform = CATransform3DMakeScale(deviceScale, deviceScale, 1);
 
@@ -1413,7 +1429,7 @@ static inline bool areEssentiallyEqualAsFloat(float a, float b)
 
     CARenderServerCaptureLayerWithTransform(MACH_PORT_NULL, self.layer.context.contextId, (uint64_t)self.layer, slotID, 0, 0, &transform);
     WebCore::IntSize imageSize = WebCore::expandedIntSize(WebCore::FloatSize(snapshotSize));
-    return WebKit::ViewSnapshot::create(slotID, imageSize, imageSize.width() * imageSize.height() * 4);
+    return WebKit::ViewSnapshot::create(slotID, imageSize, (imageSize.area() * 4).unsafeGet());
 #endif
 }
 
@@ -1482,7 +1498,7 @@ static WebCore::FloatPoint constrainContentOffset(WebCore::FloatPoint contentOff
 
     WebCore::FloatPoint scaledOffset = contentOffset;
     CGFloat zoomScale = contentZoomScale(self);
-    scaledOffset.scale(zoomScale, zoomScale);
+    scaledOffset.scale(zoomScale);
 
     CGPoint contentOffsetInScrollViewCoordinates = [self _adjustedContentOffset:scaledOffset];
     contentOffsetInScrollViewCoordinates = contentOffsetBoundedInValidRange(_scrollView.get(), contentOffsetInScrollViewCoordinates);
@@ -1545,7 +1561,7 @@ static WebCore::FloatPoint constrainContentOffset(WebCore::FloatPoint contentOff
 {
     WebCore::FloatPoint scaledOffsetDelta = contentOffsetDelta;
     CGFloat zoomScale = contentZoomScale(self);
-    scaledOffsetDelta.scale(zoomScale, zoomScale);
+    scaledOffsetDelta.scale(zoomScale);
 
     CGPoint currentOffset = [_scrollView _isAnimatingScroll] ? [_scrollView _animatedTargetOffset] : [_scrollView contentOffset];
     CGPoint boundedOffset = contentOffsetBoundedInValidRange(_scrollView.get(), currentOffset + scaledOffsetDelta);
@@ -1684,7 +1700,7 @@ static WebCore::FloatPoint constrainContentOffset(WebCore::FloatPoint contentOff
     LOG_WITH_STREAM(VisibleRects, stream << "_zoomToFocusRect: zooming to " << newCenter << " scale:" << scale);
 
     // The newCenter has been computed in the new scale, but _zoomToCenter expected the center to be in the original scale.
-    newCenter.scale(1 / scale, 1 / scale);
+    newCenter.scale(1 / scale);
     [_scrollView _zoomToCenter:newCenter
                         scale:scale
                      duration:UIWebFormAnimationDuration
@@ -1723,7 +1739,7 @@ static WebCore::FloatPoint constrainContentOffset(WebCore::FloatPoint contentOff
 
 - (void)didMoveToWindow
 {
-    _page->viewStateDidChange(WebCore::ViewState::AllFlags);
+    _page->activityStateDidChange(WebCore::ActivityState::AllFlags);
 }
 
 - (void)setOpaque:(BOOL)opaque
@@ -2100,11 +2116,6 @@ static bool scrollViewCanScroll(UIScrollView *scrollView)
         enclosedInScrollableAncestorView:scrollViewCanScroll([self _scroller])];
 }
 
-- (void)_didFirstVisuallyNonEmptyLayoutForMainFrame
-{
-    [self _setIsBlankBeforeFirstNonEmptyLayout:NO];
-}
-
 - (void)_didFinishLoadForMainFrame
 {
     if (_gestureController)
@@ -2175,6 +2186,13 @@ static bool scrollViewCanScroll(UIScrollView *scrollView)
 {
     if ([self _shouldUpdateKeyboardWithInfo:notification.userInfo])
         [self _keyboardChangedWithInfo:notification.userInfo adjustScrollView:YES];
+
+    _page->setIsKeyboardAnimatingIn(true);
+}
+
+- (void)_keyboardDidShow:(NSNotification *)notification
+{
+    _page->setIsKeyboardAnimatingIn(false);
 }
 
 - (void)_keyboardWillHide:(NSNotification *)notification
@@ -2215,7 +2233,8 @@ static bool scrollViewCanScroll(UIScrollView *scrollView)
         if (!_gestureController) {
             _gestureController = std::make_unique<WebKit::ViewGestureController>(*_page);
             _gestureController->installSwipeHandler(self, [self scrollView]);
-            _gestureController->setAlternateBackForwardListSourceView([_configuration _alternateWebViewForNavigationGestures]);
+            if (WKWebView *alternateWebView = [_configuration _alternateWebViewForNavigationGestures])
+                _gestureController->setAlternateBackForwardListSourcePage(alternateWebView->_page.get());
         }
     } else
         _gestureController = nullptr;
@@ -3143,6 +3162,38 @@ WEBCORE_COMMAND(yankAndSelect)
 
 #endif // PLATFORM(MAC)
 
+#if HAVE(TOUCH_BAR)
+
+@dynamic touchBar;
+
+- (NSTouchBar *)makeTouchBar
+{
+    return _impl->makeTouchBar();
+}
+
+- (NSCandidateListTouchBarItem *)candidateListTouchBarItem
+{
+    return _impl->candidateListTouchBarItem();
+}
+
+- (void)_web_didAddMediaControlsManager:(id)controlsManager
+{
+    [self _addMediaPlaybackControlsView:controlsManager];
+}
+
+- (void)_web_didRemoveMediaControlsManager
+{
+    [self _removeMediaPlaybackControlsView];
+}
+
+- (void)_interactWithMediaControlsForTesting
+{
+    [self _setWantsMediaPlaybackControlsView:YES];
+    [self makeTouchBar];
+}
+
+#endif // HAVE(TOUCH_BAR)
+
 @end
 
 @implementation WKWebView (WKPrivate)
@@ -3926,6 +3977,31 @@ static inline WebKit::FindOptions toFindOptions(_WKFindOptions wkFindOptions)
     return _page->process().responsivenessTimer().isResponsive();
 }
 
+- (void)_setFullscreenDelegate:(id<_WKFullscreenDelegate>)delegate
+{
+#if ENABLE(FULLSCREEN_API)
+    static_cast<WebKit::FullscreenClient&>(_page->fullscreenClient()).setDelegate(delegate);
+#endif
+}
+
+- (id<_WKFullscreenDelegate>)_fullscreenDelegate
+{
+#if ENABLE(FULLSCREEN_API)
+    return static_cast<WebKit::FullscreenClient&>(_page->fullscreenClient()).delegate().autorelease();
+#else
+    return nullptr;
+#endif
+}
+
+- (BOOL)_isInFullscreen
+{
+#if ENABLE(FULLSCREEN_API)
+    return _page->fullScreenManager() && _page->fullScreenManager()->isFullScreen();
+#else
+    return false;
+#endif
+}
+
 #pragma mark iOS-specific methods
 
 #if PLATFORM(IOS)
@@ -4492,12 +4568,62 @@ static WebCore::UserInterfaceLayoutDirection toUserInterfaceLayoutDirection(UISe
     _impl->setUserInterfaceLayoutDirection(userInterfaceLayoutDirection);
 }
 
+- (BOOL)_wantsMediaPlaybackControlsView
+{
+#if HAVE(TOUCH_BAR)
+    return _impl->clientWantsMediaPlaybackControlsView();
+#else
+    return NO;
+#endif
+}
+
+- (void)_setWantsMediaPlaybackControlsView:(BOOL)wantsMediaPlaybackControlsView
+{
+#if HAVE(TOUCH_BAR)
+    _impl->setClientWantsMediaPlaybackControlsView(wantsMediaPlaybackControlsView);
+#endif
+}
+
+- (AVFunctionBarScrubber *)_mediaPlaybackControlsView
+{
+#if HAVE(TOUCH_BAR)
+    return _impl->clientWantsMediaPlaybackControlsView() ? _impl->mediaPlaybackControlsView() : nil;
+#else
+    return nil;
+#endif
+}
+
+// This method is for subclasses to override.
+- (void)_addMediaPlaybackControlsView:(AVFunctionBarScrubber *)mediaPlaybackControlsView
+{
+}
+
+// This method is for subclasses to override.
+- (void)_removeMediaPlaybackControlsView
+{
+}
+
 #endif
 
 @end
 
 
 @implementation WKWebView (WKTesting)
+
+- (NSDictionary *)_contentsOfUserInterfaceItem:(NSString *)userInterfaceItem
+{
+    if ([userInterfaceItem isEqualToString:@"validationBubble"]) {
+        auto* validationBubble = _page->validationBubble();
+        String message = validationBubble ? validationBubble->message() : emptyString();
+        return @{ userInterfaceItem: @{ @"message": (NSString *)message } };
+    }
+
+#if PLATFORM(IOS)
+    return [_contentView _contentsOfUserInterfaceItem:(NSString *)userInterfaceItem];
+#else
+    return nil;
+#endif
+}
 
 #if PLATFORM(IOS)
 
@@ -4546,6 +4672,30 @@ static WebCore::UserInterfaceLayoutDirection toUserInterfaceLayoutDirection(UISe
     // For subclasses to override.
 }
 
+- (void)_didShowForcePressPreview
+{
+    // For subclasses to override.
+}
+
+- (void)_didDismissForcePressPreview
+{
+    // For subclasses to override.
+}
+
+- (NSArray<UIView *> *)_uiTextSelectionRectViews
+{
+    return [_contentView valueForKeyPath:@"interactionAssistant.selectionView.rangeView.m_rectViews"];
+}
+
+- (NSString *)_scrollingTreeAsText
+{
+    WebKit::RemoteScrollingCoordinatorProxy* coordinator = _page->scrollingCoordinatorProxy();
+    if (!coordinator)
+        return @"";
+
+    return coordinator->scrollingTreeAsText();
+}
+
 #endif // PLATFORM(IOS)
 
 #if PLATFORM(MAC)
@@ -4553,7 +4703,71 @@ static WebCore::UserInterfaceLayoutDirection toUserInterfaceLayoutDirection(UISe
 {
     return _page && _page->hasActiveVideoForControlsManager();
 }
+
+- (void)_requestControlledElementID
+{
+    if (_page)
+        _page->requestControlledElementID();
+}
+
+- (void)_handleControlledElementIDResponse:(NSString *)identifier
+{
+    // Overridden by subclasses.
+}
+
+- (void)_handleAcceptedCandidate:(NSTextCheckingResult *)candidate
+{
+#if __MAC_OS_X_VERSION_MIN_REQUIRED >= 101200
+    _impl->handleAcceptedCandidate(candidate);
+#endif
+}
+
+- (void)_didHandleAcceptedCandidate
+{
+    // Overridden by subclasses.
+}
+
+- (void)_didUpdateCandidateListVisibility:(BOOL)visible
+{
+    // Overridden by subclasses.
+}
+
+- (void)_forceRequestCandidates
+{
+    _impl->forceRequestCandidatesForTesting();
+}
+
+- (BOOL)_shouldRequestCandidates
+{
+    return _impl->shouldRequestCandidates();
+}
+
+- (void)_requestActiveNowPlayingSessionInfo
+{
+    if (_page)
+        _page->requestActiveNowPlayingSessionInfo();
+}
+
+- (void)_handleActiveNowPlayingSessionInfoResponse:(BOOL)hasActiveSession title:(NSString *)title duration:(double)duration elapsedTime:(double)elapsedTime
+{
+    // Overridden by subclasses.
+}
+
+- (void)_insertText:(id)string replacementRange:(NSRange)replacementRange
+{
+    [self insertText:string replacementRange:replacementRange];
+}
 #endif // PLATFORM(MAC)
+
+- (void)_setPageScale:(CGFloat)scale withOrigin:(CGPoint)origin
+{
+    _page->scalePage(scale, WebCore::roundedIntPoint(origin));
+}
+
+- (CGFloat)_pageScale
+{
+    return _page->pageScaleFactor();
+}
 
 // Execute the supplied block after the next transaction from the WebProcess.
 - (void)_doAfterNextPresentationUpdate:(void (^)(void))updateBlock
@@ -4568,6 +4782,11 @@ static WebCore::UserInterfaceLayoutDirection toUserInterfaceLayoutDirection(UISe
             Block_release(updateBlockCopy);
         }
     });
+}
+
+- (void)_disableBackForwardSnapshotVolatilityForTesting
+{
+    WebKit::ViewSnapshotStore::singleton().setDisableSnapshotVolatilityForTesting(true);
 }
 
 @end

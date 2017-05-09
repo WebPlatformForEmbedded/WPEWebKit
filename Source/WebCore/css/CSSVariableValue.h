@@ -23,18 +23,18 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef CSSVariableValue_h
-#define CSSVariableValue_h
+#pragma once
 
 #include "CSSValue.h"
 
+// FIXME-NEWPARSER: This will be removed in favor of the new variables implementation.
 namespace WebCore {
 
 class CSSValueList;
 class CSSParserValueList;
 struct CSSParserVariable;
 
-class CSSVariableValue : public CSSValue {
+class CSSVariableValue final : public CSSValue {
 public:
     static Ref<CSSVariableValue> create(CSSParserVariable* Variable)
     {
@@ -66,6 +66,3 @@ private:
 } // namespace WebCore
 
 SPECIALIZE_TYPE_TRAITS_CSS_VALUE(CSSVariableValue, isVariableValue())
-
-#endif
-

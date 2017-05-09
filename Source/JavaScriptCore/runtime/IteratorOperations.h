@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 Yusuke Suzuki <utatane.tea@gmail.com>.
+ * Copyright (C) 2016 Apple Inc. All Rights Reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -23,11 +24,11 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef IteratorOperations_h
-#define IteratorOperations_h
+#pragma once
 
 #include "JSCJSValue.h"
 #include "JSObject.h"
+#include "ThrowScope.h"
 
 namespace JSC {
 
@@ -44,29 +45,27 @@ Structure* createIteratorResultObjectStructure(VM&, JSGlobalObject&);
 JS_EXPORT_PRIVATE JSValue iteratorForIterable(ExecState*, JSValue iterable);
 
 template <typename CallBackType>
-void forEachInIterable(ExecState* state, JSValue iterable, const CallBackType& callback)
+void forEachInIterable(ExecState* exec, JSValue iterable, const CallBackType& callback)
 {
-    auto& vm = state->vm();
-    JSValue iterator = iteratorForIterable(state, iterable);
-    if (vm.exception())
-        return;
+    auto& vm = exec->vm();
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    JSValue iterator = iteratorForIterable(exec, iterable);
+    RETURN_IF_EXCEPTION(scope, void());
     while (true) {
-        JSValue next = iteratorStep(state, iterator);
-        if (next.isFalse() || vm.exception())
+        JSValue next = iteratorStep(exec, iterator);
+        if (next.isFalse() || UNLIKELY(scope.exception()))
             return;
 
-        JSValue nextValue = iteratorValue(state, next);
-        if (vm.exception())
-            return;
+        JSValue nextValue = iteratorValue(exec, next);
+        RETURN_IF_EXCEPTION(scope, void());
 
-        callback(vm, state, nextValue);
-        if (vm.exception()) {
-            iteratorClose(state, iterator);
+        callback(vm, exec, nextValue);
+        if (UNLIKELY(scope.exception())) {
+            iteratorClose(exec, iterator);
             return;
         }
     }
 }
 
-}
-
-#endif // !defined(IteratorOperations_h)
+} // namespace JSC

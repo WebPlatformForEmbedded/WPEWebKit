@@ -51,13 +51,6 @@ enum class XSSProtectionDisposition {
     BlockEnabled,
 };
 
-enum ContentDispositionType {
-    ContentDispositionNone,
-    ContentDispositionInline,
-    ContentDispositionAttachment,
-    ContentDispositionOther
-};
-
 #if ENABLE(NOSNIFF)
 enum ContentTypeOptionsDisposition {
     ContentTypeOptionsNone,
@@ -74,11 +67,10 @@ enum XFrameOptionsDisposition {
     XFrameOptionsConflict
 };
 
-ContentDispositionType contentDispositionType(const String&);
 bool isValidReasonPhrase(const String&);
 bool isValidHTTPHeaderValue(const String&);
 bool isValidHTTPToken(const String&);
-bool parseHTTPRefresh(const String& refresh, bool fromHttpEquivMeta, double& delay, String& url);
+bool parseHTTPRefresh(const String& refresh, double& delay, String& url);
 Optional<std::chrono::system_clock::time_point> parseHTTPDate(const String&);
 String filenameFromHTTPContentDisposition(const String&);
 String extractMIMETypeFromMediaType(const String&);
@@ -89,7 +81,7 @@ AtomicString extractReasonPhraseFromHTTPStatusLine(const String&);
 XFrameOptionsDisposition parseXFrameOptionsHeader(const String&);
 
 // -1 could be set to one of the return parameters to indicate the value is not specified.
-bool parseRange(const String&, long long& rangeOffset, long long& rangeEnd, long long& rangeSuffixLength);
+WEBCORE_EXPORT bool parseRange(const String&, long long& rangeOffset, long long& rangeEnd, long long& rangeSuffixLength);
 
 #if ENABLE(NOSNIFF)
 ContentTypeOptionsDisposition parseContentTypeOptionsHeader(const String& header);

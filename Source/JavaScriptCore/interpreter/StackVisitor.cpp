@@ -28,11 +28,10 @@
 
 #include "ClonedArguments.h"
 #include "DebuggerPrimitives.h"
-#include "Executable.h"
 #include "InlineCallFrame.h"
 #include "Interpreter.h"
 #include "JSCInlines.h"
-#include <wtf/DataLog.h>
+#include <wtf/text/StringBuilder.h>
 
 namespace JSC {
 
@@ -396,7 +395,7 @@ void StackVisitor::Frame::dump(PrintStream& out, Indenter indent, std::function<
             " ", RawPointer(reinterpret_cast<void*>(locationRawBits)), "\n");
         out.print(indent, "codeBlock: ", RawPointer(codeBlock));
         if (codeBlock)
-            out.print(*codeBlock);
+            out.print(" ", *codeBlock);
         out.print("\n");
         if (codeBlock && !isInlined) {
             indent++;

@@ -33,28 +33,28 @@
 #include "Dictionary.h"
 #include "Event.h"
 #include "EventNames.h"
-#include "ExceptionCode.h"
-#include "ExceptionCodePlaceholder.h"
+#include "JSOverconstrainedError.h"
 #include "MediaConstraintsImpl.h"
 #include "MediaSourceSettings.h"
 #include "MediaStream.h"
 #include "MediaStreamPrivate.h"
 #include "MediaTrackConstraints.h"
 #include "NotImplemented.h"
+#include "OverconstrainedError.h"
 #include "ScriptExecutionContext.h"
 #include <wtf/NeverDestroyed.h>
 
 namespace WebCore {
 
-Ref<MediaStreamTrack> MediaStreamTrack::create(ScriptExecutionContext& context, MediaStreamTrackPrivate& privateTrack)
+Ref<MediaStreamTrack> MediaStreamTrack::create(ScriptExecutionContext& context, Ref<MediaStreamTrackPrivate>&& privateTrack)
 {
-    return adoptRef(*new MediaStreamTrack(context, privateTrack));
+    return adoptRef(*new MediaStreamTrack(context, WTFMove(privateTrack)));
 }
 
-MediaStreamTrack::MediaStreamTrack(ScriptExecutionContext& context, MediaStreamTrackPrivate& privateTrack)
-    : RefCounted()
-    , ActiveDOMObject(&context)
-    , m_private(privateTrack)
+MediaStreamTrack::MediaStreamTrack(ScriptExecutionContext& context, Ref<MediaStreamTrackPrivate>&& privateTrack)
+    : ActiveDOMObject(&context)
+    , m_private(WTFMove(privateTrack))
+    , m_weakPtrFactory(this)
 {
     suspendIfNeeded();
 
@@ -121,9 +121,9 @@ bool MediaStreamTrack::ended() const
     return m_ended || m_private->ended();
 }
 
-RefPtr<MediaStreamTrack> MediaStreamTrack::clone()
+Ref<MediaStreamTrack> MediaStreamTrack::clone()
 {
-    return MediaStreamTrack::create(*scriptExecutionContext(), *m_private->clone());
+    return MediaStreamTrack::create(*scriptExecutionContext(), m_private->clone());
 }
 
 void MediaStreamTrack::stopProducingData()
@@ -167,18 +167,37 @@ RefPtr<RealtimeMediaSourceCapabilities> MediaStreamTrack::getCapabilities() cons
     return m_private->capabilities();
 }
 
-void MediaStreamTrack::applyConstraints(const Dictionary& constraints)
+void MediaStreamTrack::applyConstraints(Ref<MediaConstraints>&& constraints, DOMPromise<void>&& promise)
 {
-    // FIXME: Implement correctly. https://bugs.webkit.org/show_bug.cgi?id=160579
+    if (!constraints->isValid()) {
+        promise.reject(TypeError);
+        return;
+    }
 
-    m_constraints->initialize(constraints);
-    m_private->applyConstraints(*m_constraints);
+    m_constraints = WTFMove(constraints);
+    m_promise = WTFMove(promise);
+
+    applyConstraints(*m_constraints);
 }
 
-void MediaStreamTrack::applyConstraints(const MediaConstraints&)
+void MediaStreamTrack::applyConstraints(const MediaConstraints& constraints)
 {
-    // FIXME: apply the new constraints to the track
-    // https://bugs.webkit.org/show_bug.cgi?id=122428
+    auto weakThis = createWeakPtr();
+    std::function<void(const String&, const String&)> failureHandler = [weakThis](const String& failedConstraint, const String& message) {
+        if (!weakThis || !weakThis->m_promise)
+            return;
+
+        weakThis->m_promise->reject(OverconstrainedError::create(failedConstraint, message).get());
+    };
+
+    std::function<void()> successHandler = [weakThis]() {
+        if (!weakThis || !weakThis->m_promise)
+            return;
+
+        weakThis->m_promise->resolve();
+    };
+
+    m_private->applyConstraints(constraints, successHandler, failureHandler);
 }
 
 void MediaStreamTrack::addObserver(MediaStreamTrack::Observer* observer)

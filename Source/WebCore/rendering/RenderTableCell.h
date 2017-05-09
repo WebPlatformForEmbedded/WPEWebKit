@@ -22,8 +22,7 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#ifndef RenderTableCell_h
-#define RenderTableCell_h
+#pragma once
 
 #include "RenderBlockFlow.h"
 #include "RenderTableRow.h"
@@ -286,6 +285,8 @@ inline LayoutUnit RenderTableCell::logicalHeightForRowSizing() const
 {
     // FIXME: This function does too much work, and is very hot during table layout!
     LayoutUnit adjustedLogicalHeight = logicalHeight() - (intrinsicPaddingBefore() + intrinsicPaddingAfter());
+    if (!style().logicalHeight().isSpecified())
+        return adjustedLogicalHeight;
     LayoutUnit styleLogicalHeight = valueForLength(style().logicalHeight(), 0);
     // In strict mode, box-sizing: content-box do the right thing and actually add in the border and padding.
     // Call computedCSSPadding* directly to avoid including implicitPadding.
@@ -382,5 +383,3 @@ inline std::unique_ptr<RenderBox> RenderTableCell::createAnonymousBoxWithSameTyp
 } // namespace WebCore
 
 SPECIALIZE_TYPE_TRAITS_RENDER_OBJECT(RenderTableCell, isTableCell())
-
-#endif // RenderTableCell_h

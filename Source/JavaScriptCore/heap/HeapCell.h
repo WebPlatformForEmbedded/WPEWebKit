@@ -25,9 +25,24 @@
 
 #pragma once
 
+#include "DestructionMode.h"
+
+#if COMPILER(GCC_OR_CLANG)
+#define HEAPCELL_ALIGNMENT __attribute__ ((aligned (sizeof(void*))))
+#else
+#define HEAPCELL_ALIGNMENT
+#endif
+
 namespace JSC {
 
-class HeapCell {
+class CellContainer;
+class Heap;
+class LargeAllocation;
+class MarkedBlock;
+class VM;
+struct AllocatorAttributes;
+
+class HEAPCELL_ALIGNMENT HeapCell {
 public:
     enum Kind : int8_t {
         JSCell,
@@ -36,8 +51,27 @@ public:
     
     HeapCell() { }
     
-    void zap() { *reinterpret_cast<uintptr_t**>(this) = 0; }
-    bool isZapped() const { return !*reinterpret_cast<uintptr_t* const*>(this); }
+    void zap() { *reinterpret_cast_ptr<uintptr_t**>(this) = 0; }
+    bool isZapped() const { return !*reinterpret_cast_ptr<uintptr_t* const*>(this); }
+    
+    bool isLargeAllocation() const;
+    CellContainer cellContainer() const;
+    MarkedBlock& markedBlock() const;
+    LargeAllocation& largeAllocation() const;
+
+    // If you want performance and you know that your cell is small, you can do this instead:
+    // ASSERT(!cell->isLargeAllocation());
+    // cell->markedBlock().vm()
+    // We currently only use this hack for callees to make ExecState::vm() fast. It's not
+    // recommended to use it for too many other things, since the large allocation cutoff is
+    // a runtime option and its default value is small (400 bytes).
+    Heap* heap() const;
+    VM* vm() const;
+    
+    size_t cellSize() const;
+    AllocatorAttributes allocatorAttributes() const;
+    DestructionMode destructionMode() const;
+    Kind cellKind() const;
 };
 
 } // namespace JSC

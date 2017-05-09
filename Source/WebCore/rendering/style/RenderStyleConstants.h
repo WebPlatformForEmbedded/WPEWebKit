@@ -23,8 +23,7 @@
  *
  */
 
-#ifndef RenderStyleConstants_h
-#define RenderStyleConstants_h
+#pragma once
 
 #include <initializer_list>
 
@@ -696,6 +695,21 @@ enum class TrailingWord {
 };
 #endif
 
+#if ENABLE(APPLE_PAY)
+enum class ApplePayButtonStyle {
+    White,
+    WhiteOutline,
+    Black,
+};
+
+enum class ApplePayButtonType {
+    Plain,
+    Buy,
+    SetUp,
+    Other,
+};
+#endif
+
 TextStream& operator<<(TextStream&, EFillSizeType);
 TextStream& operator<<(TextStream&, EFillAttachment);
 TextStream& operator<<(TextStream&, EFillBox);
@@ -704,5 +718,3 @@ TextStream& operator<<(TextStream&, EMaskSourceType);
 TextStream& operator<<(TextStream&, Edge);
 
 } // namespace WebCore
-
-#endif // RenderStyleConstants_h

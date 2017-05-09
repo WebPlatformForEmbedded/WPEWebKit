@@ -494,14 +494,14 @@ void RemoteLayerTreeDrawingArea::BackingStoreFlusher::flush()
         CGContextFlush(context.get());
     m_hasFlushed = true;
 
-    m_connection->sendMessage(WTFMove(m_commitEncoder));
+    m_connection->sendMessage(WTFMove(m_commitEncoder), { });
 }
 
-void RemoteLayerTreeDrawingArea::viewStateDidChange(ViewState::Flags, bool wantsDidUpdateViewState, const Vector<uint64_t>&)
+void RemoteLayerTreeDrawingArea::activityStateDidChange(ActivityState::Flags, bool wantsDidUpdateActivityState, const Vector<uint64_t>&)
 {
     // FIXME: Should we suspend painting while not visible, like TiledCoreAnimationDrawingArea? Probably.
 
-    if (wantsDidUpdateViewState)
+    if (wantsDidUpdateActivityState)
         scheduleCompositingLayerFlushImmediately();
 }
 

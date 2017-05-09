@@ -22,8 +22,7 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#ifndef RenderTableRow_h
-#define RenderTableRow_h
+#pragma once
 
 #include "RenderTableSection.h"
 
@@ -62,6 +61,8 @@ public:
     void addChild(RenderObject* child, RenderObject* beforeChild = 0) override;
 
     bool nodeAtPoint(const HitTestRequest&, HitTestResult&, const HitTestLocation& locationInContainer, const LayoutPoint& accumulatedOffset, HitTestAction) override;
+
+    void destroyAndCollapseAnonymousSiblingRows();
 
 private:
     static std::unique_ptr<RenderTableRow> createTableRowWithStyle(Document&, const RenderStyle&);
@@ -157,5 +158,3 @@ inline std::unique_ptr<RenderBox> RenderTableRow::createAnonymousBoxWithSameType
 } // namespace WebCore
 
 SPECIALIZE_TYPE_TRAITS_RENDER_OBJECT(RenderTableRow, isTableRow())
-
-#endif // RenderTableRow_h

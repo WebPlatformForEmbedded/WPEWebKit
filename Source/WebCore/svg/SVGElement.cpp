@@ -27,7 +27,6 @@
 #include "SVGElement.h"
 
 #include "CSSParser.h"
-#include "DOMImplementation.h"
 #include "Document.h"
 #include "ElementIterator.h"
 #include "Event.h"
@@ -302,7 +301,7 @@ int SVGElement::tabIndex() const
 
 bool SVGElement::willRecalcStyle(Style::Change change)
 {
-    if (!m_svgRareData || styleChangeType() == SyntheticStyleChange)
+    if (!m_svgRareData || styleResolutionShouldRecompositeLayer())
         return true;
     // If the style changes because of a regular property change (not induced by SMIL animations themselves)
     // reset the "computed style without SMIL style properties", so the base value change gets reflected.
@@ -360,11 +359,6 @@ void SVGElement::reportAttributeParsingError(SVGParsingError error, const Qualif
     }
 
     ASSERT_NOT_REACHED();
-}
-
-bool SVGElement::isSupported(StringImpl* feature, StringImpl* version) const
-{
-    return DOMImplementation::hasFeature(feature, version);
 }
 
 void SVGElement::removedFrom(ContainerNode& rootParent)
@@ -438,7 +432,7 @@ SVGUseElement* SVGElement::correspondingUseElement() const
     auto* root = containingShadowRoot();
     if (!root)
         return nullptr;
-    if (root->mode() != ShadowRoot::Mode::UserAgent)
+    if (root->mode() != ShadowRootMode::UserAgent)
         return nullptr;
     auto* host = root->host();
     if (!is<SVGUseElement>(host))

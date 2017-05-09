@@ -21,8 +21,7 @@
  *
  */
 
-#ifndef HTMLFrameSetElement_h
-#define HTMLFrameSetElement_h
+#pragma once
 
 #include "HTMLElement.h"
 #include <memory>
@@ -58,7 +57,7 @@ private:
     bool rendererIsNeeded(const RenderStyle&) final;
     RenderPtr<RenderElement> createElementRenderer(RenderStyle&&, const RenderTreePosition&) final;
     
-    void defaultEventHandler(Event*) final;
+    void defaultEventHandler(Event&) final;
 
     bool willRecalcStyle(Style::Change) final;
 
@@ -82,5 +81,3 @@ private:
 };
 
 } // namespace WebCore
-
-#endif // HTMLFrameSetElement_h
