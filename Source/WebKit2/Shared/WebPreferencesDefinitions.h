@@ -121,6 +121,7 @@
     macro(AcceleratedCompositingEnabled, acceleratedCompositingEnabled, Bool, bool, true, "", "") \
     macro(ForceCompositingMode, forceCompositingMode, Bool, bool, false, "", "") \
     macro(CanvasUsesAcceleratedDrawing, canvasUsesAcceleratedDrawing, Bool, bool, DEFAULT_CANVAS_USES_ACCELERATED_DRAWING, "", "") \
+    macro(AllowScriptsToCloseWindows, allowScriptsToCloseWindows, Bool, bool, false, "", "") \
     macro(WebGLEnabled, webGLEnabled, Bool, bool, true, "", "") \
     macro(ForceSoftwareWebGLRendering, forceSoftwareWebGLRendering, Bool, bool, false, "", "") \
     macro(Accelerated2dCanvasEnabled, accelerated2dCanvasEnabled, Bool, bool, false, "", "") \
