@@ -53,4 +53,13 @@ void WebFormClient::willSubmitForm(WebPageProxy& page, WebFrameProxy& frame, Web
     m_client.willSubmitForm(toAPI(&page), toAPI(&frame), toAPI(&sourceFrame), toAPI(textFieldsMap.ptr()), toAPI(userData), toAPI(&listener.get()), m_client.base.clientInfo);
 }
 
+void WebFormClient::inputFocusChanged(WebPageProxy& page, const String& elemId, const String& elemName, const String& elemType, const String& elemValue)
+{
+    if (!m_client.inputFocusChanged) {
+        return;
+    }
+
+    m_client.inputFocusChanged(toAPI(&page), toAPI(elemId.impl()), toAPI(elemName.impl()), toAPI(elemType.impl()), toAPI(elemValue.impl()), m_client.base.clientInfo);
+}
+
 } // namespace WebKit
