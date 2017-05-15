@@ -325,6 +325,12 @@ void AudioFileReader::decodeAudioForBusCreation()
     }
 
     m_decodebin = gst_element_factory_make("decodebin", "decodebin");
+#if PLATFORM(BROADCOM)
+    static GstStaticCaps default_raw_caps = GST_STATIC_CAPS("audio/x-brcm-native; video/x-brcm-native");
+    g_object_set(m_decodebin.get(), "caps", gst_static_caps_get (&default_raw_caps), nullptr);
+    auto cb = [](AudioFileReader* reader) {gst_element_set_state(reader->m_pipeline.get(), GST_STATE_PLAYING);};
+    g_signal_connect_swapped(m_decodebin.get(), "no-more-pads", G_CALLBACK(static_cast<void(*)(AudioFileReader*)>(cb)), this);
+#endif
     g_signal_connect_swapped(m_decodebin.get(), "pad-added", G_CALLBACK(decodebinPadAddedCallback), this);
 
     gst_bin_add_many(GST_BIN(m_pipeline.get()), source, m_decodebin.get(), NULL);
