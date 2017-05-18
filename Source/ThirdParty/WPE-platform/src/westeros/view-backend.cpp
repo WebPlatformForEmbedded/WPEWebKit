@@ -31,6 +31,9 @@
 #include "WesterosViewbackendOutput.h"
 #include <cstdio>
 #include <cstdlib>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <wayland-server.h>
 #include <westeros-compositor.h>
 
 namespace Westeros {
@@ -142,7 +145,17 @@ struct wpe_view_backend_interface westeros_view_backend_interface = {
     // get_renderer_host_fd
     [](void* data) -> int
     {
-        return -1;
+        auto& backend = *static_cast<Westeros::ViewBackend*>(data);
+
+        int sockets[2];
+        int ret = socketpair(AF_UNIX, SOCK_STREAM, 0, sockets);
+        if (ret == -1)
+            fprintf(stderr, "%s in %d, NOT ABLE TO CREATE A SOCKET PAIR\n", __PRETTY_FUNCTION__, getpid());
+
+        wl_display* display = WstCompositorGetDisplay(backend.compositor);
+        wl_client_create(display, sockets[0]);
+
+        return sockets[1];
     },
 };
 

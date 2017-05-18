@@ -63,11 +63,11 @@ public:
             return false;
 
         int wpeFd = atoi(argv[2]);
-        RunLoop::main().dispatch(
-            [wpeFd] {
-                RELEASE_ASSERT(is<PlatformDisplayWPE>(PlatformDisplay::sharedDisplay()));
-                downcast<PlatformDisplayWPE>(PlatformDisplay::sharedDisplay()).initialize(wpeFd);
-            });
+//        RunLoop::main().dispatch(
+//            [wpeFd] {
+//                RELEASE_ASSERT(is<PlatformDisplayWPE>(PlatformDisplay::sharedDisplay()));
+//                downcast<PlatformDisplayWPE>(PlatformDisplay::sharedDisplay()).initialize(wpeFd);
+//            });
         return true;
     }
 };

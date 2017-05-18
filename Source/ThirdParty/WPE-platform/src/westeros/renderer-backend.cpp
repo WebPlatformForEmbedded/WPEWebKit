@@ -152,7 +152,7 @@ GSourceFuncs EventSource::sourceFuncs = {
 
 class Backend {
 public:
-    Backend();
+    explicit Backend(int fd);
     ~Backend();
 
     struct wl_display* display() const { return m_display; }
@@ -169,9 +169,9 @@ private:
     GSource* m_eventSource { nullptr };
 };
 
-Backend::Backend()
+Backend::Backend(int fd)
 {
-    m_display = wl_display_connect(nullptr);
+    m_display = wl_display_connect_to_fd(fd);
     if (!m_display)
         return;
 
@@ -314,9 +314,9 @@ extern "C" {
 
 struct wpe_renderer_backend_egl_interface westeros_renderer_backend_egl_interface = {
     // create
-    [](int) -> void*
+    [](int fd) -> void*
     {
-        return new Westeros::Backend;
+        return new Westeros::Backend(fd);
     },
     // destroy
     [](void* data)
