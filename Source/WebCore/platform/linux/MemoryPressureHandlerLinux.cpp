@@ -135,6 +135,12 @@ MemoryPressureHandler::EventFDPoller::EventFDPoller(int fd, std::function<void (
 
 MemoryPressureHandler::EventFDPoller::~EventFDPoller()
 {
+    if (m_fd.value() == -1) {
+        if (m_threadID)
+            detachThread(m_threadID);
+        return;
+    }
+
     m_fd = Nullopt;
     if (m_source)
         g_source_destroy(m_source.get());
