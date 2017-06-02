@@ -42,7 +42,7 @@ public:
 private:
     void paintCheckbox(ControlStates&, GraphicsContext&, const FloatRect&, float);
     void paintRadio(ControlStates&, GraphicsContext&, const FloatRect&, float);
-    void paintButton(ControlStates&, GraphicsContext&, const FloatRect&, float);
+    void paintButton(ControlPart, ControlStates&, GraphicsContext&, const FloatRect&, float);
 };
 
 } // namespace WebCore
