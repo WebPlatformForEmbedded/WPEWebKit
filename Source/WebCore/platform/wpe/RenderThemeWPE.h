@@ -43,6 +43,12 @@ public:
     String mediaControlsScript() override;
 #endif
 
+    virtual LengthBox popupInternalPaddingBox(const RenderStyle&) const override;
+
+protected:
+    virtual bool paintMenuList(const RenderObject&, const PaintInfo&, const FloatRect&) override;
+    virtual bool paintMenuListButtonDecorations(const RenderBox&, const PaintInfo&, const FloatRect&) override;
+
 private:
     RenderThemeWPE() = default;
     virtual ~RenderThemeWPE() = default;
