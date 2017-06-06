@@ -30,6 +30,7 @@
 #include "NativeWebMouseEvent.h"
 #include "WPEView.h"
 #include "WebContextMenuProxy.h"
+#include "WebPopupMenuProxyWPE.h"
 #include <WebCore/NotImplemented.h>
 #include <WebCore/ActivityState.h>
 
@@ -205,9 +206,9 @@ void PageClientImpl::wheelEventWasNotHandledByWebCore(const NativeWebWheelEvent&
 {
 }
 
-RefPtr<WebPopupMenuProxy> PageClientImpl::createPopupMenuProxy(WebPageProxy&)
+RefPtr<WebPopupMenuProxy> PageClientImpl::createPopupMenuProxy(WebPageProxy& page)
 {
-    return nullptr;
+    return WebPopupMenuProxyWPE::create(page);
 }
 
 #if ENABLE(CONTEXT_MENUS)
