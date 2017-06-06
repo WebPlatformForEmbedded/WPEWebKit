@@ -148,6 +148,7 @@ list(APPEND WebKit2_SOURCES
     UIProcess/wpe/WebInspectorProxyWPE.cpp
     UIProcess/wpe/WebPageProxyWPE.cpp
     UIProcess/wpe/WebPasteboardProxyWPE.cpp
+    UIProcess/wpe/WebPopupMenuProxyWPE.cpp
     UIProcess/wpe/WebPreferencesWPE.cpp
     UIProcess/wpe/WebProcessPoolWPE.cpp
 
@@ -250,6 +251,7 @@ list(APPEND WebKit2_INCLUDE_DIRECTORIES
     "${WEBKIT2_DIR}/UIProcess/Network/CustomProtocols/soup"
     "${WEBKIT2_DIR}/UIProcess/linux"
     "${WEBKIT2_DIR}/UIProcess/soup"
+    "${WEBKIT2_DIR}/UIProcess/wpe"
     "${WEBKIT2_DIR}/WebProcess/soup"
     "${WEBKIT2_DIR}/WebProcess/unix"
     "${WEBKIT2_DIR}/WebProcess/WebCoreSupport/soup"
