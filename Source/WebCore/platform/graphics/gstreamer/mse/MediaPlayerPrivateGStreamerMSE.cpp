@@ -357,6 +357,27 @@ bool MediaPlayerPrivateGStreamerMSE::doSeek()
     webKitMediaSrcPrepareSeek(WEBKIT_MEDIA_SRC(m_source.get()), seekTime);
 
     m_gstSeekCompleted = false;
+
+    // flush append pipelines to discard unneeded buffers
+    for (auto iterator : m_appendPipelinesMap) {
+        gboolean ret = FALSE;
+        GstEvent *start_event, *stop_event;
+
+        GST_INFO_OBJECT(iterator.value.get(), "flushing append pipeline");
+        start_event = gst_event_new_flush_start();
+        stop_event = gst_event_new_flush_stop(FALSE);
+
+        ret = gst_element_send_event(GST_ELEMENT(iterator.value.get()), start_event);
+        if (!ret) {
+            GST_INFO_OBJECT(iterator.value.get(), "failed to send flush-start event to append pipeline");
+        }
+
+        ret = gst_element_send_event(GST_ELEMENT(iterator.value.get()), stop_event);
+        if (!ret) {
+            GST_INFO_OBJECT(iterator.value.get(), "failed to send flush-stop event to append pipeline");
+        }
+    }
+
     if (!gst_element_seek(m_pipeline.get(), rate, GST_FORMAT_TIME, seekType, GST_SEEK_TYPE_SET, startTime, GST_SEEK_TYPE_SET, endTime)) {
         webKitMediaSrcSetReadyForSamples(WEBKIT_MEDIA_SRC(m_source.get()), true);
         m_seeking = false;
