@@ -3007,6 +3007,7 @@ void WebPage::updatePreferences(const WebPreferencesStore& store)
     settings.setAcceleratedDrawingEnabled(store.getBoolValueForKey(WebPreferencesKey::acceleratedDrawingEnabledKey()));
     settings.setDisplayListDrawingEnabled(store.getBoolValueForKey(WebPreferencesKey::displayListDrawingEnabledKey()));
     settings.setCanvasUsesAcceleratedDrawing(store.getBoolValueForKey(WebPreferencesKey::canvasUsesAcceleratedDrawingKey()));
+    settings.setAllowScriptsToCloseWindows(store.getBoolValueForKey(WebPreferencesKey::allowScriptsToCloseWindowsKey()));
     settings.setShowDebugBorders(store.getBoolValueForKey(WebPreferencesKey::compositingBordersVisibleKey()));
     settings.setShowRepaintCounter(store.getBoolValueForKey(WebPreferencesKey::compositingRepaintCountersVisibleKey()));
     settings.setShowTiledScrollingIndicator(store.getBoolValueForKey(WebPreferencesKey::tiledScrollingIndicatorVisibleKey()));

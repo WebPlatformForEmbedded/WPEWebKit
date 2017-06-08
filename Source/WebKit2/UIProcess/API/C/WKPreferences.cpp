@@ -403,6 +403,16 @@ bool WKPreferencesGetCanvasUsesAcceleratedDrawing(WKPreferencesRef preferencesRe
     return toImpl(preferencesRef)->canvasUsesAcceleratedDrawing();
 }
 
+void WKPreferencesSetAllowScriptsToCloseWindows(WKPreferencesRef preferencesRef, bool flag)
+{
+    toImpl(preferencesRef)->setAllowScriptsToCloseWindows(flag);
+}
+
+bool WKPreferencesGetAllowScriptsToCloseWindows(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->allowScriptsToCloseWindows();
+}
+
 void WKPreferencesSetAcceleratedCompositingEnabled(WKPreferencesRef preferencesRef, bool flag)
 {
     toImpl(preferencesRef)->setAcceleratedCompositingEnabled(flag);
