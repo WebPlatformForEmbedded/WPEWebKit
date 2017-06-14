@@ -644,7 +644,7 @@ bool MediaPlayerPrivateGStreamerBase::ensureGstGLContext()
 // Returns the size of the video
 FloatSize MediaPlayerPrivateGStreamerBase::naturalSize() const
 {
-#if USE(HOLE_PUNCH_GSTREAMER) && !USE(FUSION_SINK)
+#if USE(HOLE_PUNCH_GSTREAMER) && !USE(FUSION_SINK) && !USE(WESTEROS_SINK)
     // We don't care about the natural size of the video, the external sink will deal with it.
     // This means that the video will always have the size of the <video> component or the default 300x150
     return m_size;
@@ -659,14 +659,12 @@ FloatSize MediaPlayerPrivateGStreamerBase::naturalSize() const
     WTF::GMutexLocker<GMutex> lock(m_sampleMutex);
 
     GRefPtr<GstCaps> caps;
-    // We may not have enough data available for the video sink yet.
-    if (!GST_IS_SAMPLE(m_sample.get()))
-        return FloatSize();
 
-    if (GST_IS_SAMPLE(m_sample.get()) && !caps)
+    if (GST_IS_SAMPLE(m_sample.get())){
+	// If there's a sample, get the caps from it.
         caps = gst_sample_get_caps(m_sample.get());
-
-    if (!caps) {
+    } else {
+	// If there's no sample, try to get the caps from the video sink.
         GRefPtr<GstPad> videoSinkPad = adoptGRef(gst_element_get_static_pad(m_videoSink.get(), "sink"));
         if (videoSinkPad)
             caps = gst_pad_get_current_caps(videoSinkPad.get());
