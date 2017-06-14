@@ -96,7 +96,7 @@ View::View(struct wpe_view_backend* backend, const API::PageConfiguration& baseC
     };
     wpe_view_backend_set_backend_client(m_backend, &s_backendClient, this);
 
-    static struct wpe_view_backend_input_client s_inputClient = {
+    static struct wpe_input_client s_inputClient = {
         // handle_keyboard_event
         [](void* data, struct wpe_input_keyboard_event* event)
         {
