@@ -26,6 +26,7 @@
 #ifndef IntRect_h
 #define IntRect_h
 
+#include "IntDim.h"
 #include "IntPoint.h"
 #include "LayoutUnit.h"
 
@@ -75,15 +76,32 @@ public:
         : m_location(location), m_size(size) { }
     IntRect(int x, int y, int width, int height)
         : m_location(IntPoint(x, y)), m_size(IntSize(width, height)) { }
+    IntRect(const IntDim& x, const IntDim& y)
+        : m_location(IntPoint(x.start(), y.start())), m_size(IntSize(x.length(), y.length())) { }
 
     WEBCORE_EXPORT explicit IntRect(const FloatRect&); // don't do this implicitly since it's lossy
     WEBCORE_EXPORT explicit IntRect(const LayoutRect&); // don't do this implicitly since it's lossy
-        
+
     IntPoint location() const { return m_location; }
     IntSize size() const { return m_size; }
 
+    IntDim xDimension() const { return IntDim(m_location.x(), m_size.width()); }
+    IntDim yDimension() const { return IntDim(m_location.y(), m_size.height()); }
+
     void setLocation(const IntPoint& location) { m_location = location; }
     void setSize(const IntSize& size) { m_size = size; }
+
+    void setXDimension(const IntDim& dim)
+    {
+        m_location.setX(dim.start());
+        m_size.setWidth(dim.length());
+    }
+
+    void setYDimension(const IntDim& dim)
+    {
+        m_location.setY(dim.start());
+        m_size.setHeight(dim.length());
+    }
 
     int x() const { return m_location.x(); }
     int y() const { return m_location.y(); }
@@ -106,9 +124,9 @@ public:
     // center point.
     IntPoint center() const { return IntPoint(x() + width() / 2, y() + height() / 2); }
 
-    void move(const IntSize& size) { m_location += size; } 
+    void move(const IntSize& size) { m_location += size; }
     void moveBy(const IntPoint& offset) { m_location.move(offset.x(), offset.y()); }
-    void move(int dx, int dy) { m_location.move(dx, dy); } 
+    void move(int dx, int dy) { m_location.move(dx, dy); }
 
     void expand(const IntSize& size) { m_size += size; }
     void expand(int dw, int dh) { m_size.expand(dw, dh); }
@@ -142,7 +160,7 @@ public:
     IntPoint maxXMinYCorner() const { return IntPoint(m_location.x() + m_size.width(), m_location.y()); } // typically topRight
     IntPoint minXMaxYCorner() const { return IntPoint(m_location.x(), m_location.y() + m_size.height()); } // typically bottomLeft
     IntPoint maxXMaxYCorner() const { return IntPoint(m_location.x() + m_size.width(), m_location.y() + m_size.height()); } // typically bottomRight
-    
+
     WEBCORE_EXPORT bool intersects(const IntRect&) const;
     WEBCORE_EXPORT bool contains(const IntRect&) const;
 
