@@ -227,7 +227,7 @@ void PageClientImpl::wheelEventWasNotHandledByWebCore(const NativeWebWheelEvent&
 
 RefPtr<WebPopupMenuProxy> PageClientImpl::createPopupMenuProxy(WebPageProxy& page)
 {
-    return WebPopupMenuProxyWPE::create(page);
+    return WebPopupMenuProxyWPE::create(m_view.backend(), page, m_view);
 }
 
 #if ENABLE(CONTEXT_MENUS)
