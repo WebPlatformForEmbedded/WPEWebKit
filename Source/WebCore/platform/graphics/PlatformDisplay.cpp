@@ -129,6 +129,7 @@ void PlatformDisplay::setSharedDisplayForCompositing(PlatformDisplay& display)
 PlatformDisplay::PlatformDisplay()
 #if USE(EGL)
     : m_eglDisplay(EGL_NO_DISPLAY)
+    , m_eglPlatform(0)
 #endif
 {
 }
@@ -161,6 +162,13 @@ EGLDisplay PlatformDisplay::eglDisplay() const
     if (!m_eglDisplayInitialized)
         const_cast<PlatformDisplay*>(this)->initializeEGLDisplay();
     return m_eglDisplay;
+}
+
+EGLenum PlatformDisplay::eglPlatform() const
+{
+    if (!m_eglDisplayInitialized)
+        const_cast<PlatformDisplay*>(this)->initializeEGLDisplay();
+    return m_eglPlatform;
 }
 
 bool PlatformDisplay::eglCheckVersion(int major, int minor) const

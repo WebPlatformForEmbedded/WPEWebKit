@@ -31,6 +31,7 @@
 
 #if USE(EGL)
 typedef void *EGLDisplay;
+typedef unsigned int EGLenum;
 #endif
 
 namespace WebCore {
@@ -69,6 +70,7 @@ public:
 
 #if USE(EGL)
     EGLDisplay eglDisplay() const;
+    EGLenum eglPlatform() const;
     bool eglCheckVersion(int major, int minor) const;
 #endif
 
@@ -81,6 +83,7 @@ protected:
     virtual void initializeEGLDisplay();
 
     EGLDisplay m_eglDisplay;
+    EGLenum m_eglPlatform;
 #endif
 
 #if USE(EGL) || USE(GLX)

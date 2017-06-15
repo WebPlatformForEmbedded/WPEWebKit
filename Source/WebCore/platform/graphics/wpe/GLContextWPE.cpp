@@ -28,6 +28,7 @@
 #include <cairo-gl.h>
 #endif
 #endif
+#include <EGL/eglext.h>
 
 namespace WebCore {
 
@@ -113,10 +114,30 @@ std::unique_ptr<GLContextWPE> GLContextWPE::createWindowContext(EGLNativeWindowT
     if (context == EGL_NO_CONTEXT)
         return nullptr;
 
-    EGLSurface surface = eglCreateWindowSurface(display, config, window, 0);
+    EGLSurface surface = EGL_NO_SURFACE;
+
+#ifdef EGL_EXT_platform_base
+    const char* extensions = eglQueryString(EGL_NO_DISPLAY, EGL_EXTENSIONS);
+    auto proc = reinterpret_cast<PFNEGLCREATEPLATFORMWINDOWSURFACEEXTPROC>(eglGetProcAddress("eglCreatePlatformWindowSurfaceEXT"));
+
+    if (extensions && strstr(extensions, "EGL_EXT_platform_base") && proc && platformDisplay.eglPlatform()) {
+        surface = proc(display, config, window, 0);
+
+        if (surface == EGL_NO_SURFACE) {
+            fprintf(stderr, "GLContentWPE: Cannot create platform window surface\n");
+            eglDestroyContext(display, context);
+            return nullptr;
+        }
+    }
+#endif
+
     if (surface == EGL_NO_SURFACE) {
-        eglDestroyContext(display, context);
-        return nullptr;
+        surface = eglCreateWindowSurface(display, config, window, 0);
+        if (surface == EGL_NO_SURFACE) {
+            fprintf(stderr, "GLContextWPE: Cannot create window surface\n");
+            eglDestroyContext(display, context);
+            return nullptr;
+        }
     }
 
     return std::unique_ptr<GLContextWPE>(new GLContextWPE(platformDisplay, context, surface, WindowSurface));
