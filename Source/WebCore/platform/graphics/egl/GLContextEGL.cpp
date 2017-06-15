@@ -24,6 +24,7 @@
 #include "GraphicsContext3D.h"
 #include "PlatformDisplay.h"
 #include <EGL/egl.h>
+#include <EGL/eglext.h>
 
 #if USE(CAIRO)
 #include <cairo.h>
@@ -116,7 +117,15 @@ std::unique_ptr<GLContextEGL> GLContextEGL::createWindowContext(GLNativeWindowTy
         surface = createWindowSurfaceWayland(display, config, window);
 #endif
 #else
-    surface = eglCreateWindowSurface(display, config, static_cast<EGLNativeWindowType>(window), nullptr);
+#ifdef EGL_EXT_platform_base
+    const char* extensions = eglQueryString(EGL_NO_DISPLAY, EGL_EXTENSIONS);
+    auto proc = reinterpret_cast<PFNEGLCREATEPLATFORMWINDOWSURFACEEXTPROC>(eglGetProcAddress("eglCreatePlatformWindowSurfaceEXT"));
+
+    if (extensions && strstr(extensions, "EGL_EXT_platform_base") && proc && platformDisplay.eglPlatform())
+        surface = proc(display, config, static_cast<EGLNativeWindowType>(window), nullptr);
+#endif
+    if (surface == EGL_NO_SURFACE)
+        surface = eglCreateWindowSurface(display, config, static_cast<EGLNativeWindowType>(window), nullptr);
 #endif
     if (surface == EGL_NO_SURFACE) {
         eglDestroyContext(display, context);

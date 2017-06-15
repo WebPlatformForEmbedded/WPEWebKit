@@ -32,6 +32,7 @@
 #include "IntSize.h"
 #include <EGL/egl.h>
 #include <wpe/renderer-backend-egl.h>
+#include <EGL/eglext.h>
 
 namespace WebCore {
 
@@ -46,10 +47,29 @@ void PlatformDisplayWPE::initialize(int hostFd)
 {
     m_backend = wpe_renderer_backend_egl_create(hostFd);
 
-    m_eglDisplay = eglGetDisplay(wpe_renderer_backend_egl_get_native_display(m_backend));
+    auto nativeDisplay = wpe_renderer_backend_egl_get_native_display(m_backend, &m_eglPlatform);
+
+#ifdef EGL_EXT_platform_base
+    const char* extensions = eglQueryString(EGL_NO_DISPLAY, EGL_EXTENSIONS);
+    auto proc = reinterpret_cast<PFNEGLGETPLATFORMDISPLAYEXTPROC>(eglGetProcAddress("eglGetPlatformDisplayEXT"));
+
+    if (extensions && strstr(extensions, "EGL_EXT_platform_base") && proc && m_eglPlatform) {
+        m_eglDisplay = proc(m_eglPlatform, nativeDisplay, NULL);
+
+        if (m_eglDisplay == EGL_NO_DISPLAY) {
+            WTFLogAlways("PlatformDisplayWPE: could not create the EGL display.");
+            return;
+        }
+    }
+#endif
+
     if (m_eglDisplay == EGL_NO_DISPLAY) {
-        WTFLogAlways("PlatformDisplayWPE: could not create the EGL display.");
-        return;
+        m_eglDisplay = eglGetDisplay(nativeDisplay);
+
+        if (m_eglDisplay == EGL_NO_DISPLAY) {
+            WTFLogAlways("PlatformDisplayWPE: could not create the EGL display.");
+            return;
+        }
     }
 
     PlatformDisplay::initializeEGLDisplay();
