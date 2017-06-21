@@ -257,6 +257,23 @@ static const std::chrono::seconds maximumLayerVolatilityTimerInterval { 2 };
 #define RELEASE_LOG_IF_ALLOWED(...) RELEASE_LOG_IF(isAlwaysOnLoggingAllowed(), Layers, __VA_ARGS__)
 #define RELEASE_LOG_ERROR_IF_ALLOWED(...) RELEASE_LOG_ERROR_IF(isAlwaysOnLoggingAllowed(), Layers, __VA_ARGS__)
 
+class ClientInitiated {
+public:
+    ClientInitiated(bool* b)
+        : m_b(b)
+    {
+        *m_b = true;
+    }
+
+    ~ClientInitiated()
+    {
+        *m_b = false;
+    }
+
+private:
+    bool* m_b;
+};
+
 class SendStopResponsivenessTimer {
 public:
     SendStopResponsivenessTimer(WebPage* page)
@@ -828,8 +845,36 @@ EditorState WebPage::editorState(IncludePostLayoutDataHint shouldIncludePostLayo
     result.isContentEditable = selection.isContentEditable();
     result.isContentRichlyEditable = selection.isContentRichlyEditable();
     result.isInPasswordField = selection.isInPasswordField();
+    result.isClientInitiated = m_clientInitiated;
     result.hasComposition = frame.editor().hasComposition();
     result.shouldIgnoreCompositionSelectionChange = frame.editor().ignoreCompositionSelectionChange();
+
+#if ENABLE(WAYLAND_TEXT_INPUT)
+    // As an optimization, don't populate the surrounding text if the selection
+    // changes should be ignored, or there is no selection
+    if (!selection.isNone() && !result.shouldIgnoreCompositionSelectionChange) {
+        auto base = selection.base().downstream();
+        auto extent = selection.extent();
+        auto* baseNode = base.deprecatedNode();
+        auto* extentNode = extent.deprecatedNode();
+
+        if (is<Text>(baseNode) && baseNode == extentNode)
+            result.surroundingText = downcast<Text>(baseNode)->data();
+
+        if (!result.surroundingText.isEmpty()) {
+            result.selectionStart = base.deprecatedEditingOffset();
+            result.selectionEnd = extent.deprecatedEditingOffset();
+        } else {
+            result.selectionStart = 0;
+            result.selectionEnd = 0;
+        }
+    }
+
+    if (shouldIncludePostLayoutData == IncludePostLayoutDataHint::No)
+        result.isMissingPostLayoutData = true;
+    else
+        result.postLayoutData().caretRectAtStart = frame.selection().absoluteCaretBounds();
+#endif
 
 #if PLATFORM(COCOA)
     if (shouldIncludePostLayoutData == IncludePostLayoutDataHint::Yes && result.isContentEditable) {
@@ -4753,7 +4798,7 @@ void WebPage::confirmCompositionAsync()
 
 #endif // PLATFORM(COCOA)
 
-#if PLATFORM(GTK)
+#if PLATFORM(GTK) || ENABLE(WAYLAND_TEXT_INPUT)
 static Frame* targetFrameForEditing(WebPage* page)
 {
     Frame& targetFrame = page->corePage()->focusController().focusedOrMainFrame();
@@ -4777,6 +4822,8 @@ static Frame* targetFrameForEditing(WebPage* page)
 
 void WebPage::confirmComposition(const String& compositionString, int64_t selectionStart, int64_t selectionLength)
 {
+    ClientInitiated ci(&m_clientInitiated);
+
     Frame* targetFrame = targetFrameForEditing(this);
     if (!targetFrame) {
         send(Messages::WebPageProxy::EditorStateChanged(editorState()));
@@ -4803,6 +4850,8 @@ void WebPage::confirmComposition(const String& compositionString, int64_t select
 
 void WebPage::setComposition(const String& text, const Vector<CompositionUnderline>& underlines, uint64_t selectionStart, uint64_t selectionLength, uint64_t replacementStart, uint64_t replacementLength)
 {
+    ClientInitiated ci(&m_clientInitiated);
+
     Frame* targetFrame = targetFrameForEditing(this);
     if (!targetFrame || !targetFrame->selection().selection().isContentEditable()) {
         send(Messages::WebPageProxy::EditorStateChanged(editorState()));
@@ -4828,8 +4877,27 @@ void WebPage::setComposition(const String& text, const Vector<CompositionUnderli
 
 void WebPage::cancelComposition()
 {
+    ClientInitiated ci(&m_clientInitiated);
+
     if (Frame* targetFrame = targetFrameForEditing(this))
         targetFrame->editor().cancelComposition();
+    send(Messages::WebPageProxy::EditorStateChanged(editorState()));
+}
+#endif
+
+#if ENABLE(WAYLAND_TEXT_INPUT)
+void WebPage::deleteSurroundingText(int64_t selectionStart, int64_t selectionEnd)
+{
+    ClientInitiated ci(&m_clientInitiated);
+
+    Frame* targetFrame = targetFrameForEditing(this);
+    if (!targetFrame) {
+        send(Messages::WebPageProxy::EditorStateChanged(editorState()));
+        return;
+    }
+
+    targetFrame->editor().deleteSurroundingText(selectionStart, selectionEnd);
+
     send(Messages::WebPageProxy::EditorStateChanged(editorState()));
 }
 #endif
@@ -5570,6 +5638,17 @@ void WebPage::postSynchronousMessageForTesting(const String& messageName, API::O
     else
         returnData = webProcess.transformHandlesToObjects(returnUserData.object());
 }
+
+#if ENABLE(WAYLAND_TEXT_INPUT)
+void WebPage::setInputMethodState(bool enabled)
+{
+    if (m_inputMethodEnabled == enabled)
+        return;
+
+    m_inputMethodEnabled = enabled;
+    send(Messages::WebPageProxy::SetInputMethodState(enabled));
+}
+#endif
 
 void WebPage::clearWheelEventTestTrigger()
 {

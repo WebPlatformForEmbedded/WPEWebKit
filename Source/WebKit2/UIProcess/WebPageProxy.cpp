@@ -4290,6 +4290,22 @@ void WebPageProxy::didEndColorPicker()
 }
 #endif
 
+#if ENABLE(WAYLAND_TEXT_INPUT)
+void WebPageProxy::editorStateChanged(const EditorState& state)
+{
+    m_editorState = state;
+    if (auto textInput = getTextInput())
+        textInput->editorStateChanged();
+}
+
+void WebPageProxy::setInputMethodState(bool enabled)
+{
+    if (auto textInput = getTextInput())
+        textInput->enable(enabled);
+}
+#endif
+
+
 // Inspector
 WebInspectorProxy* WebPageProxy::inspector() const
 {
@@ -6129,7 +6145,7 @@ PassRefPtr<ViewSnapshot> WebPageProxy::takeViewSnapshot()
 }
 #endif
 
-#if PLATFORM(GTK)
+#if PLATFORM(GTK) || ENABLE(WAYLAND_TEXT_INPUT)
 void WebPageProxy::setComposition(const String& text, Vector<CompositionUnderline> underlines, uint64_t selectionStart, uint64_t selectionEnd, uint64_t replacementRangeStart, uint64_t replacementRangeEnd)
 {
     // FIXME: We need to find out how to proper handle the crashes case.
@@ -6154,7 +6170,17 @@ void WebPageProxy::cancelComposition()
 
     process().send(Messages::WebPage::CancelComposition(), m_pageID);
 }
-#endif // PLATFORM(GTK)
+#endif // PLATFORM(GTK) || ENABLE(WAYLAND_TEXT_INPUT)
+
+#if ENABLE(WAYLAND_TEXT_INPUT)
+void WebPageProxy::deleteSurroundingText(int64_t selectionStart, int64_t selectionEnd)
+{
+    if (!isValid())
+        return;
+
+    process().send(Messages::WebPage::DeleteSurroundingText(selectionStart, selectionEnd), m_pageID);
+}
+#endif
 
 void WebPageProxy::didSaveToPageCache()
 {
@@ -6723,5 +6749,14 @@ void WebPageProxy::requestPointerUnlock()
 }
 #endif
 
+#if ENABLE(WAYLAND_TEXT_INPUT)
+RefPtr<TextInput> WebPageProxy::getTextInput()
+{
+    if (!m_textInput)
+        m_textInput = m_pageClient.createTextInput(*this);
+
+    return m_textInput;
+}
+#endif
 
 } // namespace WebKit
