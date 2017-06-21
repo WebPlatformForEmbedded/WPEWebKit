@@ -117,6 +117,10 @@ OBJC_CLASS _WKRemoteObjectRegistry;
 #include "ArgumentCodersGtk.h"
 #endif
 
+#if ENABLE(WAYLAND_TEXT_INPUT)
+#include "TextInput.h"
+#endif
+
 #if ENABLE(WIRELESS_PLAYBACK_TARGET) && !PLATFORM(IOS)
 #include <WebCore/MediaPlaybackTargetPicker.h>
 #include <WebCore/WebMediaSessionManagerClient.h>
@@ -571,13 +575,17 @@ public:
 
     bool updateLayoutViewportParameters(const WebKit::RemoteLayerTreeTransaction&);
 
-#if PLATFORM(GTK)
+#if PLATFORM(GTK) || ENABLE(WAYLAND_TEXT_INPUT)
     void setComposition(const String& text, Vector<WebCore::CompositionUnderline> underlines, uint64_t selectionStart, uint64_t selectionEnd, uint64_t replacementRangeStart, uint64_t replacementRangeEnd);
     void confirmComposition(const String& compositionString, int64_t selectionStart, int64_t selectionLength);
     void cancelComposition();
 #endif
 
-#if PLATFORM(GTK)
+#if ENABLE(WAYLAND_TEXT_INPUT)
+    void deleteSurroundingText(int64_t selectionStart, int64_t selectionEnd);
+#endif
+
+#if PLATFORM(GTK) || ENABLE(WAYLAND_TEXT_INPUT)
     void setInputMethodState(bool enabled);
 #endif
 
@@ -1995,6 +2003,12 @@ private:
 
     HashMap<String, Ref<WebURLSchemeHandler>> m_urlSchemeHandlersByScheme;
     HashMap<uint64_t, Ref<WebURLSchemeHandler>> m_urlSchemeHandlersByIdentifier;
+
+#if ENABLE(WAYLAND_TEXT_INPUT)
+    RefPtr<TextInput> getTextInput();
+
+    RefPtr<TextInput> m_textInput;
+#endif
 };
 
 } // namespace WebKit

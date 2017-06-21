@@ -732,6 +732,48 @@ else ()
     set(JavaScriptCore_SCRIPTS_DIR "${FORWARDING_HEADERS_DIR}/JavaScriptCore/Scripts")
 endif ()
 
+if (ENABLE_WAYLAND_TEXT_INPUT)
+    find_package(Wayland REQUIRED)
+
+    set(TEXT_INPUT_UNSTABLE_V1_PROTOCOL_FILE ${CMAKE_CURRENT_SOURCE_DIR}/UIProcess/wayland/text-input-unstable-v1.xml)
+    set(TEXT_INPUT_UNSTABLE_V1_CLIENT_HEADER_FILE ${DERIVED_SOURCES_WEBKIT2_DIR}/text-input-unstable-v1-client-protocol.h)
+    set(TEXT_INPUT_UNSTABLE_V1_CODE_FILE ${DERIVED_SOURCES_WEBKIT2_DIR}/text-input-unstable-v1-code.c)
+
+    add_custom_command(OUTPUT ${TEXT_INPUT_UNSTABLE_V1_CLIENT_HEADER_FILE}
+        COMMAND ${WAYLAND_SCANNER_EXECUTABLE} client-header < ${TEXT_INPUT_UNSTABLE_V1_PROTOCOL_FILE} > ${TEXT_INPUT_UNSTABLE_V1_CLIENT_HEADER_FILE}
+        DEPENDS ${TEXT_INPUT_UNSTABLE_V1_PROTOCOL_FILE} VERBATIM
+    )
+
+    add_custom_command(OUTPUT ${TEXT_INPUT_UNSTABLE_V1_CODE_FILE}
+        COMMAND ${WAYLAND_SCANNER_EXECUTABLE} code < ${TEXT_INPUT_UNSTABLE_V1_PROTOCOL_FILE} > ${TEXT_INPUT_UNSTABLE_V1_CODE_FILE}
+        DEPENDS ${TEXT_INPUT_UNSTABLE_V1_PROTOCOL_FILE} VERBATIM
+    )
+
+    set_source_files_properties(
+        ${TEXT_INPUT_UNSTABLE_V1_CLIENT_HEADER_FILE}
+        ${TEXT_INPUT_UNSTABLE_V1_CODE_FILE}
+        PROPERTIES GENERATED TRUE
+    )
+
+    list(APPEND WebKit2_SOURCES
+        UIProcess/wayland/TextInputWayland.cpp
+    )
+
+    list(APPEND WebKit2_DERIVED_SOURCES
+        ${TEXT_INPUT_UNSTABLE_V1_CLIENT_HEADER_FILE}
+        ${TEXT_INPUT_UNSTABLE_V1_CODE_FILE}
+    )
+
+    list(APPEND WebKit2_INCLUDE_DIRECTORIES
+        "${WEBKIT2_DIR}/UIProcess/wayland"
+        ${WAYLAND_INCLUDE_DIRS}
+    )
+
+    list(APPEND WebKit2_LIBRARIES
+        ${WAYLAND_LIBRARIES}
+    )
+endif ()
+
 # librt is needed for shm_open on Linux.
 find_library(LIBRT_LIBRARIES NAMES rt)
 mark_as_advanced(LIBRT_LIBRARIES)

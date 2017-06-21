@@ -315,6 +315,7 @@ public:
     bool cancelCompositionIfSelectionIsInvalid();
     WEBCORE_EXPORT RefPtr<Range> compositionRange() const;
     WEBCORE_EXPORT bool getCompositionSelection(unsigned& selectionStart, unsigned& selectionEnd) const;
+    void deleteSurroundingText(unsigned selectionStart, unsigned selectionEnd);
 
     // getting international text input composition state (for use by InlineTextBox)
     Text* compositionNode() const { return m_compositionNode.get(); }

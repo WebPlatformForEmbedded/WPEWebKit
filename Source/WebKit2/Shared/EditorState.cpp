@@ -39,10 +39,11 @@ void EditorState::encode(IPC::Encoder& encoder) const
     encoder << isContentRichlyEditable;
     encoder << isInPasswordField;
     encoder << isInPlugin;
+    encoder << isClientInitiated;
     encoder << hasComposition;
     encoder << isMissingPostLayoutData;
 
-#if PLATFORM(IOS) || PLATFORM(GTK) || PLATFORM(MAC)
+#if PLATFORM(IOS) || PLATFORM(GTK) || PLATFORM(MAC) || ENABLE(WAYLAND_TEXT_INPUT)
     if (!isMissingPostLayoutData)
         m_postLayoutData.encode(encoder);
 #endif
@@ -51,6 +52,12 @@ void EditorState::encode(IPC::Encoder& encoder) const
     encoder << firstMarkedRect;
     encoder << lastMarkedRect;
     encoder << markedText;
+#endif
+
+#if ENABLE(WAYLAND_TEXT_INPUT)
+    encoder << surroundingText;
+    encoder << selectionStart;
+    encoder << selectionEnd;
 #endif
 }
 
@@ -77,13 +84,16 @@ bool EditorState::decode(IPC::Decoder& decoder, EditorState& result)
     if (!decoder.decode(result.isInPlugin))
         return false;
 
+    if (!decoder.decode(result.isClientInitiated))
+        return false;
+
     if (!decoder.decode(result.hasComposition))
         return false;
 
     if (!decoder.decode(result.isMissingPostLayoutData))
         return false;
 
-#if PLATFORM(IOS) || PLATFORM(GTK) || PLATFORM(MAC)
+#if PLATFORM(IOS) || PLATFORM(GTK) || PLATFORM(MAC) || ENABLE(WAYLAND_TEXT_INPUT)
     if (!result.isMissingPostLayoutData) {
         if (!PostLayoutData::decode(decoder, result.postLayoutData()))
             return false;
@@ -99,14 +109,25 @@ bool EditorState::decode(IPC::Decoder& decoder, EditorState& result)
         return false;
 #endif
 
+#if ENABLE(WAYLAND_TEXT_INPUT)
+    if (!decoder.decode(result.surroundingText))
+        return false;
+    if (!decoder.decode(result.selectionStart))
+        return false;
+    if (!decoder.decode(result.selectionEnd))
+        return false;
+#endif
+
     return true;
 }
 
-#if PLATFORM(IOS) || PLATFORM(GTK) || PLATFORM(MAC)
+#if PLATFORM(IOS) || PLATFORM(GTK) || PLATFORM(MAC) || ENABLE(WAYLAND_TEXT_INPUT)
 void EditorState::PostLayoutData::encode(IPC::Encoder& encoder) const
 {
+#if PLATFORM(IOS) || PLATFORM(GTK) || PLATFORM(MAC)
     encoder << typingAttributes;
-#if PLATFORM(IOS) || PLATFORM(GTK)
+#endif
+#if PLATFORM(IOS) || PLATFORM(GTK) || ENABLE(WAYLAND_TEXT_INPUT)
     encoder << caretRectAtStart;
 #endif
 #if PLATFORM(IOS) || PLATFORM(MAC)
@@ -137,9 +158,11 @@ void EditorState::PostLayoutData::encode(IPC::Encoder& encoder) const
 
 bool EditorState::PostLayoutData::decode(IPC::Decoder& decoder, PostLayoutData& result)
 {
+#if PLATFORM(IOS) || PLATFORM(GTK) || PLATFORM(MAC)
     if (!decoder.decode(result.typingAttributes))
         return false;
-#if PLATFORM(IOS) || PLATFORM(GTK)
+#endif
+#if PLATFORM(IOS) || PLATFORM(GTK) || ENABLE(WAYLAND_TEXT_INPUT)
     if (!decoder.decode(result.caretRectAtStart))
         return false;
 #endif
@@ -190,6 +213,6 @@ bool EditorState::PostLayoutData::decode(IPC::Decoder& decoder, PostLayoutData& 
 
     return true;
 }
-#endif // PLATFORM(IOS) || PLATFORM(GTK) || PLATFORM(MAC)
+#endif // PLATFORM(IOS) || PLATFORM(GTK) || PLATFORM(MAC) || ENABLE(WAYLAND_TEXT_INPUT)
 
 }

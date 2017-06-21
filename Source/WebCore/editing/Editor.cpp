@@ -1849,6 +1849,30 @@ void Editor::setComposition(const String& text, const Vector<CompositionUnderlin
 #endif
 }
 
+void Editor::deleteSurroundingText(unsigned selectionStart, unsigned selectionEnd)
+{
+    if (m_frame.selection().isNone())
+        return;
+
+    setIgnoreSelectionChanges(true);
+
+    // Find out what node has the composition now.
+    Position base = m_frame.selection().selection().base().downstream();
+    Position extent = m_frame.selection().selection().extent();
+    Node* baseNode = base.deprecatedNode();
+    Node* extentNode = extent.deprecatedNode();
+
+    if (is<Text>(baseNode) && baseNode == extentNode) {
+        RefPtr<Range> selectedRange = Range::create(baseNode->document(), baseNode, selectionStart, baseNode, selectionEnd);
+        m_frame.selection().setSelectedRange(selectedRange.get(), DOWNSTREAM, false);
+
+        deleteSelectionWithSmartDelete(false);
+        TypingCommand::closeTyping(&m_frame);
+    }
+
+    setIgnoreSelectionChanges(false);
+}
+
 void Editor::ignoreSpelling()
 {
     if (!client())

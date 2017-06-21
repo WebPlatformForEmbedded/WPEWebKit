@@ -26,6 +26,7 @@
 #pragma once
 
 #include "ShareableBitmap.h"
+#include "TextInput.h"
 #include "WebColorPicker.h"
 #include "WebPageProxy.h"
 #include "WebPopupMenuProxy.h"
@@ -387,6 +388,10 @@ public:
 #endif
 
     virtual void didChangeAvoidsUnsafeArea(bool avoidsUnsafeArea) = 0;
+
+#if ENABLE(WAYLAND_TEXT_INPUT)
+    virtual RefPtr<TextInput> createTextInput(WebPageProxy&) { return nullptr; }
+#endif
 };
 
 } // namespace WebKit

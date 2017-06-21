@@ -68,6 +68,7 @@ struct EditorState {
     bool isContentRichlyEditable { false };
     bool isInPasswordField { false };
     bool isInPlugin { false };
+    bool isClientInitiated { false };
     bool hasComposition { false };
     bool isMissingPostLayoutData { false };
 
@@ -77,10 +78,18 @@ struct EditorState {
     String markedText;
 #endif
 
-#if PLATFORM(IOS) || PLATFORM(GTK) || PLATFORM(MAC)
+#if ENABLE(WAYLAND_TEXT_INPUT)
+    String surroundingText { "" };
+    int32_t selectionStart { -1 };
+    int32_t selectionEnd { -1 };
+#endif
+
+#if PLATFORM(IOS) || PLATFORM(GTK) || PLATFORM(MAC) || ENABLE(WAYLAND_TEXT_INPUT)
     struct PostLayoutData {
+#if PLATFORM(IOS) || PLATFORM(GTK) || PLATFORM(MAC)
         uint32_t typingAttributes { AttributeNone };
-#if PLATFORM(IOS) || PLATFORM(GTK)
+#endif
+#if PLATFORM(IOS) || PLATFORM(GTK) || ENABLE(WAYLAND_TEXT_INPUT)
         WebCore::IntRect caretRectAtStart;
 #endif
 #if PLATFORM(IOS) || PLATFORM(MAC)
@@ -119,13 +128,13 @@ struct EditorState {
     void encode(IPC::Encoder&) const;
     static bool decode(IPC::Decoder&, EditorState&);
 
-#if PLATFORM(IOS) || PLATFORM(GTK) || PLATFORM(MAC)
+#if PLATFORM(IOS) || PLATFORM(GTK) || PLATFORM(MAC) || ENABLE(WAYLAND_TEXT_INPUT)
 private:
     PostLayoutData m_postLayoutData;
 #endif
 };
 
-#if PLATFORM(IOS) || PLATFORM(GTK) || PLATFORM(MAC)
+#if PLATFORM(IOS) || PLATFORM(GTK) || PLATFORM(MAC) || ENABLE(WAYLAND_TEXT_INPUT)
 inline auto EditorState::postLayoutData() -> PostLayoutData&
 {
     ASSERT_WITH_MESSAGE(!isMissingPostLayoutData, "Attempt to access post layout data before receiving it");

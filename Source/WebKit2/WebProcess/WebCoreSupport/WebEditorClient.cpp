@@ -540,7 +540,7 @@ void WebEditorClient::willSetInputMethodState()
 
 void WebEditorClient::setInputMethodState(bool enabled)
 {
-#if PLATFORM(GTK)
+#if PLATFORM(GTK) || ENABLE(WAYLAND_TEXT_INPUT)
     m_page->setInputMethodState(enabled);
 #else
     notImplemented();

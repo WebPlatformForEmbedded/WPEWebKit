@@ -353,11 +353,17 @@ messages -> WebPage LegacyReceiver {
     SetCanRunBeforeUnloadConfirmPanel(bool canRunBeforeUnloadConfirmPanel)
     SetCanRunModal(bool canRunModal)
 
-#if PLATFORM(GTK)
+#if PLATFORM(GTK) || ENABLE(WAYLAND_TEXT_INPUT)
     SetComposition(String text, Vector<WebCore::CompositionUnderline> underlines, uint64_t selectionStart, uint64_t selectionEnd, uint64_t replacementRangeStart, uint64_t replacementRangeEnd)
     ConfirmComposition(String text, int64_t selectionStart, int64_t selectionLength)
     CancelComposition()
+#endif
 
+#if ENABLE(WAYLAND_TEXT_INPUT)
+    DeleteSurroundingText(int64_t selectionStart, int64_t selectionEnd);
+#endif
+
+#if PLATFORM(GTK)
     CollapseSelectionInFrame(uint64_t frameID)
 #endif
 

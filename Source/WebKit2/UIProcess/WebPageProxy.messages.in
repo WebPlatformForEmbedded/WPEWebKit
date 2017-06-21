@@ -206,7 +206,9 @@ messages -> WebPageProxy {
 #if PLATFORM(GTK)
     # Support for connecting the Accessibility worlds of the UI and the Web processes
     BindAccessibilityTree(String plugID)
+#endif
 
+#if PLATFORM(GTK) || ENABLE(WAYLAND_TEXT_INPUT)
     SetInputMethodState(bool enabled);
 #endif
 
