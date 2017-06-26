@@ -56,9 +56,4 @@ void WebsiteDataStore::platformRemoveRecentSearches(std::chrono::system_clock::t
     notImplemented();
 }
 
-void WebPageProxy::editorStateChanged(const EditorState&)
-{
-    notImplemented();
-}
-
 } // namespace WebKit

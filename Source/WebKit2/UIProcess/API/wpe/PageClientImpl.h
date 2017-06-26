@@ -26,8 +26,14 @@
 #ifndef PageClientImpl_h
 #define PageClientImpl_h
 
+#include "config.h"
+
 #include "PageClient.h"
 #include "WebFullScreenManagerProxy.h"
+
+#if ENABLE(WAYLAND_TEXT_INPUT)
+#include "TextInputWayland.h"
+#endif
 
 namespace WKWPE {
 class View;
@@ -35,7 +41,10 @@ class View;
 
 namespace WebKit {
 
-class PageClientImpl final : public PageClient 
+class PageClientImpl final : public PageClient
+#if ENABLE(WAYLAND_TEXT_INPUT)
+    , public TextInputWayland::Client
+#endif
 #if ENABLE(FULLSCREEN_API)
     , public WebFullScreenManagerProxyClient
 #endif
@@ -130,6 +139,11 @@ private:
     virtual void exitFullScreen() override;
     virtual void beganEnterFullScreen(const WebCore::IntRect& initialFrame, const WebCore::IntRect& finalFrame) override;
     virtual void beganExitFullScreen(const WebCore::IntRect& initialFrame, const WebCore::IntRect& finalFrame) override;
+#endif
+
+#if ENABLE(WAYLAND_TEXT_INPUT)
+    virtual RefPtr<TextInput> createTextInput(WebPageProxy&) override;
+    virtual void handleTextInputKeySym(WebPageProxy&, uint32_t, uint32_t, uint32_t, bool, const WebKit::TextInputWayland::KeyboardModifiers&) override;
 #endif
 
     WKWPE::View& m_view;
