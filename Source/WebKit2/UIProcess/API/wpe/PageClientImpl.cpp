@@ -27,6 +27,7 @@
 #include "PageClientImpl.h"
 
 #include "DrawingAreaProxyWPE.h"
+#include "NativeWebKeyboardEvent.h"
 #include "NativeWebMouseEvent.h"
 #include "NativeWebWheelEvent.h"
 #include "ScrollGestureController.h"
@@ -35,6 +36,7 @@
 #include "WebPopupMenuProxyWPE.h"
 #include <WebCore/ActivityState.h>
 #include <WebCore/NotImplemented.h>
+#include <wpe/view-backend.h>
 
 namespace WebKit {
 
@@ -357,7 +359,34 @@ void PageClientImpl::beganExitFullScreen(
         const WebCore::IntRect& /* initialFrame */, const WebCore::IntRect& /* finalFrame */)
 {
 }
-
 #endif // ENABLE(FULLSCREEN_API)
+
+#if ENABLE(WAYLAND_TEXT_INPUT)
+RefPtr<TextInput> PageClientImpl::createTextInput(WebPageProxy& page)
+{
+    return TextInputWayland::create(page, this, wpe_view_backend_get_display(m_view.backend()),
+            wpe_view_backend_get_surface(m_view.backend()));
+}
+
+void PageClientImpl::handleTextInputKeySym(WebPageProxy& page, uint32_t serial, uint32_t time, uint32_t sym, bool pressed, const TextInputWayland::KeyboardModifiers& mods)
+{
+    struct wpe_input_keyboard_event event = {};
+
+    event.time = time;
+    event.keyCode = sym;
+    event.pressed = pressed;
+
+    if (mods.shift)
+        event.modifiers |= wpe_input_keyboard_modifier_shift;
+
+    if (mods.control)
+        event.modifiers |= wpe_input_keyboard_modifier_control;
+
+    if (mods.mod1)
+        event.modifiers |= wpe_input_keyboard_modifier_alt;
+
+    page.handleKeyboardEvent(WebKit::NativeWebKeyboardEvent(&event));
+}
+#endif
 
 } // namespace WebKit
