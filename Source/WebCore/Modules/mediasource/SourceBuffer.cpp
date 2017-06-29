@@ -579,13 +579,15 @@ void SourceBuffer::appendBufferTimerFired()
     }
 
     m_private->append(m_pendingAppendData.data(), appendSize);
-    m_pendingAppendData.clear();
 }
 
 void SourceBuffer::sourceBufferPrivateAppendComplete(SourceBufferPrivate*, AppendResult result)
 {
     if (isRemoved())
         return;
+
+    if (m_pendingAppendData.size())
+        m_pendingAppendData.clear();
 
     // Resolve the changes it TrackBuffers' buffered ranges
     // into the SourceBuffer's buffered ranges
@@ -828,7 +830,7 @@ void SourceBuffer::removeCodedFrames(const MediaTime& start, const MediaTime& en
         if (m_active && currentMediaTime >= start && currentMediaTime < end && m_private->readyState() > MediaPlayer::HaveMetadata)
             m_private->setReadyState(MediaPlayer::HaveMetadata);
     }
-    
+
     updateBufferedFromTrackBuffers();
 
     // 4. If buffer full flag equals true and this object is ready to accept more bytes, then set the buffer full flag to false.
