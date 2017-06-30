@@ -67,6 +67,8 @@ const struct wl_registry_listener TextInputWayland::s_registryListener = {
                         registry, name, &zwp_text_input_manager_v1_interface, version));
             t.m_input = zwp_text_input_manager_v1_create_text_input(t.m_inputManager);
             zwp_text_input_v1_add_listener(t.m_input, &s_textInputListener, &t);
+
+            wl_display_roundtrip(t.m_display);
         } else if (strcmp(interface, "wl_seat") == 0) {
             auto* seat = static_cast<struct wl_seat*>(wl_registry_bind(registry, name, &wl_seat_interface, version));
             auto* s = new TextInputWayland::Seat(&t, seat);
@@ -75,6 +77,8 @@ const struct wl_registry_listener TextInputWayland::s_registryListener = {
 
             if (!t.m_targetSeat)
                 t.m_targetSeat = s;
+
+            wl_display_roundtrip(t.m_display);
         }
     },
     // global_remove
