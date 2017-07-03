@@ -10,6 +10,7 @@ For **Ubuntu 16.04 LTS (Xenial Xerus)**, please type:
     $ sudo apt-get install intltool libtool-bin autoconf automake autopoint cmake gcc g++ bison flex gawk gperf ruby git libversion-perl libgnutls-dev libexpat-dev libxml2-dev libxslt-dev libsqlite3-dev libjpeg9-dev libfreetype6-dev libharfbuzz-dev libxcb-xkb-dev libwayland-dev libgbm-dev libgles2-mesa-dev libgstreamer1.0-dev libwebp-dev
 
 For **Fedora 25**, please type:
+
     $ sudo dnf install 'perl(Digest::MD5)' 'perl(Thread::Queue)' 'perl(Time::HiRes)' 'perl(version)' autoconf automake bison cairo-devel cmake expat-devel flex gawk gcc gcc-c++ git glib2-devel gnutls-devel gperf gstreamer1-devel gstreamer1-plugins-base-devel harfbuzz-devel libicu-devel libjpeg-turbo-devel libpng-devel libsoup-devel libtool libxkbcommon-devel libxml2-devel libxslt-devel mesa-libEGL-devel mesa-libGL-devel mesa-libGLES-devel mesa-libgbm-devel mesa-libwayland-egl-devel ruby-devel sqlite-devel
 
 ## Building
