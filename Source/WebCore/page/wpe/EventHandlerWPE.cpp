@@ -28,6 +28,7 @@
 
 #include "FocusController.h"
 #include "Frame.h"
+#include "MouseEventWithHitTestResults.h"
 #include "NotImplemented.h"
 #include "Page.h"
 
@@ -75,22 +76,22 @@ bool EventHandler::widgetDidHandleWheelEvent(const PlatformWheelEvent&, Widget&)
     return false;
 }
 
-bool EventHandler::passMousePressEventToSubframe(MouseEventWithHitTestResults&, Frame*)
+bool EventHandler::passMousePressEventToSubframe(MouseEventWithHitTestResults& mev, Frame* subframe)
 {
-    notImplemented();
-    return false;
+    subframe->eventHandler().handleMousePressEvent(mev.event());
+    return true;
 }
 
-bool EventHandler::passMouseMoveEventToSubframe(MouseEventWithHitTestResults&, Frame*, HitTestResult*)
+bool EventHandler::passMouseMoveEventToSubframe(MouseEventWithHitTestResults& mev, Frame* subframe, HitTestResult* hoveredNode)
 {
-    notImplemented();
-    return false;
+    subframe->eventHandler().handleMouseMoveEvent(mev.event(), hoveredNode);
+    return true;
 }
 
-bool EventHandler::passMouseReleaseEventToSubframe(MouseEventWithHitTestResults&, Frame*)
+bool EventHandler::passMouseReleaseEventToSubframe(MouseEventWithHitTestResults& mev, Frame* subframe)
 {
-    notImplemented();
-    return false;
+    subframe->eventHandler().handleMouseReleaseEvent(mev.event());
+    return true;
 }
 
 OptionSet<PlatformEvent::Modifier> EventHandler::accessKeyModifiers()
