@@ -362,7 +362,7 @@ void TextInputWayland::editorStateChanged()
 
     // If this state change was initiated by a composition action we sent,
     // ignore it.
-    if (!m_commitString.isEmpty() && e.isClientInitiated)
+    if ((m_canCommit || !m_commitString.isEmpty()) && e.isClientInitiated)
         return;
 
     endEdit();
@@ -416,6 +416,12 @@ void TextInputWayland::deactivate()
         return;
 
     zwp_text_input_v1_deactivate(m_input, m_targetSeat->m_seat);
+
+    // Roundtrip the display. This ensures that if the compositor sends us a
+    // "leave" event for our deactivate (as it should), it is processed it
+    // before continuing.  This isn't perfect, since the compositor isn't
+    // required to send the leave immediately, but in reality most should.
+    wl_display_roundtrip(m_display);
 }
 
 void TextInputWayland::updatePanelVisibility()
