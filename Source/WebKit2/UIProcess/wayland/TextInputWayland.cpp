@@ -471,28 +471,26 @@ void TextInputWayland::resetInputState()
 
 void TextInputWayland::endEdit()
 {
-    if (!m_commitString.isEmpty())
-        commitEdit(getPreeditCursorPosition());
-    else
-        cancelEdit();
+    if (m_canCommit) {
+        if (!m_commitString.isEmpty())
+            commitEdit(getPreeditCursorPosition());
+        else
+            cancelEdit();
+    }
 }
 
 void TextInputWayland::commitEdit(int64_t position)
 {
-    if (m_canCommit) {
-        m_pageProxy.confirmComposition(m_commitString.utf8().data(), position, 0);
-        m_canCommit = false;
-        m_commitString = emptyString();
-    }
+    m_pageProxy.confirmComposition(m_commitString.utf8().data(), position, 0);
+    m_canCommit = false;
+    m_commitString = emptyString();
 }
 
 void TextInputWayland::cancelEdit()
 {
-    if (m_canCommit) {
-        m_pageProxy.cancelComposition();
-        m_canCommit = false;
-        m_commitString = emptyString();
-    }
+    m_pageProxy.cancelComposition();
+    m_canCommit = false;
+    m_commitString = emptyString();
 }
 
 void TextInputWayland::commitString(uint32_t serial, const char* text)
