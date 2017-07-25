@@ -955,6 +955,16 @@ void StreamingClient::handleResponseReceived(const ResourceResponse& response)
         gst_app_src_set_size(priv->appsrc, -1);
 
     gst_app_src_set_caps(priv->appsrc, 0);
+    String value = response.httpHeaderField(HTTPHeaderName::IcyMetaInt);
+    if (!value.isEmpty()) {
+        gchar* endptr = 0;
+        gint64 icyMetaInt = g_ascii_strtoll(value.utf8().data(), &endptr, 10);
+
+        if (endptr && *endptr == '\0' && icyMetaInt > 0) {
+            GRefPtr<GstCaps> caps = adoptGRef(gst_caps_new_simple("application/x-icy", "metadata-interval", G_TYPE_INT, (gint) icyMetaInt, NULL));
+            gst_app_src_set_caps(priv->appsrc, caps.get());
+      }
+    }
 }
 
 void StreamingClient::handleDataReceived(const char* data, int length)
