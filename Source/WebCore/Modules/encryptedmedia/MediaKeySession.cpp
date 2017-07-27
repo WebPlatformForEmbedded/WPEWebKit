@@ -62,6 +62,10 @@ MediaKeySession::MediaKeySession(ScriptExecutionContext& context, WeakPtr<MediaK
     , m_implementation(WTFMove(implementation))
     , m_instance(WTFMove(instance))
     , m_eventQueue(*this)
+    , m_weakPtrFactory(this)
+    , m_callable(false)
+    , m_uninitialized(true)
+    , m_closed(false)
 {
     // https://w3c.github.io/encrypted-media/#dom-mediakeys-setservercertificate
     // W3C Editor's Draft 09 November 2016
@@ -78,6 +82,9 @@ MediaKeySession::MediaKeySession(ScriptExecutionContext& context, WeakPtr<MediaK
     // 3.8. Let the use distinctive identifier value be this object's use distinctive identifier value.
     // 3.9. Let the cdm implementation value be this object's cdm implementation.
     // 3.10. Let the cdm instance value be this object's cdm instance.
+
+    UNUSED_PARAM(m_sessionType);
+    UNUSED_PARAM(m_useDistinctiveIdentifier);
 }
 
 MediaKeySession::~MediaKeySession()
@@ -495,6 +502,7 @@ void MediaKeySession::close(Ref<DeferredPromise>&& promise)
             m_taskQueue.enqueueTask([this, promise = WTFMove(promise)] () mutable {
                 // 5.3.1. Run the Session Closed algorithm on the session.
                 sessionClosed();
+                m_closed = true;
 
                 // 5.3.2. Resolve promise.
                 promise->resolve();

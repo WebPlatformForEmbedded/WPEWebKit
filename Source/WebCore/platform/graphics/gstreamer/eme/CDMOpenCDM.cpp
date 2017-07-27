@@ -91,6 +91,37 @@ static media::OpenCdm::LicenseType webKitLicenseTypeToOpenCDM(CDMInstance::Licen
     }
 }
 
+class CDMInstanceOpenCDM : public CDMInstance {
+public:
+    CDMInstanceOpenCDM(media::OpenCdm*, const String&);
+    virtual ~CDMInstanceOpenCDM();
+
+    ImplementationType implementationType() const final { return  ImplementationType::OpenCDM; }
+    SuccessValue initializeWithConfiguration(const MediaKeySystemConfiguration&) override;
+    SuccessValue setDistinctiveIdentifiersAllowed(bool) override;
+    SuccessValue setPersistentStateAllowed(bool) override;
+    SuccessValue setServerCertificate(Ref<SharedBuffer>&&) override;
+
+    void requestLicense(LicenseType licenseType, const AtomicString& initDataType, Ref<SharedBuffer>&& initData, LicenseCallback) override;
+    void updateLicense(const String&, LicenseType licenseType, const SharedBuffer&, LicenseUpdateCallback) override;
+    void loadSession(LicenseType licenseType, const String&, const String&, LoadSessionCallback) override;
+    void closeSession(const String&, CloseSessionCallback) override;
+    void removeSessionData(const String&, LicenseType licenseType, RemoveSessionDataCallback) override;
+    void storeRecordOfKeyUsage(const String&) override;
+
+    void gatherAvailableKeys(AvailableKeysCallback) override;
+
+    const String& keySystem() const override { return m_keySystem; }
+
+private:
+    MediaKeyStatus getKeyStatus(std::string &);
+    SessionLoadFailure getSessionLoadStatus(std::string &);
+    size_t checkMessageLength(std::string &, std::string &);
+    media::OpenCdm* m_openCdmSession;
+    HashMap<String, Ref<SharedBuffer>> sessionIdMap;
+    String m_keySystem;
+};
+
 CDMPrivateOpenCDM::CDMPrivateOpenCDM(const String& keySystem)
     : m_openCdmKeySystem(keySystem)
 {
@@ -404,6 +435,13 @@ void CDMInstanceOpenCDM::removeSessionData(const String& sessionId, LicenseType,
         keys.append(std::pair<Ref<SharedBuffer>, MediaKeyStatus> {*initData, keyStatus});
         callback(WTFMove(keys), std::nullopt, SuccessValue::Failed);
     }
+    //FIXME:Check the working of removeSession sequence from OpenCDMi and make the required change for KeyStatus
+#if 1 
+    SharedBuffer* initData = sessionIdMap.get(sessionId);
+    MediaKeyStatus keyStatus = getKeyStatus(responseMessage);
+    keys.append(std::pair<Ref<SharedBuffer>, MediaKeyStatus>{*initData, keyStatus});
+#endif
+    callback(WTFMove(keys), std::nullopt, SuccessValue::Succeeded);
 }
 
 void CDMInstanceOpenCDM::storeRecordOfKeyUsage(const String&)
