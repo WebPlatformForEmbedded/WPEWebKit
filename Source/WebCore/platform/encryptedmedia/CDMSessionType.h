@@ -34,8 +34,8 @@ namespace WebCore {
 
 enum class CDMSessionType {
     Temporary,
-    PersistentUsageRecord,
-    PersistentLicense
+    PersistentLicense,
+    PersistentUsageRecord
 };
 
 } // namespace WebCore
