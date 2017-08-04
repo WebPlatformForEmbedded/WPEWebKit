@@ -102,11 +102,11 @@ public:
     SuccessValue setPersistentStateAllowed(bool) override;
     SuccessValue setServerCertificate(Ref<SharedBuffer>&&) override;
 
-    void requestLicense(LicenseType licenseType, const AtomicString& initDataType, Ref<SharedBuffer>&& initData, LicenseCallback) override;
-    void updateLicense(const String&, LicenseType licenseType, const SharedBuffer&, LicenseUpdateCallback) override;
-    void loadSession(LicenseType licenseType, const String&, const String&, LoadSessionCallback) override;
+    void requestLicense(LicenseType, const AtomicString& initDataType, Ref<SharedBuffer>&& initData, LicenseCallback) override;
+    void updateLicense(const String&, LicenseType, const SharedBuffer&, LicenseUpdateCallback) override;
+    void loadSession(LicenseType, const String&, const String&, LoadSessionCallback) override;
     void closeSession(const String&, CloseSessionCallback) override;
-    void removeSessionData(const String&, LicenseType licenseType, RemoveSessionDataCallback) override;
+    void removeSessionData(const String&, LicenseType, RemoveSessionDataCallback) override;
     void storeRecordOfKeyUsage(const String&) override;
 
     void gatherAvailableKeys(AvailableKeysCallback) override;
@@ -435,13 +435,12 @@ void CDMInstanceOpenCDM::removeSessionData(const String& sessionId, LicenseType,
         keys.append(std::pair<Ref<SharedBuffer>, MediaKeyStatus> {*initData, keyStatus});
         callback(WTFMove(keys), std::nullopt, SuccessValue::Failed);
     }
-    //FIXME:Check the working of removeSession sequence from OpenCDMi and make the required change for KeyStatus
-#if 1 
+
     SharedBuffer* initData = sessionIdMap.get(sessionId);
     MediaKeyStatus keyStatus = getKeyStatus(responseMessage);
     keys.append(std::pair<Ref<SharedBuffer>, MediaKeyStatus>{*initData, keyStatus});
-#endif
-    callback(WTFMove(keys), std::nullopt, SuccessValue::Succeeded);
+    callback(WTFMove(keys), std::nullopt, SuccessValue::Failed);
+    return;
 }
 
 void CDMInstanceOpenCDM::storeRecordOfKeyUsage(const String&)
