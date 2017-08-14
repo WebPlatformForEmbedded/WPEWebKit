@@ -108,6 +108,7 @@
 
 #if ENABLE(ENCRYPTED_MEDIA)
 #include "CDMInstance.h"
+#include "GStreamerEMEUtilities.h"
 #include "SharedBuffer.h"
 #include "WebKitClearKeyDecryptorGStreamer.h"
 #endif
@@ -137,15 +138,11 @@ void registerWebKitGStreamerElements()
     if (!playReadyDecryptorFactory)
         gst_element_register(0, "webkitplayreadydec", GST_RANK_PRIMARY + 100, WEBKIT_TYPE_OPENCDM_PLAYREADY_DECRYPT);
 
-    if (!CDM::supportsKeySystem(PLAYREADY_PROTECTION_SYSTEM_ID) || !CDM::supportsKeySystem(WIDEVINE_PROTECTION_SYSTEM_ID))
+    if (!CDM::supportsKeySystem(GStreamerEMEUtilities::s_PlayReadyKeySystems[0]) || !CDM::supportsKeySystem(GStreamerEMEUtilities::s_WidevineKeySystem))
         CDMFactory::registerFactory(*new CDMFactoryOpenCDM);
 #endif
 #endif
 }
-
-#if ENABLE(ENCRYPTED_MEDIA)
-static const char* keySystemIdToUuid(const char*);
-#endif
 
 static int greatestCommonDivisor(int a, int b)
 {
@@ -418,7 +415,7 @@ bool MediaPlayerPrivateGStreamerBase::handleSyncMessage(GstMessage* message)
             return this->m_cdmInstance;
         });
         if (m_cdmInstance && !m_cdmInstance->keySystem().isEmpty()) {
-            const char* preferredKeySystemUuid = keySystemIdToUuid(m_cdmInstance->keySystem().utf8().data());
+            const char* preferredKeySystemUuid = GStreamerEMEUtilities::keySystemToUuid(m_cdmInstance->keySystem());
             GST_INFO("working with %s, continuing with %s on %s", m_cdmInstance->keySystem().utf8().data(), preferredKeySystemUuid, GST_MESSAGE_SRC_NAME(message));
 
             GRefPtr<GstContext> context = adoptGRef(gst_context_new("drm-preferred-decryption-system-id", FALSE));
@@ -1452,23 +1449,6 @@ void MediaPlayerPrivateGStreamerBase::handleProtectionEvent(GstEvent* event)
     GST_WARNING("FIXME: unhandled protection event for %s", eventKeySystemId);
     ASSERT_NOT_REACHED();
 }
-
-static const char* keySystemIdToUuid(const char* id)
-{
-    if (!g_ascii_strcasecmp(id, CLEAR_KEY_PROTECTION_SYSTEM_ID))
-        return CLEAR_KEY_PROTECTION_SYSTEM_UUID;
-
-#if USE(OPENCDM)
-    if (!g_ascii_strcasecmp(id, PLAYREADY_PROTECTION_SYSTEM_ID)
-        || !g_ascii_strcasecmp(id, PLAYREADY_YT_PROTECTION_SYSTEM_ID))
-        return PLAYREADY_PROTECTION_SYSTEM_UUID;
-
-    if (!g_ascii_strcasecmp(id, WIDEVINE_PROTECTION_SYSTEM_ID))
-        return WIDEVINE_PROTECTION_SYSTEM_UUID;
-#endif
-
-    return { };
-}
 #endif
 
 bool MediaPlayerPrivateGStreamerBase::supportsKeySystem(const String& keySystem, const String& mimeType)
@@ -1476,8 +1456,7 @@ bool MediaPlayerPrivateGStreamerBase::supportsKeySystem(const String& keySystem,
     bool result = false;
 
 #if ENABLE(ENCRYPTED_MEDIA)
-    if (equalLettersIgnoringASCIICase(keySystem, "org.w3.clearkey"))
-        result = true;
+    result = GStreamerEMEUtilities::isClearKeyKeySystem(keySystem);
 #endif
 
     GST_DEBUG("checking for KeySystem support with %s and type %s: %s", keySystem.utf8().data(), mimeType.utf8().data(), boolForPrinting(result));
