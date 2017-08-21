@@ -925,8 +925,10 @@ void StreamingClient::handleResponseReceived(const ResourceResponse& response)
         return;
     }
 
-    if(response.isRedirected())
+    if(response.isRedirected()){
+        g_free(priv->uri);
         priv->uri = g_strdup(response.url().string().utf8().data());
+    }
 
     if (priv->requestedOffset) {
         // Seeking ... we expect a 206 == PARTIAL_CONTENT
