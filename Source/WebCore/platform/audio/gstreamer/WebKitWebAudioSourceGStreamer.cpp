@@ -398,6 +398,7 @@ static void webKitWebAudioSrcLoop(WebKitWebAudioSrc* src)
             }
         } else {
             gst_buffer_unref(channelBuffer);
+            priv->numberOfSamples -= priv->framesToPull;
             g_usleep(1000);
         }
     }
