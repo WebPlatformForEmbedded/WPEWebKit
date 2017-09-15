@@ -1025,6 +1025,7 @@ void WebProcessProxy::didReceiveMainThreadPing()
     responsivenessTimer().stop();
 
     auto isResponsiveCallbacks = WTFMove(m_isResponsiveCallbacks);
+    m_isResponsive = NoOrMaybe::Maybe;
     bool isWebProcessResponsive = true;
     for (auto& callback : isResponsiveCallbacks)
         callback(isWebProcessResponsive);
