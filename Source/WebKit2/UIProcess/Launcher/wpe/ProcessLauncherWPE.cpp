@@ -39,7 +39,7 @@
 #include <wtf/text/WTFString.h>
 #include <wtf/glib/GLibUtilities.h>
 #include <wtf/glib/GUniquePtr.h>
-
+#include <syslog.h>
 // FIXME: Merge with ProcessLauncherGtk?
 
 using namespace WebCore;
@@ -48,22 +48,42 @@ namespace WebKit {
 
 static void childSetupFunction(gpointer userData)
 {
+	syslog(LOG_INFO, "File= %s, FUN= %s ---", __FILE__, __FUNCTION__);
     int socket = GPOINTER_TO_INT(userData);
     close(socket);
 }
 
 void ProcessLauncher::launchProcess()
 {
-    GPid pid = 0;
+	syslog(LOG_INFO, "File= %s, FUN= %s ---", __FILE__, __FUNCTION__);
+	GPid pid = 0;
 
     IPC::Connection::SocketPair socketPair = IPC::Connection::createPlatformConnection(IPC::Connection::ConnectionOptions::SetCloexecOnServer);
 
-    String executablePath;
-    CString realExecutablePath;
+    String executablePath, pluginPath;       //add espial pluign path
+    CString realExecutablePath, realPluginPath; // add espial
+    WTFLogAlways("creating a new Process: %d: ", (int)m_launchOptions.processType);
     switch (m_launchOptions.processType) {
     case ProcessLauncher::ProcessType::Web:
         executablePath = executablePathOfWebProcess();
         break;
+
+//Espial start
+#if ENABLE(NETSCAPE_PLUGIN_API)
+    case ProcessLauncher::ProcessType::Plugin64:
+    case ProcessLauncher::ProcessType::Plugin32:
+        executablePath = executablePathOfPluginProcess();
+//#if ENABLE(PLUGIN_PROCESS_GTK2)
+//        if (m_launchOptions.extraInitializationData.contains("requires-gtk2"))
+//            executablePath.append('2');
+//#endif
+    	syslog(LOG_INFO, "File= %s, FUN= ...in plugin64/32%s ---", __FILE__, __FUNCTION__);
+        pluginPath = m_launchOptions.extraInitializationData.get("plugin-path");
+        realPluginPath = fileSystemRepresentation(pluginPath);
+        break;
+#endif        
+// Espial end
+
     case ProcessLauncher::ProcessType::Network:
         executablePath = executablePathOfNetworkProcess();
         break;
@@ -109,8 +129,17 @@ void ProcessLauncher::launchProcess()
     argv[i++] = wkSocket.get();
     if (m_launchOptions.processType == ProcessLauncher::ProcessType::Web)
         argv[i++] = wpeSocket.get();
-    argv[i++] = nullptr;
 
+    argv[i++] = const_cast<char*>(realPluginPath.data()); // Espial add
+
+    argv[i++] = nullptr;
+    //add debug info
+    syslog(LOG_INFO,"before async, parameters are:");
+    syslog(LOG_INFO,"argv[0]=,%s", argv[0]);
+    syslog(LOG_INFO,"argv[1]=,%s", argv[1]);
+    syslog(LOG_INFO,"argv[2]=,%s", argv[2]);
+    syslog(LOG_INFO,"argv[3]=,%s", argv[3]);
+    WTFLogAlways("creating a new Process: %s: ...", executablePath.utf8().data());
     GUniqueOutPtr<GError> error;
     if (!g_spawn_async(nullptr, argv, nullptr, static_cast<GSpawnFlags>(G_SPAWN_LEAVE_DESCRIPTORS_OPEN | G_SPAWN_DO_NOT_REAP_CHILD), childSetupFunction, GINT_TO_POINTER(socketPair.server), &pid, &error.outPtr())) {
         g_printerr("Unable to fork a new WebProcess: %s.\n", error->message);
@@ -125,6 +154,8 @@ void ProcessLauncher::launchProcess()
 
     close(socketPair.client);
     m_processIdentifier = pid;
+    syslog(LOG_INFO,"Sucessed fork a new WebProcess, pid=%d: ",pid);
+    WTFLogAlways("Sucessed fork a new Process: %s, pid=%d: ", executablePath.utf8().data(), pid);
 
     // We've finished launching the process, message back to the main run loop.
     RefPtr<ProcessLauncher> protector(this);
@@ -136,6 +167,7 @@ void ProcessLauncher::launchProcess()
 
 void ProcessLauncher::terminateProcess()
 {
+	syslog(LOG_INFO, "File= %s, FUN= %s ---", __FILE__, __FUNCTION__);
     if (m_isLaunching) {
         invalidate();
         return;

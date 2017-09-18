@@ -28,6 +28,7 @@
 
 #include "ChildProcessMessages.h"
 #include <wtf/RunLoop.h>
+#include <syslog.h>
 
 namespace WebKit {
 
@@ -48,33 +49,46 @@ ChildProcessProxy::~ChildProcessProxy()
 
 void ChildProcessProxy::getLaunchOptions(ProcessLauncher::LaunchOptions& launchOptions)
 {
+//	openlog("ChileProcessPRoxy", LOG_PID, LOG_USER);
+	syslog(LOG_INFO, "File= %s, FUNCTION = %s", __FILE__, __FUNCTION__);
     if (const char* userDirectorySuffix = getenv("DIRHELPER_USER_DIR_SUFFIX"))
         launchOptions.extraInitializationData.add(ASCIILiteral("user-directory-suffix"), userDirectorySuffix);
 
 #if ENABLE(DEVELOPER_MODE) && (PLATFORM(GTK) || PLATFORM(WPE) || PLATFORM(EFL))
-    const char* varname;
+    const char* varname="";
     switch (launchOptions.processType) {
+
     case ProcessLauncher::ProcessType::Web:
         varname = "WEB_PROCESS_CMD_PREFIX";
+     //   syslog(LOG_INFO, "File= %s, FUNCTION = %s   --case process type=web", __FILE__, __FUNCTION__);
         break;
 #if ENABLE(NETSCAPE_PLUGIN_API)
     case ProcessLauncher::ProcessType::Plugin64:
     case ProcessLauncher::ProcessType::Plugin32:
         varname = "PLUGIN_PROCESS_CMD_PREFIX";
+      //  syslog(LOG_INFO, "File= %s, FUNCTION = %s   --case process type=ProcessLauncher::ProcessType::Plugin64", __FILE__, __FUNCTION__);
         break;
 #endif
     case ProcessLauncher::ProcessType::Network:
         varname = "NETWORK_PROCESS_CMD_PREFIX";
+       // syslog(LOG_INFO, "File= %s, FUNCTION = %s   --case process type=network", __FILE__, __FUNCTION__);
         break;
 #if ENABLE(DATABASE_PROCESS)
     case ProcessLauncher::ProcessType::Database:
         varname = "DATABASE_PROCESS_CMD_PREFIX";
         break;
 #endif
+       default:
+         //   varname = "PLUGIN_PROCESS_CMD_PREFIX";
+         syslog(LOG_INFO, "File= %s, FUNCTION = %s   --case process type=%d", __FILE__, __FUNCTION__, launchOptions.processType);
+        *(char*)0 = 'a';
+        break;
     }
     const char* processCmdPrefix = getenv(varname);
+   syslog(LOG_INFO, "File= %s, FUNCTION = %s   --getenv(%s)=%s", __FILE__, __FUNCTION__,varname,processCmdPrefix);
     if (processCmdPrefix && *processCmdPrefix)
         launchOptions.processCmdPrefix = String::fromUTF8(processCmdPrefix);
+   // syslog(LOG_INFO, "File= %s, FUNCTION = %s   END getLaunchOption ," __FILE__, __FUNCTION__);
 #endif // !defined(NDEBUG) && (PLATFORM(GTK) || PLATFORM(WPE) || PLATFORM(EFL))
 }
 
@@ -82,6 +96,7 @@ void ChildProcessProxy::connect()
 {
     ASSERT(!m_processLauncher);
     ProcessLauncher::LaunchOptions launchOptions;
+
     getLaunchOptions(launchOptions);
     m_processLauncher = ProcessLauncher::create(this, launchOptions);
 }
@@ -111,17 +126,24 @@ ChildProcessProxy::State ChildProcessProxy::state() const
 
 bool ChildProcessProxy::sendMessage(std::unique_ptr<IPC::Encoder> encoder, OptionSet<IPC::SendOption> sendOptions)
 {
+	syslog(LOG_INFO, "File= %s, FUNCTION = %s", __FILE__, __FUNCTION__);
+
     switch (state()) {
     case State::Launching:
         // If we're waiting for the child process to launch, we need to stash away the messages so we can send them once we have a connection.
-        m_pendingMessages.append(std::make_pair(WTFMove(encoder), sendOptions));
+    	//syslog(LOG_INFO, "File= %s, FUNCTION = %s    Launching....", __FILE__, __FUNCTION__);
+    	m_pendingMessages.append(std::make_pair(WTFMove(encoder), sendOptions));
         return true;
 
     case State::Running:
+    //	syslog(LOG_INFO, "File= %s, FUNCTION = %s    Running....", __FILE__, __FUNCTION__);
         return connection()->sendMessage(WTFMove(encoder), sendOptions);
 
     case State::Terminated:
         return false;
+    default:
+    	syslog(LOG_INFO, "File= %s, FUNCTION = %s    default....", __FILE__, __FUNCTION__);
+
     }
 
     return false;

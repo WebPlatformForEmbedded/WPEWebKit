@@ -50,6 +50,7 @@ Ref<PluginProcessConnectionManager> PluginProcessConnectionManager::create()
 PluginProcessConnectionManager::PluginProcessConnectionManager()
     : m_queue(WorkQueue::create("com.apple.WebKit.PluginProcessConnectionManager"))
 {
+	syslog(LOG_INFO, "File= %s, FUNCTION = %s ---- will create conection", __FILE__, __FUNCTION__);
 }
 
 PluginProcessConnectionManager::~PluginProcessConnectionManager()
@@ -58,11 +59,13 @@ PluginProcessConnectionManager::~PluginProcessConnectionManager()
 
 void PluginProcessConnectionManager::initializeConnection(IPC::Connection* connection)
 {
+	syslog(LOG_INFO, "File= %s, FUNCTION = %s ", __FILE__, __FUNCTION__);
     connection->addWorkQueueMessageReceiver(Messages::PluginProcessConnectionManager::messageReceiverName(), m_queue.get(), this);
 }
 
 PluginProcessConnection* PluginProcessConnectionManager::getPluginProcessConnection(uint64_t pluginProcessToken)
 {
+	syslog(LOG_INFO, "File= %s, FUNCTION = %s", __FILE__, __FUNCTION__);
     for (size_t i = 0; i < m_pluginProcessConnections.size(); ++i) {
         if (m_pluginProcessConnections[i]->pluginProcessToken() == pluginProcessToken)
             return m_pluginProcessConnections[i].get();
@@ -70,6 +73,7 @@ PluginProcessConnection* PluginProcessConnectionManager::getPluginProcessConnect
 
     IPC::Attachment encodedConnectionIdentifier;
     bool supportsAsynchronousInitialization;
+    syslog(LOG_INFO, "File= %s, FUNCTION = %s sendsSync", __FILE__, __FUNCTION__);
     if (!WebProcess::singleton().parentProcessConnection()->sendSync(Messages::WebProcessProxy::GetPluginProcessConnection(pluginProcessToken),
                                                      Messages::WebProcessProxy::GetPluginProcessConnection::Reply(encodedConnectionIdentifier, supportsAsynchronousInitialization), 0))
         return 0;

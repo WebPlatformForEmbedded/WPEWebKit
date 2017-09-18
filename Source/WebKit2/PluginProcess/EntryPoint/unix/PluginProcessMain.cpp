@@ -24,10 +24,12 @@
  */
 
 #include "PluginProcessMainUnix.h"
-
+#include <syslog.h>
 using namespace WebKit;
 
 int main(int argc, char** argv)
 {
+    syslog(LOG_INFO, "in file PluginProcessMainUnix.h func of %s", __FUNCTION__);
+
     return PluginProcessMainUnix(argc, argv);
 }

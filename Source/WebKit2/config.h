@@ -133,3 +133,22 @@
 #define HAVE_LINK_PREVIEW 0
 #endif
 #endif
+// Espial
+#ifndef ENABLE_PLUGIN_PROCESS
+#define ENABLE_PLUGIN_PROCESS 1
+#endif
+
+#ifndef ENABLE_NETSCAPE_PLUGIN_API
+#define ENABLE_NETSCAPE_PLUGIN_API 1
+#endif
+
+#ifndef ENABLE_XP_UNIX
+#define ENABLE_XP_UNIX 1
+#endif
+
+#ifndef PLUGIN_ARCHITECTURE_WayLand 
+#define PLUGIN_ARCHITECTURE_WayLand 1
+#endif
+// test
+//#define PLUGIN_ARCHITECTURE_X11 1
+

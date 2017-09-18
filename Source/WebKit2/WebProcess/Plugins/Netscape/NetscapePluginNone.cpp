@@ -23,7 +23,7 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
-
+#if 0
 #include "config.h"
 #if ENABLE(NETSCAPE_PLUGIN_API) && PLUGIN_ARCHITECTURE(UNSUPPORTED)
 
@@ -100,3 +100,4 @@ bool NetscapePlugin::wantsPluginRelativeNPWindowCoordinates()
 } // namespace WebKit
 
 #endif // ENABLE(NETSCAPE_PLUGIN_API) && PLUGIN_ARCHITECTURE(UNSUPPORTED)
+#endif

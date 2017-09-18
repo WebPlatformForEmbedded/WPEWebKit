@@ -46,11 +46,11 @@
 #include <WebCore/NotImplemented.h>
 #include <wtf/TemporaryChange.h>
 #include <wtf/text/WTFString.h>
-
+#include <syslog.h>
 #if PLATFORM(COCOA)
 #include "LayerHostingContext.h"
 #endif
-
+#endif
 using namespace WebCore;
 
 namespace WebKit {
@@ -78,6 +78,7 @@ PluginControllerProxy::PluginControllerProxy(WebProcessConnection* connection, c
     , m_pluginElementNPObject(0)
     , m_visiblityActivity("Plugin is visible.")
 {
+    syslog(LOG_INFO,"PLCtrlProxy::constructor");
 }
 
 PluginControllerProxy::~PluginControllerProxy()
@@ -98,12 +99,13 @@ void PluginControllerProxy::setInitializationReply(PassRefPtr<Messages::WebProce
 }
 
 RefPtr<Messages::WebProcessConnection::CreatePlugin::DelayedReply> PluginControllerProxy::takeInitializationReply()
-{
+{  syslog(LOG_INFO,"CreatePlugin::DelayedReply> PluginControllerProxy::takeInitializationRep");
     return m_initializationReply;
 }
 
 bool PluginControllerProxy::initialize(const PluginCreationParameters& creationParameters)
 {
+    syslog(LOG_INFO,"PLCtrlProxy::initialize");
     ASSERT(!m_plugin);
 
     ASSERT(!m_isInitializing);
@@ -112,6 +114,7 @@ bool PluginControllerProxy::initialize(const PluginCreationParameters& creationP
     m_plugin = NetscapePlugin::create(PluginProcess::singleton().netscapePluginModule());
     if (!m_plugin) {
         // This will delete the plug-in controller proxy object.
+        syslog(LOG_INFO,"no plugin   initialize file = %s %d", __FILE__, __LINE__);
         m_connection->removePluginControllerProxy(this, 0);
         return false;
     }
@@ -125,7 +128,7 @@ bool PluginControllerProxy::initialize(const PluginCreationParameters& creationP
         // Get the plug-in so we can pass it to removePluginControllerProxy. The pointer is only
         // used as an identifier so it's OK to just get a weak reference.
         Plugin* plugin = m_plugin.get();
-        
+        syslog(LOG_INFO,"no plugin   initialize file = %s %d", __FILE__, __LINE__);  //failed here !
         m_plugin = nullptr;
 
         // This will delete the plug-in controller proxy object.
@@ -612,8 +615,8 @@ void PluginControllerProxy::getPluginScriptableNPObject(uint64_t& pluginScriptab
         pluginScriptableNPObjectID = 0;
         return;
     }
-    
-    pluginScriptableNPObjectID = m_connection->npRemoteObjectMap()->registerNPObject(pluginScriptableNPObject, m_plugin.get());
+        pluginScriptableNPObjectID = m_connection->npRemoteObjectMap()->registerNPObject(pluginScriptableNPObject, m_plugin.get());
+   syslog(LOG_INFO,"fun-%s, line=%d" , __func__, __LINE__);
     releaseNPObject(pluginScriptableNPObject);
 }
 
@@ -646,15 +649,17 @@ void PluginControllerProxy::getFormValue(bool& returnValue, String& formValue)
     returnValue = m_plugin->getFormValue(formValue);
 }
 
-#if PLUGIN_ARCHITECTURE(X11)
+#if (PLUGIN_ARCHITECTURE(X11) ||PLUGIN_ARCHITECTURE(WayLand))
 uint64_t PluginControllerProxy::createPluginContainer()
 {
+    syslog(LOG_INFO, "PLUGIN Container:");
     uint64_t windowID = 0;
     m_connection->connection()->sendSync(Messages::PluginProxy::CreatePluginContainer(), Messages::PluginProxy::CreatePluginContainer::Reply(windowID), m_pluginInstanceID);
+    syslog(LOG_INFO, "\n RETURNED WINDOWID====%d", windowID);
     return windowID;
 }
 
-void PluginControllerProxy::windowedPluginGeometryDidChange(const IntRect& frameRect, const IntRect& clipRect, uint64_t windowID)
+/*void PluginControllerProxy::windowedPluginGeometryDidChange(const IntRect& frameRect, const IntRect& clipRect, uint64_t windowID)
 {
     m_connection->connection()->send(Messages::PluginProxy::WindowedPluginGeometryDidChange(frameRect, clipRect, windowID), m_pluginInstanceID);
 }
@@ -663,8 +668,7 @@ void PluginControllerProxy::windowedPluginVisibilityDidChange(bool isVisible, ui
 {
     m_connection->connection()->send(Messages::PluginProxy::WindowedPluginVisibilityDidChange(isVisible, windowID), m_pluginInstanceID);
 }
-#endif
+*/
 
 } // namespace WebKit
-
 #endif // ENABLE(NETSCAPE_PLUGIN_API)

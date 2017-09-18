@@ -40,13 +40,16 @@
 #include <memory>
 #include <utility>
 #include <wtf/text/StringBuilder.h>
-
+#include <syslog.h>
 #if PLATFORM(COCOA)
 #include <WebCore/MachSendRight.h>
 #endif
 
 #if PLUGIN_ARCHITECTURE(X11)
 #include <WebCore/PlatformDisplayX11.h>
+#endif
+#if PLUGIN_ARCHITECTURE(WayLand)
+#include <WebCore/PlatformDisplayWPE.h>
 #endif
 
 using namespace WebCore;
@@ -360,6 +363,7 @@ static void* NPN_MemAlloc(uint32_t size)
 
 static void NPN_MemFree(void* ptr)
 {
+    syslog(LOG_INFO, "NPN_MemFree function address: %p\n", NPN_MemFree);
     npnMemFree(ptr);
 }
 
@@ -422,6 +426,7 @@ static const unsigned WKNVExpectsNonretainedLayer = 74657;
 
 static NPError NPN_GetValue(NPP npp, NPNVariable variable, void *value)
 {
+	syslog (LOG_INFO, "NPN_GETValue called");
     switch (static_cast<unsigned>(variable)) {
         case NPNVWindowNPObject: {
             RefPtr<NetscapePlugin> plugin = NetscapePlugin::fromNPP(npp);
@@ -519,18 +524,31 @@ static NPError NPN_GetValue(NPP npp, NPNVariable variable, void *value)
             *(NPBool*)value = true;
             break;
 #endif
-#elif PLUGIN_ARCHITECTURE(X11)
+#elif  PLUGIN_ARCHITECTURE(X11) // || PLUGIN_ARCHITECTURE(WayLand))
         case NPNVxDisplay: {
-            if (!npp)
-                return NPERR_GENERIC_ERROR;
+/*            if (!npp)
+            return NPERR_GENERIC_ERROR;
             auto& display = PlatformDisplay::sharedDisplay();
             if (display.type() != PlatformDisplay::Type::X11)
-                return NPERR_GENERIC_ERROR;
-            *reinterpret_cast<Display**>(value) = downcast<PlatformDisplayX11>(display).native();
+             return NPERR_GENERIC_ERROR;
+           *reinterpret_cast<Display**>(value) = downcast<PlatformDisplayX11>(display).native();
+            *reinterpret_cast<Display**>(value) = true;
             break;
         }
+*/
+
+        // Espial added WPE type
+            if (!npp)
+            return NPERR_GENERIC_ERROR;
+            auto& display = PlatformDisplay::sharedDisplay();
+            if (display.type() != PlatformDisplay::Type::WPE)
+             return NPERR_GENERIC_ERROR;
+            *reinterpret_cast<Display**>(value) = downcast<PlatformDisplayWPE>(Platformdisplay::sharedDisplay());
+            break;
+        }   
         case NPNVSupportsXEmbedBool:
-            *static_cast<NPBool*>(value) = PlatformDisplay::sharedDisplay().type() == PlatformDisplay::Type::X11;
+            //*static_cast<NPBool*>(value) = PlatformDisplay::sharedDisplay().type() == PlatformDisplay::Type::X11;
+            *static_cast<NPBool*>(value) = PlatformDisplay::sharedDisplay().type() == PlatformDisplay::Type::WPE; // Espial
             break;
         case NPNVSupportsWindowless:
             *static_cast<NPBool*>(value) = true;
@@ -544,6 +562,13 @@ static NPError NPN_GetValue(NPP npp, NPNVariable variable, void *value)
        }
 
        // TODO: implement NPNVnetscapeWindow once we want to support windowed plugins.
+
+
+
+
+
+
+
 #endif
         default:
             notImplemented();
@@ -598,7 +623,7 @@ static NPError NPN_SetValue(NPP npp, NPPVariable variable, void *value)
 
 static void NPN_InvalidateRect(NPP npp, NPRect* invalidRect)
 {
-#if PLUGIN_ARCHITECTURE(X11)
+#if PLUGIN_ARCHITECTURE(X11) || PLUGIN_ARCHITECTURE(WayLand)
     // NSPluginWrapper, a plugin wrapper binary that allows running 32-bit plugins
     // on 64-bit architectures typically used in X11, will sometimes give us a null NPP here.
     if (!npp)

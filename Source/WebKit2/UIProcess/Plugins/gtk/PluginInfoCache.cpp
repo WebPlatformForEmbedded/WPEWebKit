@@ -32,28 +32,43 @@
 #include <WebCore/FileSystem.h>
 #include <WebCore/PlatformDisplay.h>
 #include <wtf/text/CString.h>
-
+#include <syslog.h>
 namespace WebKit {
 
 static const unsigned gSchemaVersion = 3;
 
 PluginInfoCache& PluginInfoCache::singleton()
 {
+	syslog(LOG_INFO, "File --%s , Fun = %s,",__FILE__, __FUNCTION__);
     static NeverDestroyed<PluginInfoCache> pluginInfoCache;
     return pluginInfoCache;
 }
 
 static inline const char* cacheFilenameForCurrentDisplay()
 {
+	syslog(LOG_INFO, "in file %s sharedDispaly().type()== WPE", __FUNCTION__);
+	syslog(LOG_INFO, "File --%s , Fun = %s,",__FILE__, __FUNCTION__);
 #if PLATFORM(X11)
     if (WebCore::PlatformDisplay::sharedDisplay().type() == WebCore::PlatformDisplay::Type::X11)
+        syslog(LOG_INFO, "in file %s sharedDispaly().type()== X11", __FUNCTION__);
         return "plugins-x11";
 #endif
 #if PLATFORM(WAYLAND)
+        syslog(LOG_INFO, "File --%s , Fun = %s,",__FILE__, __FUNCTION__);
     if (WebCore::PlatformDisplay::sharedDisplay().type() == WebCore::PlatformDisplay::Type::Wayland)
+        syslog(LOG_INFO, "in file %s sharedDispaly().type()== Wayland", __FUNCTION__);
         return "plugins-wayland";
 #endif
 
+#if PLATFORM(WPE)
+    	syslog(LOG_INFO, "File --%s , Fun = %s,platform(WPE)",__FILE__, __FUNCTION__);
+     if (WebCore::PlatformDisplay::sharedDisplay().type() == WebCore::PlatformDisplay::Type::WPE)
+        {
+    	 syslog(LOG_INFO, "in file %s sharedDispaly().type()== WPE", __FUNCTION__);
+         return "plugins-WPE";
+        }
+        syslog(LOG_INFO, "File --%s , Fun = %s,PLATFROM(WPE)--return plugins-WPE as file name",__FILE__, __FUNCTION__);
+#endif
     ASSERT_NOT_REACHED();
     return "plugins";
 }
@@ -63,6 +78,8 @@ PluginInfoCache::PluginInfoCache()
     , m_saveToFileIdle(RunLoop::main(), this, &PluginInfoCache::saveToFile)
     , m_readOnlyMode(false)
 {
+	openlog("Module::getpliunInfo", LOG_PID, LOG_USER);
+	syslog(LOG_INFO, "File= %s, in function %s == ", __FILE__, __FUNCTION__);
     m_saveToFileIdle.setPriority(G_PRIORITY_DEFAULT_IDLE);
 
     GUniquePtr<char> cacheDirectory(g_build_filename(g_get_user_cache_dir(), "webkitgtk", nullptr));
@@ -76,6 +93,7 @@ PluginInfoCache::PluginInfoCache()
     }
 
     if (g_key_file_has_group(m_cacheFile.get(), "schema")) {
+    	syslog(LOG_INFO, "File --%s , Fun = %s,",__FILE__, __FUNCTION__);
         unsigned schemaVersion = static_cast<unsigned>(g_key_file_get_integer(m_cacheFile.get(), "schema", "version", nullptr));
         if (schemaVersion < gSchemaVersion) {
             // Cache file using an old schema, create a new empty file.
@@ -98,6 +116,7 @@ PluginInfoCache::~PluginInfoCache()
 
 void PluginInfoCache::saveToFile()
 {
+	syslog(LOG_INFO, "File --%s , Fun = %s,",__FILE__, __FUNCTION__);
     gsize dataLength;
     GUniquePtr<char> data(g_key_file_to_data(m_cacheFile.get(), &dataLength, nullptr));
     if (!data)
@@ -108,6 +127,7 @@ void PluginInfoCache::saveToFile()
 
 bool PluginInfoCache::getPluginInfo(const String& pluginPath, PluginModuleInfo& plugin)
 {
+	syslog(LOG_INFO, "File --%s , Fun = %s,",__FILE__, __FUNCTION__);
     CString pluginGroup = pluginPath.utf8();
     if (!g_key_file_has_group(m_cacheFile.get(), pluginGroup.data()))
         return false;
@@ -128,18 +148,20 @@ bool PluginInfoCache::getPluginInfo(const String& pluginPath, PluginModuleInfo& 
     stringValue.reset(g_key_file_get_string(m_cacheFile.get(), pluginGroup.data(), "description", nullptr));
     plugin.info.desc = String::fromUTF8(stringValue.get());
 
-#if PLUGIN_ARCHITECTURE(X11)
+#if PLUGIN_ARCHITECTURE(X11) || PLUGIN_ARCHITECTURE(WayLand) //Espial enable mime discriptin
     stringValue.reset(g_key_file_get_string(m_cacheFile.get(), pluginGroup.data(), "mime-description", nullptr));
     NetscapePluginModule::parseMIMEDescription(String::fromUTF8(stringValue.get()), plugin.info.mimes);
-#endif
-
-    plugin.requiresGtk2 = g_key_file_get_boolean(m_cacheFile.get(), pluginGroup.data(), "requires-gtk2", nullptr);
+    syslog(LOG_INFO, "File --%s , Fun = %s, ",__FILE__, __FUNCTION__);
+    #endif
+ // Espial not consider gtk2 yet
+  //  plugin.requiresGtk2 = g_key_file_get_boolean(m_cacheFile.get(), pluginGroup.data(), "requires-gtk2", nullptr);
 
     return true;
 }
 
 void PluginInfoCache::updatePluginInfo(const String& pluginPath, const PluginModuleInfo& plugin)
 {
+	syslog(LOG_INFO, "File --%s , Fun = %s,!!!!!call m_cacheFile.get",__FILE__, __FUNCTION__);
     time_t lastModified;
     if (!WebCore::getFileModificationTime(pluginPath, lastModified))
         return;
@@ -149,12 +171,14 @@ void PluginInfoCache::updatePluginInfo(const String& pluginPath, const PluginMod
     g_key_file_set_string(m_cacheFile.get(), pluginGroup.data(), "name", plugin.info.name.utf8().data());
     g_key_file_set_string(m_cacheFile.get(), pluginGroup.data(), "description", plugin.info.desc.utf8().data());
 
-#if PLUGIN_ARCHITECTURE(X11)
+#if PLUGIN_ARCHITECTURE(X11)|| PLUGIN_ARCHITECTURE(WayLand)
+    syslog(LOG_INFO, "buildMIMEDescriptin ...File --%s , Fun = %s,",__FILE__, __FUNCTION__);
     String mimeDescription = NetscapePluginModule::buildMIMEDescription(plugin.info.mimes);
     g_key_file_set_string(m_cacheFile.get(), pluginGroup.data(), "mime-description", mimeDescription.utf8().data());
 #endif
 
-    g_key_file_set_boolean(m_cacheFile.get(), pluginGroup.data(), "requires-gtk2", plugin.requiresGtk2);
+  // Espial not consider gtk2 yet
+  //  g_key_file_set_boolean(m_cacheFile.get(), pluginGroup.data(), "requires-gtk2", plugin.requiresGtk2);
 
     if (m_cachePath && !m_readOnlyMode) {
         // Save the cache file in an idle to make sure it happens in the main thread and

@@ -33,7 +33,7 @@
 #include "PluginProcess.h"
 #include "PluginProcessAttributes.h"
 #include <wtf/RefCounted.h>
-
+#include <syslog.h>
 namespace WebKit {
 
 class NPRemoteObjectMap;
@@ -44,6 +44,8 @@ class PluginProcessConnection : public RefCounted<PluginProcessConnection>, IPC:
 public:
     static Ref<PluginProcessConnection> create(PluginProcessConnectionManager* pluginProcessConnectionManager, uint64_t pluginProcessToken, IPC::Connection::Identifier connectionIdentifier, bool supportsAsynchronousPluginInitialization)
     {
+    	syslog(LOG_INFO, "File= %s, FUNCTION = %s", __FILE__, __FUNCTION__);
+    	syslog(LOG_INFO,"created pluginprocess conneticon");
         return adoptRef(*new PluginProcessConnection(pluginProcessConnectionManager, pluginProcessToken, connectionIdentifier, supportsAsynchronousPluginInitialization));
     }
     ~PluginProcessConnection();

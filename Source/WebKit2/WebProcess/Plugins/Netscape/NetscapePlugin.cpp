@@ -41,8 +41,8 @@
 #include <runtime/JSObject.h>
 #include <utility>
 #include <wtf/text/CString.h>
-
-#if PLUGIN_ARCHITECTURE(X11)
+#include <syslog.h>
+#if PLUGIN_ARCHITECTURE(X11) || PLUGIN_ARCHITECTURE(WayLand)
 #include "NetscapePluginUnix.h"
 #endif
 
@@ -55,9 +55,13 @@ static NetscapePlugin* currentNPPNewPlugin;
 
 RefPtr<NetscapePlugin> NetscapePlugin::create(PassRefPtr<NetscapePluginModule> pluginModule)
 {
+	syslog(LOG_INFO, "Create pluginmodule");
     if (!pluginModule)
+    {  
+	syslog(LOG_INFO, "Create (pluginmodule) not pluginModule...return nullptri !!! ");
         return nullptr;
-
+  }
+	syslog(LOG_INFO, "===>retrun new NetscapePluin(pluignMudle) Create (pluginmodule) ");
     return adoptRef(*new NetscapePlugin(pluginModule));
 }
     
@@ -70,7 +74,7 @@ NetscapePlugin::NetscapePlugin(PassRefPtr<NetscapePluginModule> pluginModule)
 #if PLATFORM(COCOA)
     , m_isWindowed(false)
 #else
-    , m_isWindowed(true)
+//    , m_isWindowed(false)
 #endif
     , m_isTransparent(false)
     , m_inNPPNew(false)
@@ -96,6 +100,10 @@ NetscapePlugin::NetscapePlugin(PassRefPtr<NetscapePluginModule> pluginModule)
 #endif
 #endif
 {
+    m_isWindowed = m_pluginModule->pluginFuncs().setwindow != NULL;
+
+    syslog(LOG_INFO, "===>file=%s, line=%d ,m_isWinndowed=%d,", __FILE__, __LINE__, m_isWindowed);
+
     m_npp.ndata = this;
     m_npp.pdata = 0;
     
@@ -441,7 +449,10 @@ NPError NetscapePlugin::NPP_Destroy(NPSavedData** savedData)
 
 NPError NetscapePlugin::NPP_SetWindow(NPWindow* npWindow)
 {
-    return m_pluginModule->pluginFuncs().setwindow(&m_npp, npWindow);
+    if(m_isWindowed)
+        return m_pluginModule->pluginFuncs().setwindow(&m_npp, npWindow);
+    else
+        return NPERR_NO_ERROR;
 }
 
 NPError NetscapePlugin::NPP_NewStream(NPMIMEType mimeType, NPStream* stream, NPBool seekable, uint16_t* streamType)
@@ -490,8 +501,15 @@ bool NetscapePlugin::NPP_URLRedirectNotify(const char* url, int32_t status, void
 
 NPError NetscapePlugin::NPP_GetValue(NPPVariable variable, void *value)
 {
+    syslog(LOG_INFO, "File= %s, FUNCTION = %s, line=%d", __FILE__, __FUNCTION__, __LINE__);
+
     if (!m_pluginModule->pluginFuncs().getvalue)
+    {
+        syslog(LOG_INFO, "Return error !!! File= %s, FUNCTION = %s, line=%d", __FILE__, __FUNCTION__, __LINE__);
+
         return NPERR_GENERIC_ERROR;
+    }
+        syslog(LOG_INFO, "will call m_pluginModuel->pluginFuncs()  getvalue File= %s, FUNCTION = %s, line=%d", __FILE__, __FUNCTION__, __LINE__);
 
     return m_pluginModule->pluginFuncs().getvalue(&m_npp, variable, value);
 }
@@ -505,7 +523,8 @@ NPError NetscapePlugin::NPP_SetValue(NPNVariable variable, void *value)
 }
 
 void NetscapePlugin::callSetWindow()
-{
+{    
+	syslog(LOG_INFO, "File= %s, FUNCTION = %s", __FILE__, __FUNCTION__);
     if (wantsPluginRelativeNPWindowCoordinates()) {
         m_npWindow.x = 0;
         m_npWindow.y = 0;
@@ -532,6 +551,7 @@ void NetscapePlugin::callSetWindow()
 
 void NetscapePlugin::callSetWindowInvisible()
 {
+	syslog(LOG_INFO, "File= %s, FUNCTION = %s", __FILE__, __FUNCTION__);
     NPWindow invisibleWindow = m_npWindow;
     
     invisibleWindow.window = 0;
@@ -546,7 +566,8 @@ void NetscapePlugin::callSetWindowInvisible()
 
 bool NetscapePlugin::shouldLoadSrcURL()
 {
-#if PLUGIN_ARCHITECTURE(X11)
+	syslog(LOG_INFO, "File= %s, FUNCTION = %s", __FILE__, __FUNCTION__);
+#if PLUGIN_ARCHITECTURE(X11) ||PLUGIN_ARCHITECTURE(WayLand)
     // Flash crashes when NPP_GetValue is called for NPPVpluginCancelSrcStream in windowed mode.
     if (m_isWindowed && m_pluginModule->pluginQuirks().contains(PluginQuirks::DoNotCancelSrcStreamInWindowedMode))
         return true;
@@ -563,11 +584,13 @@ bool NetscapePlugin::shouldLoadSrcURL()
 
 NetscapePluginStream* NetscapePlugin::streamFromID(uint64_t streamID)
 {
+	syslog(LOG_INFO, "File= %s, FUNCTION = %s", __FILE__, __FUNCTION__);
     return m_streams.get(streamID);
 }
 
 void NetscapePlugin::stopAllStreams()
 {
+	syslog(LOG_INFO, "File= %s, FUNCTION = %s", __FILE__, __FUNCTION__);
     Vector<RefPtr<NetscapePluginStream>> streams;
     copyValuesToVector(m_streams, streams);
 
@@ -577,6 +600,7 @@ void NetscapePlugin::stopAllStreams()
 
 bool NetscapePlugin::allowPopups() const
 {
+	syslog(LOG_INFO, "File= %s, FUNCTION = %s", __FILE__, __FUNCTION__);
     if (m_pluginModule->pluginFuncs().version >= NPVERS_HAS_POPUPS_ENABLED_STATE) {
         if (!m_popupEnabledStates.isEmpty())
             return m_popupEnabledStates.last();
@@ -622,6 +646,8 @@ static bool isTransparentSilverlightBackgroundValue(const String& lowercaseBackg
 
 bool NetscapePlugin::initialize(const Parameters& parameters)
 {
+	syslog(LOG_INFO, "File= %s, FUNCTION = %s", __FILE__, __FUNCTION__);
+
     uint16_t mode = parameters.isFullFramePlugin ? NP_FULL : NP_EMBED;
     
     m_shouldUseManualLoader = parameters.shouldUseManualLoader;
@@ -644,7 +670,8 @@ bool NetscapePlugin::initialize(const Parameters& parameters)
         paramValues.append(parameters.values[i].utf8());
     }
 
-#if PLUGIN_ARCHITECTURE(X11)
+#if PLUGIN_ARCHITECTURE(X11) || PLUGIN_ARCHITECTURE(WayLand)
+    syslog(LOG_INFO, "File= %s, FUNCTION = %s", __FILE__, __FUNCTION__);
     if (equalLettersIgnoringASCIICase(parameters.mimeType, "application/x-shockwave-flash")) {
         size_t wmodeIndex = parameters.names.find("wmode");
         if (wmodeIndex != notFound) {
@@ -684,11 +711,13 @@ bool NetscapePlugin::initialize(const Parameters& parameters)
 #endif
 
     platformPreInitialize();
-
+    syslog(LOG_INFO, "AFter platformPreInitialize () called ---File= %s, FUNCTION = %s", __FILE__, __FUNCTION__);
     NetscapePlugin* previousNPPNewPlugin = currentNPPNewPlugin;
     
     m_inNPPNew = true;
     currentNPPNewPlugin = this;
+    syslog(LOG_INFO, "will call NPP_New ... File= %s, FUNCTION = %s", __FILE__, __FUNCTION__);
+  //  m_isWindowed = m_pluginModule->pluginFuncs().setwindow != NULL;
 
     NPError error = NPP_New(const_cast<char*>(mimeTypeCString.data()), mode, names.size(),
                             const_cast<char**>(names.data()), const_cast<char**>(values.data()), 0);
@@ -702,29 +731,31 @@ bool NetscapePlugin::initialize(const Parameters& parameters)
     m_isStarted = true;
 
     // FIXME: This is not correct in all cases.
-    m_npWindow.type = NPWindowTypeDrawable;
+  // m_npWindow.type = NPWindowTypeDrawable;
+    m_npWindow.type = NPWindowTypeWindow;   //Espial
 
     if (!platformPostInitialize()) {
         destroy();
+        syslog(LOG_INFO, " platfromPostInitialize() fail  ... File= %s, FUNCTION = %s", __FILE__, __FUNCTION__);
         return false;
     }
 
     // Load the src URL if needed.
     if (!parameters.shouldUseManualLoader && !parameters.url.isEmpty() && shouldLoadSrcURL())
         loadURL("GET", parameters.url.string(), String(), HTTPHeaderMap(), Vector<uint8_t>(), false, 0);
-    
+    syslog(LOG_INFO, "after load URL Ret True    File= %s, FUNCTION = %s", __FILE__, __FUNCTION__);
     return true;
 }
     
 void NetscapePlugin::destroy()
 {
     ASSERT(m_isStarted);
-
-    // Stop all streams.
+    syslog(LOG_INFO, "File= %s, FUNCTION = %s", __FILE__, __FUNCTION__);
     stopAllStreams();
 
-#if !PLUGIN_ARCHITECTURE(MAC) && !PLUGIN_ARCHITECTURE(X11)
+#if !PLUGIN_ARCHITECTURE(MAC) && !PLUGIN_ARCHITECTURE(X11) && !PLUGIN_ARCHITECTURE(WayLand)
     m_npWindow.window = 0;
+    syslog(LOG_INFsyslog(LOG_INFO, "Will callSetWindow() File= %s, FUNCTION = %s", __FILE__, __FUNCTION__);
     callSetWindow();
 #endif
 
@@ -795,7 +826,7 @@ void NetscapePlugin::geometryDidChange(const IntSize& pluginSize, const IntRect&
     m_clipRect = clipRect;
     m_pluginToRootViewTransform = pluginToRootViewTransform;
 
-#if PLUGIN_ARCHITECTURE(X11)
+#if PLUGIN_ARCHITECTURE(X11) || PLUGIN_ARCHITECTURE(WayLand)
     IntPoint frameRectLocationInWindowCoordinates = m_pluginToRootViewTransform.mapPoint(IntPoint());
     m_frameRectInWindowCoordinates = IntRect(frameRectLocationInWindowCoordinates, m_pluginSize);
 #endif
@@ -1004,16 +1035,21 @@ void NetscapePlugin::setFocus(bool hasFocus)
 
 NPObject* NetscapePlugin::pluginScriptableNPObject()
 {
+    syslog(LOG_INFO, "File= %s, FUNCTION = %s, line=%d", __FILE__, __FUNCTION__, __LINE__);
     ASSERT(m_isStarted);
     NPObject* scriptableNPObject = 0;
     
     if (NPP_GetValue(NPPVpluginScriptableNPObject, &scriptableNPObject) != NPERR_NO_ERROR)
-        return 0;
+    {
+        syslog(LOG_INFO, "File= %s, FUNCTION = %s, line=%d", __FILE__, __FUNCTION__, __LINE__);
 
+        return 0;
+    }
 #if PLUGIN_ARCHITECTURE(MAC)
     if (m_pluginModule->pluginQuirks().contains(PluginQuirks::ReturnsNonRetainedScriptableNPObject))
         retainNPObject(scriptableNPObject);        
 #endif    
+    syslog(LOG_INFO, " OK, Retrunr scrptableNPobject ....File= %s, FUNCTION = %s, line=%d", __FILE__, __FUNCTION__, __LINE__);
 
     return scriptableNPObject;
 }
@@ -1071,6 +1107,7 @@ void NetscapePlugin::updateNPNPrivateMode()
 
 bool NetscapePlugin::getFormValue(String& formValue)
 {
+    syslog(LOG_INFO, "File= %s, FUNCTION = %s", __FILE__, __FUNCTION__);
     ASSERT(m_isStarted);
 
     char* formValueString = 0;

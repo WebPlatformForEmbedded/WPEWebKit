@@ -87,7 +87,7 @@ public:
 
 #endif
 
-#if PLUGIN_ARCHITECTURE(X11)
+#if PLUGIN_ARCHITECTURE(X11) || PLUGIN_ARCHITECTURE(WayLand)
     const WebCore::IntRect& frameRectInWindowCoordinates() const { return m_frameRectInWindowCoordinates; }
 #endif
     const WebCore::IntRect& clipRect() const { return m_clipRect; }
@@ -298,7 +298,7 @@ private:
     // A transform that can be used to convert from root view coordinates to plug-in coordinates.
     WebCore::AffineTransform m_pluginToRootViewTransform;
 
-#if PLUGIN_ARCHITECTURE(X11)
+#if PLUGIN_ARCHITECTURE(X11) || PLUGIN_ARCHITECTURE(WayLand)
     WebCore::IntRect m_frameRectInWindowCoordinates;
 #endif
 
@@ -386,7 +386,7 @@ private:
     RunLoop::Timer<NetscapePlugin> m_nullEventTimer;
     NP_CGContext m_npCGContext;
 #endif
-#elif PLUGIN_ARCHITECTURE(X11)
+#elif PLUGIN_ARCHITECTURE(X11) || PLUGIN_ARCHITECTURE(WayLand)
     std::unique_ptr<NetscapePluginUnix> m_impl;
 #endif
 };

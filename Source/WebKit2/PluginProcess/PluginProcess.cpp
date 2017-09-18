@@ -39,7 +39,7 @@
 #include <WebCore/MemoryPressureHandler.h>
 #include <WebCore/NotImplemented.h>
 #include <wtf/RunLoop.h>
-
+#include <syslog.h>
 #if PLATFORM(MAC)
 #include <crt_externs.h>
 #endif
@@ -50,6 +50,7 @@ namespace WebKit {
 
 PluginProcess& PluginProcess::singleton()
 {
+	syslog(LOG_INFO, "=====>File --%s , Fun = %s,",__FILE__, __FUNCTION__);
     static NeverDestroyed<PluginProcess> pluginProcess;
     return pluginProcess;
 }
@@ -59,6 +60,7 @@ PluginProcess::PluginProcess()
     , m_minimumLifetimeTimer(RunLoop::main(), this, &PluginProcess::minimumLifetimeTimerFired)
     , m_connectionActivity("PluginProcess connection activity.")
 {
+	syslog(LOG_INFO, "=====>File --%s , Fun = %s,",__FILE__, __FUNCTION__);
     NetscapePlugin::setSetExceptionFunction(WebProcessConnection::setGlobalException);
 }
 
@@ -68,13 +70,15 @@ PluginProcess::~PluginProcess()
 
 void PluginProcess::initializeProcess(const ChildProcessInitializationParameters& parameters)
 {
+	syslog(LOG_INFO, "======>File --%s , Fun = %s,",__FILE__, __FUNCTION__);
     m_pluginPath = parameters.extraInitializationData.get("plugin-path");
     platformInitializeProcess(parameters);
 }
 
 void PluginProcess::removeWebProcessConnection(WebProcessConnection* webProcessConnection)
 {
-    size_t vectorIndex = m_webProcessConnections.find(webProcessConnection);
+	syslog(LOG_INFO, "======>File --%s , Fun = %s,",__FILE__, __FUNCTION__);
+	size_t vectorIndex = m_webProcessConnections.find(webProcessConnection);
     ASSERT(vectorIndex != notFound);
 
     m_webProcessConnections.remove(vectorIndex);
@@ -111,11 +115,13 @@ bool PluginProcess::shouldTerminate()
 
 void PluginProcess::didReceiveMessage(IPC::Connection& connection, IPC::Decoder& decoder)
 {
+	syslog(LOG_INFO, "======>File --%s , Fun = %s,",__FILE__, __FUNCTION__);
     didReceivePluginProcessMessage(connection, decoder);
 }
 
 void PluginProcess::didClose(IPC::Connection&)
 {
+	syslog(LOG_INFO, "===>File --%s , Fun = %s,",__FILE__, __FUNCTION__);
     // The UI process has crashed, just quit.
     // FIXME: If the plug-in is spinning in the main loop, we'll never get this message.
     stopRunLoop();
@@ -127,6 +133,7 @@ void PluginProcess::didReceiveInvalidMessage(IPC::Connection&, IPC::StringRefere
 
 void PluginProcess::initializePluginProcess(PluginProcessCreationParameters&& parameters)
 {
+	syslog(LOG_INFO, "======>File --%s , Fun = %s,",__FILE__, __FUNCTION__);
     ASSERT(!m_pluginModule);
 
     auto& memoryPressureHandler = MemoryPressureHandler::singleton();
@@ -149,6 +156,7 @@ void PluginProcess::initializePluginProcess(PluginProcessCreationParameters&& pa
 
 void PluginProcess::createWebProcessConnection()
 {
+	syslog(LOG_INFO, "======>File --%s , Fun = %s,",__FILE__, __FUNCTION__);
     bool didHaveAnyWebProcessConnections = !m_webProcessConnections.isEmpty();
 
 #if USE(UNIX_DOMAIN_SOCKETS)
@@ -177,6 +185,7 @@ void PluginProcess::createWebProcessConnection()
 
     if (NetscapePluginModule* module = netscapePluginModule()) {
         if (!didHaveAnyWebProcessConnections) {
+        	syslog(LOG_INFO, "===>File --%s , Fun = %s,!didHaveAnyWebProcessConnection",__FILE__, __FUNCTION__);
             // Increment the load count. This is matched by a call to decrementLoadCount in removeWebProcessConnection.
             // We do this so that the plug-in module's NP_Shutdown won't be called until right before exiting.
             module->incrementLoadCount();
@@ -191,7 +200,7 @@ void PluginProcess::getSitesWithData(uint64_t callbackID)
     Vector<String> sites;
     if (NetscapePluginModule* module = netscapePluginModule())
         sites = module->sitesWithData();
-
+    syslog(LOG_INFO, "===>File --%s , Fun = %s,",__FILE__, __FUNCTION__);
     parentProcessConnection()->send(Messages::PluginProcessProxy::DidGetSitesWithData(sites, callbackID), 0);
 }
 

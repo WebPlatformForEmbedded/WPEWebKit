@@ -29,6 +29,7 @@
 #include "Logging.h"
 #include "SandboxInitializationParameters.h"
 #include <unistd.h>
+#include <syslog.h>
 
 namespace WebKit {
 
@@ -46,6 +47,7 @@ ChildProcess::~ChildProcess()
 
 static void didCloseOnConnectionWorkQueue(IPC::Connection*)
 {
+	syslog(LOG_INFO, " =====>File --%s , Fun = %s,",__FILE__, __FUNCTION__);
     // If the connection has been closed and we haven't responded in the main thread for 10 seconds
     // the process will exit forcibly.
     auto watchdogDelay = std::chrono::seconds(10);
@@ -61,21 +63,23 @@ static void didCloseOnConnectionWorkQueue(IPC::Connection*)
 
 void ChildProcess::initialize(const ChildProcessInitializationParameters& parameters)
 {
+	syslog(LOG_INFO, "call platformInitilize()=====>File --%s , Fun = %s,",__FILE__, __FUNCTION__);
     platformInitialize();
 
 #if PLATFORM(COCOA)
     m_priorityBoostMessage = parameters.priorityBoostMessage;
 #endif
-
+    syslog(LOG_INFO, "call initializeProcess(parameters) =====>File --%s , Fun = %s,",__FILE__, __FUNCTION__);
     initializeProcess(parameters);
     initializeProcessName(parameters);
 
     SandboxInitializationParameters sandboxParameters;
     initializeSandbox(parameters, sandboxParameters);
-    
+    syslog(LOG_INFO, "call IPC::connection::createclientconnection =====>File --%s , Fun = %s,",__FILE__, __FUNCTION__);
     m_connection = IPC::Connection::createClientConnection(parameters.connectionIdentifier, *this);
     m_connection->setDidCloseOnConnectionWorkQueueCallback(didCloseOnConnectionWorkQueue);
     initializeConnection(m_connection.get());
+    syslog(LOG_INFO, "call open====>File --%s , Fun = %s,",__FILE__, __FUNCTION__);
     m_connection->open();
 }
 

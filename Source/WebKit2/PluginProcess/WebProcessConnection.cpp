@@ -25,6 +25,7 @@
 
 #include "config.h"
 #include "WebProcessConnection.h"
+#include <syslog.h>
 
 #if ENABLE(NETSCAPE_PLUGIN_API)
 
@@ -207,6 +208,7 @@ void WebProcessConnection::didReceiveInvalidMessage(IPC::Connection&, IPC::Strin
 
 void WebProcessConnection::createPluginInternal(const PluginCreationParameters& creationParameters, bool& result, bool& wantsWheelEvents, uint32_t& remoteLayerClientID)
 {
+    syslog(LOG_INFO,"createPlugin -- %d", __LINE__);
     auto pluginControllerProxy = std::make_unique<PluginControllerProxy>(this, creationParameters);
 
     PluginControllerProxy* pluginControllerProxyPtr = pluginControllerProxy.get();
@@ -231,6 +233,7 @@ void WebProcessConnection::createPluginInternal(const PluginCreationParameters& 
 
 void WebProcessConnection::createPlugin(const PluginCreationParameters& creationParameters, PassRefPtr<Messages::WebProcessConnection::CreatePlugin::DelayedReply> reply)
 {
+    syslog(LOG_INFO,"createPlugin -- %d", __LINE__);
     // Ensure we don't clamp any timers during initialization
     ActivityAssertion activityAssertion(PluginProcess::singleton().connectionActivity());
 
@@ -268,6 +271,7 @@ void WebProcessConnection::createPlugin(const PluginCreationParameters& creation
 
 void WebProcessConnection::createPluginAsynchronously(const PluginCreationParameters& creationParameters)
 {
+    syslog(LOG_INFO,"createPlugin -- %d", __LINE__);
     // In the time since this plugin was requested asynchronously we might have created it synchronously or destroyed it.
     // In either of those cases we need to ignore this creation request.
     if (m_asynchronousInstanceIDsToIgnore.contains(creationParameters.pluginInstanceID)) {

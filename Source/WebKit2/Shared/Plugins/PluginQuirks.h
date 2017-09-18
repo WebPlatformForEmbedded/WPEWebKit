@@ -79,7 +79,7 @@ public:
 #endif
 
         // X11 specific quirks:
-#elif PLUGIN_ARCHITECTURE(X11)
+#elif (PLUGIN_ARCHITECTURE(X11) || PLUGIN_ARCHITECTURE(WayLand))
         // Flash and npwrapper ask the browser about which GTK version does it use
         // and refuse to load and work if it is not GTK 2 so we need to fake it in
         // NPN_GetValue even when it is a lie.
@@ -96,6 +96,7 @@ public:
         DoNotCancelSrcStreamInWindowedMode,
 #endif
 
+        // This isn't really a quirk as much as the opposite of a quirk. By default, we don't send wheel events
         // This isn't really a quirk as much as the opposite of a quirk. By default, we don't send wheel events
         // to plug-ins unless we know that they handle them correctly. Adobe Reader on Mac handles wheel events correctly.
         WantsWheelEvents,

@@ -23,7 +23,6 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
-
 #ifndef NetscapePluginX11_h
 #define NetscapePluginX11_h
 
@@ -40,6 +39,7 @@ class NetscapePluginX11 final : public NetscapePluginUnix {
 public:
     static std::unique_ptr<NetscapePluginX11> create(NetscapePlugin&);
     NetscapePluginX11(NetscapePlugin&, Display*);
+    NetscapePluginX11(NetscapePlugin&, void *);
 #if PLATFORM(GTK)
     NetscapePluginX11(NetscapePlugin&, Display*, uint64_t windowID);
 #endif
@@ -61,12 +61,13 @@ private:
 
     NetscapePlugin& m_plugin;
     Display* m_pluginDisplay { nullptr };
+    void * m_pluginDisplay { nullptr };
     WebCore::XUniquePixmap m_drawable;
     NPSetWindowCallbackStruct m_setWindowCallbackStruct;
-#if PLATFORM(GTK)
+#if PLATFORM(GTK) || PLATFORM(WPE)
     uint64_t m_windowID { 0 };
     unsigned long m_npWindowID { 0 };
-    GtkWidget* m_platformPluginWidget { nullptr };
+   // GtkWidget* m_platformPluginWidget { nullptr };
 #endif
 };
 } // namespace WebKit
@@ -74,3 +75,4 @@ private:
 #endif // PLUGIN_ARCHITECTURE(X11) && ENABLE(NETSCAPE_PLUGIN_API)
 
 #endif // NetscapePluginX11_h
+

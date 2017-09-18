@@ -57,6 +57,7 @@ static uint64_t generatePluginInstanceID()
 
 Ref<PluginProxy> PluginProxy::create(uint64_t pluginProcessToken, bool isRestartedProcess)
 {
+	syslog(LOG_INFO, "File= %s, FUNCTION = %s", __FILE__, __FUNCTION__);
     return adoptRef(*new PluginProxy(pluginProcessToken, isRestartedProcess));
 }
 
@@ -72,6 +73,7 @@ PluginProxy::PluginProxy(uint64_t pluginProcessToken, bool isRestartedProcess)
     , m_waitingOnAsynchronousInitialization(false)
     , m_isRestartedProcess(isRestartedProcess)
 {
+	syslog(LOG_INFO, "File= %s, FUNCTION = %s", __FILE__, __FUNCTION__);
 }
 
 PluginProxy::~PluginProxy()
@@ -80,17 +82,22 @@ PluginProxy::~PluginProxy()
 
 void PluginProxy::pluginProcessCrashed()
 {
+	syslog(LOG_INFO, "File= %s, FUNCTION = %s", __FILE__, __FUNCTION__);
     controller()->pluginProcessCrashed();
 }
 
 bool PluginProxy::initialize(const Parameters& parameters)
 {
+    syslog(LOG_INFO, "#####File= %s, FUNCTION = %s PluginPRoxy::initilize---- will create conection", __FILE__, __FUNCTION__);
     ASSERT(!m_connection);
     m_connection = WebProcess::singleton().pluginProcessConnectionManager().getPluginProcessConnection(m_pluginProcessToken);
     
     if (!m_connection)
+    {
+    	syslog(LOG_INFO, "File= %s, FUNCTION = %s ---- getpluginprocess connectin failled !!!!", __FILE__, __FUNCTION__);
         return false;
-    
+    }
+        syslog(LOG_INFO, "### Good got m_connection Add plugin proxy befreo breate the plug-in; it needs to be in the map because CreatePlugin can call plugin-in proxy", __FILE__, __FUNCTION__);
     // Add the plug-in proxy before creating the plug-in; it needs to be in the map because CreatePlugin
     // can call back out to the plug-in proxy.
     m_connection->addPluginProxy(this);
@@ -110,6 +117,7 @@ bool PluginProxy::initialize(const Parameters& parameters)
 
     if (!canInitializeAsynchronously())
         return initializeSynchronously();
+    syslog(LOG_INFO, "File= %s, FUNCTION = %d ---- Will create ASYNC plugin process  !!!!", __FILE__, __LINE__);
 
     // Remember that we tried to create this plug-in asynchronously in case we need to create it synchronously later.
     m_waitingOnAsynchronousInitialization = true;
@@ -695,21 +703,21 @@ void PluginProxy::setStatusbarText(const String& statusbarText)
     controller()->setStatusbarText(statusbarText);
 }
 
-#if PLUGIN_ARCHITECTURE(X11)
+#if PLUGIN_ARCHITECTURE(X11) || PLUGIN_ARCHITECTURE(WayLand)
 void PluginProxy::createPluginContainer(uint64_t& windowID)
 {
     windowID = controller()->createPluginContainer();
 }
 
-void PluginProxy::windowedPluginGeometryDidChange(const WebCore::IntRect& frameRect, const WebCore::IntRect& clipRect, uint64_t windowID)
-{
-    controller()->windowedPluginGeometryDidChange(frameRect, clipRect, windowID);
-}
-
-void PluginProxy::windowedPluginVisibilityDidChange(bool isVisible, uint64_t windowID)
-{
-    controller()->windowedPluginVisibilityDidChange(isVisible, windowID);
-}
+//void PluginProxy::windowedPluginGeometryDidChange(const WebCore::IntRect& frameRect, const WebCore::IntRect& clipRect, uint64_t windowID)
+//{
+//    controller()->windowedPluginGeometryDidChange(frameRect, clipRect, windowID);
+//}
+//
+//void PluginProxy::windowedPluginVisibilityDidChange(bool isVisible, uint64_t windowID)
+//{
+//    controller()->windowedPluginVisibilityDidChange(isVisible, windowID);
+//}
 #endif
 
 void PluginProxy::update(const IntRect& paintedRect)

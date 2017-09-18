@@ -60,7 +60,7 @@ namespace WebKit {
 
 static inline Display* x11HostDisplay()
 {
-    return downcast<PlatformDisplayX11>(PlatformDisplay::sharedDisplay()).native();
+        return downcast<PlatformDisplayX11>(PlatformDisplay::sharedDisplay()).native();
 }
 
 static Display* getPluginDisplay()
@@ -71,6 +71,9 @@ static Display* getPluginDisplay()
     return GDK_DISPLAY_XDISPLAY(gdk_display_get_default());
 #elif PLATFORM(EFL) && defined(HAVE_ECORE_X)
     return static_cast<Display*>(ecore_x_display_get());
+// Add Espial implementation
+#elif PLATFORM(WPE)
+    return static_cast<Display*>(downcast<PlatformDisplayWPE>(PlatformDisplay::sharedDisplay()));
 #else
     return nullptr;
 #endif
@@ -122,11 +125,11 @@ static gboolean socketPlugRemovedCallback(GtkSocket*)
 
 std::unique_ptr<NetscapePluginX11> NetscapePluginX11::create(NetscapePlugin& plugin)
 {
-#if PLATFORM(GTK)
+#if PLATFORM(GTK) || PLATFORM(WPE)
     uint64_t windowID = 0;
 #endif
     if (plugin.isWindowed()) {
-#if PLATFORM(GTK)
+#if PLATFORM(GTK) || PLATFORM(WPE)
         // NPPVplugiNeedsXEmbed is a boolean value, but at least the
         // Flash player plugin is using an 'int' instead.
         int needsXEmbed = 0;
@@ -168,7 +171,8 @@ NetscapePluginX11::NetscapePluginX11(NetscapePlugin& plugin, Display* display)
 
     XVisualInfo visualTemplate;
     visualTemplate.screen = x11Screen();
-    visualTemplate.depth = depth;
+    visualTemplate.depth = d
+    		epth;
     visualTemplate.c_class = TrueColor;
     int numMatching;
     XUniquePtr<XVisualInfo> visualInfo(XGetVisualInfo(hostDisplay, VisualScreenMask | VisualDepthMask | VisualClassMask, &visualTemplate, &numMatching));
@@ -550,3 +554,5 @@ bool NetscapePluginX11::handleKeyboardEvent(const WebKeyboardEvent& event)
 } // namespace WebKit
 
 #endif // PLUGIN_ARCHITECTURE(X11) && ENABLE(NETSCAPE_PLUGIN_API)
+
+

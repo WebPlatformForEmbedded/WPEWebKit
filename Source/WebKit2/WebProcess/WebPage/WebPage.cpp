@@ -3886,6 +3886,7 @@ void WebPage::mainFrameDidLayout()
 
 void WebPage::addPluginView(PluginView* pluginView)
 {
+    syslog(LOG_INFO, "fun = %s, in file=%s", __FUNCTION__, __FILE__);
     ASSERT(!m_pluginViews.contains(pluginView));
 
     m_pluginViews.add(pluginView);
@@ -3898,6 +3899,8 @@ void WebPage::addPluginView(PluginView* pluginView)
 
 void WebPage::removePluginView(PluginView* pluginView)
 {
+    syslog(LOG_INFO, "fun = %s, in file=%s", __FUNCTION__, __FILE__);
+
     ASSERT(m_pluginViews.contains(pluginView));
 
     m_pluginViews.remove(pluginView);

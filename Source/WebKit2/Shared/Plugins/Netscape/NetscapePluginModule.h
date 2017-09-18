@@ -65,18 +65,19 @@ public:
 
     Module* module() const { return m_module.get(); }
 
-#if PLUGIN_ARCHITECTURE(X11)
+#if PLUGIN_ARCHITECTURE(X11) || PLUGIN_ARCHITECTURE(WayLand)
     static bool scanPlugin(const String& pluginPath);
     static void parseMIMEDescription(const String& mimeDescription, Vector<WebCore::MimeClassInfo>& result);
     static String buildMIMEDescription(const Vector<WebCore::MimeClassInfo>&);
 #endif
+
 
 private:
     explicit NetscapePluginModule(const String& pluginPath);
 
     void determineQuirks();
 
-#if PLUGIN_ARCHITECTURE(X11)
+#if PLUGIN_ARCHITECTURE(X11) || PLUGIN_ARCHITECTURE(WayLand)
     bool getPluginInfoForLoadedPlugin(RawPluginMetaData&);
 #endif
 

@@ -179,7 +179,7 @@ public:
     void setAdditionalPluginsDirectory(const String&);
 
     PluginInfoStore& pluginInfoStore() { return m_pluginInfoStore; }
-
+    void refreshPlugins();
     void setPluginLoadClientPolicy(WebCore::PluginLoadClientPolicy, const String& host, const String& bundleIdentifier, const String& versionString);
     void clearPluginClientPolicies();
 #endif

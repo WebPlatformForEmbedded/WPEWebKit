@@ -71,6 +71,7 @@
 #include <WebCore/UserGestureIndicator.h>
 #include <bindings/ScriptValue.h>
 #include <wtf/text/StringBuilder.h>
+#include <syslog.h>
 
 using namespace JSC;
 using namespace WebCore;
@@ -324,11 +325,13 @@ PluginView::PluginView(PassRefPtr<HTMLPlugInElement> pluginElement, PassRefPtr<P
     , m_pageScaleFactor(1)
     , m_pluginIsPlayingAudio(false)
 {
+    syslog(LOG_INFO, "PLUGIN VIEW Constructor FILE will addPluginView(this)= %s  FUN=,--- %s", __FILE__, __func__);
     m_webPage->addPluginView(this);
 }
 
 PluginView::~PluginView()
 {
+    syslog(LOG_INFO, "%s,--- %s", __FILE__, __FUNCTION__);
     if (m_webPage)
         m_webPage->removePluginView(this);
 
@@ -348,6 +351,7 @@ PluginView::~PluginView()
 
 void PluginView::destroyPluginAndReset()
 {
+        syslog(LOG_INFO, "%s,--- %s", __FILE__, __FUNCTION__);
     // Cancel all pending frame loads.
     for (FrameLoadMap::iterator it = m_pendingFrameLoads.begin(), end = m_pendingFrameLoads.end(); it != end; ++it)
         it->key->setLoadListener(0);
@@ -376,6 +380,7 @@ void PluginView::destroyPluginAndReset()
 
 void PluginView::recreateAndInitialize(PassRefPtr<Plugin> plugin)
 {
+    syslog(LOG_INFO, "%s,--- %s", __FILE__, __FUNCTION__);
     if (m_plugin) {
         if (m_pluginSnapshotTimer.isActive())
             m_pluginSnapshotTimer.stop();
@@ -411,6 +416,7 @@ void PluginView::setLayerHostingMode(LayerHostingMode layerHostingMode)
 
 Frame* PluginView::frame() const
 {
+	syslog(LOG_INFO, "File=%s, Fun=%s", __FILE__, __FUNCTION__);
     return m_pluginElement->document().frame();
 }
 
@@ -443,6 +449,7 @@ void PluginView::manualLoadDidReceiveResponse(const ResourceResponse& response)
 
 void PluginView::manualLoadDidReceiveData(const char* bytes, int length)
 {
+	syslog(LOG_INFO, "%s,  %s" , __FILE__, __FUNCTION__);
     // The plug-in can be null here if it failed to initialize.
     if (!m_plugin)
         return;
@@ -576,6 +583,7 @@ bool PluginView::sendComplexTextInput(uint64_t pluginComplexTextInputIdentifier,
     
 NSObject *PluginView::accessibilityObject() const
 {
+	syslog(LOG_INFO, "%s,--- %s", __FILE__, __FUNCTION__);
     if (!m_isInitialized || !m_plugin)
         return 0;
     
@@ -585,6 +593,7 @@ NSObject *PluginView::accessibilityObject() const
 
 void PluginView::initializePlugin()
 {
+	syslog(LOG_INFO, "%s,--- %s", __FILE__, __FUNCTION__);
     if (m_isInitialized)
         return;
 
@@ -615,13 +624,18 @@ void PluginView::initializePlugin()
     m_didPlugInStartOffScreen = !m_webPage->plugInIntersectsSearchRect(plugInImageElement);
 #endif
     m_plugin->initialize(this, m_parameters);
-    
+    syslog(LOG_INFO, "%s,--- %s", __FILE__, __FUNCTION__);
     // Plug-in initialization continued in didFailToInitializePlugin() or didInitializePlugin().
 }
 
 void PluginView::didFailToInitializePlugin()
 {
+	syslog(LOG_INFO, "%s,--- %s", __FILE__, __FUNCTION__);
     m_plugin = nullptr;
+    int n = 20;
+    void *stack[20];
+    WTFGetBacktrace(stack, &n);
+    WTFPrintBacktrace(stack, n);
 
 #if ENABLE(NETSCAPE_PLUGIN_API)
     String frameURLString = frame()->loader().documentLoader()->responseURL().string();
@@ -632,6 +646,7 @@ void PluginView::didFailToInitializePlugin()
 
 void PluginView::didInitializePlugin()
 {
+	syslog(LOG_INFO, "%s,--- %s", __FILE__, __FUNCTION__);
     m_isInitialized = true;
 
 #if PLATFORM(COCOA)
@@ -698,25 +713,37 @@ PlatformLayer* PluginView::platformLayer() const
 
 JSObject* PluginView::scriptObject(JSGlobalObject* globalObject)
 {
+    syslog(LOG_INFO,"fun==%s, file=%s.line=%d", __FUNCTION__, __FILE__, __LINE__);
     // If we're already waiting for synchronous initialization of the plugin,
     // calls to scriptObject() are from the plug-in itself and need to return 0;
     if (m_isWaitingForSynchronousInitialization)
+    {
+        syslog(LOG_INFO,"fun==%s, file=%s.line=%d", __FUNCTION__, __FILE__, __LINE__);
         return 0;
-
+    }
     // We might not have started initialization of the plug-in yet, the plug-in might be in the middle
     // of being initializing asynchronously, or initialization might have previously failed.
     if (!m_isInitialized || !m_plugin)
+    {
+      syslog(LOG_INFO,"fun==%s, file=%s.line=%d", __FUNCTION__, __FILE__, __LINE__);
         return 0;
-
+    }
 #if ENABLE(NETSCAPE_PLUGIN_API)
+    syslog(LOG_INFO,"fun==%s, file=%s.line=%d", __FUNCTION__, __FILE__, __LINE__);
     NPObject* scriptableNPObject = m_plugin->pluginScriptableNPObject();
     if (!scriptableNPObject)
-        return 0;
-
+    {
+     syslog(LOG_INFO,"fun==%s, file=%s.line=%d", __FUNCTION__, __FILE__, __LINE__);
+    return 0;
+    }
     JSObject* jsObject = m_npRuntimeObjectMap.getOrCreateJSObject(globalObject, scriptableNPObject);
-    releaseNPObject(scriptableNPObject);
 
+    syslog(LOG_INFO,"fun==%s, file=%s.line=%d", __FUNCTION__, __FILE__, __LINE__);
+
+     releaseNPObject(scriptableNPObject);  //?????
+    syslog(LOG_INFO,"+++++++Will return jsObjct........fun==%s, file=%s.line=%d", __FUNCTION__, __FILE__, __LINE__);
     return jsObject;
+
 #else
     UNUSED_PARAM(globalObject);
     return 0;
@@ -1193,6 +1220,7 @@ void PluginView::performURLRequest(URLRequest* request)
 
 void PluginView::performFrameLoadURLRequest(URLRequest* request)
 {
+	syslog(LOG_INFO, "%s,--- %s", __FILE__, __FUNCTION__);
     ASSERT(!request->target().isNull());
 
     Frame* frame = m_pluginElement->document().frame();
@@ -1381,11 +1409,14 @@ void PluginView::mediaCanStart(WebCore::Document&)
 
 void PluginView::pageMutedStateDidChange()
 {
+	syslog(LOG_INFO, "%s,--- %s", __FILE__, __FUNCTION__);
 #if ENABLE(NETSCAPE_PLUGIN_API)
     // The plug-in can be null here if it failed to initialize.
     if (!m_isInitialized || !m_plugin)
-        return;
-
+    {
+    	syslog(LOG_INFO, "%s,--- %s", __FILE__, __FUNCTION__);
+    	return;
+    }
     m_plugin->mutedStateChanged(isMuted());
 #endif
 }
@@ -1695,15 +1726,18 @@ void PluginView::didFailLoad(WebFrame* webFrame, bool wasCancelled)
     m_plugin->frameDidFail(request->requestID(), wasCancelled);
 }
 
-#if PLUGIN_ARCHITECTURE(X11)
+#if PLUGIN_ARCHITECTURE(X11) || PLUGIN_ARCHITECTURE(WayLand)
 uint64_t PluginView::createPluginContainer()
 {
+    syslog(LOG_INFO, "createPluginContainer");
     uint64_t windowID = 0;
     m_webPage->sendSync(Messages::WebPageProxy::CreatePluginContainer(), Messages::WebPageProxy::CreatePluginContainer::Reply(windowID));
+
+    syslog(LOG_INFO, "createPluginContainer %s %d ---windowID=%d", __FILE__, __LINE__, windowID);
     return windowID;
 }
 
-void PluginView::windowedPluginGeometryDidChange(const WebCore::IntRect& frameRect, const WebCore::IntRect& clipRect, uint64_t windowID)
+/*void PluginView::windowedPluginGeometryDidChange(const WebCore::IntRect& frameRect, const WebCore::IntRect& clipRect, uint64_t windowID)
 {
     m_webPage->send(Messages::WebPageProxy::WindowedPluginGeometryDidChange(frameRect, clipRect, windowID));
 }
@@ -1711,7 +1745,7 @@ void PluginView::windowedPluginGeometryDidChange(const WebCore::IntRect& frameRe
 void PluginView::windowedPluginVisibilityDidChange(bool isVisible, uint64_t windowID)
 {
     m_webPage->send(Messages::WebPageProxy::WindowedPluginVisibilityDidChange(isVisible, windowID));
-}
+} */
 #endif
 
 #if PLATFORM(COCOA)

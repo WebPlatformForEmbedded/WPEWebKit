@@ -197,13 +197,13 @@ private:
     void cancelStreamLoad(uint64_t streamID) override;
     void continueStreamLoad(uint64_t streamID) override;
     void cancelManualStreamLoad() override;
-#if ENABLE(NETSCAPE_PLUGIN_API)
+//#if ENABLE(NETSCAPE_PLUGIN_API)
     NPObject* windowScriptNPObject() override;
     NPObject* pluginElementNPObject() override;
     bool evaluate(NPObject*, const String& scriptString, NPVariant* result, bool allowPopups) override;
     void setPluginIsPlayingAudio(bool) override;
     bool isMuted() const override;
-#endif
+//#endif
     void setStatusbarText(const String&) override;
     bool isAcceleratedCompositingEnabled() override;
     void pluginProcessCrashed() override;
@@ -223,10 +223,10 @@ private:
     bool artificialPluginInitializationDelayEnabled() const override;
     void protectPluginFromDestruction() override;
     void unprotectPluginFromDestruction() override;
-#if PLUGIN_ARCHITECTURE(X11)
+#if PLUGIN_ARCHITECTURE(X11) || PLUGIN_ARCHITECTURE(WayLand)
     uint64_t createPluginContainer() override;
-    void windowedPluginGeometryDidChange(const WebCore::IntRect& frameRect, const WebCore::IntRect& clipRect, uint64_t windowID) override;
-    void windowedPluginVisibilityDidChange(bool isVisible, uint64_t windowID) override;
+  //  void windowedPluginGeometryDidChange(const WebCore::IntRect& frameRect, const WebCore::IntRect& clipRect, uint64_t windowID) override;
+   // void windowedPluginVisibilityDidChange(bool isVisible, uint64_t windowID) override;
 #endif
 
     void didInitializePlugin() override;

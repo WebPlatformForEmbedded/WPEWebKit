@@ -412,7 +412,7 @@ static GSourceFuncs waylandLoopSourceFunctions = {
 };
 
 static GRefPtr<GSource> createWaylandLoopSource(struct wl_display* display)
-{
+{syslog(LOG_INFO, "~~~~~~fun- %s, file ==%s", __FUNCTION__, __FILE__);
     GRefPtr<GSource> source = adoptGRef(g_source_new(&waylandLoopSourceFunctions, sizeof(WaylandLoopSource)));
     g_source_set_name(source.get(), "Nested Wayland compositor display event source");
     g_source_set_priority(source.get(), G_PRIORITY_DEFAULT + 1);
@@ -426,7 +426,7 @@ static GRefPtr<GSource> createWaylandLoopSource(struct wl_display* display)
 }
 
 WaylandCompositor::WaylandCompositor()
-{
+{syslog(LOG_INFO, "~~~~~~fun- %s, file ==%s", __FUNCTION__, __FILE__);
     WlUniquePtr<struct wl_display> display(wl_display_create());
     if (!display) {
         WTFLogAlways("Nested Wayland compositor could not create display object");
