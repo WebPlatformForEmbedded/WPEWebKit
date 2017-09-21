@@ -367,7 +367,11 @@ std::unique_ptr<FontPlatformData> FontCache::createFontPlatformData(const FontDe
         return nullptr;
 
     FcChar8* fontConfigFamilyNameAfterMatching;
-    FcPatternGetString(resultPattern.get(), FC_FAMILY, 0, &fontConfigFamilyNameAfterMatching);
+
+    //When a font has two family names: use the second (more descriptive) one instead
+    if (FcPatternGetString(resultPattern.get(), FC_FAMILY, 1, &fontConfigFamilyNameAfterMatching) != FcResultMatch)
+        FcPatternGetString(resultPattern.get(), FC_FAMILY, 0, &fontConfigFamilyNameAfterMatching);
+
     String familyNameAfterMatching = String::fromUTF8(reinterpret_cast<char*>(fontConfigFamilyNameAfterMatching));
 
     // If Fontconfig gave us a different font family than the one we requested, we should ignore it
