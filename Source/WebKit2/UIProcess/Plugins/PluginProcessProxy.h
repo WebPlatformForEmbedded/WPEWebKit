@@ -49,12 +49,11 @@ class PluginProcessManager;
 class WebProcessProxy;
 struct PluginProcessCreationParameters;
 
-#if PLUGIN_ARCHITECTURE(X11)
+#if (PLUGIN_ARCHITECTURE(X11)||PLUGIN_ARCHITECTURE(WayLand))
 struct RawPluginMetaData {
     String name;
     String description;
     String mimeDescription;
-
 #if PLATFORM(GTK)
     bool requiresGtk2;
 #endif
@@ -94,7 +93,7 @@ public:
 
 #endif
 
-#if PLUGIN_ARCHITECTURE(X11)
+#if PLUGIN_ARCHITECTURE(X11) || PLUGIN_ARCHITECTURE(WayLand)
     static bool scanPlugin(const String& pluginPath, RawPluginMetaData& result);
 #endif
 

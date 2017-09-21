@@ -78,7 +78,9 @@
 #include <wtf/RunLoop.h>
 #include <wtf/text/WTFString.h>
 
-#if HAVE(ACCESSIBILITY) && (PLATFORM(GTK) || PLATFORM(EFL))
+
+
+#if HAVE(ACCESSIBILITY) && (PLATFORM(GTK) || PLATFORM(EFL))// ||PLATFROM(WPE)  //???Espial
 #include "WebPageAccessibilityObject.h"
 #include <wtf/glib/GRefPtr.h>
 #endif
@@ -94,7 +96,7 @@
 #endif
 
 #if ENABLE(IOS_TOUCH_EVENTS)
-#include <WebKitAdditions/PlatformTouchEventIOS.h>
+#include <WebKitAdditions/PlatformTouchEventIOS.h
 #elif ENABLE(TOUCH_EVENTS)
 #include <WebCore/PlatformTouchEvent.h>
 #endif
@@ -701,7 +703,7 @@ public:
     void cancelComposition();
 #endif
 
-#if HAVE(ACCESSIBILITY) && (PLATFORM(GTK) || PLATFORM(EFL))
+#if HAVE(ACCESSIBILITY) && (PLATFORM(GTK) || PLATFORM(EFL) || PLATFORM(WPE))
     void updateAccessibilityTree();
 #endif
 

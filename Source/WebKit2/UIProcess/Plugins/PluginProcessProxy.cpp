@@ -37,7 +37,7 @@
 #include "WebProcessProxy.h"
 #include <WebCore/NotImplemented.h>
 #include <wtf/RunLoop.h>
-
+#include <syslog.h>
 #if OS(LINUX)
 #include "MemoryPressureMonitor.h"
 #endif
@@ -61,6 +61,7 @@ static uint64_t generateCallbackID()
 
 Ref<PluginProcessProxy> PluginProcessProxy::create(PluginProcessManager* PluginProcessManager, const PluginProcessAttributes& pluginProcessAttributes, uint64_t pluginProcessToken)
 {
+	syslog(LOG_INFO, "File= %s, FUNCTION = %s", __FILE__, __FUNCTION__);
     return adoptRef(*new PluginProcessProxy(PluginProcessManager, pluginProcessAttributes, pluginProcessToken));
 }
 
@@ -75,6 +76,7 @@ PluginProcessProxy::PluginProcessProxy(PluginProcessManager* PluginProcessManage
     , m_preFullscreenAppPresentationOptions(0)
 #endif
 {
+    syslog(LOG_INFO, "File= %s, FUNCTION = %s, process type=%d", __FILE__, __FUNCTION__, m_pluginProcessAttributes.processType);
     connect();
 }
 
@@ -88,8 +90,11 @@ PluginProcessProxy::~PluginProcessProxy()
 
 void PluginProcessProxy::getLaunchOptions(ProcessLauncher::LaunchOptions& launchOptions)
 {
-    ChildProcessProxy::getLaunchOptions(launchOptions);
+    syslog(LOG_INFO, "File= %s, FUNCTION = %s", __FILE__, __FUNCTION__);
     platformGetLaunchOptions(launchOptions, m_pluginProcessAttributes);
+    ChildProcessProxy::getLaunchOptions(launchOptions);
+    syslog(LOG_INFO, "after  ChildProcessProxy::getLaunchOptions(launchOptions)   File= %s, FUNCTION = %s", __FILE__, __FUNCTION__);
+    syslog(LOG_INFO, "after  platformGetLaunchOptions(launchOptions, m_pluginProcessAttributes);   File= %s, FUNCTION = %s", __FILE__, __FUNCTION__);
 }
 
 void PluginProcessProxy::processWillShutDown(IPC::Connection& connection)
@@ -101,6 +106,7 @@ void PluginProcessProxy::processWillShutDown(IPC::Connection& connection)
 // encoded in the given argument encoder and sent back to the connection of the given web process.
 void PluginProcessProxy::getPluginProcessConnection(PassRefPtr<Messages::WebProcessProxy::GetPluginProcessConnection::DelayedReply> reply)
 {
+	syslog(LOG_INFO, "File= %s, FUNCTION = %s", __FILE__, __FUNCTION__);
     m_pendingConnectionReplies.append(reply);
 
     if (state() == State::Launching) {
@@ -115,6 +121,7 @@ void PluginProcessProxy::getPluginProcessConnection(PassRefPtr<Messages::WebProc
 
 void PluginProcessProxy::fetchWebsiteData(std::function<void (Vector<String>)> completionHandler)
 {
+	syslog(LOG_INFO, "File= %s, FUNCTION = %s", __FILE__, __FUNCTION__);
     uint64_t callbackID = generateCallbackID();
     m_pendingFetchWebsiteDataCallbacks.set(callbackID, WTFMove(completionHandler));
 
@@ -154,6 +161,7 @@ void PluginProcessProxy::deleteWebsiteDataForHostNames(const Vector<String>& hos
 
 void PluginProcessProxy::pluginProcessCrashedOrFailedToLaunch()
 {
+	syslog(LOG_INFO, "File= %s, FUNCTION = %s", __FILE__, __FUNCTION__);
     // The plug-in process must have crashed or exited, send any pending sync replies we might have.
     while (!m_pendingConnectionReplies.isEmpty()) {
         RefPtr<Messages::WebProcessProxy::GetPluginProcessConnection::DelayedReply> reply = m_pendingConnectionReplies.takeFirst();
@@ -273,6 +281,7 @@ void PluginProcessProxy::didFinishLaunching(ProcessLauncher*, IPC::Connection::I
 
 void PluginProcessProxy::didCreateWebProcessConnection(const IPC::Attachment& connectionIdentifier, bool supportsAsynchronousPluginInitialization)
 {
+	syslog(LOG_INFO, "File= %s, FUNCTION = %s", __FILE__, __FUNCTION__);
     ASSERT(!m_pendingConnectionReplies.isEmpty());
 
     // Grab the first pending connection reply.
@@ -289,18 +298,21 @@ void PluginProcessProxy::didCreateWebProcessConnection(const IPC::Attachment& co
 
 void PluginProcessProxy::didGetSitesWithData(const Vector<String>& sites, uint64_t callbackID)
 {
+	syslog(LOG_INFO, "File= %s, FUNCTION = %s", __FILE__, __FUNCTION__);
     auto callback = m_pendingFetchWebsiteDataCallbacks.take(callbackID);
     callback(sites);
 }
 
 void PluginProcessProxy::didDeleteWebsiteData(uint64_t callbackID)
 {
+	syslog(LOG_INFO, "File= %s, FUNCTION = %s", __FILE__, __FUNCTION__);
     auto callback = m_pendingDeleteWebsiteDataCallbacks.take(callbackID);
     callback();
 }
 
 void PluginProcessProxy::didDeleteWebsiteDataForHostNames(uint64_t callbackID)
 {
+	syslog(LOG_INFO, "File= %s, FUNCTION = %s", __FILE__, __FUNCTION__);
     auto callback = m_pendingDeleteWebsiteDataForHostNamesCallbacks.take(callbackID);
     callback();
 }

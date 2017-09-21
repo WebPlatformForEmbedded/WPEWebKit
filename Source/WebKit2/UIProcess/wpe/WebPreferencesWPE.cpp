@@ -25,16 +25,48 @@
 
 #include "config.h"
 #include "WebPreferences.h"
-
+#include <WebCore/PlatformDisplay.h>
 #include <WebCore/NotImplemented.h>
-
+#include <syslog.h>
+using namespace WebCore;
 namespace WebKit {
 
 void WebPreferences::platformInitializeStore()
 {
-    notImplemented();
-}
+	syslog(LOG_INFO, "file= %s, Fun= %s", __FILE__, __FUNCTION__);
+#if !ENABLE(OPENGL)
+    setAcceleratedCompositingEnabled(false);
+#else
+#if USE(COORDINATED_GRAPHICS_THREADED)
+    setForceCompositingMode(true);
+#else
+    if (getenv("WEBKIT_FORCE_COMPOSITING_MODE"))
+        setForceCompositingMode(true);
+#endif
 
+    if (getenv("WEBKIT_DISABLE_COMPOSITING_MODE")) {
+        setAcceleratedCompositingEnabled(false);
+        return;
+    }
+
+#if USE(REDIRECTED_XCOMPOSITE_WINDOW)
+    if (PlatformDisplay::sharedDisplay().type() == PlatformDisplay::Type::WPE) {
+        auto& display = downcast<PlatformDisplayWPE>(PlatformDisplay::sharedDisplay());
+        Optional<int> damageBase;
+        if (!display.supportsXComposite() || !display.supportsXDamage(damageBase))
+            setAcceleratedCompositingEnabled(false);
+    }
+#endif
+
+#if PLATFORM(WAYLAND)
+    if (PlatformDisplay::sharedDisplay().type() == PlatformDisplay::Type::Wayland) {
+        if (!WaylandCompositor::singleton().isRunning())
+            setAcceleratedCompositingEnabled(false);
+    }
+#endif
+
+#endif // ENABLE(OPENGL)
+}
 void WebPreferences::platformUpdateStringValueForKey(const String&, const String&)
 {
     notImplemented();

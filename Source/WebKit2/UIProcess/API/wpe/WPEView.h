@@ -33,6 +33,7 @@
 #include "WPEViewClient.h"
 #include <memory>
 #include <wtf/RefPtr.h>
+#include <syslog.h>
 
 struct wpe_view_backend;
 
@@ -49,6 +50,7 @@ class View : public API::ObjectImpl<API::Object::Type::View> {
 public:
     static View* create(struct wpe_view_backend* backend, const API::PageConfiguration& configuration)
     {
+
         return new View(backend, configuration);
     }
 

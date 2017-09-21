@@ -22,7 +22,7 @@
 
 #include "WebKitPrivate.h"
 #include <gtk/gtk.h>
-
+#if 0
 struct _WebKitWebViewBaseAccessiblePrivate {
     GtkWidget* widget;
 };
@@ -105,3 +105,4 @@ WebKitWebViewBaseAccessible* webkitWebViewBaseAccessibleNew(GtkWidget* widget)
     atk_object_initialize(object, widget);
     return WEBKIT_WEB_VIEW_BASE_ACCESSIBLE(object);
 }
+#endif

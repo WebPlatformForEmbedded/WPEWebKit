@@ -48,11 +48,6 @@ WKPageRef WKViewGetPage(WKViewRef view)
     return toAPI(&toImpl(view)->page());
 }
 
-struct wpe_view_backend* WKViewGetViewBackend(WKViewRef view)
-{
-    return toImpl(view)->backend();
-}
-
 void WKViewSetViewState(WKViewRef view, WKViewState viewState)
 {
     toImpl(view)->setViewState(toViewStateFlags(viewState));

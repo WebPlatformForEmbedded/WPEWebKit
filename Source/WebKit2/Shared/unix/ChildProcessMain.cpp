@@ -35,7 +35,7 @@ bool ChildProcessMainBase::parseCommandLine(int argc, char** argv)
     ASSERT(argc >= 2);
     if (argc < 2)
         return false;
-
+ WTFLogAlways("parseCommand/Line, artv-1= %s,", argv[1]);
     m_parameters.connectionIdentifier = atoi(argv[1]);
     return true;
 }

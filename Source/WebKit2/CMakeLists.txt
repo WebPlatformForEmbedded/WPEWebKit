@@ -24,7 +24,8 @@ set(WebKit2_INCLUDE_DIRECTORIES
     "${WEBKIT2_DIR}/Shared/Gamepad"
     "${WEBKIT2_DIR}/Shared/Plugins"
     "${WEBKIT2_DIR}/Shared/Plugins/Netscape"
-    "${WEBKIT2_DIR}/Shared/Plugins/Netscape/x11"
+
+   "${WEBKIT2_DIR}/Shared/Plugins/Netscape/wayland"
     "${WEBKIT2_DIR}/Shared/WebsiteData"
     "${WEBKIT2_DIR}/UIProcess"
     "${WEBKIT2_DIR}/UIProcess/API"
@@ -42,6 +43,7 @@ set(WebKit2_INCLUDE_DIRECTORIES
     "${WEBKIT2_DIR}/UIProcess/Network/CustomProtocols"
     "${WEBKIT2_DIR}/UIProcess/Notifications"
     "${WEBKIT2_DIR}/UIProcess/Plugins"
+    "${WEBKIT2_DIR}/PluginProcess/unix" 
     "${WEBKIT2_DIR}/UIProcess/Storage"
     "${WEBKIT2_DIR}/UIProcess/UserContent"
     "${WEBKIT2_DIR}/UIProcess/WebsiteData"
@@ -69,11 +71,15 @@ set(WebKit2_INCLUDE_DIRECTORIES
     "${WEBKIT2_DIR}/WebProcess/OriginData"
     "${WEBKIT2_DIR}/WebProcess/Plugins"
     "${WEBKIT2_DIR}/WebProcess/Plugins/Netscape"
+    "${WEBKIT2_DIR}/WebProcess/Plugins/Netscape/unix"
+    "${WEBKIT2_DIR}/WebProcess/Plugins/Netscape"
+    "${WEBKIT2_DIR}/WebProcess/Plugins/Netscape/wayland"
     "${WEBKIT2_DIR}/WebProcess/ResourceCache"
     "${WEBKIT2_DIR}/WebProcess/Storage"
     "${WEBKIT2_DIR}/WebProcess/UserContent"
     "${WEBKIT2_DIR}/WebProcess/WebCoreSupport"
     "${WEBKIT2_DIR}/WebProcess/WebPage"
+#"${WEBKIT2_DIR}/WebProcess/WebPage/atk"
     "${WEBCORE_DIR}"
     "${WEBCORE_DIR}/Modules/indexeddb"
     "${WEBCORE_DIR}/Modules/indexeddb/client"
@@ -170,6 +176,13 @@ set(PROTOCOL_GENERATOR_SCRIPTS_DIR "${JAVASCRIPTCORE_DIR}/inspector/scripts")
 set(WebKit2_SYSTEM_INCLUDE_DIRECTORIES
     ${ICU_INCLUDE_DIRS}
 )
+
+if (ENABLE_GRAPHICS_CONTEXT_3D)
+    list(APPEND WebKit2_INCLUDE_DIRECTORIES
+        "${THIRDPARTY_DIR}/ANGLE"
+        "${THIRDPARTY_DIR}/ANGLE/include/KHR"
+    )
+endif ()
 
 set(WebKit2_SOURCES
     DatabaseProcess/DatabaseProcess.cpp
@@ -386,6 +399,7 @@ set(WebKit2_SOURCES
     UIProcess/WebPageGroup.cpp
     UIProcess/WebPageInjectedBundleClient.cpp
     UIProcess/WebPageProxy.cpp
+    UIProcess/wpe/WebPageProxyWPE.cpp
     UIProcess/WebPasteboardProxy.cpp
     UIProcess/WebPreferences.cpp
     UIProcess/WebProcessLifetimeObserver.cpp
@@ -598,6 +612,7 @@ set(WebKit2_SOURCES
     WebProcess/Plugins/Netscape/NetscapePlugin.cpp
     WebProcess/Plugins/Netscape/NetscapePluginNone.cpp
     WebProcess/Plugins/Netscape/NetscapePluginStream.cpp
+    WebProcess/Plugins/Netscape/wayland/NetscapePluginWayLand.cpp
 
     WebProcess/Storage/StorageAreaImpl.cpp
     WebProcess/Storage/StorageAreaMap.cpp
@@ -773,44 +788,6 @@ endif ()
 set(PluginProcess_LIBRARIES
     WebKit2
 )
-
-if (ENABLE_GRAPHICS_CONTEXT_3D)
-    # For platforms that want to use system-provided OpenGL (ES) / EGL headers,
-    # these include directories, libraries or definitions need to be
-    # added before the ANGLE directories.
-    if (USE_OPENGL)
-        list(APPEND WebKit2_SYSTEM_INCLUDE_DIRECTORIES
-            ${OPENGL_INCLUDE_DIRS}
-        )
-        list(APPEND WebKit2_LIBRARIES
-            ${OPENGL_LIBRARIES}
-        )
-        add_definitions(${OPENGL_DEFINITIONS})
-    elseif (USE_OPENGL_ES_2)
-        list(APPEND WebKit2_SYSTEM_INCLUDE_DIRECTORIES
-            ${OPENGLES2_INCLUDE_DIRS}
-        )
-        list(APPEND WebKit2_LIBRARIES
-            ${OPENGLES2_LIBRARIES}
-        )
-        add_definitions(${OPENGLES2_DEFINITIONS})
-    endif ()
-
-    if (USE_EGL)
-        list(APPEND WebKit2_SYSTEM_INCLUDE_DIRECTORIES
-            ${EGL_INCLUDE_DIRS}
-        )
-        list(APPEND WebKit2_LIBRARIES
-            ${EGL_LIBRARIES}
-        )
-        add_definitions(${EGL_DEFINITIONS})
-    endif ()
-
-    list(APPEND WebKit2_INCLUDE_DIRECTORIES
-        "${THIRDPARTY_DIR}/ANGLE"
-        "${THIRDPARTY_DIR}/ANGLE/include/KHR"
-    )
-endif ()
 
 if (WIN32 AND INTERNAL_BUILD)
     set(JavaScriptCore_SCRIPTS_DIR "${CMAKE_BINARY_DIR}/../include/private/JavaScriptCore/Scripts")

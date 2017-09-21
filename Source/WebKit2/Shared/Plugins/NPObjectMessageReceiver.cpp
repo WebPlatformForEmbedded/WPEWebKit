@@ -34,7 +34,7 @@
 #include "NPVariantData.h"
 #include "Plugin.h"
 #include "PluginController.h"
-
+#include <syslog.h>
 namespace WebKit {
 
 NPObjectMessageReceiver::NPObjectMessageReceiver(NPRemoteObjectMap* npRemoteObjectMap, Plugin* plugin, uint64_t npObjectID, NPObject* npObject)
@@ -130,6 +130,7 @@ void NPObjectMessageReceiver::invokeDefault(const Vector<NPVariantData>& argumen
 
 void NPObjectMessageReceiver::hasProperty(const NPIdentifierData& propertyNameData, bool& returnValue)
 {
+    syslog(LOG_INFO, "hasPROPERTY file=%s, line= %d" , __FILE__, __LINE__);
     if (!m_npObject->_class->hasProperty) {
         returnValue = false;
         return;
@@ -140,6 +141,8 @@ void NPObjectMessageReceiver::hasProperty(const NPIdentifierData& propertyNameDa
 
 void NPObjectMessageReceiver::getProperty(const NPIdentifierData& propertyNameData, bool& returnValue, NPVariantData& resultData)
 {
+    syslog(LOG_INFO, "getPROPERTY file=%s, line= %d" , __FILE__, __LINE__);
+
     if (!m_npObject->_class->getProperty) {
         returnValue = false;
         return;

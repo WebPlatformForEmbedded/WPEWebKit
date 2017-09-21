@@ -83,8 +83,9 @@ list(APPEND WebKit2_SOURCES
     Shared/CoordinatedGraphics/threadedcompositor/ThreadedCompositor.cpp
     Shared/CoordinatedGraphics/threadedcompositor/ThreadSafeCoordinatedSurface.cpp
 
-    Shared/Plugins/Netscape/x11/NetscapePluginModuleX11.cpp
+# Shared/Plugins/Netscape/x11/NetscapePluginModuleX11.cpp
 
+    Shared/Plugins/Netscape/wayland/NetscapePluginModuleWayLand.cpp
     Shared/cairo/ShareableBitmapCairo.cpp
 
     Shared/linux/WebMemorySamplerLinux.cpp
@@ -117,7 +118,13 @@ list(APPEND WebKit2_SOURCES
     UIProcess/API/wpe/WPEViewClient.cpp
     UIProcess/API/wpe/WPEWebAutomation.cpp
     UIProcess/API/wpe/WPEWebAutomationClient.cpp
-
+    UIProcess/API/wpe/WebKitMimeInfo.cpp
+    UIProcess/API/wpe/WebKitPlugin.cpp
+    UIProcess/API/wpe/WebKitPlugin.h
+    UIProcess/API/wpe/WebKitPluginPrivate.h
+    UIProcess/API/wpe/WebKitMimeInfo.h
+    UIProcess/API/wpe/WebKitMimeInfoPrivate.h
+     
     UIProcess/BackingStore.cpp
     UIProcess/DefaultUndoController.cpp
     UIProcess/LegacySessionStateCodingNone.cpp
@@ -137,7 +144,7 @@ list(APPEND WebKit2_SOURCES
 
     UIProcess/Plugins/unix/PluginInfoStoreUnix.cpp
     UIProcess/Plugins/unix/PluginProcessProxyUnix.cpp
-
+    UIProcess/Plugins/gtk/PluginInfoCache.cpp
     UIProcess/Storage/StorageManager.cpp
 
     UIProcess/WebsiteData/unix/WebsiteDataStoreUnix.cpp
@@ -191,6 +198,12 @@ list(APPEND WebKit2_SOURCES
     WebProcess/soup/WebProcessSoup.cpp
 
     WebProcess/wpe/WebProcessMainWPE.cpp
+
+    WebProcess/Plugins/Netscape/unix/NetscapePluginUnix.cpp
+    WebProcess/Plugins/Netscape/unix/PluginProxyUnix.cpp
+    WebProcess/Plugins/Netscape/x11/NetscapePluginX11.cpp
+    Shared/Plugins/unix/PluginSearchPath.cpp
+    
 )
 
 list(APPEND WebKit2_MESSAGES_IN_FILES
@@ -219,6 +232,11 @@ file(WRITE ${DERIVED_SOURCES_WEBKIT2_DIR}/WebKit2ResourcesGResourceBundle.xml
     "</gresources>\n"
 )
 
+#if (ENABLE_PLUGIN_PROCESS AND NOT "${PORT}" STREQUAL "Mac")
+#    add_definitions(-DENABLE_PLUGIN_PROCESS=1)
+#    add_executable(PluginProcess ${PluginProcess_SOURCES})
+#    add_webkit2_prefix_header(PluginProcess)
+#endif ()
 add_custom_command(
     OUTPUT ${DERIVED_SOURCES_WEBKIT2_DIR}/WebKit2ResourcesGResourceBundle.c
     DEPENDS ${DERIVED_SOURCES_WEBKIT2_DIR}/WebKit2ResourcesGResourceBundle.xml
@@ -258,6 +276,8 @@ list(APPEND WebKit2_INCLUDE_DIRECTORIES
     "${WEBKIT2_DIR}/WebProcess/WebCoreSupport/soup"
     "${WEBKIT2_DIR}/WebProcess/WebPage/CoordinatedGraphics"
     "${WEBKIT2_DIR}/WebProcess/WebPage/wpe"
+    "${WEBKIT2_DIR}/Shared/Plugins/unix"  #Espial
+    "${WEBKIT2_DIR}/UIProcess/Plugins/gtk" #Espial
     "${WTF_DIR}/wtf/gtk/"
     "${WTF_DIR}/wtf/gobject"
     "${WTF_DIR}"
@@ -499,6 +519,12 @@ set(WPE_INSTALLED_WEBKIT_HEADERS
 
     ${WEBKIT2_DIR}/UIProcess/API/C/soup/WKCookieManagerSoup.h
     ${WEBKIT2_DIR}/UIProcess/API/C/soup/WKSoupSession.h
+
+    
+    ${WEBKIT2_DIR}/UIProcess/API/wpe/WebKitPlugin.h
+    ${WEBKIT2_DIR}/UIProcess/API/wpe/WebKitPluginPriviate.h
+    ${WEBKIT2_DIR}/UIProcess/API/wpe/WebKitMimeInfo.h
+    ${WEBKIT2_DIR}/UIProcess/API/wpe/WebKitMimeInfoPrivate.h
 )
 
 install(FILES ${WPE_INSTALLED_WEBKIT_HEADERS}
@@ -519,3 +545,11 @@ install(FILES ${CMAKE_BINARY_DIR}/wpe-webkit.pc
     DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig"
     COMPONENT "Development"
 )
+
+#Espial PluginProcess
+
+list(APPEND PluginProcess_SOURCES
+        PluginProcess/EntryPoint/unix/PluginProcessMain.cpp
+ )
+
+

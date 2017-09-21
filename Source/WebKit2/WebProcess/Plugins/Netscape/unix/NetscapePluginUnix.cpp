@@ -25,10 +25,12 @@
 
 #include "config.h"
 #include "NetscapePlugin.h"
+#include <syslog.h>
 
-#if PLUGIN_ARCHITECTURE(X11) && ENABLE(NETSCAPE_PLUGIN_API)
-
-#include "NetscapePluginX11.h"
+//#if PLUGIN_ARCHITECTURE(X11)  && ENABLE(NETSCAPE_PLUGIN_API)
+#if PLUGIN_ARCHITECTURE(WayLand)  && ENABLE(NETSCAPE_PLUGIN_API)
+//#include "NetscapePluginX11.h"
+#include "NetscapePluginWayLand.h"
 #include "WebEvent.h"
 #include <WebCore/NotImplemented.h>
 #include <WebCore/PlatformDisplay.h>
@@ -43,22 +45,27 @@ void NetscapePlugin::platformPreInitialize()
 
 bool NetscapePlugin::platformPostInitialize()
 {
+    syslog(LOG_INFO, "file: %s, function: %s " , __FILE__, __func__);
 #if PLATFORM(X11)
     if (PlatformDisplay::sharedDisplay().type() == PlatformDisplay::Type::X11) {
+    	syslog(LOG_INFO, "file: %s, function: %s " , __FILE__, __func__);
         m_impl = NetscapePluginX11::create(*this);
+        if (!m_impl)
+            return false;
+    }
+#elif PLATFORM(WPE)
+    if (PlatformDisplay::sharedDisplay().type() == PlatformDisplay::Type::WPE) {
+        m_impl = NetscapePluginWayLand::create(*this);
+        syslog(LOG_INFO, "file: %s, function====Skip callSetWindow: %s " , __FILE__, __func__);
         if (!m_impl)
             return false;
     }
 #endif
 
     // Windowed plugins need a platform implementation.
+
     if (!m_impl)
         return !m_isWindowed;
-
-    m_npWindow.type = m_impl->windowType();
-    m_npWindow.window = m_impl->window();
-    m_npWindow.ws_info = m_impl->windowSystemInfo();
-    callSetWindow();
     return true;
 }
 
@@ -77,7 +84,7 @@ void NetscapePlugin::platformGeometryDidChange()
 {
     if (!m_impl)
         return;
-    m_impl->geometryDidChange();
+    //m_impl->geometryDidChange();
 }
 
 void NetscapePlugin::platformVisibilityDidChange()
@@ -85,11 +92,12 @@ void NetscapePlugin::platformVisibilityDidChange()
     if (!m_isWindowed || !m_impl)
         return;
 
-    m_impl->visibilityDidChange();
+   // m_impl->visibilityDidChange();
 }
 
 void NetscapePlugin::platformPaint(GraphicsContext& context, const IntRect& dirtyRect, bool /*isSnapshot*/)
 {
+#if 0
     if (m_isWindowed || !m_impl)
         return;
 
@@ -99,10 +107,12 @@ void NetscapePlugin::platformPaint(GraphicsContext& context, const IntRect& dirt
     }
 
     m_impl->paint(context, dirtyRect);
+#endif
 }
 
 bool NetscapePlugin::platformHandleMouseEvent(const WebMouseEvent& event)
 {
+#if 0 
     if (m_isWindowed || !m_impl)
         return false;
 
@@ -112,22 +122,30 @@ bool NetscapePlugin::platformHandleMouseEvent(const WebMouseEvent& event)
         return false;
 
     return m_impl->handleMouseEvent(event);
+    
+#endif
+    return true;
 }
 
 bool NetscapePlugin::platformHandleWheelEvent(const WebWheelEvent& event)
 {
+#if 0
     if (m_isWindowed || !m_impl)
         return false;
 
     return m_impl->handleWheelEvent(event);
+    #endif
+    return true;
 }
 
 void NetscapePlugin::platformSetFocus(bool focusIn)
 {
+#if 0
     if (m_isWindowed || !m_impl)
         return;
 
     m_impl->setFocus(focusIn);
+#endif
 }
 
 bool NetscapePlugin::wantsPluginRelativeNPWindowCoordinates()
@@ -137,22 +155,29 @@ bool NetscapePlugin::wantsPluginRelativeNPWindowCoordinates()
 
 bool NetscapePlugin::platformHandleMouseEnterEvent(const WebMouseEvent& event)
 {
+#if 0
     if (m_isWindowed || !m_impl)
         return false;
 
     return m_impl->handleMouseEnterEvent(event);
+#endif
+    return true;
 }
 
 bool NetscapePlugin::platformHandleMouseLeaveEvent(const WebMouseEvent& event)
 {
+#if 0
     if (m_isWindowed || !m_impl)
         return false;
 
     return m_impl->handleMouseLeaveEvent(event);
+#endif
+    return true;
 }
 
 bool NetscapePlugin::platformHandleKeyboardEvent(const WebKeyboardEvent& event)
-{
+{ 
+#if 0
     // We don't generate other types of keyboard events via WebEventFactory.
     ASSERT(event.type() == WebEvent::KeyDown || event.type() == WebEvent::KeyUp);
 
@@ -160,8 +185,9 @@ bool NetscapePlugin::platformHandleKeyboardEvent(const WebKeyboardEvent& event)
         return false;
 
     return m_impl->handleKeyboardEvent(event);
+#endif
+return true;
 }
-
 } // namespace WebKit
 
 #endif // PLUGIN_ARCHITECTURE(X11) && ENABLE(NETSCAPE_PLUGIN_API)

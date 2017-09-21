@@ -223,10 +223,10 @@ private:
     bool artificialPluginInitializationDelayEnabled() const override;
     void protectPluginFromDestruction() override;
     void unprotectPluginFromDestruction() override;
-#if PLUGIN_ARCHITECTURE(X11)
+#if PLUGIN_ARCHITECTURE(X11) || PLUGIN_ARCHITECTURE(WayLand)
     uint64_t createPluginContainer() override;
-    void windowedPluginGeometryDidChange(const WebCore::IntRect& frameRect, const WebCore::IntRect& clipRect, uint64_t windowID) override;
-    void windowedPluginVisibilityDidChange(bool isVisible, uint64_t windowID) override;
+  //  void windowedPluginGeometryDidChange(const WebCore::IntRect& frameRect, const WebCore::IntRect& clipRect, uint64_t windowID) override;
+   // void windowedPluginVisibilityDidChange(bool isVisible, uint64_t windowID) override;
 #endif
 
     void didInitializePlugin() override;

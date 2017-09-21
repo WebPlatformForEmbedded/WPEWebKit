@@ -110,6 +110,7 @@
 #include <wtf/HashCountedSet.h>
 #include <wtf/RunLoop.h>
 #include <wtf/text/StringHash.h>
+#include <syslog.h>
 
 #if PLATFORM(COCOA)
 #include "ObjCObjectGraph.h"
@@ -630,6 +631,7 @@ void WebProcess::terminate()
 
 void WebProcess::didReceiveSyncMessage(IPC::Connection& connection, IPC::Decoder& decoder, std::unique_ptr<IPC::Encoder>& replyEncoder)
 {
+    syslog(LOG_INFO, "WebProcess: sync recieved %s", decoder.messageName().data());
     if (messageReceiverMap().dispatchSyncMessage(connection, decoder, replyEncoder))
         return;
 
@@ -638,6 +640,7 @@ void WebProcess::didReceiveSyncMessage(IPC::Connection& connection, IPC::Decoder
 
 void WebProcess::didReceiveMessage(IPC::Connection& connection, IPC::Decoder& decoder)
 {
+    syslog(LOG_INFO, "WebProcess: recieved %s", decoder.messageName().data());
     if (messageReceiverMap().dispatchMessage(connection, decoder))
         return;
 
@@ -920,7 +923,14 @@ void WebProcess::clearPluginClientPolicies()
     WebPluginInfoProvider::singleton().clearPluginClientPolicies();
 #endif
 }
-
+#if 0
+void WebProcess::refreshPlugins()
+{
+#if ENABLE(NETSCAPE_PLUGIN_API)
+    WebPluginInfoProvider::singleton().refresh();
+#endif
+}
+#endif
 static void fromCountedSetToHashMap(TypeCountSet* countedSet, HashMap<String, uint64_t>& map)
 {
     TypeCountSet::const_iterator end = countedSet->end();

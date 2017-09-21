@@ -168,9 +168,10 @@ struct ViewportAttributes;
 struct WindowFeatures;
 }
 
-#if PLATFORM(GTK)
+#if PLATFORM(GTK) 
 typedef GtkWidget* PlatformWidget;
 #endif
+
 
 namespace WebKit {
 
@@ -229,7 +230,7 @@ typedef GenericCallback<EditingRange> EditingRangeCallback;
 typedef GenericCallback<const String&> StringCallback;
 typedef GenericCallback<API::SerializedScriptValue*, bool, const WebCore::ExceptionDetails&> ScriptValueCallback;
 
-#if PLATFORM(GTK)
+#if PLATFORM(GTK) || PLATFORM(WPE)
 typedef GenericCallback<API::Error*> PrintFinishedCallback;
 #endif
 
@@ -617,7 +618,6 @@ public:
     const WebCore::Color& backgroundColor() const { return m_backgroundColor; }
     void setBackgroundColor(const WebCore::Color& color) { m_backgroundColor = color; }
 #endif
-
     void handleMouseEvent(const NativeWebMouseEvent&);
     void handleWheelEvent(const NativeWebWheelEvent&);
     void handleKeyboardEvent(const NativeWebKeyboardEvent&);
@@ -907,7 +907,7 @@ public:
     void setSmartInsertDeleteEnabled(bool);
 #endif
 
-#if PLATFORM(GTK)
+#if PLATFORM(GTK)||PLATFORM(WPE)
     String accessibilityPlugID() const { return m_accessibilityPlugID; }
 #endif
 
@@ -1354,7 +1354,7 @@ private:
     void executeSavedCommandBySelector(const String& selector, bool& handled);
 #endif
 
-#if PLATFORM(GTK)
+#if PLATFORM(GTK)||PLATFORM(WPE)
     void getEditorCommandsForKeyEvent(const AtomicString&, Vector<String>&);
     void bindAccessibilityTree(const String&);
 #endif
@@ -1524,11 +1524,13 @@ private:
 
     void setRenderTreeSize(uint64_t treeSize) { m_renderTreeSize = treeSize; }
 
-#if PLUGIN_ARCHITECTURE(X11)
+#if PLUGIN_ARCHITECTURE(X11) || PLUGIN_ARCHITECTURE(WayLand)
     void createPluginContainer(uint64_t& windowID);
-    void windowedPluginGeometryDidChange(const WebCore::IntRect& frameRect, const WebCore::IntRect& clipRect, uint64_t windowID);
-    void windowedPluginVisibilityDidChange(bool isVisible, uint64_t windowID);
+
+    //void windowedPluginGeometryDidChange(const WebCore::IntRect& frameRect, const WebCore::IntRect& clipRect, uint64_t windowID);
+    //void windowedPluginVisibilityDidChange(bool isVisible, uint64_t windowID);
 #endif
+
 
     void processNextQueuedWheelEvent();
     void sendWheelEvent(const WebWheelEvent&);
@@ -1824,7 +1826,7 @@ private:
     bool m_isSmartInsertDeleteEnabled;
 #endif
 
-#if PLATFORM(GTK)
+#if PLATFORM(GTK)||PLATFORM(WPE)
     String m_accessibilityPlugID;
     WebCore::Color m_backgroundColor;
 #endif

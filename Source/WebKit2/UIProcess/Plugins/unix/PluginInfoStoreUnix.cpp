@@ -26,11 +26,11 @@
 // Note: this file is only for UNIX. On other platforms we can reuse the native implementation.
 
 #include "config.h"
-
+#include <syslog.h>
 #if ENABLE(NETSCAPE_PLUGIN_API)
 
 #include "PluginInfoStore.h"
-
+#include "PluginInfoCache.h"  // Espial
 #include "NetscapePluginModule.h"
 #include "PluginSearchPath.h"
 #include "ProcessExecutablePath.h"
@@ -38,7 +38,7 @@
 #include <limits.h>
 #include <stdlib.h>
 
-#if PLATFORM(GTK)
+#if PLATFORM(GTK) || PLATFORM(WPE)
 #include "PluginInfoCache.h"
 #endif
 
@@ -53,6 +53,7 @@ Vector<String> PluginInfoStore::pluginsDirectories()
 
 Vector<String> PluginInfoStore::pluginPathsInDirectory(const String& directory)
 {
+    syslog(LOG_INFO, "File --%s , Fun = %s,",__FILE__, __FUNCTION__);
     Vector<String> result;
     char normalizedPath[PATH_MAX];
     for (const auto& path : listDirectory(directory, String("*.so"))) {
@@ -66,13 +67,18 @@ Vector<String> PluginInfoStore::pluginPathsInDirectory(const String& directory)
 
 Vector<String> PluginInfoStore::individualPluginPaths()
 {
+	syslog(LOG_INFO, "File --%s , Fun = %s,",__FILE__, __FUNCTION__);
     return Vector<String>();
 }
 
 bool PluginInfoStore::getPluginInfo(const String& pluginPath, PluginModuleInfo& plugin)
 {
-#if PLATFORM(GTK)
+    openlog("PluginInfo", LOG_PID, LOG_USER);
+    syslog(LOG_INFO, "PluginInfoStore::getPluginInfo(path,plugin");
+    syslog(LOG_INFO, "File --%s , Fun = %s,",__FILE__, __FUNCTION__);
+#if PLATFORM(GTK) || PLATFORM(WPE)
     if (PluginInfoCache::singleton().getPluginInfo(pluginPath, plugin)) {
+        syslog(LOG_INFO, "pluigninfocash.getpluinginfo sucess !!!");
 #if ENABLE(PLUGIN_PROCESS_GTK2)
         if (plugin.requiresGtk2) {
             String pluginProcessPath = executablePathOfPluginProcess();
@@ -83,8 +89,9 @@ bool PluginInfoStore::getPluginInfo(const String& pluginPath, PluginModuleInfo& 
 #endif
         return true;
     }
-
+    syslog(LOG_INFO,"pp_PAth=%s",pluginPath.utf8().data());
     if (NetscapePluginModule::getPluginInfo(pluginPath, plugin)) {
+        syslog(LOG_INFO,"Module::get..info");
         PluginInfoCache::singleton().updatePluginInfo(pluginPath, plugin);
         return true;
     }

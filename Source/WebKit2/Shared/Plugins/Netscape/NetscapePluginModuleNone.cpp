@@ -25,6 +25,7 @@
  */
 
 #include "config.h"
+#if 0
 #if ENABLE(NETSCAPE_PLUGIN_API) && PLUGIN_ARCHITECTURE(UNSUPPORTED)
 
 #include "NetscapePluginModule.h"
@@ -44,4 +45,5 @@ void NetscapePluginModule::determineQuirks()
 
 } // namespace WebKit
 
+#endif
 #endif

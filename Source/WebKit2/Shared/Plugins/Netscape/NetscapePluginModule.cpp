@@ -33,11 +33,13 @@
 #include "NetscapeBrowserFuncs.h"
 #include <wtf/NeverDestroyed.h>
 #include <wtf/text/CString.h>
+#include <syslog.h>
 
 namespace WebKit {
 
 static Vector<NetscapePluginModule*>& initializedNetscapePluginModules()
 {
+    syslog(LOG_INFO, "Fun= %s, file=%s ,", __func__, __FILE__);
     static NeverDestroyed<Vector<NetscapePluginModule*>> initializedNetscapePluginModules;
     return initializedNetscapePluginModules;
 }
@@ -49,6 +51,8 @@ NetscapePluginModule::NetscapePluginModule(const String& pluginPath)
     , m_shutdownProcPtr(0)
     , m_pluginFuncs()
 {
+    syslog(LOG_INFO, "Fun= %s, file=%s ,", __func__, __FILE__);
+
 }
 
 NetscapePluginModule::~NetscapePluginModule()
@@ -58,6 +62,8 @@ NetscapePluginModule::~NetscapePluginModule()
 
 Vector<String> NetscapePluginModule::sitesWithData()
 {
+    syslog(LOG_INFO, "Fun= %s, file=%s ,", __func__, __FILE__);
+
     Vector<String> sites;
 
     incrementLoadCount();
@@ -78,6 +84,8 @@ bool NetscapePluginModule::clearSiteData(const String& site, uint64_t flags, uin
 
 bool NetscapePluginModule::tryGetSitesWithData(Vector<String>& sites)
 {
+    syslog(LOG_INFO, "Fun= %s, file=%s ,", __func__, __FILE__);
+
     if (!m_isInitialized)
         return false;
 
@@ -123,6 +131,8 @@ bool NetscapePluginModule::tryClearSiteData(const String& site, uint64_t flags, 
 
 void NetscapePluginModule::shutdown()
 {
+	syslog(LOG_INFO, "FUN= %s, File=%s", __FUNCTION__,__FILE__);
+    syslog(LOG_INFO,"shutdown plugin");
     ASSERT(m_isInitialized);
 
     m_shutdownProcPtr();
@@ -137,20 +147,24 @@ void NetscapePluginModule::shutdown()
 
 PassRefPtr<NetscapePluginModule> NetscapePluginModule::getOrCreate(const String& pluginPath)
 {
+	  syslog(LOG_INFO," NetscapePluingModule::getOrCreate .");
     // First, see if we already have a module with this plug-in path.
     for (size_t i = 0; i < initializedNetscapePluginModules().size(); ++i) {
+  	  syslog(LOG_INFO," initializeNetscapePluginmudule().size= %d.",int(initializedNetscapePluginModules().size()) );
         NetscapePluginModule* pluginModule = initializedNetscapePluginModules()[i];
 
         if (pluginModule->m_pluginPath == pluginPath)
             return pluginModule;
     }
-
     auto pluginModule(adoptRef(*new NetscapePluginModule(pluginPath)));
-    
+    syslog(LOG_INFO," NetscapePluingModule::getOrCreate    "
+    		"  2nd try to loas and initialize the plugin module pluginpath =====%s "
+    		, pluginPath.utf8().data());
     // Try to load and initialize the plug-in module.
     if (!pluginModule->load())
-        return nullptr;
-    
+    {
+    	return nullptr;
+    }
     return WTFMove(pluginModule);
 }
 
@@ -170,6 +184,7 @@ void NetscapePluginModule::decrementLoadCount()
     m_loadCount--;
     
     if (!m_loadCount && m_isInitialized) {
+        syslog(LOG_INFO, "NetScapePluginModule: dcrement->shutdown");
         shutdown();
         unload();
     }
@@ -177,12 +192,14 @@ void NetscapePluginModule::decrementLoadCount()
 
 bool NetscapePluginModule::load()
 {
+    syslog(LOG_INFO,"NetscapePluginModule load()  .");
     if (m_isInitialized) {
         ASSERT(initializedNetscapePluginModules().find(this) != notFound);
         return true;
     }
 
     if (!tryLoad()) {
+    	syslog(LOG_INFO,"tryLoad failed   .");
         unload();
         return false;
     }
@@ -191,8 +208,8 @@ bool NetscapePluginModule::load()
 
     ASSERT(initializedNetscapePluginModules().find(this) == notFound);
     initializedNetscapePluginModules().append(this);
-
-    determineQuirks();
+    syslog(LOG_INFO,"tryLoad ok initializedNetscapePluginModules().append(this) return true   .");
+    //determineQuirks();
 
     return true;
 }
@@ -210,24 +227,38 @@ static bool moduleMixesGtkSymbols(Module* module)
 
 bool NetscapePluginModule::tryLoad()
 {
+	syslog(LOG_INFO, "in Try load");
     m_module = std::make_unique<Module>(m_pluginPath);
     if (!m_module->load())
+    {
+     	syslog(LOG_INFO, "in Try load load() fail ret false");
         return false;
-
+    }
 #if PLATFORM(GTK)
     if (moduleMixesGtkSymbols(m_module.get()))
         return false;
 #endif
+	syslog(LOG_INFO, "in Try load NP_InitializeFunptr ,will call NP_InitializeFuncPtr initializeFuncPtr ");
 
     NP_InitializeFuncPtr initializeFuncPtr = m_module->functionPointer<NP_InitializeFuncPtr>("NP_Initialize");
-    if (!initializeFuncPtr)
-        return false;
 
-#if !PLUGIN_ARCHITECTURE(X11)
+
+    if (!initializeFuncPtr)
+    {
+	    syslog(LOG_INFO, "in Try load  after call module->functionPointer initlizeFunPtr ......fail..ret false ");
+        return false;
+    }
+
+#if !(PLUGIN_ARCHITECTURE(X11) || PLUGIN_ARCHITECTURE(WayLand))
     NP_GetEntryPointsFuncPtr getEntryPointsFuncPtr = m_module->functionPointer<NP_GetEntryPointsFuncPtr>("NP_GetEntryPoints");
     if (!getEntryPointsFuncPtr)
+    {
+        syslog(LOG_INFO, "in Try load  not arch x11 or wayland  ");
         return false;
+    }
 #endif
+
+    syslog(LOG_INFO, "Good initfunptr ok will call NP_GetEntryPointesFunPtr if not X11 pluginarch");
 
     m_shutdownProcPtr = m_module->functionPointer<NPP_ShutdownProcPtr>("NP_Shutdown");
     if (!m_shutdownProcPtr)
@@ -253,7 +284,6 @@ bool NetscapePluginModule::tryLoad()
 
 #endif
     bool result = initializeFuncPtr(netscapeBrowserFuncs()) == NPERR_NO_ERROR && getEntryPointsFuncPtr(&m_pluginFuncs) == NPERR_NO_ERROR;
-
 #ifndef NP_NO_CARBON
     // Restore the resource file.
     UseResFile(currentResourceFile);
@@ -263,11 +293,10 @@ bool NetscapePluginModule::tryLoad()
 #endif
 
     return result;
-#elif PLUGIN_ARCHITECTURE(X11)
-    if (initializeFuncPtr(netscapeBrowserFuncs(), &m_pluginFuncs) != NPERR_NO_ERROR)
+#elif PLUGIN_ARCHITECTURE(X11) || PLUGIN_ARCHITECTURE(WayLand)
+     if (initializeFuncPtr(netscapeBrowserFuncs(), &m_pluginFuncs) != NPERR_NO_ERROR)
         return false;
 #endif
-
     return true;
 }
 

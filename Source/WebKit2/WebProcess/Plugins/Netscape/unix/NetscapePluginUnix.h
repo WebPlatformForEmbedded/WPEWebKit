@@ -26,10 +26,10 @@
 #ifndef NetscapePluginUnix_h
 #define NetscapePluginUnix_h
 
-#if PLUGIN_ARCHITECTURE(X11) && ENABLE(NETSCAPE_PLUGIN_API)
+#if (PLUGIN_ARCHITECTURE(X11) || PLUGIN_ARCHITECTURE(WayLand)) && ENABLE(NETSCAPE_PLUGIN_API)
 
 #include <WebCore/npruntime_internal.h>
-
+//#include <WebCore/plugins/npapi.h>
 namespace WebCore {
 class GraphicsContext;
 class IntRect;
@@ -43,23 +43,23 @@ class WebWheelEvent;
 
 class NetscapePluginUnix {
 public:
-    virtual ~NetscapePluginUnix() { }
-    virtual NPWindowType windowType() const = 0;
-    virtual void* window() const = 0;
-    virtual NPSetWindowCallbackStruct* windowSystemInfo() = 0;
-    virtual void geometryDidChange() = 0;
-    virtual void visibilityDidChange() = 0;
-    virtual void paint(WebCore::GraphicsContext&, const WebCore::IntRect&) = 0;
-    virtual bool handleMouseEvent(const WebMouseEvent&) = 0;
-    virtual bool handleWheelEvent(const WebWheelEvent&) = 0;
-    virtual bool handleMouseEnterEvent(const WebMouseEvent&) = 0;
-    virtual bool handleMouseLeaveEvent(const WebMouseEvent&) = 0;
-    virtual bool handleKeyboardEvent(const WebKeyboardEvent&) = 0;
-    virtual void setFocus(bool) = 0;
+      virtual ~NetscapePluginUnix() { }
+      virtual NPWindowType windowType() const = 0;
+      virtual void* window() const = 0;
+//      virtual NPSetWindowCallbackStruct* windowSystemInfo() = 0;
+//    virtual void geometryDidChange() = 0;
+//    virtual void visibilityDidChange() = 0;
+//    virtual void paint(WebCore::GraphicsContext&, const WebCore::IntRect&) = 0;
+//    virtual bool handleMouseEvent(const WebMouseEvent&) = 0;
+//    virtual bool handleWheelEvent(const WebWheelEvent&) = 0;
+//    virtual bool handleMouseEnterEvent(const WebMouseEvent&) = 0;
+//    virtual bool handleMouseLeaveEvent(const WebMouseEvent&) = 0;
+//    virtual bool handleKeyboardEvent(const WebKeyboardEvent&) = 0;
+//    virtual void setFocus(bool) = 0;
 };
 
 } // namespace WebKit
 
-#endif // PLUGIN_ARCHITECTURE(X11) && ENABLE(NETSCAPE_PLUGIN_API)
+#endif // PLUGIN_ARCHITECTURE(X11) ||PLUGIN_ARCHITECTURE(WayLand) && ENABLE(NETSCAPE_PLUGIN_API)
 
 #endif // NetscapePluginUnix_h

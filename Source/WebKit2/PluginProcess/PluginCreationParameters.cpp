@@ -25,6 +25,7 @@
 
 #include "config.h"
 #include "PluginCreationParameters.h"
+#include <syslog.h>
 
 #if ENABLE(NETSCAPE_PLUGIN_API)
 
@@ -60,36 +61,38 @@ void PluginCreationParameters::encode(IPC::Encoder& encoder) const
 
 bool PluginCreationParameters::decode(IPC::Decoder& decoder, PluginCreationParameters& result)
 {
+#define return_false syslog(LOG_INFO, "decode fail: %s:%d", __FILE__, __LINE__)
+
     if (!decoder.decode(result.pluginInstanceID) || !result.pluginInstanceID)
-        return false;
+        return_false;
 
     if (!decoder.decode(result.windowNPObjectID))
-        return false;
+        return_false;
 
     if (!decoder.decode(result.parameters))
-        return false;
+        return_false;
 
     if (!decoder.decode(result.userAgent))
-        return false;
+        return_false;
 
     if (!decoder.decode(result.contentsScaleFactor))
-        return false;
+        return_false;
 
     if (!decoder.decode(result.isPrivateBrowsingEnabled))
-        return false;
+        return_false;
 
     if (!decoder.decode(result.isMuted))
-        return false;
+        return_false;
 
     if (!decoder.decode(result.asynchronousCreationIncomplete))
-        return false;
+        return_false;
 
     if (!decoder.decode(result.artificialPluginInitializationDelayEnabled))
-        return false;
+        return_false;
 
     if (!decoder.decode(result.isAcceleratedCompositingEnabled))
-        return false;
-
+        return_false;
+    syslog(LOG_INFO, "decode succeed");
     return true;
 }
 

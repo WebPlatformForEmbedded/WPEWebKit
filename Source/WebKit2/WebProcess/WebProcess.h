@@ -45,7 +45,7 @@
 #include <wtf/HashSet.h>
 #include <wtf/text/AtomicString.h>
 #include <wtf/text/AtomicStringHash.h>
-
+#include <syslog.h>
 #if PLATFORM(COCOA)
 #include <dispatch/dispatch.h>
 #include <WebCore/MachSendRight.h>

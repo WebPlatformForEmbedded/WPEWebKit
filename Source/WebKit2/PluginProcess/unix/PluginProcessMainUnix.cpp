@@ -1,3 +1,5 @@
+//=========================
+
 /*
  * Copyright (C) 2011, 2014 Igalia S.L.
  * Copyright (C) 2011 Apple Inc.
@@ -36,21 +38,22 @@
 #include "PluginProcess.h"
 #include <WebCore/FileSystem.h>
 #include <stdlib.h>
-
+#include <syslog.h>
+#include <execinfo.h>
 #if PLATFORM(GTK)
 #include <gtk/gtk.h>
 #elif PLATFORM(EFL) && HAVE_ECORE_X
 #include <Ecore_X.h>
 #endif
 
-#if defined(XP_UNIX)
+#if defined(XP_UNIX) && !PLUGIN_ARCHITECTURE(WayLand)
 #include <WebCore/PlatformDisplayX11.h>
 #include <WebCore/XErrorTrapper.h>
 #endif
 
 namespace WebKit {
 
-#if defined(XP_UNIX)
+#if defined(XP_UNIX) && !PLUGIN_ARCHITECTURE(WayLand)
 static std::unique_ptr<WebCore::XErrorTrapper> xErrorTrapper;
 #endif // XP_UNIX
 
@@ -72,18 +75,27 @@ public:
 
     bool parseCommandLine(int argc, char** argv) override
     {
+        /*
+        int n = 10;
+        void *stack[10];
+        WTFGetBacktrace(stack, &n);
+        syslog(LOG_INFO, "++++++PPProcessMain  stacksize: %d", n);
+        for (int i=0;i<n;i++)
+        syslog(LOG_INFO, "++++++PPProcessMain  --%d %s",i, *backtrace_symbols(stack + i, 1));
+        */
+        syslog(LOG_INFO, "++++++PPProcessMain ::parseCommandline argv[2]:%s", argv[2]);
         ASSERT(argc == 3);
         if (argc != 3)
             return false;
 
         if (!strcmp(argv[1], "-scanPlugin"))
-#if PLUGIN_ARCHITECTURE(X11)
+#if PLUGIN_ARCHITECTURE(X11) || PLUGIN_ARCHITECTURE(WayLand)
             exit(NetscapePluginModule::scanPlugin(argv[2]) ? EXIT_SUCCESS : EXIT_FAILURE);
 #else
             exit(EXIT_FAILURE);
 #endif
 
-#if defined(XP_UNIX)
+#if defined(XP_UNIX) && !PLUGIN_ARCHITECTURE(WayLand)
         if (WebCore::PlatformDisplay::sharedDisplay().type() == WebCore::PlatformDisplay::Type::X11) {
             auto* display = downcast<WebCore::PlatformDisplayX11>(WebCore::PlatformDisplay::sharedDisplay()).native();
             xErrorTrapper = std::make_unique<WebCore::XErrorTrapper>(display, WebCore::XErrorTrapper::Policy::Warn);
@@ -91,6 +103,7 @@ public:
 #endif
 
         m_parameters.extraInitializationData.add("plugin-path", argv[2]);
+         syslog(LOG_INFO, "++++++PPProcessMain::extraInitialization.add:%s", argv[2]);
         return ChildProcessMainBase::parseCommandLine(argc, argv);
     }
 };
@@ -103,3 +116,5 @@ int PluginProcessMainUnix(int argc, char** argv)
 } // namespace WebKit
 
 #endif
+
+

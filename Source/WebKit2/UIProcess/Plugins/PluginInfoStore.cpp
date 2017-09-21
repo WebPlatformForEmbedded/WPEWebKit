@@ -34,7 +34,7 @@
 #include <algorithm>
 #include <wtf/ListHashSet.h>
 #include <wtf/StdLibExtras.h>
-
+#include <syslog.h>
 using namespace WebCore;
 
 namespace WebKit {
@@ -64,6 +64,7 @@ static void addFromVector(T& hashSet, const U& vector)
 
 void PluginInfoStore::loadPluginsIfNecessary()
 {
+	syslog(LOG_INFO, "file=%s, fun=%s", __FILE__, __FUNCTION__);
     if (m_pluginListIsUpToDate)
         return;
 
@@ -104,6 +105,7 @@ void PluginInfoStore::loadPlugin(Vector<PluginModuleInfo>& plugins, const String
 
 Vector<PluginModuleInfo> PluginInfoStore::plugins()
 {
+	syslog(LOG_INFO, "~~~~~~fun- %s, file ==%s", __FUNCTION__, __FILE__);
     loadPluginsIfNecessary();
     return m_plugins;
 }
@@ -174,6 +176,7 @@ PluginModuleInfo PluginInfoStore::findPluginWithBundleIdentifier(const String&)
 
 PluginModuleInfo PluginInfoStore::findPlugin(String& mimeType, const URL& url, PluginData::AllowedPluginTypes allowedPluginTypes)
 {
+	syslog(LOG_INFO, "file=%s, fun=%s", __FILE__, __FUNCTION__);
     loadPluginsIfNecessary();
     
     // First, check if we can get the plug-in based on its MIME type.

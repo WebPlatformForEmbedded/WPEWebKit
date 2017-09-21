@@ -34,7 +34,7 @@
 #include <wtf/RunLoop.h>
 #include <wtf/text/WTFString.h>
 #include <wtf/threads/BinarySemaphore.h>
-
+#include <syslog.h>
 namespace IPC {
 
 struct Connection::ReplyHandler {
@@ -147,6 +147,7 @@ bool Connection::SyncMessageState::processIncomingMessage(Connection& connection
 void Connection::SyncMessageState::dispatchMessages(Connection* allowedConnection)
 {
     ASSERT(RunLoop::isMain());
+    syslog(LOG_INFO, "==in function: %s ", __FUNCTION__);
 
     Vector<ConnectionAndIncomingMessage> messagesToDispatchWhileWaitingForSyncReply;
 
@@ -183,6 +184,7 @@ void Connection::SyncMessageState::dispatchMessageAndResetDidScheduleDispatchMes
     {
         std::lock_guard<Lock> lock(m_mutex);
         ASSERT(m_didScheduleDispatchMessagesWorkSet.contains(&connection));
+        syslog(LOG_INFO, "==in function: %s ASSERT(m_didScheduleDispatchMessagesWorkSet.contains(&connection)--not fail will remove it", __FUNCTION__);
         m_didScheduleDispatchMessagesWorkSet.remove(&connection);
     }
 

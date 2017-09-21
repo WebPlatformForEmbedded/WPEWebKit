@@ -70,15 +70,15 @@ messages -> PluginProxy LegacyReceiver {
     SetLayerHostingContextID(uint32_t layerHostingContextID)
 #endif
 
-#if PLUGIN_ARCHITECTURE(X11)
+#if PLUGIN_ARCHITECTURE(X11) || PLUGIN_ARCHITECTURE(WayLand)
     # Create the plugin container for windowed plugins
     CreatePluginContainer() -> (uint64_t windowID)
 
     # Update geometry of windowed plugin widget
-    WindowedPluginGeometryDidChange(WebCore::IntRect frameRect, WebCore::IntRect clipRect, uint64_t windowID)
+# WindowedPluginGeometryDidChange(WebCore::IntRect frameRect, WebCore::IntRect clipRect, uint64_t windowID)
 
     # Update visibility of windowed plugin widget
-    WindowedPluginVisibilityDidChange(bool isVisible, uint64_t windowID)
+#    WindowedPluginVisibilityDidChange(bool isVisible, uint64_t windowID)
 #endif
 
     # Tells the WebProcess that the plug-in was successfully initialized asynchronously

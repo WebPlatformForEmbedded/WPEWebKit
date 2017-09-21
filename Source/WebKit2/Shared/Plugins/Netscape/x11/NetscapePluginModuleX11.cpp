@@ -37,7 +37,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <wtf/text/StringBuilder.h>
-
+#include <syslog.h>
 using namespace WebCore;
 
 namespace WebKit {
@@ -73,6 +73,7 @@ StdoutDevNullRedirector::~StdoutDevNullRedirector()
 
 void NetscapePluginModule::parseMIMEDescription(const String& mimeDescription, Vector<MimeClassInfo>& result)
 {
+    syslog(LOG_INFO," parseMIMEDEscription");
     ASSERT_ARG(result, result.isEmpty());
 
     Vector<String> types;
@@ -100,6 +101,7 @@ void NetscapePluginModule::parseMIMEDescription(const String& mimeDescription, V
 
 String NetscapePluginModule::buildMIMEDescription(const Vector<MimeClassInfo>& mimeDescription)
 {
+    syslog(LOG_INFO," buildMIMEDEscription");
     StringBuilder builder;
 
     size_t mimeInfoCount = mimeDescription.size();
@@ -120,12 +122,14 @@ String NetscapePluginModule::buildMIMEDescription(const Vector<MimeClassInfo>& m
         if (i != mimeInfoCount - 1)
             builder.append(';');
     }
-
+     syslog(LOG_INFO,"builder return %s",builder.toString().utf8().data());
     return builder.toString();
 }
 
 bool NetscapePluginModule::getPluginInfoForLoadedPlugin(RawPluginMetaData& metaData)
 {
+
+     syslog(LOG_INFO,"getPluginInfoForLoadedPlugin ");
     ASSERT(m_isInitialized);
 
     Module* module = m_module.get();
@@ -152,6 +156,8 @@ bool NetscapePluginModule::getPluginInfoForLoadedPlugin(RawPluginMetaData& metaD
 
     metaData.mimeDescription = mimeDescription;
 
+     syslog(LOG_INFO,"getPluginInfoForLoadedPlugin return true ");
+     syslog(LOG_INFO,"getPluginInfoForLoadedPlugin mimeDesp=%s",mimeDescription.utf8().data());
     return true;
 }
 
@@ -159,12 +165,23 @@ bool NetscapePluginModule::getPluginInfo(const String& pluginPath, PluginModuleI
 {
     RawPluginMetaData metaData;
     if (!PluginProcessProxy::scanPlugin(pluginPath, metaData))
+    {
+        syslog(LOG_INFO, "=====================getpluininf not reached, after proxy::scanPlugin");
         return false;
-
+    }    
     plugin.path = pluginPath;
     plugin.info.file = pathGetFileName(pluginPath);
     plugin.info.name = metaData.name;
     plugin.info.desc = metaData.description;
+    openlog("Module::getpliunInfo", LOG_PID, LOG_USER);
+    syslog(LOG_INFO, "path=%s",plugin.path.utf8().data());
+
+    syslog(LOG_INFO, "name=%s",plugin.info.name.utf8().data());
+
+    syslog(LOG_INFO, "file=%s",plugin.info.file.utf8().data());
+
+    syslog(LOG_INFO, "desc=%s",plugin.info.desc.utf8().data());
+    
     parseMIMEDescription(metaData.mimeDescription, plugin.info.mimes);
 #if PLATFORM(GTK)
     plugin.requiresGtk2 = metaData.requiresGtk2;
@@ -217,6 +234,7 @@ static void writeLine(const String& line)
 
 bool NetscapePluginModule::scanPlugin(const String& pluginPath)
 {
+    syslog(LOG_INFO,"scanPLugin(string)");
     RawPluginMetaData metaData;
 
     {
@@ -243,7 +261,9 @@ bool NetscapePluginModule::scanPlugin(const String& pluginPath)
     writeLine(metaData.mimeDescription);
 
     fflush(stdout);
-
+    syslog(LOG_INFO, "writeline=name ==%s", metaData.name.utf8().data());
+    syslog(LOG_INFO, "writeline=description ==%s", metaData.description.utf8().data());
+    syslog(LOG_INFO, "writeline=mimeDescripinton ==%s", metaData.mimeDescription.utf8().data());
     return true;
 }
 

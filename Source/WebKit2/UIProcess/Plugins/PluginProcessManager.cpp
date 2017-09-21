@@ -32,12 +32,22 @@
 #include <wtf/CryptographicallyRandomNumber.h>
 #include <wtf/StdLibExtras.h>
 #include <wtf/text/WTFString.h>
+#include <syslog.h>
+#include<execinfo.h>
 
 namespace WebKit {
 
 PluginProcessManager& PluginProcessManager::singleton()
 {
+    int n=10;
+    void *stack[10];
+    WTFGetBacktrace(stack, &n);
+     syslog(LOG_INFO, "File= %s, FUNCTION = %s", __FILE__, __FUNCTION__);
+     syslog(LOG_INFO, "++++++PPProcessMain  stacksize: %d", n);
+     for (int i=0; i<n;i++)
+     syslog(LOG_INFO, "PluginProcessManager::singleton, %d, %s", i, *backtrace_symbols(stack+i, 1));
     static NeverDestroyed<PluginProcessManager> pluginProcessManager;
+
     return pluginProcessManager;
 }
 
@@ -50,6 +60,7 @@ PluginProcessManager::PluginProcessManager()
 
 uint64_t PluginProcessManager::pluginProcessToken(const PluginModuleInfo& pluginModuleInfo, PluginProcessType pluginProcessType, PluginProcessSandboxPolicy pluginProcessSandboxPolicy)
 {
+	syslog(LOG_INFO, "see if we know token alrady...File= %s, FUNCTION = %s", __FILE__, __FUNCTION__);
     // See if we know this token already.
     for (size_t i = 0; i < m_pluginProcessTokens.size(); ++i) {
         const PluginProcessAttributes& attributes = m_pluginProcessTokens[i].first;
@@ -57,7 +68,10 @@ uint64_t PluginProcessManager::pluginProcessToken(const PluginModuleInfo& plugin
         if (attributes.moduleInfo.path == pluginModuleInfo.path
             && attributes.processType == pluginProcessType
             && attributes.sandboxPolicy == pluginProcessSandboxPolicy)
-            return m_pluginProcessTokens[i].second;
+        {
+        	syslog(LOG_INFO, "We know the token resturn second");
+        	return m_pluginProcessTokens[i].second;
+        }
     }
 
     uint64_t token;
@@ -67,7 +81,7 @@ uint64_t PluginProcessManager::pluginProcessToken(const PluginModuleInfo& plugin
         if (m_knownTokens.isValidValue(token) && !m_knownTokens.contains(token))
             break;
     }
-
+    syslog(LOG_INFO, "set pluginginprocessAttributes  and tocken append");
     PluginProcessAttributes attributes;
     attributes.moduleInfo = pluginModuleInfo;
     attributes.processType = pluginProcessType;
@@ -75,15 +89,17 @@ uint64_t PluginProcessManager::pluginProcessToken(const PluginModuleInfo& plugin
 
     m_pluginProcessTokens.append(std::make_pair(WTFMove(attributes), token));
     m_knownTokens.add(token);
-
+    syslog(LOG_INFO, "token=====%ld", (uint64_t)token);
     return token;
 }
 
 void PluginProcessManager::getPluginProcessConnection(uint64_t pluginProcessToken, PassRefPtr<Messages::WebProcessProxy::GetPluginProcessConnection::DelayedReply> reply)
 {
+	syslog(LOG_INFO, " ---- will getOrCreatePluginProcessProxy File= %s, FUNCTION = %s   ", __FILE__, __FUNCTION__);
     ASSERT(pluginProcessToken);
-
+    syslog(LOG_INFO, "PluginProcess token=====%ld", (uint64_t)pluginProcessToken);
     PluginProcessProxy* pluginProcess = getOrCreatePluginProcess(pluginProcessToken);
+    syslog(LOG_INFO, "--- will getOrCreateProcessConnection File= %s, FUNCTION = %s    ", __FILE__, __FUNCTION__);
     pluginProcess->getPluginProcessConnection(reply);
 }
 
@@ -117,6 +133,7 @@ void PluginProcessManager::deleteWebsiteDataForHostNames(const PluginModuleInfo&
 
 PluginProcessProxy* PluginProcessManager::getOrCreatePluginProcess(uint64_t pluginProcessToken)
 {
+	syslog(LOG_INFO, "File= %s, FUNCTION = %s", __FILE__, __FUNCTION__);
     for (size_t i = 0; i < m_pluginProcesses.size(); ++i) {
         if (m_pluginProcesses[i]->pluginProcessToken() == pluginProcessToken)
             return m_pluginProcesses[i].get();
@@ -125,6 +142,7 @@ PluginProcessProxy* PluginProcessManager::getOrCreatePluginProcess(uint64_t plug
     for (size_t i = 0; i < m_pluginProcessTokens.size(); ++i) {
         auto& attributesAndToken = m_pluginProcessTokens[i];
         if (attributesAndToken.second == pluginProcessToken) {
+            syslog(LOG_INFO, "PluingProcesManager: process type=%d", attributesAndToken.first.processType);
             auto pluginProcess = PluginProcessProxy::create(this, attributesAndToken.first, attributesAndToken.second);
             PluginProcessProxy* pluginProcessPtr = pluginProcess.ptr();
 

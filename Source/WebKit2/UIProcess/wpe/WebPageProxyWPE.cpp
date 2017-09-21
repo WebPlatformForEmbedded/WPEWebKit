@@ -29,17 +29,31 @@
 #include "WebsiteDataStore.h"
 #include <WebCore/NotImplemented.h>
 
+
+#include "NotImplemented.h"
+#include "PageClientImpl.h"
+#include "WebPageMessages.h"
+
+#include "WebProcessProxy.h"
+#include "WebsiteDataStore.h"
+#include <WebCore/UserAgent.h>
+#include <wtf/NeverDestroyed.h>
+#include <syslog.h>
+
+
+
 namespace WebKit {
 
 void WebPageProxy::platformInitialize()
 {
-    notImplemented();
 }
 
-String WebPageProxy::standardUserAgent(const String&)
+
+String WebPageProxy::standardUserAgent(const String& applicationNameForUserAgent)
 {
-    return "Mozilla/5.0 (Linux; x86_64 GNU/Linux) AppleWebKit/601.1 (KHTML, like Gecko) Version/8.0 Safari/601.1 WPE";
+	return "Mozilla/5.0 (Linux; x86_64 GNU/Linux) AppleWebKit/601.1 (KHTML, like Gecko) Version/8.0 Safari/601.1 WPE";
 }
+
 
 void WebPageProxy::saveRecentSearches(const String&, const Vector<WebCore::RecentSearch>&)
 {
@@ -51,14 +65,36 @@ void WebPageProxy::loadRecentSearches(const String&, Vector<WebCore::RecentSearc
     notImplemented();
 }
 
-void WebsiteDataStore::platformRemoveRecentSearches(std::chrono::system_clock::time_point)
+void WebsiteDataStore::platformRemoveRecentSearches(std::chrono::system_clock::time_point oldestTimeToRemove)
 {
     notImplemented();
 }
 
-void WebPageProxy::editorStateChanged(const EditorState&)
+void WebPageProxy::editorStateChanged(const EditorState& editorState)
 {
     notImplemented();
 }
+
+#if PLUGIN_ARCHITECTURE(X11) || PLUGIN_ARCHITECTURE(WayLand)
+typedef HashMap<uint64_t, WebCore::Widget* > PluginWindowMap;
+static PluginWindowMap& pluginWindowMap()
+{
+    static NeverDestroyed<PluginWindowMap> map;
+    return map;
+}
+
+void WebPageProxy::createPluginContainer(uint64_t& windowID)
+{
+	syslog(LOG_INFO, "createpluincontainer");
+    static uint64_t id = 0;
+    id += 1023;
+    windowID = id;
+}
+
+#endif // PLUGIN_ARCHITECTURE(X11) ||PLUGIN_ARCHITECTURE(WayLand)
 
 } // namespace WebKit
+
+
+
+
