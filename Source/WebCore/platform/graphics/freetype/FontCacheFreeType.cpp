@@ -368,7 +368,7 @@ std::unique_ptr<FontPlatformData> FontCache::createFontPlatformData(const FontDe
 
     FcChar8* fontConfigFamilyNameAfterMatching;
 
-    //When a font has two family names: use the second (more descriptive) one instead
+    // When a font has two family names: use the second (more descriptive) one instead
     if (FcPatternGetString(resultPattern.get(), FC_FAMILY, 1, &fontConfigFamilyNameAfterMatching) != FcResultMatch)
         FcPatternGetString(resultPattern.get(), FC_FAMILY, 0, &fontConfigFamilyNameAfterMatching);
 
