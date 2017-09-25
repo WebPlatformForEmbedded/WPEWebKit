@@ -55,7 +55,7 @@ MediaSourceClientGStreamerMSE::~MediaSourceClientGStreamerMSE()
     ASSERT(WTF::isMainThread());
 }
 
-MediaSourcePrivate::AddStatus MediaSourceClientGStreamerMSE::addSourceBuffer(RefPtr<SourceBufferPrivateGStreamer> sourceBufferPrivate, const ContentType&)
+MediaSourcePrivate::AddStatus MediaSourceClientGStreamerMSE::addSourceBuffer(RefPtr<SourceBufferPrivateGStreamer> sourceBufferPrivate, const ContentType& contentType)
 {
     ASSERT(WTF::isMainThread());
 
@@ -65,7 +65,7 @@ MediaSourcePrivate::AddStatus MediaSourceClientGStreamerMSE::addSourceBuffer(Ref
     ASSERT(m_playerPrivate->m_playbackPipeline);
     ASSERT(sourceBufferPrivate);
 
-    RefPtr<AppendPipeline> appendPipeline = adoptRef(new AppendPipeline(*this, *sourceBufferPrivate, *m_playerPrivate));
+    RefPtr<AppendPipeline> appendPipeline = adoptRef(new AppendPipeline(*this, *sourceBufferPrivate, *m_playerPrivate, contentType));
     GST_TRACE("Adding SourceBuffer to AppendPipeline: this=%p sourceBuffer=%p appendPipeline=%p", this, sourceBufferPrivate.get(), appendPipeline.get());
     m_playerPrivate->m_appendPipelinesMap.add(sourceBufferPrivate, appendPipeline);
 

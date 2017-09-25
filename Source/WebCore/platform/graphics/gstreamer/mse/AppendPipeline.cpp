@@ -107,7 +107,7 @@ static void appendPipelineElementMessageCallback(GstBus*, GstMessage* message, A
 }
 #endif
 
-AppendPipeline::AppendPipeline(Ref<MediaSourceClientGStreamerMSE> mediaSourceClient, Ref<SourceBufferPrivateGStreamer> sourceBufferPrivate, MediaPlayerPrivateGStreamerMSE& playerPrivate)
+AppendPipeline::AppendPipeline(Ref<MediaSourceClientGStreamerMSE> mediaSourceClient, Ref<SourceBufferPrivateGStreamer> sourceBufferPrivate, MediaPlayerPrivateGStreamerMSE& playerPrivate, const ContentType& contentType)
     : m_mediaSourceClient(mediaSourceClient.get())
     , m_sourceBufferPrivate(sourceBufferPrivate.get())
     , m_playerPrivate(&playerPrivate)
@@ -140,7 +140,15 @@ AppendPipeline::AppendPipeline(Ref<MediaSourceClientGStreamerMSE> mediaSourceCli
     // We assign the created instances here instead of adoptRef() because gst_bin_add_many()
     // below will already take the initial reference and we need an additional one for us.
     m_appsrc = gst_element_factory_make("appsrc", nullptr);
-    m_demux = gst_element_factory_make("qtdemux", nullptr);
+    GST_DEBUG("create demux for type %s", contentType.type().utf8().data());
+    if (contentType.type() == "audio/webm" || contentType.type() == "video/webm") {
+	    GST_DEBUG("create matroskademux ");
+	    m_demux = gst_element_factory_make("matroskademux", nullptr);
+    } else {
+	    GST_DEBUG("create qtdemux ");
+	    m_demux = gst_element_factory_make("qtdemux", nullptr);
+    }
+
     m_appsink = gst_element_factory_make("appsink", nullptr);
 
     gst_app_sink_set_emit_signals(GST_APP_SINK(m_appsink.get()), TRUE);

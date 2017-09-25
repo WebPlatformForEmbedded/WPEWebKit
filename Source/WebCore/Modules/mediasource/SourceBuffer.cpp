@@ -1769,7 +1769,7 @@ void SourceBuffer::sourceBufferPrivateDidReceiveSample(SourceBufferPrivate*, Med
         // Add the coded frame with the presentation timestamp, decode timestamp, and frame duration to the track buffer.
         trackBuffer.samples.addSample(sample);
 
-        if (trackBuffer.lastEnqueuedDecodeEndTime.isInvalid() || decodeTimestamp >= trackBuffer.lastEnqueuedDecodeEndTime) {
+        if (trackBuffer.lastEnqueuedDecodeEndTime.isInvalid() || (decodeTimestamp + MediaTime::createWithDouble(0.001))>= trackBuffer.lastEnqueuedDecodeEndTime) {
             DecodeOrderSampleMap::KeyType decodeKey(decodeTimestamp, presentationTimestamp);
             trackBuffer.decodeQueue.insert(DecodeOrderSampleMap::MapType::value_type(decodeKey, &sample));
         }

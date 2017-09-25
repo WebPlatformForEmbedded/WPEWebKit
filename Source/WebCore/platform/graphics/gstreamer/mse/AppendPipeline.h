@@ -44,7 +44,7 @@ class AppendPipeline : public ThreadSafeRefCounted<AppendPipeline> {
 public:
     enum class AppendState { Invalid, NotStarted, Ongoing, KeyNegotiation, DataStarve, Sampling, LastSample, Aborting };
 
-    AppendPipeline(Ref<MediaSourceClientGStreamerMSE>, Ref<SourceBufferPrivateGStreamer>, MediaPlayerPrivateGStreamerMSE&);
+    AppendPipeline(Ref<MediaSourceClientGStreamerMSE>, Ref<SourceBufferPrivateGStreamer>, MediaPlayerPrivateGStreamerMSE&, const ContentType&);
     virtual ~AppendPipeline();
 
     void handleNeedContextSyncMessage(GstMessage*);
