@@ -366,7 +366,9 @@ bool CachedResource::isCORSSameOrigin() const
 {
     // Following resource types do not use CORS
     ASSERT(type() != CachedResource::Type::FontResource);
+#if ENABLE(SVG_FONTS)
     ASSERT(type() != CachedResource::Type::SVGFontResource);
+#endif
     ASSERT(type() != CachedResource::XSLStyleSheet);
 
     // https://html.spec.whatwg.org/multipage/infrastructure.html#cors-same-origin
