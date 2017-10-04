@@ -82,7 +82,6 @@ bool LibWebRTCMediaEndpoint::setConfiguration(LibWebRTCProvider& client, webrtc:
     return m_backend->SetConfiguration(WTFMove(configuration));
 }
 
-// FIXME: unify with MediaEndpointSessionDescription::typeString()
 static inline const char* sessionDescriptionType(RTCSdpType sdpType)
 {
     switch (sdpType) {

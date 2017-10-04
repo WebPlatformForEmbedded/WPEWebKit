@@ -2109,7 +2109,7 @@ MediaPlayer::SupportsType MediaPlayerPrivateGStreamer::supportsType(const MediaE
     if (parameters.isMediaSource)
         return result;
 #endif
-    // MediaStream playback is handled by the OpenWebRTC player.
+
     if (parameters.isMediaStream)
         return result;
 

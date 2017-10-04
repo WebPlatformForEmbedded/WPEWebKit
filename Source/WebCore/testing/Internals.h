@@ -428,9 +428,6 @@ public:
 #endif
 
 #if ENABLE(WEB_RTC)
-#if USE(OPENWEBRTC)
-    void enableMockMediaEndpoint();
-#endif
     void emulateRTCPeerConnectionPlatformEvent(RTCPeerConnection&, const String& action);
     void useMockRTCPeerConnectionFactory(const String&);
     void setICECandidateFiltering(bool);
