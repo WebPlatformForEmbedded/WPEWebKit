@@ -43,31 +43,6 @@
 GST_DEBUG_CATEGORY_EXTERN(webkit_mse_debug);
 #define GST_CAT_DEFAULT webkit_mse_debug
 
-static Stream* getStreamByTrackId(WebKitMediaSrc*, AtomicString);
-static Stream* getStreamBySourceBufferPrivate(WebKitMediaSrc*, WebCore::SourceBufferPrivateGStreamer*);
-
-static Stream* getStreamByTrackId(WebKitMediaSrc* source, AtomicString trackIdString)
-{
-    // WebKitMediaSrc should be locked at this point.
-    for (Stream* stream : source->priv->streams) {
-        if (stream->type != WebCore::Invalid
-            && ((stream->audioTrack && stream->audioTrack->id() == trackIdString)
-                || (stream->videoTrack && stream->videoTrack->id() == trackIdString) ) ) {
-            return stream;
-        }
-    }
-    return nullptr;
-}
-
-static Stream* getStreamBySourceBufferPrivate(WebKitMediaSrc* source, WebCore::SourceBufferPrivateGStreamer* sourceBufferPrivate)
-{
-    for (Stream* stream : source->priv->streams) {
-        if (stream->sourceBuffer == sourceBufferPrivate)
-            return stream;
-    }
-    return nullptr;
-}
-
 // FIXME: Use gst_app_src_push_sample() instead when we switch to the appropriate GStreamer version.
 static GstFlowReturn pushSample(GstAppSrc* appsrc, GstSample* sample)
 {
@@ -153,7 +128,7 @@ void PlaybackPipeline::removeSourceBuffer(RefPtr<SourceBufferPrivateGStreamer> s
     GST_DEBUG_OBJECT(m_webKitMediaSrc.get(), "Element removed from MediaSource");
     GST_OBJECT_LOCK(m_webKitMediaSrc.get());
     WebKitMediaSrcPrivate* priv = m_webKitMediaSrc->priv;
-    Stream* stream = getStreamBySourceBufferPrivate(m_webKitMediaSrc.get(), sourceBufferPrivate.get());
+    Stream* stream = webKitMediaSrcGetStreamBySourceBufferPrivate(m_webKitMediaSrc.get(), sourceBufferPrivate.get());
     if (stream)
         priv->streams.removeFirst(stream);
     GST_OBJECT_UNLOCK(m_webKitMediaSrc.get());
@@ -167,7 +142,7 @@ void PlaybackPipeline::attachTrack(RefPtr<SourceBufferPrivateGStreamer> sourceBu
     WebKitMediaSrc* webKitMediaSrc = m_webKitMediaSrc.get();
 
     GST_OBJECT_LOCK(webKitMediaSrc);
-    Stream* stream = getStreamBySourceBufferPrivate(webKitMediaSrc, sourceBufferPrivate.get());
+    Stream* stream = webKitMediaSrcGetStreamBySourceBufferPrivate(webKitMediaSrc, sourceBufferPrivate.get());
     GST_OBJECT_UNLOCK(webKitMediaSrc);
 
     ASSERT(stream);
@@ -312,7 +287,7 @@ void PlaybackPipeline::reattachTrack(RefPtr<SourceBufferPrivateGStreamer> source
     WebKitMediaSrc* webKitMediaSrc = m_webKitMediaSrc.get();
 
     GST_OBJECT_LOCK(webKitMediaSrc);
-    Stream* stream = getStreamBySourceBufferPrivate(webKitMediaSrc, sourceBufferPrivate.get());
+    Stream* stream = webKitMediaSrcGetStreamBySourceBufferPrivate(webKitMediaSrc, sourceBufferPrivate.get());
     GST_OBJECT_UNLOCK(webKitMediaSrc);
 
     ASSERT(stream && stream->type != Invalid);
@@ -402,7 +377,7 @@ void PlaybackPipeline::flush(AtomicString trackId)
     GST_DEBUG("flush: trackId=%s", trackId.string().utf8().data());
 
     GST_OBJECT_LOCK(m_webKitMediaSrc.get());
-    Stream* stream = getStreamByTrackId(m_webKitMediaSrc.get(), trackId);
+    Stream* stream = webKitMediaSrcGetStreamByTrackId(m_webKitMediaSrc.get(), trackId);
 
     if (!stream) {
         GST_OBJECT_UNLOCK(m_webKitMediaSrc.get());
@@ -492,7 +467,7 @@ void PlaybackPipeline::enqueueSample(Ref<MediaSample>&& mediaSample)
         GST_TIME_ARGS(WebCore::toGstClockTime(mediaSample->presentationTime())),
         GST_TIME_ARGS(WebCore::toGstClockTime(mediaSample->duration())));
 
-    Stream* stream = getStreamByTrackId(m_webKitMediaSrc.get(), trackId);
+    Stream* stream = webKitMediaSrcGetStreamByTrackId(m_webKitMediaSrc.get(), trackId);
 
     if (!stream) {
         GST_WARNING("No stream!");

@@ -94,11 +94,10 @@ enum OnSeekDataAction {
 };
 
 struct _WebKitMediaSrcPrivate {
-    // Used to coordinate the release of Stream track info.
+    // Used to protect access to streams.
     Lock streamLock;
-    Condition streamCondition;
-
     Vector<Stream*> streams;
+
     GUniquePtr<gchar> location;
     int numberOfAudioStreams;
     int numberOfVideoStreams;
@@ -140,5 +139,9 @@ GstURIType webKitMediaSrcUriGetType(GType);
 const gchar* const* webKitMediaSrcGetProtocols(GType);
 gchar* webKitMediaSrcGetUri(GstURIHandler*);
 gboolean webKitMediaSrcSetUri(GstURIHandler*, const gchar*, GError**);
+
+Stream* webKitMediaSrcGetStreamByAppsrc(WebKitMediaSrc*, GstElement*);
+Stream* webKitMediaSrcGetStreamByTrackId(WebKitMediaSrc*, AtomicString);
+Stream* webKitMediaSrcGetStreamBySourceBufferPrivate(WebKitMediaSrc*, WebCore::SourceBufferPrivateGStreamer*);
 
 #endif // USE(GSTREAMER)

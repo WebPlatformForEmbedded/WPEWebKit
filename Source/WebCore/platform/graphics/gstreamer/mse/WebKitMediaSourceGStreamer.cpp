@@ -86,8 +86,6 @@ GstAppSrcCallbacks disabledAppsrcCallbacks = {
     { 0 }
 };
 
-static Stream* getStreamByAppsrc(WebKitMediaSrc*, GstElement*);
-
 static void enabledAppsrcNeedData(GstAppSrc* appsrc, guint, gpointer userData)
 {
     WebKitMediaSrc* webKitMediaSrc = static_cast<WebKitMediaSrc*>(userData);
@@ -95,7 +93,7 @@ static void enabledAppsrcNeedData(GstAppSrc* appsrc, guint, gpointer userData)
 
     GST_OBJECT_LOCK(webKitMediaSrc);
     OnSeekDataAction appsrcSeekDataNextAction = webKitMediaSrc->priv->appsrcSeekDataNextAction;
-    Stream* appsrcStream = getStreamByAppsrc(webKitMediaSrc, GST_ELEMENT(appsrc));
+    Stream* appsrcStream = webKitMediaSrcGetStreamByAppsrc(webKitMediaSrc, GST_ELEMENT(appsrc));
     bool allAppsrcNeedDataAfterSeek = false;
 
     if (webKitMediaSrc->priv->appsrcSeekDataCount > 0) {
@@ -132,12 +130,10 @@ static void enabledAppsrcNeedData(GstAppSrc* appsrc, guint, gpointer userData)
             break;
         }
     } else if (appsrcSeekDataNextAction == Nothing) {
-        LockHolder locker(webKitMediaSrc->priv->streamLock);
-
         GST_OBJECT_LOCK(webKitMediaSrc);
 
         // Search again for the Stream, just in case it was removed between the previous lock and this one.
-        appsrcStream = getStreamByAppsrc(webKitMediaSrc, GST_ELEMENT(appsrc));
+        appsrcStream = webKitMediaSrcGetStreamByAppsrc(webKitMediaSrc, GST_ELEMENT(appsrc));
 
         if (appsrcStream && appsrcStream->type != WebCore::Invalid) {
             GstStructure* structure = gst_structure_new("ready-for-more-samples", "appsrc-stream", G_TYPE_POINTER, appsrcStream, nullptr);
@@ -158,7 +154,7 @@ static void enabledAppsrcEnoughData(GstAppSrc *appsrc, gpointer userData)
     WebKitMediaSrc* webKitMediaSrc = static_cast<WebKitMediaSrc*>(userData);
     ASSERT(WEBKIT_IS_MEDIA_SRC(webKitMediaSrc));
 
-    Stream* stream = getStreamByAppsrc(webKitMediaSrc, GST_ELEMENT(appsrc));
+    Stream* stream = webKitMediaSrcGetStreamByAppsrc(webKitMediaSrc, GST_ELEMENT(appsrc));
 
     // This callback might have been scheduled from a child thread before the stream was removed.
     // Then, the removal code might have run, and later this callback.
@@ -182,15 +178,6 @@ static gboolean enabledAppsrcSeekData(GstAppSrc*, guint64, gpointer userData)
     GST_OBJECT_UNLOCK(webKitMediaSrc);
 
     return TRUE;
-}
-
-static Stream* getStreamByAppsrc(WebKitMediaSrc* source, GstElement* appsrc)
-{
-    for (Stream* stream : source->priv->streams) {
-        if (stream->appsrc == appsrc)
-            return stream;
-    }
-    return nullptr;
 }
 
 G_DEFINE_TYPE_WITH_CODE(WebKitMediaSrc, webkit_media_src, GST_TYPE_BIN,
@@ -553,8 +540,6 @@ void webKitMediaSrcFreeStream(WebKitMediaSrc* source, Stream* stream)
 
         if (signal != -1)
             g_signal_emit(G_OBJECT(source), webKitMediaSrcSignals[signal], 0, nullptr);
-
-        source->priv->streamCondition.notifyOne();
     }
 
     GST_DEBUG("Releasing stream: %p", stream);
@@ -749,6 +734,37 @@ void webKitMediaSrcPrepareSeek(WebKitMediaSrc* source, const MediaTime& time)
     // The pending action will be performed in enabledAppsrcSeekData().
     source->priv->appsrcSeekDataNextAction = MediaSourceSeekToTime;
     GST_OBJECT_UNLOCK(source);
+}
+
+template <typename Pred>
+static Stream* getStreamBy(WebKitMediaSrc* source, Pred p) {
+    LockHolder locker(source->priv->streamLock);
+    auto start = source->priv->streams.begin();
+    auto end = source->priv->streams.end();
+    auto stream = std::find_if(start, end, p);
+    return (stream == end) ? nullptr : *stream;
+}
+
+Stream* webKitMediaSrcGetStreamByTrackId(WebKitMediaSrc* source, AtomicString trackIdString)
+{
+    return getStreamBy(source, [trackIdString](Stream *s) {
+        return s->type != WebCore::Invalid && ((s->audioTrack && s->audioTrack->id() == trackIdString) ||
+                                               (s->videoTrack && s->videoTrack->id() == trackIdString));
+    });
+}
+
+Stream* webKitMediaSrcGetStreamBySourceBufferPrivate(WebKitMediaSrc* source, WebCore::SourceBufferPrivateGStreamer* sourceBufferPrivate)
+{
+    return getStreamBy(source, [sourceBufferPrivate](Stream *s) {
+        return s->sourceBuffer == sourceBufferPrivate;
+    });
+}
+
+Stream* webKitMediaSrcGetStreamByAppsrc(WebKitMediaSrc* source, GstElement* appsrc)
+{
+    return getStreamBy(source, [appsrc](Stream *s) {
+        return s->appsrc == appsrc;
+    });
 }
 
 namespace WTF {
