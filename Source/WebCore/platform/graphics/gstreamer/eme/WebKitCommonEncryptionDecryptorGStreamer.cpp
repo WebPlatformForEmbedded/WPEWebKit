@@ -297,15 +297,29 @@ static gboolean webkitMediaCommonEncryptionDecryptSinkEventHandler(GstBaseTransf
     switch (GST_EVENT_TYPE(event)) {
     case GST_EVENT_PROTECTION: {
         const char* systemId = nullptr;
+        const gchar* contentType = nullptr;
 
         gst_event_parse_protection(event, &systemId, nullptr, nullptr);
         GST_TRACE_OBJECT(self, "received protection event for %s", systemId);
 
         if (!g_strcmp0(systemId, klass->protectionSystemId)) {
             GST_DEBUG_OBJECT(self, "sending protection event to the pipeline");
+#if USE(OPENCDM)
+            /* Getting decrypt plugin capabilities */
+            GstElement* decryptorElement = GST_ELEMENT(self);
+            GstPad* decryptorSinkPad = gst_element_get_static_pad(decryptorElement, "sink");
+            GstCaps* decryptorElementCaps = gst_pad_get_current_caps(decryptorSinkPad);
+            GstStructure* decryptorStructure = gst_caps_get_structure(decryptorElementCaps, 0);
+            if (gst_structure_has_field_typed(decryptorStructure, "original-media-type", G_TYPE_STRING))
+                contentType = gst_structure_get_string(decryptorStructure, "original-media-type");
+
+            gst_caps_unref(decryptorElementCaps);
+            gst_object_unref(decryptorSinkPad);
+#endif
             gst_element_post_message(GST_ELEMENT(self),
                 gst_message_new_element(GST_OBJECT(self),
-                    gst_structure_new("drm-key-needed", "event", GST_TYPE_EVENT, event, nullptr)));
+                    gst_structure_new("drm-key-needed", "event", GST_TYPE_EVENT, event,
+                        "contentType", G_TYPE_STRING, contentType, nullptr)));
         }
 
         gst_event_unref(event);

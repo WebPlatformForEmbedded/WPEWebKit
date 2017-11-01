@@ -31,6 +31,9 @@ G_BEGIN_DECLS
 #define WEBKIT_TYPE_OPENCDM_DECRYPT          (webkit_media_opencdm_decrypt_get_type())
 #define WEBKIT_OPENCDM_DECRYPT(obj)          (G_TYPE_CHECK_INSTANCE_CAST((obj), WEBKIT_TYPE_OPENCDM_DECRYPT, WebKitOpenCDMDecrypt))
 #define WEBKIT_OPENCDM_DECRYPT_CLASS(klass)  (G_TYPE_CHECK_CLASS_CAST((klass), WEBKIT_TYPE_OPENCDM_DECRYPT, WebKitOpenCDMDecryptClass))
+/* Now we are only handling Audio and Video content type, so defining CONTENT_TYPE_SIZE as 5.
+   We will modify it once we have subtitle */
+#define CONTENT_TYPE_SIZE 5
 
 typedef struct _WebKitOpenCDMDecrypt           WebKitOpenCDMDecrypt;
 typedef struct _WebKitOpenCDMDecryptClass      WebKitOpenCDMDecryptClass;

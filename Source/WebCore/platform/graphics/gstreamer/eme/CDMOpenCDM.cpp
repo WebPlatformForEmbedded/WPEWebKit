@@ -210,6 +210,7 @@ bool CDMFactoryOpenCDM::supportsKeySystem(const String& keySystem)
 CDMInstanceOpenCDM::CDMInstanceOpenCDM(media::OpenCdm* session, const String& keySystem)
     : m_openCdmSession(session)
     , m_keySystem(keySystem)
+    , m_sessionInfoCount(0)
 {
 }
 
@@ -278,11 +279,13 @@ void CDMInstanceOpenCDM::requestLicense(LicenseType licenseType, const AtomicStr
     Ref<SharedBuffer> licenseRequestMessage = SharedBuffer::create(message.c_str(), message.size());
     callback(WTFMove(licenseRequestMessage), sessionIdValue, needIndividualization, Succeeded);
     sessionIdMap.add(sessionIdValue, WTFMove(initData));
+    m_sessionId.append(sessionIdValue);
 }
 
 void CDMInstanceOpenCDM::updateLicense(const String& sessionId, LicenseType, const SharedBuffer& response, LicenseUpdateCallback callback)
 {
     std::string responseMessage;
+    m_openCdmSession->SelectSession(sessionId.utf8().data());
     int ret = m_openCdmSession->Update(reinterpret_cast<unsigned char*>(const_cast<char*>(response.data())), response.size(), responseMessage);
     GST_DEBUG("session id %s, calling callback %s message", sessionId.utf8().data(), ret ? "with" : "without");
     if (ret) {
@@ -410,18 +413,23 @@ void CDMInstanceOpenCDM::storeRecordOfKeyUsage(const String&)
 {
 }
 
-String CDMInstanceOpenCDM::getCurrentSessionId() const
+void CDMInstanceOpenCDM::getCurrentSessionInfo(String& sessionId, uint8_t*& initData) const
 {
     ASSERT(sessionIdMap.size() == 1);
 
-    if (sessionIdMap.size() == 0) {
+    if (m_sessionId.isEmpty()) {
         GST_WARNING("no sessions");
-        return { };
+        return;
     }
-    if (sessionIdMap.size() > 1)
-        GST_WARNING("more than one session");
 
-    return sessionIdMap.begin()->key;
+    String tmpsessionId = m_sessionId[m_sessionInfoCount];
+    SharedBuffer* initDataBuffer = sessionIdMap.get(tmpsessionId);
+    uint8_t* tmpinitData = (uint8_t*)initDataBuffer->data();
+
+    sessionId = tmpsessionId;
+    initData = tmpinitData;
+    m_sessionInfoCount ++;
+
 }
 
 } // namespace WebCore
