@@ -62,10 +62,6 @@ MediaKeySession::MediaKeySession(ScriptExecutionContext& context, WeakPtr<MediaK
     , m_implementation(WTFMove(implementation))
     , m_instance(WTFMove(instance))
     , m_eventQueue(*this)
-    , m_weakPtrFactory(this)
-    , m_callable(false)
-    , m_uninitialized(true)
-    , m_closed(false)
 {
     // https://w3c.github.io/encrypted-media/#dom-mediakeys-setservercertificate
     // W3C Editor's Draft 09 November 2016
@@ -82,9 +78,6 @@ MediaKeySession::MediaKeySession(ScriptExecutionContext& context, WeakPtr<MediaK
     // 3.8. Let the use distinctive identifier value be this object's use distinctive identifier value.
     // 3.9. Let the cdm implementation value be this object's cdm implementation.
     // 3.10. Let the cdm instance value be this object's cdm instance.
-
-    UNUSED_PARAM(m_sessionType);
-    UNUSED_PARAM(m_useDistinctiveIdentifier);
 }
 
 MediaKeySession::~MediaKeySession()
@@ -241,12 +234,11 @@ void MediaKeySession::load(const String& sessionId, Ref<DeferredPromise>&& promi
 
     // 1. If this object is closed, return a promise rejected with an InvalidStateError.
     // 2. If this object's uninitialized value is false, return a promise rejected with an InvalidStateError.
-# if 0 /* Commenting this condition check for loading a closed persistent session */
     if (m_closed || !m_uninitialized) {
         promise->reject(InvalidStateError);
         return;
     }
-# endif 
+
     // 3. Let this object's uninitialized value be false.
     m_uninitialized = false;
 
@@ -463,11 +455,6 @@ void MediaKeySession::update(const BufferSource& response, Ref<DeferredPromise>&
                         enqueueMessage(messageType, WTFMove(message->second));
                     }
                 }
-#if USE(OPENCDM)
-                CDMInstance::KeyStatusVector&& keyStatuses = WTFMove(*changedKeys);
-                if (!message && (keyStatuses[0].second == CDMInstance::KeyStatus::Usable))
-                    m_keys->decryptWithSession(m_sessionId);
-#endif
                 // 6.8.2. Resolve promise.
                 promise->resolve();
             });

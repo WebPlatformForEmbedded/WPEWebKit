@@ -27,12 +27,10 @@
 
 #include "CDMPrivate.h"
 #include "GStreamerEMEUtilities.h"
-#include "inspector/InspectorValues.h"
 #include "MediaKeyMessageType.h"
 #include "MediaKeysRequirement.h"
-#include "WebKitClearKeyDecryptorGStreamer.h"
-#include "WebKitOpenCDMPlayReadyDecryptorGStreamer.h"
-#include "WebKitOpenCDMWidevineDecryptorGStreamer.h"
+#include "inspector/InspectorValues.h"
+
 #include <gst/gst.h>
 #include <open_cdm.h>
 #include <wtf/text/Base64.h>
@@ -92,37 +90,6 @@ static media::OpenCdm::LicenseType webKitLicenseTypeToOpenCDM(CDMInstance::Licen
         break;
     }
 }
-
-class CDMInstanceOpenCDM : public CDMInstance {
-
-public:
-
-    CDMInstanceOpenCDM(media::OpenCdm*, const String&);
-    virtual ~CDMInstanceOpenCDM();
-
-    ImplementationType implementationType() const final { return  ImplementationType::OpenCDM; }
-    SuccessValue initializeWithConfiguration(const MediaKeySystemConfiguration&) override;
-    SuccessValue setDistinctiveIdentifiersAllowed(bool) override;
-    SuccessValue setPersistentStateAllowed(bool) override;
-    SuccessValue setServerCertificate(Ref<SharedBuffer>&&) override;
-    void requestLicense(LicenseType, const AtomicString&, Ref<SharedBuffer>&&, LicenseCallback) override;
-    void updateLicense(const String&, LicenseType, const SharedBuffer&, LicenseUpdateCallback) override;
-    void loadSession(LicenseType, const String&, const String&, LoadSessionCallback) override;
-    void closeSession(const String&, CloseSessionCallback) override;
-    void removeSessionData(const String&, LicenseType, RemoveSessionDataCallback) override;
-    void storeRecordOfKeyUsage(const String&) override;
-    void gatherAvailableKeys(AvailableKeysCallback) override;
-    const String& keySystem() const override { return m_keySystem; }
-
-private:
-
-    MediaKeyStatus getKeyStatus(std::string &);
-    SessionLoadFailure getSessionLoadStatus(std::string &);
-    size_t checkMessageLength(std::string &, std::string &);
-    media::OpenCdm* m_openCdmSession;
-    HashMap<String, Ref<SharedBuffer>> sessionIdMap;
-    String m_keySystem;
-};
 
 CDMPrivateOpenCDM::CDMPrivateOpenCDM(const String& keySystem)
     : m_openCdmKeySystem(keySystem)
