@@ -210,6 +210,7 @@ bool CDMFactoryOpenCDM::supportsKeySystem(const String& keySystem)
 CDMInstanceOpenCDM::CDMInstanceOpenCDM(media::OpenCdm* session, const String& keySystem)
     : m_openCdmSession(session)
     , m_keySystem(keySystem)
+    , m_sessionInfoCount(0)
 {
 }
 
@@ -278,11 +279,13 @@ void CDMInstanceOpenCDM::requestLicense(LicenseType licenseType, const AtomicStr
     Ref<SharedBuffer> licenseRequestMessage = SharedBuffer::create(message.c_str(), message.size());
     callback(WTFMove(licenseRequestMessage), sessionIdValue, needIndividualization, Succeeded);
     sessionIdMap.add(sessionIdValue, WTFMove(initData));
+    m_sessionId.append(sessionIdValue);
 }
 
 void CDMInstanceOpenCDM::updateLicense(const String& sessionId, LicenseType, const SharedBuffer& response, LicenseUpdateCallback callback)
 {
     std::string responseMessage;
+    m_openCdmSession->SelectSession(sessionId.utf8().data());
     int ret = m_openCdmSession->Update(reinterpret_cast<unsigned char*>(const_cast<char*>(response.data())), response.size(), responseMessage);
     GST_DEBUG("session id %s, calling callback %s message", sessionId.utf8().data(), ret ? "with" : "without");
     if (ret) {
@@ -410,18 +413,25 @@ void CDMInstanceOpenCDM::storeRecordOfKeyUsage(const String&)
 {
 }
 
-String CDMInstanceOpenCDM::getCurrentSessionId() const
+bool CDMInstanceOpenCDM::getCurrentSessionInfo(String& sessionId, uint8_t*& initData) const
 {
-    ASSERT(sessionIdMap.size() == 1);
+    bool ret = false;
 
-    if (sessionIdMap.size() == 0) {
+    if (m_sessionId.isEmpty()) {
         GST_WARNING("no sessions");
-        return { };
+        return ret;
     }
-    if (sessionIdMap.size() > 1)
-        GST_WARNING("more than one session");
 
-    return sessionIdMap.begin()->key;
+    if (m_sessionInfoCount > m_sessionId.size()) {
+        GST_WARNING("Invalid SessionInfo count");
+        return ret;
+    }
+
+    sessionId = m_sessionId[m_sessionInfoCount];
+    initData = (uint8_t*)sessionIdMap.get(sessionId)->data();
+    m_sessionInfoCount ++;
+    ret = true;
+    return ret;
 }
 
 } // namespace WebCore

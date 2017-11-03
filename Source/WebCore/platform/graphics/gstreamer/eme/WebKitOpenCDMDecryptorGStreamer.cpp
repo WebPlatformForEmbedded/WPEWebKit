@@ -90,21 +90,46 @@ static void webKitMediaOpenCDMDecryptorFinalize(GObject* object)
 static gboolean webKitMediaOpenCDMDecryptorHandleKeyResponse(WebKitMediaCommonEncryptionDecrypt* self, GstEvent* event)
 {
     const GstStructure* structure = gst_event_get_structure(event);
+    const gchar* decryptorContentType = nullptr;
     if (!gst_structure_has_name(structure, "drm-session"))
         return false;
 
     GUniqueOutPtr<char> temporarySession;
-    gst_structure_get(structure, "session", G_TYPE_STRING, &temporarySession.outPtr(), nullptr);
+    GUniqueOutPtr<char> tempContentType;
+    gst_structure_get(structure, "session", G_TYPE_STRING, &temporarySession.outPtr(),
+        "contentType", G_TYPE_STRING, &tempContentType.outPtr(), nullptr);
     WebKitOpenCDMDecryptPrivate* priv = GST_WEBKIT_OPENCDM_DECRYPT_GET_PRIVATE(WEBKIT_OPENCDM_DECRYPT(self));
     ASSERT(temporarySession);
+    ASSERT(tempContentType);
 
     if (priv->m_session != temporarySession.get() ) {
-        priv->m_session = temporarySession.get();
-        priv->m_openCdm = std::make_unique<media::OpenCdm>();
-        priv->m_openCdm->SelectSession(priv->m_session.utf8().data());
-        GST_DEBUG_OBJECT(self, "selected session %s", priv->m_session.utf8().data());
-    } else
+        /* Getting decrypt plugin capabilities(contentType) */
+        GstElement* decryptElement = GST_ELEMENT(self);
+        GstPad* decryptSinkPad = gst_element_get_static_pad(decryptElement, "sink");
+        GstCaps* decryptElementCaps = gst_pad_get_current_caps(decryptSinkPad);
+        GstStructure* decryptStruct = gst_caps_get_structure(decryptElementCaps, 0);
+        if (gst_structure_has_field_typed(decryptStruct, "original-media-type", G_TYPE_STRING))
+            decryptorContentType = gst_structure_get_string(decryptStruct, "original-media-type");
+
+        /* Unref after usage */
+        gst_caps_unref(decryptElementCaps);
+        gst_object_unref(decryptSinkPad);
+
+        /* Getting initiator contentType */
+        gchar* contentType = tempContentType.get();
+
+        /* Comparing decrypt plugin contentType with initiator contentType */
+        if (!(g_ascii_strncasecmp(decryptorContentType, contentType, CONTENT_TYPE_SIZE))) {
+            priv->m_session = temporarySession.get();
+            priv->m_openCdm = std::make_unique<media::OpenCdm>();
+            priv->m_openCdm->SelectSession(priv->m_session.utf8().data());
+            GST_DEBUG_OBJECT(self, "selected session %s", priv->m_session.utf8().data());
+        } else
+            return false;
+    } else {
         GST_DEBUG_OBJECT(self, "session %s already selected!", priv->m_session.utf8().data());
+        return false;
+    }
 
     return true;
 }

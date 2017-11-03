@@ -1184,8 +1184,9 @@ void MediaPlayerPrivateGStreamer::handleMessage(GstMessage* message)
             else if (gst_structure_has_name(structure, "drm-key-needed")) {
                 GST_DEBUG("drm-key-needed message from %s", GST_MESSAGE_SRC_NAME(message));
                 GRefPtr<GstEvent> event;
-                gst_structure_get(structure, "event", GST_TYPE_EVENT, &event.outPtr(), nullptr);
-                handleProtectionEvent(event.get());
+                GUniqueOutPtr<gchar> contentType;
+                gst_structure_get(structure, "event", GST_TYPE_EVENT, &event.outPtr(), "contentType", G_TYPE_STRING, &contentType.outPtr(), nullptr);
+                handleProtectionEvent(event.get(), contentType.get());
             }
 #endif
         }
