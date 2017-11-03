@@ -70,9 +70,7 @@ public:
     const String& keySystem() const override { return m_keySystem; }
 
     // FIXME: Session handling needs a lot of love here.
-#if USE(OPENCDM)
-    void getCurrentSessionInfo(String&, uint8_t*&) const;
-#endif
+    bool getCurrentSessionInfo(String&, uint8_t*&) const;
 
 private:
     MediaKeyStatus getKeyStatus(std::string &);
@@ -82,10 +80,8 @@ private:
     media::OpenCdm* m_openCdmSession;
     HashMap<String, Ref<SharedBuffer>> sessionIdMap;
     String m_keySystem;
-#if USE(OPENCDM)
     Vector<String> m_sessionId;
     mutable uint8_t m_sessionInfoCount;
-#endif
 };
 
 } // namespace WebCore

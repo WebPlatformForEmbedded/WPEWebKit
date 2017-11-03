@@ -267,7 +267,6 @@ MediaPlayerPrivateGStreamerBase::MediaPlayerPrivateGStreamerBase(MediaPlayer* pl
     , m_networkState(MediaPlayer::Empty)
     , m_isEndReached(false)
     , m_usingFallbackVideoSink(false)
-    , m_sessionCount(0)
     , m_decryptorCount(0)
     , m_drawTimer(RunLoop::main(), this, &MediaPlayerPrivateGStreamerBase::repaint)
 {
@@ -434,33 +433,26 @@ bool MediaPlayerPrivateGStreamerBase::handleSyncMessage(GstMessage* message)
             }
 #if USE(OPENCDM)
             /* Getting source element (qtdemux) capabilities */
-            GstObject* sourceObject = GST_MESSAGE_SRC(message);
-            String tmpContentType = getContentType(sourceObject);
+            String contentType = getContentType(GST_MESSAGE_SRC(message));
 
             /* Copy initData of the initiator */
-            uint8_t* tmpInitData = (uint8_t*)malloc(mapInfo.size);
-            memcpy(tmpInitData, reinterpret_cast<uint8_t*>(mapInfo.data),  mapInfo.size);
+            uint8_t* initData = (uint8_t*)malloc(mapInfo.size);
+            memcpy (initData, reinterpret_cast<uint8_t*>(mapInfo.data),  mapInfo.size);
 
             /* Compare previously saved initData with received initData */
             uint8_t initDataInfoCount = 0;
-            while(initDataInfoCount < m_initDataInfo.size()) {
-                if(!(memcmp(tmpInitData, m_initDataInfo[initDataInfoCount].initData, m_initDataInfo[initDataInfoCount].initDataSize)))
-                    break;
-                else
-                    initDataInfoCount++;
-            }
-
-            if(initDataInfoCount == m_initDataInfo.size()) {
+            if (checkInitData(initData, initDataInfoCount)) {
+                m_initDataInfo[initDataInfoCount].contentType.append(contentType);
+                m_handledProtectionEvents.add(GST_EVENT_SEQNUM(event.get()));
+                GST_TRACE("m_handledProtectionEvents count %x", GST_EVENT_SEQNUM(event.get()));
+                return false;
+            } else {
                 /* Storing "original-media-type", initData and initDataSize of source element (qtdemux) */
                 InitDataInfo tmpInitDataInfo;
-                tmpInitDataInfo.initData = tmpInitData;
+                tmpInitDataInfo.initData = initData;
                 tmpInitDataInfo.initDataSize =  mapInfo.size;
-                tmpInitDataInfo.contentType.append(tmpContentType);
+                tmpInitDataInfo.contentType.append(contentType);
                 m_initDataInfo.append(tmpInitDataInfo);
-            } else {
-                m_initDataInfo[initDataInfoCount].contentType.append(tmpContentType);
-                m_handledProtectionEvents.add(GST_EVENT_SEQNUM(event.get()));
-                return false;
             }
 #endif
             GST_TRACE("appending init data for %s of size %" G_GSIZE_FORMAT, eventKeySystemId, mapInfo.size);
@@ -1391,14 +1383,21 @@ void MediaPlayerPrivateGStreamerBase::attemptToDecryptWithInstance(const CDMInst
 void MediaPlayerPrivateGStreamerBase::attemptToDecryptWithLocalInstance()
 {
 #if USE(OPENCDM)
-    String sessionId;
-    uint8_t* initData;
     if (is<CDMInstanceOpenCDM>(*m_cdmInstance)) {
         GST_DEBUG("handling OpenCDM %s keys", m_cdmInstance->keySystem().utf8().data());
         auto& cdmInstanceOpenCDM = downcast<CDMInstanceOpenCDM>(*m_cdmInstance);
-        cdmInstanceOpenCDM.getCurrentSessionInfo(sessionId, initData);
-        ASSERT(!sessionId.isEmpty());
-        dispatchDecryptionSession(sessionId, initData);
+        uint8_t* initData;
+        String sessionId;
+        bool ret = cdmInstanceOpenCDM.getCurrentSessionInfo(sessionId, initData);
+        if (ret) {
+            /* Preserving SessionId and initData */
+            SessionInfo tmpSessionInfo;
+            tmpSessionInfo.sessionId = sessionId;
+            tmpSessionInfo.initData = (uint8_t*)initData;
+            m_sessionInfo.append(tmpSessionInfo);
+            dispatchDecryptionSession(sessionId, initData);
+        } else
+            GST_WARNING("Not able to retrieve current session info");
     }
 #endif
 }
@@ -1415,109 +1414,36 @@ void MediaPlayerPrivateGStreamerBase::dispatchDecryptionSession(const String& se
 {
     uint8_t initDataInfoCount = 0;
     uint8_t decryptContTypeCount = 0;
-    uint8_t initDataContTypecount = 0;
-    SessionInfo tmpSessionInfo;
+    uint8_t initDataContTypeCount = 0;
 
-    /* Preserving SessionId and initData */
-    tmpSessionInfo.sessionId = sessionId;
-    tmpSessionInfo.initData = (uint8_t*)initData;
-    m_sessionInfo.append(tmpSessionInfo);
-
-    if(!m_decryptorCount)
+    if (!m_decryptorCount)
         return;
     else {
         /* Compare sessionId initData with initiator initData to get Content type of initiator */
-        for(initDataInfoCount = 0; initDataInfoCount < m_initDataInfo.size(); initDataInfoCount++) {
-            if(!(memcmp(initData, m_initDataInfo[initDataInfoCount].initData, m_initDataInfo[initDataInfoCount].initDataSize)))
-                break;
-        }
+        if (checkInitData(initData, initDataInfoCount)) {
 
-        /* If sessionId and initiator initData are same then compare the Content type of initator with decrypt plugin */
-        if(initDataInfoCount != m_initDataInfo.size()) {
-
-            for(initDataContTypecount = 0; initDataContTypecount < m_initDataInfo[initDataInfoCount].contentType.size(); initDataContTypecount++) {
+            for (initDataContTypeCount = 0; initDataContTypeCount < m_initDataInfo[initDataInfoCount].contentType.size(); initDataContTypeCount++) {
                 /* Compare initiator Content type with all decrypt plugin Content type */
-                for(decryptContTypeCount = 0; decryptContTypeCount < m_decryptorContentType.size(); decryptContTypeCount++) {
-
+                for (decryptContTypeCount = 0; decryptContTypeCount < m_decryptorContentType.size(); decryptContTypeCount++)
                     if (!(memcmp(m_decryptorContentType[decryptContTypeCount].utf8().data(),
-                        m_initDataInfo[initDataInfoCount].contentType[initDataContTypecount].utf8().data(), CONTENT_TYPE_SIZE))) {
+                        m_initDataInfo[initDataInfoCount].contentType[initDataContTypeCount].utf8().data(), CONTENT_TYPE_SIZE)))
                         break;
-                    }
-                }
 
-                /*  If initiator and decrypt plugin Content type are same then send the OOB event */
-                if(decryptContTypeCount != m_decryptorContentType.size()) {
+                /*  If initiator and decrypt plugin Content type are same then send GST_EVENT_CUSTOM_DOWNSTREAM_OOB event */
+                if (decryptContTypeCount != m_decryptorContentType.size()) {
                     bool eventHandled = gst_element_send_event(m_pipeline.get(), gst_event_new_custom(GST_EVENT_CUSTOM_DOWNSTREAM_OOB,
                         gst_structure_new("drm-session", "session", G_TYPE_STRING, sessionId.utf8().data(), "contentType",
-                        G_TYPE_STRING, m_initDataInfo[initDataInfoCount].contentType[initDataContTypecount].utf8().data(), nullptr)));
+                        G_TYPE_STRING, m_initDataInfo[initDataInfoCount].contentType[initDataContTypeCount].utf8().data(), nullptr)));
                     GST_TRACE("emitted decryption session %s on pipeline, event handled %s, need to resend credentials %s",
                         sessionId.utf8().data(), boolForPrinting(eventHandled), boolForPrinting(m_needToResendCredentials));
 
                     /* Remove handled contentType */
-                    m_initDataInfo[initDataInfoCount].contentType.remove(initDataContTypecount);
+                    m_initDataInfo[initDataInfoCount].contentType.remove(initDataContTypeCount);
                 }
             }
         }
     }
 }
-
-void MediaPlayerPrivateGStreamerBase::handleProtectionEvent(GstEvent* event, gchar* contType)
-{
-    if (m_handledProtectionEvents.contains(GST_EVENT_SEQNUM(event))) {
-        GST_DEBUG("event %u already handled", GST_EVENT_SEQNUM(event));
-        m_handledProtectionEvents.remove(GST_EVENT_SEQNUM(event));
-#if USE(OPENCDM)
-        String contentType = contType;
-        uint8_t sessionInfoCount = 0;
-        uint8_t initDataInfoCount = 0;
-        uint8_t contentTypeCount = 0;
-
-        if(!m_sessionInfo.isEmpty()) {
-
-            /* Send GST_EVENT_CUSTOM_DOWNSTREAM_OOB event with all saved SessionId */
-            for(sessionInfoCount = 0; sessionInfoCount < m_sessionInfo.size(); sessionInfoCount++) {
-
-                /* Compare sessionId initData with initiator initData to get the ContentType */
-                for(initDataInfoCount = 0; initDataInfoCount < m_initDataInfo.size(); initDataInfoCount++) {
-                    if(!(memcmp(m_sessionInfo[sessionInfoCount].initData, m_initDataInfo[initDataInfoCount].initData,
-                            m_initDataInfo[initDataInfoCount].initDataSize)))
-                        break;
-                }
-
-                if(initDataInfoCount != m_initDataInfo.size()) {
-                    for(contentTypeCount = 0; contentTypeCount < m_initDataInfo[initDataInfoCount].contentType.size(); contentTypeCount++) {
-                        /*  If initiator and decrypt plugin Content type are same then send the OOB event */
-                        if (!(memcmp(contentType.utf8().data(),
-                            m_initDataInfo[initDataInfoCount].contentType[contentTypeCount].utf8().data(), CONTENT_TYPE_SIZE))) {
-
-                            bool eventHandled = gst_element_send_event(m_pipeline.get(), gst_event_new_custom(
-                                                GST_EVENT_CUSTOM_DOWNSTREAM_OOB, gst_structure_new("drm-session", "session", G_TYPE_STRING,
-                                                m_sessionInfo[sessionInfoCount].sessionId.utf8().data(), "contentType", G_TYPE_STRING,
-                                                m_initDataInfo[initDataInfoCount].contentType[contentTypeCount].utf8().data(), nullptr)));
-                            GST_TRACE("emitted decryption session %s on pipeline, event handled %s",
-                                          m_sessionInfo[sessionInfoCount].sessionId.utf8().data(), boolForPrinting(eventHandled));
-                            /* Remove handled Content type */
-                            m_initDataInfo[initDataInfoCount].contentType.remove(contentTypeCount);
-                            break;
-                        }
-                    }
-                }
-            }
-        } else {
-            /* Incrementing decryptor plugin count and copying decrypt plugin Content type */
-            m_decryptorCount++;
-            m_decryptorContentType.append(contentType);
-        }
-#endif
-        return;
-    }
-
-    const gchar* eventKeySystemId = nullptr;
-    gst_event_parse_protection(event, &eventKeySystemId, nullptr, nullptr);
-    GST_WARNING("FIXME: unhandled protection event for %s", eventKeySystemId);
-    ASSERT_NOT_REACHED();
-}
-#endif
 
 #if USE(OPENCDM)
 String MediaPlayerPrivateGStreamerBase::getContentType(GstObject* object)
@@ -1529,6 +1455,48 @@ String MediaPlayerPrivateGStreamerBase::getContentType(GstObject* object)
     gst_caps_unref(sourceElementCaps);
     gst_object_unref(sourceSinkPad);
     return contentType;
+}
+
+bool MediaPlayerPrivateGStreamerBase::checkInitData(const uint8_t* initData, uint8_t& index)
+{
+    bool ret = false;
+
+    for (int initDataInfoCount = 0; initDataInfoCount < m_initDataInfo.size(); initDataInfoCount++) {
+        if (!(memcmp(initData, m_initDataInfo[initDataInfoCount].initData, m_initDataInfo[initDataInfoCount].initDataSize))) {
+            ret =true;
+            index = initDataInfoCount;
+            break;
+        }
+    }
+    return ret;
+}
+#endif
+
+void MediaPlayerPrivateGStreamerBase::handleProtectionEvent(GstEvent* event, gchar* contType)
+{
+    if (m_handledProtectionEvents.contains(GST_EVENT_SEQNUM(event))) {
+        GST_DEBUG("event %u already handled", GST_EVENT_SEQNUM(event));
+        m_handledProtectionEvents.remove(GST_EVENT_SEQNUM(event));
+#if USE(OPENCDM)
+        String contentType = contType;
+        uint8_t sessionInfoCount = 0;
+
+        if (!m_sessionInfo.isEmpty()) {
+            /* Send GST_EVENT_CUSTOM_DOWNSTREAM_OOB event with all saved SessionId */
+            for (sessionInfoCount = 0; sessionInfoCount < m_sessionInfo.size(); sessionInfoCount++)
+               dispatchDecryptionSession(m_sessionInfo[sessionInfoCount].sessionId, m_sessionInfo[sessionInfoCount].initData);
+        } else {
+            m_decryptorCount++;
+            m_decryptorContentType.append(contentType);
+        }
+#endif
+        return;
+    }
+
+    const gchar* eventKeySystemId = nullptr;
+    gst_event_parse_protection(event, &eventKeySystemId, nullptr, nullptr);
+    GST_WARNING("FIXME: unhandled protection event for %s", eventKeySystemId);
+    ASSERT_NOT_REACHED();
 }
 #endif
 

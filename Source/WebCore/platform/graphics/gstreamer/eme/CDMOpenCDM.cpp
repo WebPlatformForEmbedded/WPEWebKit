@@ -413,23 +413,25 @@ void CDMInstanceOpenCDM::storeRecordOfKeyUsage(const String&)
 {
 }
 
-void CDMInstanceOpenCDM::getCurrentSessionInfo(String& sessionId, uint8_t*& initData) const
+bool CDMInstanceOpenCDM::getCurrentSessionInfo(String& sessionId, uint8_t*& initData) const
 {
-    ASSERT(sessionIdMap.size() == 1);
+    bool ret = false;
 
     if (m_sessionId.isEmpty()) {
         GST_WARNING("no sessions");
-        return;
+        return ret;
     }
 
-    String tmpsessionId = m_sessionId[m_sessionInfoCount];
-    SharedBuffer* initDataBuffer = sessionIdMap.get(tmpsessionId);
-    uint8_t* tmpinitData = (uint8_t*)initDataBuffer->data();
+    if (m_sessionInfoCount > m_sessionId.size()) {
+        GST_WARNING("Invalid SessionInfo count");
+        return ret;
+    }
 
-    sessionId = tmpsessionId;
-    initData = tmpinitData;
+    sessionId = m_sessionId[m_sessionInfoCount];
+    initData = (uint8_t*)sessionIdMap.get(sessionId)->data();
     m_sessionInfoCount ++;
-
+    ret = true;
+    return ret;
 }
 
 } // namespace WebCore

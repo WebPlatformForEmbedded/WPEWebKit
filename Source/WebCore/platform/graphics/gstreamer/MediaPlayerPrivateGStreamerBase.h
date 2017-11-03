@@ -155,6 +155,7 @@ public:
     void attemptToDecryptWithInstance(const CDMInstance&) override;
 #if USE(OPENCDM)
     String getContentType(GstObject*);
+    bool checkInitData(const uint8_t*, uint8_t&);
 #endif
 #endif
 
@@ -174,7 +175,6 @@ public:
     virtual bool handleSyncMessage(GstMessage*);
 #if USE(OPENCDM)
     uint8_t m_decryptorCount;
-    uint8_t m_sessionCount;
     Vector<String> m_decryptorContentType;
     Vector<SessionInfo> m_sessionInfo;
     Vector<InitDataInfo> m_initDataInfo;
