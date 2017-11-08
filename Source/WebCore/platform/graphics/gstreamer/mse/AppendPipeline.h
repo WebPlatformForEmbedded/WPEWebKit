@@ -64,6 +64,11 @@ public:
 #if ENABLE(ENCRYPTED_MEDIA)
     void dispatchDecryptionStructure(GUniquePtr<GstStructure>&&);
 #endif
+#if USE(OPENCDM)
+    bool isDecryptionStructureDispatched();
+    Vector<char> getInitData();
+    HashMap<String, unsigned> getKeySystemProtectionEventMap();
+#endif
 
     // Takes ownership of caps.
     void parseDemuxerSrcPadCaps(GstCaps*);
@@ -169,6 +174,12 @@ private:
 #endif
     Vector< GRefPtr<GstSample> > m_startupSamples;
     bool m_startupBufferingComplete { false };
+#if USE(OPENCDM)
+    Vector<char> m_initData;
+    HashMap<String, unsigned> m_keySystemProtectionEventMap;
+    bool m_protectionEventTriggered;
+    bool m_decryptionStructureDispatched;
+#endif
 };
 
 } // namespace WebCore.
