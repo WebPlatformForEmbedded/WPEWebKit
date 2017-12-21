@@ -396,7 +396,7 @@ void MediaSource::monitorSourceBuffers()
     // https://rawgit.com/w3c/media-source/45627646344eea0170dd1cbc5a3d508ca751abb8/media-source-respec.html#buffer-monitoring
 
     // Note, the behavior if activeSourceBuffers is empty is undefined.
-    if (!m_activeSourceBuffers) {
+    if (!m_activeSourceBuffers || m_activeSourceBuffers->length() == 0) {
         m_private->setReadyState(MediaPlayer::HaveNothing);
         return;
     }
