@@ -613,6 +613,9 @@ void MediaPlayerPrivateGStreamerMSE::updateStates()
                 GST_DEBUG("m_readyState=%s", dumpReadyState(m_readyState));
                 m_networkState = MediaPlayer::Loaded;
             } else {
+                if (m_mediaSource)
+                    m_mediaSource->monitorSourceBuffers();
+
                 m_readyState = MediaPlayer::HaveFutureData;
                 GST_DEBUG("m_readyState=%s", dumpReadyState(m_readyState));
                 m_networkState = MediaPlayer::Loading;

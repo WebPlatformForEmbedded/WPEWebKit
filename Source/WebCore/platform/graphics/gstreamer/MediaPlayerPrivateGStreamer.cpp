@@ -448,6 +448,11 @@ bool MediaPlayerPrivateGStreamer::changePipelineState(GstState newState)
         return true;
     }
 
+    if (m_readyState <= MediaPlayer::HaveMetadata && newState == GST_STATE_PLAYING) {
+        GST_DEBUG("Rejected state change to playing, buffers are not ready yet");
+        return true;
+    }
+
     GST_DEBUG("Changing state change to %s from %s with %s pending", gst_element_state_get_name(newState),
         gst_element_state_get_name(currentState), gst_element_state_get_name(pending));
 
