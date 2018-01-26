@@ -34,12 +34,14 @@
 #include "LibWebRTCMediaEndpoint.h"
 #include "MediaEndpointConfiguration.h"
 #include "Page.h"
+#include "RealtimeIncomingAudioSource.h"
+#include "RealtimeIncomingVideoSource.h"
+#include "RealtimeOutgoingAudioSource.h"
+#include "RealtimeOutgoingVideoSource.h"
 #include "RTCIceCandidate.h"
 #include "RTCPeerConnection.h"
 #include "RTCRtpReceiver.h"
 #include "RTCSessionDescription.h"
-#include "RealtimeIncomingAudioSource.h"
-#include "RealtimeIncomingVideoSource.h"
 
 namespace WebCore {
 

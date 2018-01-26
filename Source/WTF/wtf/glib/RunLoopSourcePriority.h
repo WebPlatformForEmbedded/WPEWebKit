@@ -19,6 +19,8 @@
 
 #pragma once
 
+#include "config.h"
+
 #if USE(GLIB)
 
 namespace WTF {

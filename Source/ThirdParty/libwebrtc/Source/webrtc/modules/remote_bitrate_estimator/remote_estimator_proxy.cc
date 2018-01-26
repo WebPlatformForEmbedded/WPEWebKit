@@ -138,7 +138,7 @@ void RemoteEstimatorProxy::OnPacketArrival(uint16_t sequence_number,
          arrival_time - it->second >= kBackWindowMs;) {
       auto delete_it = it;
       ++it;
-      packet_arrival_times_.erase(delete_it);
+      packet_arrival_times_.erase(delete_it->first);
     }
   }
 

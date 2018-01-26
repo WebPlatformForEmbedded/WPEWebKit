@@ -26,11 +26,15 @@
 #include "config.h"
 #include "LibWebRTCProvider.h"
 
+#if PLATFORM(COCOA)
+#include "LibWebRTCProviderCocoa.h"
+#else
+#include "LibWebRTCProviderGlib.h"
+#endif
+
 #if USE(LIBWEBRTC)
 #include "LibWebRTCAudioModule.h"
 #include "Logging.h"
-#include "VideoToolBoxDecoderFactory.h"
-#include "VideoToolBoxEncoderFactory.h"
 #include <dlfcn.h>
 #include <webrtc/api/peerconnectionfactoryproxy.h>
 #include <webrtc/base/physicalsocketserver.h>
@@ -42,6 +46,19 @@
 #endif
 
 namespace WebCore {
+
+UniqueRef<LibWebRTCProvider> LibWebRTCProvider::create()
+{
+#if USE(LIBWEBRTC)
+#if PLATFORM(COCOA)
+    return makeUniqueRef<LibWebRTCProviderCocoa>();
+#elif PLATFORM(GTK) || PLATFORM(WPE)
+    return makeUniqueRef<LibWebRTCProviderGlib>();
+#endif
+#else
+    return makeUniqueRef<LibWebRTCProvider>();
+#endif // USE(LIBWEBRTC)
+}
 
 #if USE(LIBWEBRTC)
 struct PeerConnectionFactoryAndThreads : public rtc::MessageHandler {
@@ -138,13 +155,25 @@ webrtc::PeerConnectionFactoryInterface* LibWebRTCProvider::factory()
 
     auto& factoryAndThreads = getStaticFactoryAndThreads(m_useNetworkThreadWithSocketServer);
 
+#if PLATFORM(COCOA)
     auto decoderFactory = std::make_unique<VideoToolboxVideoDecoderFactory>();
     auto encoderFactory = std::make_unique<VideoToolboxVideoEncoderFactory>();
 
     m_decoderFactory = decoderFactory.get();
     m_encoderFactory = encoderFactory.get();
+#else
+    auto encoderFactory = std::make_unique<GStreamerVideoEncoderFactory>();
+    auto decoderFactory = std::make_unique<GStreamerVideoDecoderFactory>();
 
-    m_factory = webrtc::CreatePeerConnectionFactory(factoryAndThreads.networkThread.get(), factoryAndThreads.networkThread.get(), factoryAndThreads.signalingThread.get(), factoryAndThreads.audioDeviceModule.get(), encoderFactory.release(), decoderFactory.release());
+    m_decoderFactory = decoderFactory.get();
+    m_encoderFactory = encoderFactory.get();
+#endif
+
+    m_factory = webrtc::CreatePeerConnectionFactory(factoryAndThreads.networkThread.get(),
+        factoryAndThreads.networkThread.get(),
+        factoryAndThreads.signalingThread.get(),
+        factoryAndThreads.audioDeviceModule.get(),
+        encoderFactory.release(), decoderFactory.release());
 
     return m_factory;
 }
@@ -191,10 +220,12 @@ rtc::scoped_refptr<webrtc::PeerConnectionInterface> LibWebRTCProvider::createPee
 void LibWebRTCProvider::setActive(bool value)
 {
 #if USE(LIBWEBRTC)
+#if PLATFORM(COCOA)
     if (m_decoderFactory)
         m_decoderFactory->setActive(value);
     if (m_encoderFactory)
         m_encoderFactory->setActive(value);
+#endif
 #else
     UNUSED_PARAM(value);
 #endif

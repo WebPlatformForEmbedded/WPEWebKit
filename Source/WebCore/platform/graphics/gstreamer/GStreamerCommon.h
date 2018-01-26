@@ -82,6 +82,9 @@ inline GstClockTime toGstClockTime(const MediaTime &mediaTime)
 }
 
 bool gstRegistryHasElementForMediaType(GList* elementFactories, const char* capsString);
+
+void connectSimpleBusMessageCallback(GstElement *pipeline);
+void disconnectSimpleBusMessageCallback(GstElement *pipeline);
 }
 
 class GstMappedBuffer {

@@ -715,7 +715,7 @@ void Internals::pruneMemoryCacheToSize(unsigned size)
     MemoryCache::singleton().pruneDeadResourcesToSize(size);
     MemoryCache::singleton().pruneLiveResourcesToSize(size, true);
 }
-    
+
 void Internals::destroyDecodedDataForAllImages()
 {
     MemoryCache::singleton().destroyDecodedDataForAllImages();
@@ -2474,7 +2474,7 @@ Vector<String> Internals::shortcutIconURLs() const
 {
     if (!frame())
         return { };
-    
+
     auto* documentLoader = frame()->loader().documentLoader();
     if (!documentLoader)
         return { };
@@ -2482,7 +2482,7 @@ Vector<String> Internals::shortcutIconURLs() const
     Vector<String> result;
     for (auto& linkIcon : documentLoader->linkIcons())
         result.append(linkIcon.url.string());
-    
+
     return result;
 }
 
@@ -4048,11 +4048,11 @@ void Internals::videoSampleAvailable(MediaSample& sample)
     auto& videoSettings = m_track->source().settings();
     if (!videoSettings.width() || !videoSettings.height())
         return;
-    
+
     auto rgba = sample.getRGBAImageData();
     if (!rgba)
         return;
-    
+
     auto imageData = ImageData::create(rgba.releaseNonNull(), videoSettings.width(), videoSettings.height());
     if (!imageData.hasException())
         m_nextTrackFramePromise->resolve(imageData.releaseReturnValue().releaseNonNull());

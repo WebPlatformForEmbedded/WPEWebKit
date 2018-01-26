@@ -27,7 +27,6 @@
 #define MediaPlayerEnums_h
 
 namespace WebCore {
-
 class MediaPlayerEnums {
 public:
     enum NetworkState { Empty, Idle, Loading, Loaded, FormatError, NetworkError, DecodeError };
@@ -42,6 +41,10 @@ public:
     };
     typedef uint32_t VideoFullscreenMode;
 };
+
+WTF::String convertEnumerationToString(MediaPlayerEnums::ReadyState);
+WTF::String convertEnumerationToString(MediaPlayerEnums::NetworkState);
+WTF::String convertEnumerationToString(MediaPlayerEnums::Preload);
 
 }
 

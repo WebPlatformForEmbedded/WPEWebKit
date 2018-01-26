@@ -29,6 +29,7 @@
 #if USE(LIBWEBRTC)
 
 #include <wtf/CurrentTime.h>
+#include <wtf/MathExtras.h>
 
 namespace WebCore {
 

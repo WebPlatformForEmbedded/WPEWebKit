@@ -23,7 +23,7 @@ VCMDecodedFrameCallback::VCMDecodedFrameCallback(VCMTiming* timing,
                                                  Clock* clock)
     : _clock(clock),
       _timing(timing),
-      _timestampMap(kDecoderFrameMemoryLength),
+      _timestampMap(500),
       _lastReceivedPictureID(0) {
   ntp_offset_ =
       _clock->CurrentNtpInMilliseconds() - _clock->TimeInMilliseconds();
@@ -76,7 +76,7 @@ void VCMDecodedFrameCallback::Decoded(VideoFrame& decodedImage,
 
   if (frameInfo == NULL) {
     LOG(LS_WARNING) << "Too many frames backed up in the decoder, dropping "
-                       "this one.";
+                       "this one: " << decodedImage.timestamp();
     return;
   }
 

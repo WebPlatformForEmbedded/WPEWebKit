@@ -292,6 +292,9 @@ void MediaPlayerPrivateGStreamer::load(const String&, MediaSourcePrivateClient*)
 #if ENABLE(MEDIA_STREAM)
 void MediaPlayerPrivateGStreamer::load(MediaStreamPrivate&)
 {
+    // Properly fail so the global MediaPlayer tries to fallback to the next MediaPlayerPrivate.
+    m_networkState = MediaPlayer::FormatError;
+    m_player->networkStateChanged();
     notImplemented();
 }
 #endif
@@ -2291,13 +2294,13 @@ void MediaPlayerPrivateGStreamer::createGSTPlayBin()
 #else
     unsigned flagText = 0x0;
 #endif
-    
+
     unsigned flagAudio = getGstPlayFlag("audio");
     unsigned flagVideo = getGstPlayFlag("video");
-    
-#if ENABLE(NATIVE_VIDEO)    
+
+#if ENABLE(NATIVE_VIDEO)
     unsigned flagNativeVideo = getGstPlayFlag("native-video");
-#else    
+#else
     unsigned flagNativeVideo = 0x0;
 #endif
 
@@ -2306,7 +2309,7 @@ void MediaPlayerPrivateGStreamer::createGSTPlayBin()
 #else
     unsigned flagNativeAudio = 0x0;
 #endif
-    
+
     g_object_set(m_pipeline.get(), "flags", flagText | flagAudio | flagVideo | flagNativeVideo | flagNativeAudio, nullptr);
 
     GRefPtr<GstBus> bus = adoptGRef(gst_pipeline_get_bus(GST_PIPELINE(m_pipeline.get())));
@@ -2376,8 +2379,8 @@ void MediaPlayerPrivateGStreamer::createGSTPlayBin()
 #if PLATFORM(QCOM_DB)
     m_videoSink = gst_element_factory_make( "db410csink", "optimized vsink");
     g_object_set(m_pipeline.get(), "video-sink", m_videoSink.get(), nullptr);
-#endif    
-    
+#endif
+
 #if !USE(WESTEROS_SINK) && !USE(FUSION_SINK)
     g_object_set(m_pipeline.get(), "audio-sink", createAudioSink(), nullptr);
 #endif

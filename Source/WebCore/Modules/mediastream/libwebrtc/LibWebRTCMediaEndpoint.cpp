@@ -37,6 +37,10 @@
 #include "NotImplemented.h"
 #include "Performance.h"
 #include "PlatformStrategies.h"
+#include "RealtimeIncomingAudioSource.h"
+#include "RealtimeIncomingVideoSource.h"
+#include "RealtimeOutgoingAudioSource.h"
+#include "RealtimeOutgoingVideoSource.h"
 #include "RTCDataChannel.h"
 #include "RTCDataChannelEvent.h"
 #include "RTCOfferOptions.h"
@@ -44,8 +48,6 @@
 #include "RTCSessionDescription.h"
 #include "RTCStatsReport.h"
 #include "RTCTrackEvent.h"
-#include "RealtimeIncomingAudioSource.h"
-#include "RealtimeIncomingVideoSource.h"
 #include "RuntimeEnabledFeatures.h"
 #include <webrtc/base/physicalsocketserver.h>
 #include <webrtc/p2p/base/basicpacketsocketfactory.h>
@@ -54,7 +56,7 @@
 #include <wtf/CurrentTime.h>
 #include <wtf/MainThread.h>
 
-#include "CoreMediaSoftLink.h"
+// #include "CoreMediaSoftLink.h"
 
 namespace WebCore {
 
@@ -199,7 +201,7 @@ void LibWebRTCMediaEndpoint::addTrack(RTCRtpSender& sender, MediaStreamTrack& tr
         mediaStream = m_peerConnectionFactory.CreateLocalMediaStream(mediaStreamIds[0].utf8().data());
         mediaStreams.push_back(mediaStream.get());
     }
-    
+
     switch (track.privateTrack().type()) {
     case RealtimeMediaSource::Type::Audio: {
         auto trackSource = RealtimeOutgoingAudioSource::create(track.privateTrack());
@@ -679,7 +681,7 @@ void LibWebRTCMediaEndpoint::addRemoteTrack(rtc::scoped_refptr<webrtc::RtpReceiv
     }
 
     receiver->setBackend(std::make_unique<RTCRtpReceiverBackend>(WTFMove(rtcReceiver)));
-    
+
     auto* track = receiver->track();
     ASSERT(track);
 

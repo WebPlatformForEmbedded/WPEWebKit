@@ -177,6 +177,9 @@ void RealtimeMediaSource::requestStop(Observer* callingObserver)
             return;
     }
 
+    for (Observer& observer : m_observers)
+        observer.sourceStopping();
+
     stop();
 
     for (Observer& observer : m_observers) {

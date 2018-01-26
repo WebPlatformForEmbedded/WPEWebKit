@@ -22,6 +22,7 @@
 
 #include "APIUIClient.h"
 #include "DrawingAreaProxy.h"
+#include "wtf/UUID.h"
 #include "WebKitFileChooserRequestPrivate.h"
 #include "WebKitGeolocationPermissionRequestPrivate.h"
 #include "WebKitNavigationActionPrivate.h"
@@ -192,6 +193,13 @@ private:
     {
         GRefPtr<WebKitUserMediaPermissionRequest> userMediaPermissionRequest = adoptGRef(webkitUserMediaPermissionRequestCreate(permissionRequest, userMediaDocumentOrigin, topLevelDocumentOrigin));
         webkitWebViewMakePermissionRequest(m_webView, WEBKIT_PERMISSION_REQUEST(userMediaPermissionRequest.get()));
+        return true;
+    }
+
+    bool checkUserMediaPermissionForOrigin(WebPageProxy&, WebFrameProxy&, API::SecurityOrigin& userMediaDocumentOrigin, API::SecurityOrigin& topLevelDocumentOrigin, UserMediaPermissionCheckProxy& permissionRequest) override
+    {
+        // FIXME: Add permission request to get the devices, store salt per origin.
+        permissionRequest.setUserMediaAccessInfo(createCanonicalUUIDString(), false);
         return true;
     }
 

@@ -45,6 +45,27 @@ template <> void derefGPtr<GstElement>(GstElement* ptr)
         gst_object_unref(ptr);
 }
 
+template <> GRefPtr<GstDevice> adoptGRef(GstDevice* ptr)
+{
+    ASSERT(!ptr || !g_object_is_floating(ptr));
+    return GRefPtr<GstDevice>(ptr, GRefPtrAdopt);
+}
+
+template <> GstDevice* refGPtr<GstDevice>(GstDevice* ptr)
+{
+    if (ptr)
+        gst_object_ref_sink(GST_OBJECT(ptr));
+
+    return ptr;
+}
+
+template <> void derefGPtr<GstDevice>(GstDevice* ptr)
+{
+    if (ptr)
+        gst_object_unref(ptr);
+}
+
+
 template <> GRefPtr<GstPad> adoptGRef(GstPad* ptr)
 {
     ASSERT(!ptr || !g_object_is_floating(ptr));

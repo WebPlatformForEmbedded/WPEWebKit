@@ -16,6 +16,8 @@
 #include "webrtc/base/trace_event.h"
 #include "webrtc/pc/localaudiosource.h"
 
+#define WEBRTC_WEBKIT_BUILD
+
 namespace webrtc {
 
 LocalAudioSinkAdapter::LocalAudioSinkAdapter() : sink_(nullptr) {}

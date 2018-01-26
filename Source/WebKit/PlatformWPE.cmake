@@ -74,6 +74,12 @@ list(APPEND WebKit_SOURCES
     NetworkProcess/soup/NetworkProcessSoup.cpp
     NetworkProcess/soup/NetworkSessionSoup.cpp
     NetworkProcess/soup/RemoteNetworkingContextSoup.cpp
+    NetworkProcess/webrtc/NetworkRTCProvider.cpp
+    NetworkProcess/webrtc/NetworkRTCSocket.cpp
+    NetworkProcess/webrtc/NetworkRTCMonitor.cpp
+    NetworkProcess/webrtc/LibWebRTCSocketClient.cpp
+
+    NetworkProcess/webrtc/NetworkRTCResolver.cpp
 
     Platform/IPC/glib/GSocketMonitor.cpp
 
@@ -353,6 +359,12 @@ set(WPE_API_INSTALLED_HEADERS
     ${WEBKIT_DIR}/UIProcess/API/wpe/webkit.h
 )
 
+if (USE_LIBWEBRTC)
+list(APPEND WebKit_SYSTEM_INCLUDE_DIRECTORIES
+    "${THIRDPARTY_DIR}/libwebrtc/Source/"
+)
+endif ()
+
 # To generate WebKitEnumTypes.h we want to use all installed headers, except WebKitEnumTypes.h itself.
 set(WPE_ENUM_GENERATION_HEADERS ${WPE_API_INSTALLED_HEADERS})
 list(REMOVE_ITEM WPE_ENUM_GENERATION_HEADERS ${DERIVED_SOURCES_WPE_API_DIR}/WebKitEnumTypes.h)
@@ -445,6 +457,7 @@ list(APPEND WebKit_INCLUDE_DIRECTORIES
     ${FREETYPE2_INCLUDE_DIRS}
     ${GLIB_INCLUDE_DIRS}
     ${GSTREAMER_INCLUDE_DIRS}
+    ${GSTREAMER_CODECPARSERS_INCLUDE_DIRS}
     ${HARFBUZZ_INCLUDE_DIRS}
     ${LIBSOUP_INCLUDE_DIRS}
     ${WPE_INCLUDE_DIRS}
@@ -457,6 +470,7 @@ list(APPEND WebKit_LIBRARIES
     ${FREETYPE2_LIBRARIES}
     ${GLIB_LIBRARIES}
     ${GSTREAMER_LIBRARIES}
+    ${GSTREAMER_CODECPARSERS_LIBRARIES}
     ${HARFBUZZ_LIBRARIES}
     ${LIBSOUP_LIBRARIES}
     ${WPE_LIBRARIES}

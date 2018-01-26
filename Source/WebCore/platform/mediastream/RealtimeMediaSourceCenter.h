@@ -50,7 +50,7 @@ class RealtimeMediaSourceSupportedConstraints;
 class TrackSourceInfo;
 
 struct MediaConstraints;
-    
+
 class RealtimeMediaSourceCenter {
 public:
     virtual ~RealtimeMediaSourceCenter();
@@ -63,10 +63,12 @@ public:
     virtual void validateRequestConstraints(ValidConstraintsHandler&&, InvalidConstraintsHandler&&, const MediaConstraints& audioConstraints, const MediaConstraints& videoConstraints, String&&);
 
     using NewMediaStreamHandler = std::function<void(RefPtr<MediaStreamPrivate>&&)>;
-    virtual void createMediaStream(NewMediaStreamHandler&&, const String& audioDeviceID, const String& videoDeviceID, const MediaConstraints* audioConstraints, const MediaConstraints* videoConstraints);
+    virtual void createMediaStream(NewMediaStreamHandler&&, const String& audioDeviceID,
+            const String& videoDeviceID, const MediaConstraints* audioConstraints,
+            const MediaConstraints* videoConstraints);
 
     WEBCORE_EXPORT virtual Vector<CaptureDevice> getMediaStreamDevices();
-    
+
     const RealtimeMediaSourceSupportedConstraints& supportedConstraints() { return m_supportedConstraints; }
 
     virtual RealtimeMediaSource::AudioCaptureFactory& defaultAudioFactory() = 0;
@@ -75,21 +77,21 @@ public:
     virtual CaptureDeviceManager& defaultAudioCaptureDeviceManager() = 0;
     virtual CaptureDeviceManager& defaultVideoCaptureDeviceManager() = 0;
 
-    WEBCORE_EXPORT void setAudioFactory(RealtimeMediaSource::AudioCaptureFactory&);
-    WEBCORE_EXPORT void unsetAudioFactory(RealtimeMediaSource::AudioCaptureFactory&);
-    WEBCORE_EXPORT RealtimeMediaSource::AudioCaptureFactory& audioFactory();
+    WEBCORE_EXPORT virtual void setAudioFactory(RealtimeMediaSource::AudioCaptureFactory&);
+    WEBCORE_EXPORT virtual void unsetAudioFactory(RealtimeMediaSource::AudioCaptureFactory&);
+    WEBCORE_EXPORT virtual RealtimeMediaSource::AudioCaptureFactory& audioFactory();
 
     WEBCORE_EXPORT void setVideoFactory(RealtimeMediaSource::VideoCaptureFactory&);
     WEBCORE_EXPORT void unsetVideoFactory(RealtimeMediaSource::VideoCaptureFactory&);
-    WEBCORE_EXPORT RealtimeMediaSource::VideoCaptureFactory& videoFactory();
+    virtual RealtimeMediaSource::VideoCaptureFactory& videoFactory();
 
     WEBCORE_EXPORT void setAudioCaptureDeviceManager(CaptureDeviceManager&);
     WEBCORE_EXPORT void unsetAudioCaptureDeviceManager(CaptureDeviceManager&);
-    CaptureDeviceManager& audioCaptureDeviceManager();
+    virtual CaptureDeviceManager& audioCaptureDeviceManager();
 
     WEBCORE_EXPORT void setVideoCaptureDeviceManager(CaptureDeviceManager&);
     WEBCORE_EXPORT void unsetVideoCaptureDeviceManager(CaptureDeviceManager&);
-    CaptureDeviceManager& videoCaptureDeviceManager();
+    virtual CaptureDeviceManager& videoCaptureDeviceManager();
 
     String hashStringWithSalt(const String& id, const String& hashSalt);
     WEBCORE_EXPORT std::optional<CaptureDevice> captureDeviceWithUniqueID(const String& id, const String& hashSalt);

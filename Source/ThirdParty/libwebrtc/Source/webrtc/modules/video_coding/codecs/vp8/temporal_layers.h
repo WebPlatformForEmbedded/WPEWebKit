@@ -100,9 +100,15 @@ class TemporalLayersFactory {
  public:
   TemporalLayersFactory() : listener_(nullptr) {}
   virtual ~TemporalLayersFactory() {}
+#if defined(WEBRTC_MAC) || defined(WEBRTC_IOS)
   virtual TemporalLayers* Create(int /* simulcast_id */,
                                  int /* temporal_layers */,
                                  uint8_t /* initial_tl0_pic_idx */) const { return nullptr; }
+#else
+  virtual TemporalLayers* Create(int /* simulcast_id */,
+                                 int /* temporal_layers */,
+                                 uint8_t /* initial_tl0_pic_idx */) const;
+#endif
   void SetListener(TemporalLayersListener* listener);
 
  protected:

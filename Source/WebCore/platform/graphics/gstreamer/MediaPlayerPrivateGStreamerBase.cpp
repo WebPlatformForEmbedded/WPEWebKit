@@ -63,7 +63,7 @@
 #define GST_GL_CAPS_FORMAT "{ RGBA }"
 #define TEXTURE_MAPPER_COLOR_CONVERT_FLAG static_cast<TextureMapperGL::Flag>(0);
 #define TEXTURE_COPIER_COLOR_CONVERT_FLAG VideoTextureCopierGStreamer::ColorConversion::AlreadyRGBA
-#elif G_BYTE_ORDER == G_LITTLE_ENDIAN)
+#elif (G_BYTE_ORDER == G_LITTLE_ENDIAN)
 #define GST_GL_CAPS_FORMAT "{ BGRx, BGRA }"
 #define TEXTURE_MAPPER_COLOR_CONVERT_FLAG TextureMapperGL::ShouldConvertTextureBGRAToRGBA
 #define TEXTURE_COPIER_COLOR_CONVERT_FLAG VideoTextureCopierGStreamer::ColorConversion::ConvertBGRAToRGBA
@@ -307,7 +307,7 @@ MediaPlayerPrivateGStreamerBase::~MediaPlayerPrivateGStreamerBase()
         g_signal_handlers_disconnect_matched(m_videoSink.get(), G_SIGNAL_MATCH_DATA, 0, 0, nullptr, nullptr, this);
 #if USE(GSTREAMER_GL)
         if (GST_IS_BIN(m_videoSink.get())) {
-            GRefPtr<GstElement> appsink = adoptGRef(gst_bin_get_by_name(GST_BIN_CAST(m_videoSink.get()), "webkit-gl-video-sink"));
+        GRefPtr<GstElement> appsink = adoptGRef(gst_bin_get_by_name(GST_BIN_CAST(m_videoSink.get()), "webkit-gl-video-sink"));
             g_signal_handlers_disconnect_by_data(appsink.get(), this);
         }
 #endif

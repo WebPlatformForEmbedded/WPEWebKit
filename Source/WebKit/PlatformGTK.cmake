@@ -36,6 +36,12 @@ list(APPEND WebKit_SOURCES
     NetworkProcess/soup/NetworkProcessSoup.cpp
     NetworkProcess/soup/NetworkSessionSoup.cpp
     NetworkProcess/soup/RemoteNetworkingContextSoup.cpp
+    NetworkProcess/webrtc/NetworkRTCProvider.cpp
+    NetworkProcess/webrtc/NetworkRTCSocket.cpp
+    NetworkProcess/webrtc/NetworkRTCMonitor.cpp
+    NetworkProcess/webrtc/LibWebRTCSocketClient.cpp
+
+    NetworkProcess/webrtc/NetworkRTCResolver.cpp
 
     Platform/IPC/glib/GSocketMonitor.cpp
     Platform/IPC/unix/AttachmentUnix.cpp
@@ -854,6 +860,12 @@ list(APPEND WebKit_LIBRARIES
 if (LIBNOTIFY_FOUND)
 list(APPEND WebKit_LIBRARIES
     ${LIBNOTIFY_LIBRARIES}
+)
+endif ()
+
+if (USE_LIBWEBRTC)
+list(APPEND WebKit_SYSTEM_INCLUDE_DIRECTORIES
+    "${THIRDPARTY_DIR}/libwebrtc/Source/"
 )
 endif ()
 

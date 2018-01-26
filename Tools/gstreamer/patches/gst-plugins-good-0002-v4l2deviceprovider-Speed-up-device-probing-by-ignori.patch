@@ -1,0 +1,25 @@
+From 014385866513a3018cf12c8b43ca5a022059f0bc Mon Sep 17 00:00:00 2001
+From: Thibault Saunier <tsaunier@gnome.org>
+Date: Thu, 21 Dec 2017 10:02:25 -0300
+Subject: [PATCH 2/2] v4l2deviceprovider: Speed up device probing by ignoring
+ colorimetry infos
+
+---
+ sys/v4l2/gstv4l2deviceprovider.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/sys/v4l2/gstv4l2deviceprovider.c b/sys/v4l2/gstv4l2deviceprovider.c
+index 23959ca57..0dfb47c97 100644
+--- a/sys/v4l2/gstv4l2deviceprovider.c
++++ b/sys/v4l2/gstv4l2deviceprovider.c
+@@ -148,6 +148,7 @@ gst_v4l2_device_provider_probe_device (GstV4l2DeviceProvider * provider,
+       goto close;
+ 
+     type = GST_V4L2_DEVICE_TYPE_SOURCE;
++    v4l2obj->skip_try_fmt_probes = TRUE;
+   }
+ 
+   if (v4l2obj->device_caps &
+-- 
+2.15.1
+

@@ -106,6 +106,7 @@ function installDependenciesWithApt {
         libatk1.0-dev \
         libedit-dev \
         libenchant-dev \
+        libevent-dev \
         libfaad-dev \
         libffi-dev \
         $(aptIfElse libgcrypt20-dev libgcrypt11-dev) \
@@ -251,6 +252,7 @@ function installDependenciesWithPacman {
         gst-plugins-base-libs \
         gzip \
         hyphen \
+        libevent \
         libtool \
         m4 \
         make \
@@ -407,6 +409,7 @@ function installDependenciesWithDnf {
         libXtst-devel \
         libxslt-devel \
         libedit-devel \
+        libevent-devel \
         libffi-devel \
         libgcrypt-devel \
         libgudev1-devel \

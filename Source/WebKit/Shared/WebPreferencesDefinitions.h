@@ -31,6 +31,12 @@
 #define DEFAULT_WEBKIT_TABSTOLINKS_ENABLED false
 #endif
 
+#if PLATFORM(WPE)
+#define DEFAULT_WEBKIT_MEDIA_DEVICE_ENABLED true
+#else
+#define DEFAULT_WEBKIT_MEDIA_DEVICE_ENABLED false
+#endif
+
 #if ENABLE(SMOOTH_SCROLLING)
 #define DEFAULT_WEBKIT_SCROLL_ANIMATOR_ENABLED true
 #else
@@ -254,7 +260,7 @@
     macro(SimpleLineLayoutEnabled, simpleLineLayoutEnabled, Bool, bool, true, "", "") \
     macro(SubpixelCSSOMElementMetricsEnabled, subpixelCSSOMElementMetricsEnabled, Bool, bool, false, "", "") \
     macro(UseGiantTiles, useGiantTiles, Bool, bool, false, "", "") \
-    macro(MediaDevicesEnabled, mediaDevicesEnabled, Bool, bool, false, "", "") \
+    macro(MediaDevicesEnabled, mediaDevicesEnabled, Bool, bool, DEFAULT_WEBKIT_MEDIA_DEVICE_ENABLED, "", "") \
     macro(MediaStreamEnabled, mediaStreamEnabled, Bool, bool, true, "", "") \
     macro(PeerConnectionEnabled, peerConnectionEnabled, Bool, bool, WebCore::LibWebRTCProvider::webRTCAvailable(), "", "") \
     macro(UseLegacyTextAlignPositionedElementBehavior, useLegacyTextAlignPositionedElementBehavior, Bool, bool, false, "", "") \

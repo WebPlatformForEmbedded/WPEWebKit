@@ -130,7 +130,7 @@ static bool canCallGetUserMedia(Document& document, String& errorMessage)
             }
         }
     }
-    
+
     return true;
 }
 
@@ -179,7 +179,7 @@ void UserMediaRequest::allow(String&& audioDeviceUID, String&& videoDeviceUID, S
         }
 
         stream->startProducingData();
-        
+
         m_promise.resolve(stream);
     };
 

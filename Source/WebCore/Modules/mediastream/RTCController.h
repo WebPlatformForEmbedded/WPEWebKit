@@ -24,6 +24,8 @@
 
 #pragma once
 
+// FIXME - What is happening here?
+#define FALLTHROUGH
 #include <wtf/Vector.h>
 
 namespace WebCore {

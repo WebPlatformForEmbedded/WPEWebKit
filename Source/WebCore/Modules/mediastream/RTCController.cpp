@@ -22,6 +22,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "webrtc/media/engine/webrtcvideodecoderfactory.h"
 #include "config.h"
 #include "RTCController.h"
 

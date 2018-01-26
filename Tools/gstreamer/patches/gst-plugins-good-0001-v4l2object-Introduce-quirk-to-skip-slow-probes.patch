@@ -1,0 +1,95 @@
+From 325a37ed7c916aabf1ad9b98916573358ad19248 Mon Sep 17 00:00:00 2001
+From: Nicolas Dufresne <nicolas.dufresne@collabora.com>
+Date: Wed, 19 Jul 2017 22:09:38 -0400
+Subject: [PATCH 1/2] v4l2object: Introduce quirk to skip slow probes
+
+skip_try_fmt_probes quirk is set, V4L2 object will not probe for
+interlace-mode and colorimetry to avoid relying on try_fmt. This quirk
+will be used by v4l2src to avoid desastrous startup time with slow
+USB webcams.
+
+When this quirk is enabled, caller will have to iterate over the
+negotiated caps as it may contains unsupported formats. If the peer
+didn't choose a specific interlace-mode, or colorimetry, the value
+chosen by the driver is set into the caps. For this reason, when this
+mode is enabled, gst_v4l2_object_set_format() will require writable
+caps.
+
+https://bugzilla.gnome.org/show_bug.cgi?id=785156
+---
+ sys/v4l2/gstv4l2object.c | 28 +++++++++++++++++++---------
+ sys/v4l2/gstv4l2object.h |  4 ++++
+ 2 files changed, 23 insertions(+), 9 deletions(-)
+
+diff --git a/sys/v4l2/gstv4l2object.c b/sys/v4l2/gstv4l2object.c
+index 09a688c6b..5b3736695 100644
+--- a/sys/v4l2/gstv4l2object.c
++++ b/sys/v4l2/gstv4l2object.c
+@@ -2460,9 +2460,12 @@ return_data:
+   gst_structure_set (s, "width", G_TYPE_INT, (gint) width,
+       "height", G_TYPE_INT, (gint) height, NULL);
+   gst_v4l2_object_add_aspect_ratio (v4l2object, s);
+-  gst_v4l2_object_add_interlace_mode (v4l2object, s, width, height,
+-      pixelformat);
+-  gst_v4l2_object_add_colorspace (v4l2object, s, width, height, pixelformat);
++
++  if (!v4l2object->skip_try_fmt_probes) {
++    gst_v4l2_object_add_interlace_mode (v4l2object, s, width, height,
++        pixelformat);
++    gst_v4l2_object_add_colorspace (v4l2object, s, width, height, pixelformat);
++  }
+ 
+   if (G_IS_VALUE (&rates)) {
+     gst_v4l2src_value_simplify (&rates);
+@@ -2782,13 +2785,17 @@ default_frame_sizes:
+     else
+       gst_structure_set (tmp, "height", GST_TYPE_INT_RANGE, min_h, max_h, NULL);
+ 
+-    /* We could consider setting interlace mode from min and max. */
+-    gst_v4l2_object_add_interlace_mode (v4l2object, tmp, max_w, max_h,
+-        pixelformat);
+     gst_v4l2_object_add_aspect_ratio (v4l2object, tmp);
+-    /* We could consider to check colorspace for min too, in case it depends on
+-     * the size. But in this case, min and max could not be enough */
+-    gst_v4l2_object_add_colorspace (v4l2object, tmp, max_w, max_h, pixelformat);
++
++    if (!v4l2object->skip_try_fmt_probes) {
++      /* We could consider setting interlace mode from min and max. */
++      gst_v4l2_object_add_interlace_mode (v4l2object, tmp, max_w, max_h,
++          pixelformat);
++      /* We could consider to check colorspace for min too, in case it depends on
++       * the size. But in this case, min and max could not be enough */
++      gst_v4l2_object_add_colorspace (v4l2object, tmp, max_w, max_h,
++          pixelformat);
++    }
+ 
+     gst_v4l2_object_update_and_append (v4l2object, pixelformat, ret, tmp);
+     return ret;
+@@ -3155,6 +3162,9 @@ gst_v4l2_object_set_format_full (GstV4l2Object * v4l2object, GstCaps * caps,
+   enum v4l2_ycbcr_encoding matrix = 0;
+   enum v4l2_xfer_func transfer = 0;
+ 
++  g_return_val_if_fail (!v4l2object->skip_try_fmt_probes ||
++      gst_caps_is_writable (caps), FALSE);
++
+   GST_V4L2_CHECK_OPEN (v4l2object);
+   if (!try_only)
+     GST_V4L2_CHECK_NOT_ACTIVE (v4l2object);
+diff --git a/sys/v4l2/gstv4l2object.h b/sys/v4l2/gstv4l2object.h
+index 231b1ab3a..c79192e9b 100644
+--- a/sys/v4l2/gstv4l2object.h
++++ b/sys/v4l2/gstv4l2object.h
+@@ -174,6 +174,10 @@ struct _GstV4l2Object {
+   /* Allow to skip reading initial format through G_FMT. Some devices
+    * just fails if you don't call S_FMT first. (ex: M2M decoders) */
+   gboolean no_initial_format;
++  /* Avoid any try_fmt probe. This is used by v4l2src to speedup start up time
++   * on slow USB firmwares. When this is set, gst_v4l2_set_format() will modify
++   * the caps to reflect what was negotiated during fixation */
++  gboolean skip_try_fmt_probes;
+ };
+ 
+ struct _GstV4l2ObjectClassHelper {
+-- 
+2.15.1
+

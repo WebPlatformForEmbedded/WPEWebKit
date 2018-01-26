@@ -211,7 +211,7 @@ public:
 
     bool SetTrack(webrtc::MediaStreamTrackInterface*) final { return false; }
     rtc::scoped_refptr<webrtc::MediaStreamTrackInterface> track() const final { return m_track; }
-    
+
     uint32_t ssrc() const { return 0; }
     cricket::MediaType media_type() const { return cricket::MEDIA_TYPE_VIDEO; }
     std::string id() const { return ""; }
@@ -223,7 +223,7 @@ public:
 private:
     rtc::scoped_refptr<webrtc::MediaStreamTrackInterface> m_track;
 };
-    
+
 class MockLibWebRTCPeerConnectionFactory : public webrtc::PeerConnectionFactoryInterface {
 public:
     static rtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface> create(String&& testCase) { return new rtc::RefCountedObject<MockLibWebRTCPeerConnectionFactory>(WTFMove(testCase)); }

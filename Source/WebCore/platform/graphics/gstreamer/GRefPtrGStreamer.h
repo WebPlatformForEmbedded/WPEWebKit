@@ -24,6 +24,7 @@
 #include <wtf/glib/GRefPtr.h>
 
 typedef struct _GstElement GstElement;
+typedef struct _GstDevice GstDevice;
 typedef struct _GstPad GstPad;
 typedef struct _GstPadTemplate GstPadTemplate;
 typedef struct _GstCaps GstCaps;
@@ -53,6 +54,10 @@ namespace WTF {
 template<> GRefPtr<GstElement> adoptGRef(GstElement* ptr);
 template<> GstElement* refGPtr<GstElement>(GstElement* ptr);
 template<> void derefGPtr<GstElement>(GstElement* ptr);
+
+template<> GRefPtr<GstDevice> adoptGRef(GstDevice* ptr);
+template<> GstDevice* refGPtr<GstDevice>(GstDevice* ptr);
+template<> void derefGPtr<GstDevice>(GstDevice* ptr);
 
 template<> GRefPtr<GstPad> adoptGRef(GstPad* ptr);
 template<> GstPad* refGPtr<GstPad>(GstPad* ptr);

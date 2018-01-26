@@ -1,3 +1,31 @@
+2017-10-26  Alejandro G. Castro  <alex@igalia.com>
+
+        Make NetworkRTCResolver port agnostic
+        https://bugs.webkit.org/show_bug.cgi?id=178855
+
+        Reviewed by NOBODY (OOPS!).
+
+        Create an specific Cocoa class, for the other platforms added empty implementation.
+
+        No new tests because this is a refactor.
+
+        * NetworkProcess/webrtc/NetworkRTCProvider.cpp: Create an alias class name defined per platform to instantiate the resolver.
+        (WebKit::NetworkRTCProvider::createResolver): Used the alias class name.
+        * NetworkProcess/webrtc/NetworkRTCResolver.cpp: Remove the platform specific code.
+        * NetworkProcess/webrtc/NetworkRTCResolver.h:
+        (WebKit::NetworkRTCResolver::start): Make this class virtual and add an empty implementation.
+        (WebKit::NetworkRTCResolver::stop): Ditto.
+        * NetworkProcess/webrtc/NetworkRTCResolverCocoa.cpp: Copied Cocoa code from Source/WebKit/NetworkProcess/webrtc/NetworkRTCResolver.cpp.
+        * NetworkProcess/webrtc/NetworkRTCResolverCocoa.h: Copied Cocoa code from Source/WebKit/NetworkProcess/webrtc/NetworkRTCResolver.h.
+        * PlatformGTK.cmake: Add NetworkRTCResolver compilation for GTK.
+        * WebKit.xcodeproj/project.pbxproj: Add the NetworkRTCResolverCocoa class to the compilation.
+
+2018-01-17  John Wilander  <wilander@apple.com>
+
+        Resource Load Statistics: Block cookies for prevalent resources without user interaction
+        https://bugs.webkit.org/show_bug.cgi?id=177394
+        <rdar://problem/34613960>
+
 2018-07-26  Miguel Gomez  <magomez@igalia.com>
 
         [GTK][WPE] Improve the way request displayRefresh notifications

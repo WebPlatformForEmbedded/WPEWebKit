@@ -552,7 +552,7 @@ int RtpPacketizerVp8::WriteTIDAndKeyIdxFields(uint8_t* x_field,
   *data_field = 0;
   if (TIDFieldPresent()) {
     *x_field |= kTBit;
-    assert(hdr_info_.temporalIdx <= 3);
+    RTC_DCHECK_LE(hdr_info_.temporalIdx, 3);
     *data_field |= hdr_info_.temporalIdx << 6;
     *data_field |= hdr_info_.layerSync ? kYBit : 0;
   }

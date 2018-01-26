@@ -280,8 +280,11 @@ static int keyCodeForVirtualKey(Inspector::Protocol::Automation::VirtualKey key,
     return 0;
 }
 
-void WebAutomationSession::platformSimulateKeyboardInteraction(WebPageProxy& page, KeyboardInteraction interaction, std::optional<VirtualKey> virtualKey, std::optional<CharKey> charKey)
+void WebAutomationSession::platformSimulateKeyboardInteraction(WebPageProxy&, KeyboardInteraction, WTF::Variant<VirtualKey, CharKey>&&)
 {
+
+// Just build...
+#if 0
     ASSERT(virtualKey.has_value() || charKey.has_value());
 
     GdkModifierType updateState;
@@ -304,6 +307,7 @@ void WebAutomationSession::platformSimulateKeyboardInteraction(WebPageProxy& pag
         doKeyStrokeEvent(GDK_KEY_PRESS, page.viewWidget(), keyCode, m_currentModifiers, true);
         break;
     }
+#endif
 }
 
 void WebAutomationSession::platformSimulateKeySequence(WebPageProxy& page, const String& keySequence)
