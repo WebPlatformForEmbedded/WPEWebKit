@@ -24,7 +24,10 @@
  */
 
 #pragma once
-
+#if !USE(GLX)
+// This define is used in mesa and other GL implementations to exlcude X11 headers.
+#define MESA_EGL_NO_X11_HEADERS 1
+#endif
 #include <epoxy/egl.h>
 
 // Provide the EGL_CAST macro in case the eglplatform.h header doesn't define it already.

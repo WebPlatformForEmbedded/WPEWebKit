@@ -28,6 +28,10 @@
 
 #include "WebPage.h"
 #include <WebCore/PlatformDisplayWPE.h>
+#if !USE(GLX)
+// This define is used in mesa and other GL implementations to exlcude X11 headers.
+#define MESA_EGL_NO_X11_HEADERS 1
+#endif
 #include <wpe/renderer-backend-egl.h>
 
 using namespace WebCore;
