@@ -292,6 +292,9 @@ void MemoryPressureHandler::pollMemoryPressure()
     bool critical;
     String processName(getProcessName());
     do {
+        if (!MemoryPressureHandler::singleton().m_installed)
+            return;
+
         if (s_pollMaximumProcessMemoryCriticalLimit) {
             size_t vmRSS = readToken(s_processStatus, "VmRSS:", KB);
 
@@ -316,6 +319,9 @@ void MemoryPressureHandler::pollMemoryPressure()
 
         sleep(s_pollTimeSec);
     } while (true);
+    if (!MemoryPressureHandler::singleton().m_installed)
+        return;
+
 
     if (ReliefLogger::loggingEnabled())
         LOG(MemoryPressure, "Polled memory pressure (%s)", critical ? "critical" : "non-critical");
@@ -393,6 +399,7 @@ void MemoryPressureHandler::install()
     if (!tryEnsureEventFD())
         return;
 
+    m_installed = true;
     m_eventFDPoller = std::make_unique<EventFDPoller>(m_eventFD.value(), [this] {
         // FIXME: Current memcg does not provide any way for users to know how serious the memory pressure is.
         // So we assume all notifications from memcg are critical for now. If memcg had better inferfaces
@@ -412,13 +419,10 @@ void MemoryPressureHandler::install()
         LOG(MemoryPressure, "System is no longer under memory pressure.");
 
     setUnderMemoryPressure(false);
-    m_installed = true;
 }
 
 void MemoryPressureHandler::uninstall()
 {
-    if (!m_installed)
-        return;
 
     m_holdOffTimer.stop();
     m_eventFDPoller = nullptr;
@@ -456,6 +460,14 @@ static size_t processMemoryUsage()
 
 void MemoryPressureHandler::respondToMemoryPressure(Critical critical, Synchronous synchronous)
 {
+    if (!m_installed)
+    {
+        if (ReliefLogger::loggingEnabled())
+            LOG(MemoryPressure, "MemoryPressureHandler is stopped, ignoring pressure notification");
+        setUnderMemoryPressure(false);
+        return;
+    }
+
     uninstall();
 
     double startTime = monotonicallyIncreasingTime();
