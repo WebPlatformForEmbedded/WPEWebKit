@@ -380,6 +380,7 @@ bool RenderImage::hasNonBitmapImage() const
 
 void RenderImage::paintReplaced(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
 {
+    printf("RenderImage::paintReplaced(Started)\n");
     LayoutSize contentSize = this->contentSize();
 
     GraphicsContext& context = paintInfo.context();
@@ -433,6 +434,7 @@ void RenderImage::paintReplaced(PaintInfo& paintInfo, const LayoutPoint& paintOf
 #if ENABLE(CSS_IMAGE_ORIENTATION)
                 orientationDescription.setImageOrientationEnum(style().imageOrientation());
 #endif
+                printf("RenderImage::paintReplaced(calling context drawImage)\n");
                 context.drawImage(*image, snapRectToDevicePixels(LayoutRect(paintOffset + imageOffset, imageSize), deviceScaleFactor), orientationDescription);
                 errorPictureDrawn = true;
             }
@@ -465,6 +467,7 @@ void RenderImage::paintReplaced(PaintInfo& paintInfo, const LayoutPoint& paintOf
 
     RefPtr<Image> img = imageResource().image(flooredIntSize(contentSize));
     if (!img || img->isNull()) {
+        printf("RenderImage::paintReplaced(calling page().addRelevantUnpaintedObject)\n");
         if (paintInfo.phase == PaintPhaseForeground)
             page().addRelevantUnpaintedObject(this, visualOverflowRect());
         return;

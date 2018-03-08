@@ -262,10 +262,12 @@ void GraphicsContext::drawRect(const FloatRect& rect, float borderThickness)
 
 void GraphicsContext::drawNativeImage(const NativeImagePtr& image, const FloatSize& imageSize, const FloatRect& destRect, const FloatRect& srcRect, CompositeOperator op, BlendMode blendMode, ImageOrientation orientation)
 {
+    printf("GraphicsContextCairo:::GraphicsContext::drawNativeImage(Start)");
     if (paintingDisabled())
         return;
 
     if (isRecording()) {
+    printf("GraphicsContextCairo:::GraphicsContext::drawNativeImage(calling m_displayListRecorder->drawNativeImage )");
         m_displayListRecorder->drawNativeImage(image, imageSize, destRect, srcRect, op, blendMode, orientation);
         return;
     }

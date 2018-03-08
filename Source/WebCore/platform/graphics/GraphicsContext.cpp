@@ -719,10 +719,12 @@ ImageDrawResult GraphicsContext::drawImage(Image& image, const FloatRect& destin
 
 ImageDrawResult GraphicsContext::drawImage(Image& image, const FloatRect& destination, const FloatRect& source, const ImagePaintingOptions& imagePaintingOptions)
 {
+    printf("GraphicsContext::drawImage(Start) \n");
     if (paintingDisabled())
         return ImageDrawResult::DidNothing;
 
     if (isRecording()) {
+        printf("GraphicsContext::drawImage(Call   m_displayListRecorder->drawImage ) \n");
         m_displayListRecorder->drawImage(image, destination, source, imagePaintingOptions);
         return ImageDrawResult::DidRecord;
     }

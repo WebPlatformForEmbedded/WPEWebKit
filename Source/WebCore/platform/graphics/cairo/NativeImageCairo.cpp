@@ -58,6 +58,7 @@ Color nativeImageSinglePixelSolidColor(const NativeImagePtr& image)
 
 void drawNativeImage(const NativeImagePtr& image, GraphicsContext& context, const FloatRect& destRect, const FloatRect& srcRect, const IntSize&, CompositeOperator op, BlendMode mode, const ImageOrientation& orientation)
 {
+    printf("NativeIMageCairo:::void:::drawnativeImage(Start)\n");
     context.save();
     
     // Set the compositing operation.
@@ -86,7 +87,7 @@ void drawNativeImage(const NativeImagePtr& image, GraphicsContext& context, cons
             adjustedDestRect.setSize(adjustedDestRect.size().transposedSize());
         }
     }
-
+    printf("NativeIMageCairo:::void:::drawnativeImage(calling  context.platformContext()->drawSurfaceToContext)\n");
     context.platformContext()->drawSurfaceToContext(image.get(), adjustedDestRect, adjustedSrcRect, context);
     context.restore();
 }
