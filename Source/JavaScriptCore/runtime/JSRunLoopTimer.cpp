@@ -141,8 +141,8 @@ void JSRunLoopTimer::timerDidFireCallback()
 
 void JSRunLoopTimer::scheduleTimer(Seconds intervalInSeconds)
 {
-    m_timer.startOneShot(intervalInSeconds);
     m_isScheduled = true;
+    m_timer.startOneShot(intervalInSeconds);
 
     auto locker = holdLock(m_timerCallbacksLock);
     for (auto& task : m_timerSetCallbacks)
