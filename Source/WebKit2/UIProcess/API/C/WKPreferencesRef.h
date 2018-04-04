@@ -316,6 +316,10 @@ WK_EXPORT bool WKPreferencesGetWebSecurityEnabled(WKPreferencesRef preferences);
 WK_EXPORT void WKPreferencesSetScrollToFocusedElementEnabled(WKPreferencesRef preferences, bool enabled);
 WK_EXPORT bool WKPreferencesGetScrollToFocusedElementEnabled(WKPreferencesRef preferences);
 
+// Defaults to false.
+WK_EXPORT void WKPreferencesSetAccessibilityEnabled(WKPreferencesRef preferences, bool accessibilityEnabled);
+WK_EXPORT bool WKPreferencesGetAccessibilityEnabled(WKPreferencesRef preferences);
+
 #ifdef __cplusplus
 }
 #endif

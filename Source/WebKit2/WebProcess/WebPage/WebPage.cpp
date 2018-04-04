@@ -2938,6 +2938,7 @@ void WebPage::updatePreferences(const WebPreferencesStore& store)
     m_artificialPluginInitializationDelayEnabled = store.getBoolValueForKey(WebPreferencesKey::artificialPluginInitializationDelayEnabledKey());
 
     m_scrollingPerformanceLoggingEnabled = store.getBoolValueForKey(WebPreferencesKey::scrollingPerformanceLoggingEnabledKey());
+    m_accessibilityEnabled = store.getBoolValueForKey(WebPreferencesKey::accessibilityEnabledKey());
 
 #if PLATFORM(COCOA)
     m_pdfPluginEnabled = store.getBoolValueForKey(WebPreferencesKey::pdfPluginEnabledKey());

@@ -242,6 +242,7 @@
     macro(CustomElementsEnabled, customElementsEnabled, Bool, bool, true, "", "") \
     macro(AllowScriptsToCloseWindows, allowScriptsToCloseWindows, Bool, bool, false, "", "") \
     macro(ScrollToFocusedElementEnabled, scrollToFocusedElementEnabled, Bool, bool, true, "", "") \
+    macro(AccessibilityEnabled, accessibilityEnabled, Bool, bool, false, "", "") \
     \
 
 #define FOR_EACH_WEBKIT_DOUBLE_PREFERENCE(macro) \

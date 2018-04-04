@@ -1502,6 +1502,7 @@ private:
     bool m_shouldDispatchFakeMouseMoveEvents;
     bool m_isEditorStateMissingPostLayoutData { false };
     bool m_isSelectingTextWhileInsertingAsynchronously { false };
+    bool m_accessibilityEnabled { false };
 
     enum class EditorStateIsContentEditable { No, Yes, Unset };
     mutable EditorStateIsContentEditable m_lastEditorStateWasContentEditable { EditorStateIsContentEditable::Unset };

@@ -1630,3 +1630,13 @@ bool WKPreferencesGetScrollToFocusedElementEnabled(WKPreferencesRef preferencesR
 {
     return toImpl(preferencesRef)->scrollToFocusedElementEnabled();
 }
+
+void WKPreferencesSetAccessibilityEnabled(WKPreferencesRef preferencesRef, bool accessibilityEnabled)
+{
+    toImpl(preferencesRef)->setAccessibilityEnabled(accessibilityEnabled);
+}
+
+bool WKPreferencesGetAccessibilityEnabled(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->accessibilityEnabled();
+}

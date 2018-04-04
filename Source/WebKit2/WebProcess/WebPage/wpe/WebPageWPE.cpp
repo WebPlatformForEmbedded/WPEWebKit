@@ -44,9 +44,11 @@ void WebPage::platformInitialize()
     // entry point to the Web process, and send a message to the UI
     // process to connect the two worlds through the accessibility
     // object there specifically placed for that purpose (the socket).
-    m_accessibilityObject = adoptGRef(webPageAccessibilityObjectNew(this));
-    GUniquePtr<gchar> plugID(atk_plug_get_id(ATK_PLUG(m_accessibilityObject.get())));
-    // send(Messages::WebPageProxy::BindAccessibilityTree(String(plugID.get())));
+    if(m_accessibilityEnabled) {
+        m_accessibilityObject = adoptGRef(webPageAccessibilityObjectNew(this));
+        GUniquePtr<gchar> plugID(atk_plug_get_id(ATK_PLUG(m_accessibilityObject.get())));
+        // send(Messages::WebPageProxy::BindAccessibilityTree(String(plugID.get())));
+    }
 #endif
 }
 
