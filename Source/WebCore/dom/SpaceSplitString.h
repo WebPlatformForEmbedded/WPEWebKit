@@ -35,7 +35,9 @@ public:
     {
         const AtomicString* data = tokenArrayStart();
         unsigned i = 0;
+        if (!data) return false;
         do {
+            if (!data[i]) break;
             if (data[i] == string)
                 return true;
             ++i;
