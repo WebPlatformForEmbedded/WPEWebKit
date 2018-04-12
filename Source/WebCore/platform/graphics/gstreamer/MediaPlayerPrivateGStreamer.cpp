@@ -1819,7 +1819,7 @@ void MediaPlayerPrivateGStreamer::didEnd()
 
     if (!m_player->client().mediaPlayerIsLooping()) {
         m_paused = true;
-        m_durationAtEOS = durationMediaTime().toDouble();
+        m_durationAtEOS = durationMediaTime();
         changePipelineState(GST_STATE_READY);
         m_downloadFinished = false;
     }
