@@ -195,7 +195,7 @@ static GstFlowReturn webkitMediaCommonEncryptionDecryptTransformInPlace(GstBaseT
             GST_ERROR_OBJECT(self, "can't process key requests in less than PAUSED state");
             return GST_FLOW_NOT_SUPPORTED;
         }
-        priv->condition.waitFor(priv->mutex, Seconds(5), [priv] {
+        priv->condition.waitFor(priv->mutex, GST_EME_LICENSE_KEY_RESPONSE_TIMEOUT, [priv] {
             return priv->keyReceived;
         });
         if (!priv->keyReceived) {

@@ -26,11 +26,14 @@
 #include <gst/video/video-format.h>
 #include <gst/video/video-info.h>
 #include <wtf/MediaTime.h>
+#include <wtf/Seconds.h>
 
 namespace WebCore {
 
 using GstEventSeqNum = uint32_t;
 class IntSize;
+// NOTE: YouTube 2018 has tests that expect this to be >= 5s.
+const WTF::Seconds GST_EME_LICENSE_KEY_RESPONSE_TIMEOUT = WTF::Seconds(6);
 
 inline bool webkitGstCheckVersion(guint major, guint minor, guint micro)
 {

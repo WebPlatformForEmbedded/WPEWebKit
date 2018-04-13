@@ -487,7 +487,7 @@ bool MediaPlayerPrivateGStreamerBase::handleSyncMessage(GstMessage* message)
         });
 
         GST_INFO("waiting for a CDM instance");
-        m_protectionCondition.waitFor(m_protectionMutex, Seconds(4), [this] {
+        m_protectionCondition.waitFor(m_protectionMutex, GST_EME_LICENSE_KEY_RESPONSE_TIMEOUT, [this] {
             return this->m_cdmInstance;
         });
         if (m_cdmInstance && !m_cdmInstance->keySystem().isEmpty()) {
@@ -1486,7 +1486,7 @@ void MediaPlayerPrivateGStreamerBase::handleProtectionEvent(GstEvent* event)
         m_reportedProtectionEvents.remove(eventPosition);
 #if USE(OPENCDM)
         GST_DEBUG("waiting for a CDM instance");
-        m_protectionCondition.waitFor(m_protectionMutex, Seconds(4), [this] {
+        m_protectionCondition.waitFor(m_protectionMutex, GST_EME_LICENSE_KEY_RESPONSE_TIMEOUT, [this] {
             return this->m_cdmInstance;
             });
         if (!m_cdmInstance) {
