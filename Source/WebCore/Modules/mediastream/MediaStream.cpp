@@ -177,14 +177,10 @@ MediaStreamTrackVector MediaStream::getVideoTracks() const
 
 MediaStreamTrackVector MediaStream::getTracks() const
 {
-#ifdef USE_LIBWEBRTC_UPSTREAM
-    return copyToVector(m_trackSet.values());
-#else
     MediaStreamTrackVector tracks;
     tracks.reserveCapacity(m_trackSet.size());
     copyValuesToVector(m_trackSet, tracks);
     return tracks;
-#endif
 }
 
 void MediaStream::trackDidEnd()

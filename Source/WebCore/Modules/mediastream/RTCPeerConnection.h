@@ -182,11 +182,7 @@ private:
     // EventTarget implementation.
     void refEventTarget() final { ref(); }
     void derefEventTarget() final { deref(); }
-#ifdef USE_LIBWEBRTC_UPSTREAM
-    void dispatchEvent(Event&) final;
-#else
     bool dispatchEvent(Event&) final;
-#endif
 
     // ActiveDOMObject
     WEBCORE_EXPORT void stop() final;

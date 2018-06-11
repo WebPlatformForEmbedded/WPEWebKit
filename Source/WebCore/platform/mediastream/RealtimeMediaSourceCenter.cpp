@@ -155,11 +155,7 @@ static void addStringToSHA1(SHA1& sha1, const String& string)
 {
     if (string.isEmpty())
         return;
-#ifdef USE_LIBWEBRTC_UPSTREAM
-    if (string.is8Bit() && string.isAllASCII()) {
-#else
     if (string.is8Bit() && string.containsOnlyASCII()) {
-#endif
         const uint8_t nullByte = 0;
         sha1.addBytes(string.characters8(), string.length());
         sha1.addBytes(&nullByte, 1);

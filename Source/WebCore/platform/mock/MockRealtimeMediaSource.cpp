@@ -70,11 +70,7 @@ static const HashMap<String, MockDeviceInfo>& deviceMap()
 
         HashMap<String, MockDeviceInfo> map;
         for (auto& info : devices)
-#ifdef USE_LIBWEBRTC_UPSTREAM
-            map.add(ASCIILiteral(info.id), info);
-#else
             map.set(ASCIILiteral(info.id), info);
-#endif
         return map;
     }());
 

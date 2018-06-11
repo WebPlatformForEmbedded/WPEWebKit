@@ -97,7 +97,6 @@ void DNSResolveQueue::platformResolve(const String& hostname)
 
     soup_session_prefetch_dns(NetworkStorageSession::defaultStorageSession().getOrCreateSoupNetworkSession().soupSession(), hostname.utf8().data(), nullptr, resolvedCallback, nullptr);
 }
-#ifndef USE_LIBWEBRTC_UPSTREAM
 void prefetchDNS(const String& hostname)
 {
     ASSERT(isMainThread());
@@ -106,7 +105,6 @@ void prefetchDNS(const String& hostname)
 
     DNSResolveQueue::singleton().add(hostname);
 }
-#endif
 }
 
 #endif

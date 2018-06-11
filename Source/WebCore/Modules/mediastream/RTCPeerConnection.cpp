@@ -604,17 +604,11 @@ RTCRtpParameters RTCPeerConnection::getParameters(RTCRtpSender& sender) const
     return m_backend->getParameters(sender);
 }
 
-#ifdef USE_LIBWEBRTC_UPSTREAM
-void RTCPeerConnection::dispatchEvent(Event& event)
-#else
 bool RTCPeerConnection::dispatchEvent(Event& event)
-#endif
 {
     DEBUG_LOG(LOGIDENTIFIER, "dispatching '", event.type(), "'");
     EventTarget::dispatchEvent(event);
-#ifndef USE_LIBWEBRTC_UPSTREAM
     return true;
-#endif
 }
 
 #if !RELEASE_LOG_DISABLED

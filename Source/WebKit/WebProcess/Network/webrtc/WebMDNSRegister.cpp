@@ -28,6 +28,7 @@
 
 #if ENABLE(WEB_RTC)
 
+#include "NetworkMDNSRegister.h"
 //#include "NetworkMDNSRegisterMessages.h"
 #include "NetworkProcessConnection.h"
 #include "WebProcess.h"
@@ -42,11 +43,7 @@ void WebMDNSRegister::finishedRegisteringMDNSName(uint64_t identifier, LibWebRTC
     auto pendingRegistration = m_pendingRegistrations.take(identifier);
     if (!pendingRegistration.callback)
         return;
-#ifdef USE_LIBWEBRTC_UPSTREAM
-    if (result.has_value()) {
-#else
     if (result.hasValue()) {
-#endif
         auto iterator = m_registeringDocuments.find(pendingRegistration.documentIdentifier);
         if (iterator == m_registeringDocuments.end())
             return;

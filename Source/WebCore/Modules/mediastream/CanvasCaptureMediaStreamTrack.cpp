@@ -26,9 +26,6 @@
 #include "CanvasCaptureMediaStreamTrack.h"
 
 #include "GraphicsContext.h"
-#ifdef USE_LIBWEBRTC_UPSTREAM
-#include "HTMLCanvasElement.h"
-#endif
 #include "WebGLRenderingContextBase.h"
 
 #if ENABLE(MEDIA_STREAM)
@@ -104,11 +101,7 @@ void CanvasCaptureMediaStreamTrack::Source::requestFrameTimerFired()
     requestFrame();
 }
 
-#ifdef USE_LIBWEBRTC_UPSTREAM
-void CanvasCaptureMediaStreamTrack::Source::canvasDestroyed(CanvasBase& canvas)
-#else
 void CanvasCaptureMediaStreamTrack::Source::canvasDestroyed(HTMLCanvasElement& canvas)
-#endif
 {
     ASSERT_UNUSED(canvas, m_canvas == &canvas);
 
@@ -116,11 +109,7 @@ void CanvasCaptureMediaStreamTrack::Source::canvasDestroyed(HTMLCanvasElement& c
     m_canvas = nullptr;
 }
 
-#ifdef USE_LIBWEBRTC_UPSTREAM
-void CanvasCaptureMediaStreamTrack::Source::canvasResized(CanvasBase& canvas)
-#else
 void CanvasCaptureMediaStreamTrack::Source::canvasResized(HTMLCanvasElement& canvas)
-#endif
 {
     ASSERT_UNUSED(canvas, m_canvas == &canvas);
 
@@ -130,30 +119,18 @@ void CanvasCaptureMediaStreamTrack::Source::canvasResized(HTMLCanvasElement& can
     settingsDidChange();
 }
 
-#ifdef USE_LIBWEBRTC_UPSTREAM
-void CanvasCaptureMediaStreamTrack::Source::canvasChanged(CanvasBase& canvas, const FloatRect&)
-#else
 void CanvasCaptureMediaStreamTrack::Source::canvasChanged(HTMLCanvasElement& canvas, const FloatRect&)
-#endif
 {
     ASSERT_UNUSED(canvas, m_canvas == &canvas);
 
     // FIXME: We need to preserve drawing buffer as we are currently grabbing frames asynchronously.
     // We should instead add an anchor point for both 2d and 3d contexts where canvas will actually paint.
     // And call canvas observers from that point.
-#ifdef USE_LIBWEBRTC_UPSTREAM
-    if (is<WebGLRenderingContextBase>(canvas.renderingContext())) {
-        auto& context = downcast<WebGLRenderingContextBase>(*canvas.renderingContext());
-        if (!context.isPreservingDrawingBuffer()) {
-            canvas.scriptExecutionContext()->addConsoleMessage(MessageSource::JS, MessageLevel::Warning, ASCIILiteral("Turning drawing buffer preservation for the WebGL canvas being captured"));
-            context.setPreserveDrawingBuffer(true);
-#else
     if (canvas.renderingContext() && canvas.renderingContext()->isWebGL()) {
         auto& context = static_cast<WebGLRenderingContextBase&>(*canvas.renderingContext());
         if (!context.isPreservingDrawingBuffer()) {
             canvas.document().addConsoleMessage(MessageSource::JS, MessageLevel::Warning, ASCIILiteral("Turning drawing buffer preservation for the WebGL canvas being captured"));
             context.setPreserveDrawingBuffer(true);
-#endif
         }
     }
     // FIXME: We should try to generate the frame at the time the screen is being updated.

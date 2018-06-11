@@ -45,11 +45,7 @@ rtc::AsyncPacketSocket* LibWebRTCSocketFactory::CreateServerTcpSocket(const rtc:
     auto socket = std::make_unique<LibWebRTCSocket>(*this, ++s_uniqueSocketIdentifier, LibWebRTCSocket::Type::ServerTCP, address, rtc::SocketAddress());
     m_sockets.set(socket->identifier(), socket.get());
     callOnMainThread([identifier = socket->identifier(), address = RTCNetwork::isolatedCopy(address), minPort, maxPort, options]() {
-#ifdef USE_LIBWEBRTC_UPSTREAM
-        if (!WebProcess::singleton().ensureNetworkProcessConnection().connection().send(Messages::NetworkRTCProvider::CreateServerTCPSocket(identifier, RTCNetwork::SocketAddress(address), minPort, maxPort, options), 0)) {
-#else
         if (!WebProcess::singleton().networkConnection().connection().send(Messages::NetworkRTCProvider::CreateServerTCPSocket(identifier, RTCNetwork::SocketAddress(address), minPort, maxPort, options), 0)) {
-#endif
             // FIXME: Set error back to socket
             return;
         }
@@ -64,11 +60,7 @@ rtc::AsyncPacketSocket* LibWebRTCSocketFactory::CreateUdpSocket(const rtc::Socke
     m_sockets.set(socket->identifier(), socket.get());
 
     callOnMainThread([identifier = socket->identifier(), address = RTCNetwork::isolatedCopy(address), minPort, maxPort]() {
-#ifdef USE_LIBWEBRTC_UPSTREAM
-        if (!WebProcess::singleton().ensureNetworkProcessConnection().connection().send(Messages::NetworkRTCProvider::CreateUDPSocket(identifier, RTCNetwork::SocketAddress(address), minPort, maxPort), 0)) {
-#else
         if (!WebProcess::singleton().networkConnection().connection().send(Messages::NetworkRTCProvider::CreateUDPSocket(identifier, RTCNetwork::SocketAddress(address), minPort, maxPort), 0)) {
-#endif
             // FIXME: Set error back to socket
             return;
         }
@@ -82,11 +74,7 @@ rtc::AsyncPacketSocket* LibWebRTCSocketFactory::CreateClientTcpSocket(const rtc:
     socket->setState(LibWebRTCSocket::STATE_CONNECTING);
     m_sockets.set(socket->identifier(), socket.get());
     callOnMainThread([identifier = socket->identifier(), localAddress = RTCNetwork::isolatedCopy(localAddress), remoteAddress = RTCNetwork::isolatedCopy(remoteAddress), options]() {
-#ifdef USE_LIBWEBRTC_UPSTREAM
-        if (!WebProcess::singleton().ensureNetworkProcessConnection().connection().send(Messages::NetworkRTCProvider::CreateClientTCPSocket(identifier, RTCNetwork::SocketAddress(localAddress), RTCNetwork::SocketAddress(remoteAddress), options), 0)) {
-#else
         if (!WebProcess::singleton().networkConnection().connection().send(Messages::NetworkRTCProvider::CreateClientTCPSocket(identifier, RTCNetwork::SocketAddress(localAddress), RTCNetwork::SocketAddress(remoteAddress), options), 0)) {
-#endif
             // FIXME: Set error back to socket
             return;
         }
@@ -100,11 +88,7 @@ rtc::AsyncPacketSocket* LibWebRTCSocketFactory::createNewConnectionSocket(LibWeb
     socket->setState(LibWebRTCSocket::STATE_CONNECTED);
     m_sockets.set(socket->identifier(), socket.get());
     callOnMainThread([identifier = socket->identifier(), newConnectionSocketIdentifier]() {
-#ifdef USE_LIBWEBRTC_UPSTREAM
-        if (!WebProcess::singleton().ensureNetworkProcessConnection().connection().send(Messages::NetworkRTCProvider::WrapNewTCPConnection(identifier, newConnectionSocketIdentifier), 0)) {
-#else
         if (!WebProcess::singleton().networkConnection().connection().send(Messages::NetworkRTCProvider::WrapNewTCPConnection(identifier, newConnectionSocketIdentifier), 0)) {
-#endif
             // FIXME: Set error back to socket
             return;
         }

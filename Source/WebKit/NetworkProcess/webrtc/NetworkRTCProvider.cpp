@@ -198,11 +198,7 @@ void NetworkRTCProvider::stopResolver(uint64_t identifier)
 void NetworkRTCProvider::createResolver(uint64_t identifier, const String& address)
 {
     auto completionHandler = [this, identifier](WebCore::DNSAddressesOrError&& result) mutable {
-#ifdef USE_LIBWEBRTC_UPSTREAM
-        if (!result.has_value()) {
-#else
         if (!result.hasValue()) {
-#endif
             if (result.error() != WebCore::DNSError::Cancelled)
                 m_connection->connection().send(Messages::WebRTCResolver::ResolvedAddressError(1), identifier);
             return;

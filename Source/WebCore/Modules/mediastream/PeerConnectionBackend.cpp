@@ -292,11 +292,7 @@ void PeerConnectionBackend::addIceCandidate(RTCIceCandidate* iceCandidate, DOMPr
                     return;
 
                 --m_waitingForMDNSResolution;
-#ifdef USE_LIBWEBRTC_UPSTREAM
-                if (!result.has_value()) {
-#else
                 if (!result.hasValue()) {
-#endif
                     if (result.error() != MDNSRegisterError::Timeout)
                         peerConnection->scriptExecutionContext()->addConsoleMessage(MessageSource::JS, MessageLevel::Warning, makeString("MDNS resolution of a host candidate failed with error", (unsigned)result.error()));
                     return;
