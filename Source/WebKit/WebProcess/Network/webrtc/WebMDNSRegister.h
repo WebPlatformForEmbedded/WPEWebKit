@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Apple Inc. All rights reserved.
+ * Copyright (C) 2018 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,50 +25,48 @@
 
 #pragma once
 
-#if USE(LIBWEBRTC)
+#if ENABLE(WEB_RTC)
 
-#include "RTCNetwork.h"
-
-#include <WebCore/LibWebRTCMacros.h>
-#include <webrtc/rtc_base/asyncpacketsocket.h>
-#include <webrtc/rtc_base/sigslot.h>
+#include <WebCore/DocumentIdentifier.h>
+#include <WebCore/LibWebRTCProvider.h>
+#include <wtf/Expected.h>
+#include <wtf/Forward.h>
+#include <wtf/HashMap.h>
 
 namespace IPC {
 class Connection;
-class DataReference;
-}
-
-namespace rtc {
-class AsyncPacketSocket;
-class SocketAddress;
-struct PacketOptions;
-struct PacketTime;
-struct SentPacket;
-}
-
-namespace WebCore {
-class SharedBuffer;
+class Decoder;
 }
 
 namespace WebKit {
 
-class NetworkConnectionToWebProcess;
-class NetworkRTCProvider;
-struct RTCPacketOptions;
-
-class NetworkRTCSocket {
+class WebMDNSRegister {
 public:
-    NetworkRTCSocket(uint64_t, NetworkRTCProvider&);
-    void didReceiveMessage(IPC::Connection&, IPC::Decoder&);
-private:
-    void sendTo(const IPC::DataReference&, RTCNetwork::SocketAddress&&, RTCPacketOptions&&);
-    void close();
-    void setOption(int option, int value);
+    WebMDNSRegister() = default;
 
-    uint64_t m_identifier;
-    NetworkRTCProvider& m_rtcProvider;
+    void unregisterMDNSNames(uint64_t documentIdentifier);
+    void registerMDNSName(PAL::SessionID, uint64_t documentIdentifier, const String& ipAddress, CompletionHandler<void(WebCore::LibWebRTCProvider::MDNSNameOrError&&)>&&);
+    void resolveMDNSName(PAL::SessionID, const String& name, CompletionHandler<void(WebCore::LibWebRTCProvider::IPAddressOrError&&)>&&);
+
+    void didReceiveMessage(IPC::Connection&, IPC::Decoder&);
+
+private:
+    void finishedRegisteringMDNSName(uint64_t, WebCore::LibWebRTCProvider::MDNSNameOrError&&);
+    void finishedResolvingMDNSName(uint64_t, WebCore::LibWebRTCProvider::IPAddressOrError&&);
+
+    struct PendingRegistration {
+        CompletionHandler<void(WebCore::LibWebRTCProvider::MDNSNameOrError&&)> callback;
+        WebCore::DocumentIdentifier documentIdentifier;
+        String ipAddress;
+    };
+    HashMap<uint64_t, PendingRegistration> m_pendingRegistrations;
+
+    HashMap<uint64_t, CompletionHandler<void(WebCore::LibWebRTCProvider::IPAddressOrError&&)>> m_pendingResolutions;
+    uint64_t m_pendingRequestsIdentifier { 0 };
+
+    HashMap<WebCore::DocumentIdentifier, HashMap<String, String>> m_registeringDocuments;
 };
 
 } // namespace WebKit
 
-#endif // USE(LIBWEBRTC)
+#endif // ENABLE(WEB_RTC)

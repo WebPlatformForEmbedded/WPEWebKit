@@ -1,4 +1,4 @@
-# Copyright (C) 2017 Apple Inc. All rights reserved.
+# Copyright (C) 2018 Apple Inc. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -20,12 +20,12 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#if USE(LIBWEBRTC)
+#if ENABLE(WEB_RTC)
 
-messages -> NetworkRTCSocket {
-    void SendTo(IPC::DataReference data, WebKit::RTCNetwork::SocketAddress address, struct WebKit::RTCPacketOptions options)
-    void Close()
-    void SetOption(int option, int value)
+messages -> NetworkMDNSRegister {
+    UnregisterMDNSNames(WebCore::DocumentIdentifier documentIdentifier)
+    RegisterMDNSName(uint64_t requestIdentifier, PAL::SessionID sessionID, WebCore::DocumentIdentifier documentIdentifier, String ipAddress)
+    ResolveMDNSName(uint64_t requestIdentifier, PAL::SessionID sessionID, String name)
 }
 
-#endif // USE(LIBWEBRTC)s
+#endif // ENABLE(WEB_RTC)

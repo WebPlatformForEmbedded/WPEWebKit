@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Apple Inc. All rights reserved.
+ * Copyright (C) 2018 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,50 +25,57 @@
 
 #pragma once
 
-#if USE(LIBWEBRTC)
+#if ENABLE(WEB_RTC)
 
 #include "RTCNetwork.h"
+#include <WebCore/DocumentIdentifier.h>
+#include <wtf/Expected.h>
+#include <wtf/Forward.h>
+#include <wtf/HashMap.h>
 
-#include <WebCore/LibWebRTCMacros.h>
-#include <webrtc/rtc_base/asyncpacketsocket.h>
-#include <webrtc/rtc_base/sigslot.h>
+#if PLATFORM(COCOA) && defined __has_include && __has_include(<dns_sd.h>)
+#define ENABLE_MDNS 1
+#else
+#define ENABLE_MDNS 0
+#endif
+
+#if ENABLE_MDNS
+#include <dns_sd.h>
+#endif
 
 namespace IPC {
 class Connection;
-class DataReference;
+class Decoder;
 }
 
-namespace rtc {
-class AsyncPacketSocket;
-class SocketAddress;
-struct PacketOptions;
-struct PacketTime;
-struct SentPacket;
-}
-
-namespace WebCore {
-class SharedBuffer;
+namespace PAL {
+class SessionID;
 }
 
 namespace WebKit {
 
 class NetworkConnectionToWebProcess;
-class NetworkRTCProvider;
-struct RTCPacketOptions;
 
-class NetworkRTCSocket {
+class NetworkMDNSRegister {
 public:
-    NetworkRTCSocket(uint64_t, NetworkRTCProvider&);
-    void didReceiveMessage(IPC::Connection&, IPC::Decoder&);
-private:
-    void sendTo(const IPC::DataReference&, RTCNetwork::SocketAddress&&, RTCPacketOptions&&);
-    void close();
-    void setOption(int option, int value);
+    NetworkMDNSRegister(NetworkConnectionToWebProcess&);
+    ~NetworkMDNSRegister();
 
-    uint64_t m_identifier;
-    NetworkRTCProvider& m_rtcProvider;
+    void didReceiveMessage(IPC::Connection&, IPC::Decoder&);
+
+private:
+    void unregisterMDNSNames(WebCore::DocumentIdentifier);
+    void registerMDNSName(uint64_t requestIdentifier, PAL::SessionID, WebCore::DocumentIdentifier, const String& ipAddress);
+    void resolveMDNSName(uint64_t requestIdentifier, PAL::SessionID, const String& name);
+
+    NetworkConnectionToWebProcess& m_connection;
+#if ENABLE_MDNS
+    HashMap<WebCore::DocumentIdentifier, DNSServiceRef> m_services;
+
+    uint64_t m_registrationCount { 0 };
+#endif
 };
 
 } // namespace WebKit
 
-#endif // USE(LIBWEBRTC)
+#endif // ENABLE(WEB_RTC)

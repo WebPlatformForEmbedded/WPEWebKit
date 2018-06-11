@@ -2564,7 +2564,6 @@ set(WebCore_SOURCES
 
     platform/mock/DeviceOrientationClientMock.cpp
     platform/mock/GeolocationClientMock.cpp
-    platform/mock/MockMediaEndpoint.cpp
     platform/mock/MockRealtimeAudioSource.cpp
     platform/mock/MockRealtimeMediaSource.cpp
     platform/mock/MockRealtimeMediaSourceCenter.cpp
@@ -2584,6 +2583,7 @@ set(WebCore_SOURCES
     platform/network/Cookie.cpp
     platform/network/CredentialBase.cpp
     platform/network/CredentialStorage.cpp
+    platform/network/DNS.cpp
     platform/network/DNSResolveQueue.cpp
     platform/network/DataURLDecoder.cpp
     platform/network/FormData.cpp

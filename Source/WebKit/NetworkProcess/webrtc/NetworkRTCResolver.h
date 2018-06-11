@@ -28,45 +28,25 @@
 #if USE(LIBWEBRTC)
 
 #include "RTCNetwork.h"
-
-#include <WebCore/LibWebRTCMacros.h>
-#include <webrtc/rtc_base/asyncpacketsocket.h>
-#include <webrtc/rtc_base/sigslot.h>
-
-namespace IPC {
-class Connection;
-class DataReference;
-}
-
-namespace rtc {
-class AsyncPacketSocket;
-class SocketAddress;
-struct PacketOptions;
-struct PacketTime;
-struct SentPacket;
-}
-
-namespace WebCore {
-class SharedBuffer;
-}
+#include <WebCore/DNS.h>
+#include <wtf/CompletionHandler.h>
+#include <wtf/text/WTFString.h>
 
 namespace WebKit {
 
-class NetworkConnectionToWebProcess;
-class NetworkRTCProvider;
-struct RTCPacketOptions;
-
-class NetworkRTCSocket {
+class NetworkRTCResolver {
 public:
-    NetworkRTCSocket(uint64_t, NetworkRTCProvider&);
-    void didReceiveMessage(IPC::Connection&, IPC::Decoder&);
-private:
-    void sendTo(const IPC::DataReference&, RTCNetwork::SocketAddress&&, RTCPacketOptions&&);
-    void close();
-    void setOption(int option, int value);
+    static std::unique_ptr<NetworkRTCResolver> create(uint64_t identifier, WebCore::DNSCompletionHandler&&);
 
+    NetworkRTCResolver(uint64_t identifier, WebCore::DNSCompletionHandler&&);
+    virtual ~NetworkRTCResolver();
+
+    virtual void start(const String& address);
+    virtual void stop();
+
+protected:
     uint64_t m_identifier;
-    NetworkRTCProvider& m_rtcProvider;
+    WebCore::DNSCompletionHandler m_completionHandler;
 };
 
 } // namespace WebKit

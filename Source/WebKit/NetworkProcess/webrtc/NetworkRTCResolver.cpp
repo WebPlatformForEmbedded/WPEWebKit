@@ -23,51 +23,44 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#pragma once
+#include "config.h"
+#include "NetworkRTCResolver.h"
 
 #if USE(LIBWEBRTC)
 
-#include "RTCNetwork.h"
-
-#include <WebCore/LibWebRTCMacros.h>
-#include <webrtc/rtc_base/asyncpacketsocket.h>
-#include <webrtc/rtc_base/sigslot.h>
-
-namespace IPC {
-class Connection;
-class DataReference;
-}
-
-namespace rtc {
-class AsyncPacketSocket;
-class SocketAddress;
-struct PacketOptions;
-struct PacketTime;
-struct SentPacket;
-}
-
-namespace WebCore {
-class SharedBuffer;
-}
+#include <wtf/Expected.h>
 
 namespace WebKit {
 
-class NetworkConnectionToWebProcess;
-class NetworkRTCProvider;
-struct RTCPacketOptions;
+// FIXME: Use the function after removing the NetworkRTCResolverCocoa.
+#if !PLATFORM(COCOA)
+std::unique_ptr<NetworkRTCResolver> NetworkRTCResolver::create(uint64_t identifier, WebCore::DNSCompletionHandler&& completionHandler)
+{
+    return std::unique_ptr<NetworkRTCResolver>(new NetworkRTCResolver(identifier, WTFMove(completionHandler)));
+}
+#endif
 
-class NetworkRTCSocket {
-public:
-    NetworkRTCSocket(uint64_t, NetworkRTCProvider&);
-    void didReceiveMessage(IPC::Connection&, IPC::Decoder&);
-private:
-    void sendTo(const IPC::DataReference&, RTCNetwork::SocketAddress&&, RTCPacketOptions&&);
-    void close();
-    void setOption(int option, int value);
+NetworkRTCResolver::NetworkRTCResolver(uint64_t identifier, WebCore::DNSCompletionHandler&& completionHandler)
+    : m_identifier(identifier)
+    , m_completionHandler(WTFMove(completionHandler))
+{
+}
 
-    uint64_t m_identifier;
-    NetworkRTCProvider& m_rtcProvider;
-};
+NetworkRTCResolver::~NetworkRTCResolver()
+{
+    if (auto completionHandler = WTFMove(m_completionHandler))
+        completionHandler(makeUnexpected(WebCore::DNSError::Unknown));
+}
+
+void NetworkRTCResolver::start(const String& address)
+{
+    WebCore::resolveDNS(address, m_identifier, WTFMove(m_completionHandler));
+}
+
+void NetworkRTCResolver::stop()
+{
+    WebCore::stopResolveDNS(m_identifier);
+}
 
 } // namespace WebKit
 

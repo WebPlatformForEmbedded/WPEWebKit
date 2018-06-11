@@ -39,7 +39,11 @@ namespace WebKit {
 static inline void sendOnMainThread(Function<void(IPC::Connection&)>&& callback)
 {
     callOnMainThread([callback = WTFMove(callback)]() {
+#ifdef USE_LIBWEBRTC_UPSTREAM
+        callback(WebProcess::singleton().ensureNetworkProcessConnection().connection());
+#else
         callback(WebProcess::singleton().networkConnection().connection());
+#endif
     });
 }
 

@@ -27,46 +27,25 @@
 
 #if USE(LIBWEBRTC)
 
-#include "RTCNetwork.h"
+#include "NetworkRTCResolver.h"
 
-#include <WebCore/LibWebRTCMacros.h>
-#include <webrtc/rtc_base/asyncpacketsocket.h>
-#include <webrtc/rtc_base/sigslot.h>
-
-namespace IPC {
-class Connection;
-class DataReference;
-}
-
-namespace rtc {
-class AsyncPacketSocket;
-class SocketAddress;
-struct PacketOptions;
-struct PacketTime;
-struct SentPacket;
-}
-
-namespace WebCore {
-class SharedBuffer;
-}
+#include <CFNetwork/CFHost.h>
 
 namespace WebKit {
 
-class NetworkConnectionToWebProcess;
-class NetworkRTCProvider;
-struct RTCPacketOptions;
-
-class NetworkRTCSocket {
+// FIXME: Remove this class when we complete the implementation of the DNSResolveQueueCFNet.
+class NetworkRTCResolverCocoa final : public NetworkRTCResolver {
 public:
-    NetworkRTCSocket(uint64_t, NetworkRTCProvider&);
-    void didReceiveMessage(IPC::Connection&, IPC::Decoder&);
-private:
-    void sendTo(const IPC::DataReference&, RTCNetwork::SocketAddress&&, RTCPacketOptions&&);
-    void close();
-    void setOption(int option, int value);
+    explicit NetworkRTCResolverCocoa(uint64_t identifier, WebCore::DNSCompletionHandler&&);
+    ~NetworkRTCResolverCocoa() final;
 
-    uint64_t m_identifier;
-    NetworkRTCProvider& m_rtcProvider;
+    void start(const String& address) final;
+    void stop() final;
+
+    void completed(WebCore::DNSAddressesOrError&&);
+
+private:
+    RetainPtr<CFHostRef> m_host;
 };
 
 } // namespace WebKit

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015 Apple Inc. All rights reserved.
+ * Copyright (C) 2015-2017 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -47,7 +47,6 @@ class MockRealtimeVideoSource : public MockRealtimeMediaSource {
 public:
 
     static CaptureSourceOrError create(const String& deviceID, const String& name, const MediaConstraints*);
-    static Ref<MockRealtimeVideoSource> createMuted(const String& name);
 
     static VideoCaptureFactory& factory();
 
@@ -59,7 +58,7 @@ protected:
 
     ImageBuffer* imageBuffer() const;
 
-    double elapsedTime();
+    Seconds elapsedTime();
     bool applySize(const IntSize&) override;
 
 private:
@@ -82,7 +81,10 @@ private:
 
     void generateFrame();
 
-    void delaySamples(float) override;
+    void delaySamples(Seconds) override;
+
+    bool mockCamera() const { return device() == MockDevice::Camera1 || device() == MockDevice::Camera2; }
+    bool mockScreen() const { return device() == MockDevice::Screen1 || device() == MockDevice::Screen2; }
 
     float m_baseFontSize { 0 };
     float m_bipBopFontSize { 0 };
@@ -93,9 +95,9 @@ private:
     Path m_path;
     DashArray m_dashWidths;
 
-    double m_startTime { NAN };
-    double m_elapsedTime { 0 };
-    double m_delayUntil { 0 };
+    MonotonicTime m_startTime { MonotonicTime::nan() };
+    Seconds m_elapsedTime { 0_s };
+    MonotonicTime m_delayUntil;
 
     unsigned m_frameNumber { 0 };
 

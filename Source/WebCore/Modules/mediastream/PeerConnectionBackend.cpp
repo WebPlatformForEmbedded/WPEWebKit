@@ -35,6 +35,7 @@
 #if ENABLE(WEB_RTC)
 
 #include "EventNames.h"
+#include "Page.h"
 #include "JSRTCSessionDescription.h"
 #include "Logging.h"
 #include "RTCIceCandidate.h"
@@ -280,7 +281,6 @@ void PeerConnectionBackend::addIceCandidate(RTCIceCandidate* iceCandidate, DOMPr
         endOfIceCandidates(WTFMove(promise));
         return;
     }
-
     if (RuntimeEnabledFeatures::sharedFeatures().mdnsICECandidatesEnabled()) {
         auto name = extractIPAddres(iceCandidate->candidate());
         if (name.endsWith(".local")) {
@@ -292,7 +292,11 @@ void PeerConnectionBackend::addIceCandidate(RTCIceCandidate* iceCandidate, DOMPr
                     return;
 
                 --m_waitingForMDNSResolution;
+#ifdef USE_LIBWEBRTC_UPSTREAM
                 if (!result.has_value()) {
+#else
+                if (!result.hasValue()) {
+#endif
                     if (result.error() != MDNSRegisterError::Timeout)
                         peerConnection->scriptExecutionContext()->addConsoleMessage(MessageSource::JS, MessageLevel::Warning, makeString("MDNS resolution of a host candidate failed with error", (unsigned)result.error()));
                     return;
@@ -463,6 +467,9 @@ void PeerConnectionBackend::doneGatheringCandidates()
 
 void PeerConnectionBackend::registerMDNSName(const String& ipAddress)
 {
+#ifdef USE_LIBWEBRTC_UPSTREAM
+    // FIXME Current WebCore document does not have Idenitifier property.
+    // Adding it may affect other interfaces using Document class.
     ++m_waitingForMDNSRegistration;
     auto& document = downcast<Document>(*m_peerConnection.scriptExecutionContext());
     auto& provider = document.page()->libWebRTCProvider();
@@ -478,6 +485,7 @@ void PeerConnectionBackend::registerMDNSName(const String& ipAddress)
 
         this->finishedRegisteringMDNSName(ipAddress, result.value());
     });
+#endif
 }
 
 void PeerConnectionBackend::finishedRegisteringMDNSName(const String& ipAddress, const String& name)

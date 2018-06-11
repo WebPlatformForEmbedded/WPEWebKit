@@ -91,7 +91,15 @@ void MediaStreamPrivate::removeObserver(MediaStreamPrivate::Observer& observer)
 
 MediaStreamTrackPrivateVector MediaStreamPrivate::tracks() const
 {
+#ifdef USE_LIBWEBRTC_UPSTREAM
     return copyToVector(m_trackSet.values());
+#else
+    MediaStreamTrackPrivateVector tracks;
+    tracks.reserveCapacity(m_trackSet.size());
+    copyValuesToVector(m_trackSet, tracks);
+
+    return tracks;
+#endif
 }
 
 void MediaStreamPrivate::updateActiveState(NotifyClientOption notifyClientOption)

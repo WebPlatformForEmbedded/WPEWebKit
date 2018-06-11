@@ -143,6 +143,13 @@ set(WebKit_SOURCES
     NetworkProcess/capture/NetworkCaptureResource.cpp
     NetworkProcess/capture/NetworkDataTaskReplay.cpp
 
+    NetworkProcess/webrtc/NetworkMDNSRegister.cpp
+    NetworkProcess/webrtc/LibWebRTCSocketClient.cpp
+    NetworkProcess/webrtc/NetworkRTCMonitor.cpp
+    NetworkProcess/webrtc/NetworkRTCProvider.cpp
+    NetworkProcess/webrtc/NetworkRTCSocket.cpp
+
+
     Platform/Logging.cpp
     Platform/Module.cpp
 
@@ -175,6 +182,8 @@ set(WebKit_SOURCES
     Shared/NavigationActionData.cpp
     Shared/PlatformPopupMenuData.cpp
     Shared/PrintInfo.cpp
+    Shared/RTCNetwork.cpp
+    Shared/RTCPacketOptions.cpp
     Shared/SessionState.cpp
     Shared/SessionTracker.cpp
     Shared/ShareableBitmap.cpp
@@ -520,6 +529,16 @@ set(WebKit_SOURCES
     WebProcess/Network/WebResourceLoader.cpp
     WebProcess/Network/WebSocketProvider.cpp
     WebProcess/Network/WebSocketStream.cpp
+    WebProcess/Network/webrtc/LibWebRTCProvider.cpp
+    WebProcess/Network/webrtc/LibWebRTCResolver.cpp
+    WebProcess/Network/webrtc/LibWebRTCSocket.cpp
+    WebProcess/Network/webrtc/LibWebRTCSocketFactory.cpp
+    WebProcess/Network/webrtc/WebMDNSRegister.cpp
+    WebProcess/Network/webrtc/WebRTCMonitor.cpp
+    WebProcess/Network/webrtc/WebRTCResolver.cpp
+    WebProcess/Network/webrtc/WebRTCSocket.cpp
+
+
 
     WebProcess/Notifications/NotificationPermissionRequestManager.cpp
     WebProcess/Notifications/WebNotificationManager.cpp
@@ -605,6 +624,7 @@ set(WebKit_MESSAGES_IN_FILES
     NetworkProcess/NetworkResourceLoader.messages.in
     NetworkProcess/NetworkSocketStream.messages.in
 
+#    NetworkProcess/webrtc/NetworkMDNSRegister.messages.in
     NetworkProcess/webrtc/NetworkRTCMonitor.messages.in
     NetworkProcess/webrtc/NetworkRTCProvider.messages.in
     NetworkProcess/webrtc/NetworkRTCSocket.messages.in
@@ -673,6 +693,7 @@ set(WebKit_MESSAGES_IN_FILES
     WebProcess/Network/webrtc/WebRTCMonitor.messages.in
     WebProcess/Network/webrtc/WebRTCResolver.messages.in
     WebProcess/Network/webrtc/WebRTCSocket.messages.in
+    WebProcess/Network/webrtc/WebMDNSRegister.messages.in
 
     WebProcess/Network/NetworkProcessConnection.messages.in
     WebProcess/Network/WebResourceLoader.messages.in

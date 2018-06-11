@@ -1,5 +1,6 @@
 /*
- * Copyright (C) 2008 Collin Jackson  <collinj@webkit.org>
+ * Copyright (C) 2009 Apple Inc. All Rights Reserved.
+ * Copyright (C) 2012, 2018 Igalia S.L.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -23,41 +24,38 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#pragma once
+#include "config.h"
+#include "DNS.h"
 
-#if PLATFORM(COCOA) || PLATFORM(GTK) || PLATFORM(WPE)
-#include <netinet/in.h>
-#elif PLATFORM(WIN)
-#include <winsock2.h>
-#endif
-
-#include <wtf/Forward.h>
-#include <wtf/Expected.h>
-#include <wtf/CompletionHandler.h>
+#include "DNSResolveQueue.h"
+#include <wtf/MainThread.h>
 
 namespace WebCore {
+#ifdef USE_LIBWEBRTC_UPSTREAM
+void prefetchDNS(const String& hostname)
+{
+    ASSERT(isMainThread());
+    if (hostname.isEmpty())
+        return;
 
-class WEBCORE_EXPORT IPAddress {
-public:
-    explicit IPAddress(const struct sockaddr_in& address)
-    {
-        memset(&m_address, 0, sizeof(struct sockaddr_in));
-        m_address = address;
-    }
+    DNSResolveQueue::singleton().add(hostname);
+}
+#endif
+void resolveDNS(const String& hostname, uint64_t identifier, DNSCompletionHandler&& completionHandler)
+{
+    ASSERT(isMainThread());
+    if (hostname.isEmpty())
+        return;
+#ifdef USE_LIBWEBRTC_UPSTREAM
+    WebCore::DNSResolveQueue::singleton().resolve(hostname, identifier, WTFMove(completionHandler));
+#endif
+}
 
-    const struct in_addr& getSinAddr() { return m_address.sin_addr; };
-
-private:
-    struct sockaddr_in m_address;
-};
-
-enum class DNSError { Unknown, CannotResolve, Cancelled };
-
-using DNSAddressesOrError = Expected<Vector<WebCore::IPAddress>, DNSError>;
-using DNSCompletionHandler = WTF::CompletionHandler<void(DNSAddressesOrError&&)>;
-
-WEBCORE_EXPORT void prefetchDNS(const String& hostname);
-WEBCORE_EXPORT void resolveDNS(const String& hostname, uint64_t identifier, DNSCompletionHandler&&);
-WEBCORE_EXPORT void stopResolveDNS(uint64_t identifier);
+void stopResolveDNS(uint64_t identifier)
+{
+#ifdef USE_LIBWEBRTC_UPSTREAM
+    WebCore::DNSResolveQueue::singleton().stopResolve(identifier);
+#endif
+}
 
 }

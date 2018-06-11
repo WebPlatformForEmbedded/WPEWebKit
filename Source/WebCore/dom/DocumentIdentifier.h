@@ -25,50 +25,11 @@
 
 #pragma once
 
-#if USE(LIBWEBRTC)
-
-#include "RTCNetwork.h"
-
-#include <WebCore/LibWebRTCMacros.h>
-#include <webrtc/rtc_base/asyncpacketsocket.h>
-#include <webrtc/rtc_base/sigslot.h>
-
-namespace IPC {
-class Connection;
-class DataReference;
-}
-
-namespace rtc {
-class AsyncPacketSocket;
-class SocketAddress;
-struct PacketOptions;
-struct PacketTime;
-struct SentPacket;
-}
+#include <wtf/ObjectIdentifier.h>
 
 namespace WebCore {
-class SharedBuffer;
+
+enum DocumentIdentifierType { };
+using DocumentIdentifier = ObjectIdentifier<DocumentIdentifierType>;
+
 }
-
-namespace WebKit {
-
-class NetworkConnectionToWebProcess;
-class NetworkRTCProvider;
-struct RTCPacketOptions;
-
-class NetworkRTCSocket {
-public:
-    NetworkRTCSocket(uint64_t, NetworkRTCProvider&);
-    void didReceiveMessage(IPC::Connection&, IPC::Decoder&);
-private:
-    void sendTo(const IPC::DataReference&, RTCNetwork::SocketAddress&&, RTCPacketOptions&&);
-    void close();
-    void setOption(int option, int value);
-
-    uint64_t m_identifier;
-    NetworkRTCProvider& m_rtcProvider;
-};
-
-} // namespace WebKit
-
-#endif // USE(LIBWEBRTC)

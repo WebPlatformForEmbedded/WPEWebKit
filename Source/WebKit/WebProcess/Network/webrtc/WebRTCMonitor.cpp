@@ -33,7 +33,7 @@
 #include "NetworkRTCMonitorMessages.h"
 #include "WebProcess.h"
 #include <WebCore/LibWebRTCMacros.h>
-#include <webrtc/base/nethelpers.h>
+#include <webrtc/rtc_base/nethelpers.h>
 #include <wtf/MainThread.h>
 
 namespace WebKit {
@@ -41,7 +41,11 @@ namespace WebKit {
 static inline void sendOnMainThread(Function<void(IPC::Connection&)>&& callback)
 {
     callOnMainThread([callback = WTFMove(callback)]() {
+#ifdef USE_LIBWEBRTC_UPSTREAM
+        callback(WebProcess::singleton().ensureNetworkProcessConnection().connection());
+#else
         callback(WebProcess::singleton().networkConnection().connection());
+#endif
     });
 }
 

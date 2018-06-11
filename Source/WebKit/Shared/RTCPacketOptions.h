@@ -27,48 +27,24 @@
 
 #if USE(LIBWEBRTC)
 
-#include "RTCNetwork.h"
-
 #include <WebCore/LibWebRTCMacros.h>
 #include <webrtc/rtc_base/asyncpacketsocket.h>
-#include <webrtc/rtc_base/sigslot.h>
+#include <wtf/Optional.h>
 
 namespace IPC {
-class Connection;
-class DataReference;
-}
-
-namespace rtc {
-class AsyncPacketSocket;
-class SocketAddress;
-struct PacketOptions;
-struct PacketTime;
-struct SentPacket;
-}
-
-namespace WebCore {
-class SharedBuffer;
+class Decoder;
+class Encoder;
 }
 
 namespace WebKit {
 
-class NetworkConnectionToWebProcess;
-class NetworkRTCProvider;
-struct RTCPacketOptions;
+struct RTCPacketOptions {
+    void encode(IPC::Encoder&) const;
+    static std::optional<RTCPacketOptions> decode(IPC::Decoder&);
 
-class NetworkRTCSocket {
-public:
-    NetworkRTCSocket(uint64_t, NetworkRTCProvider&);
-    void didReceiveMessage(IPC::Connection&, IPC::Decoder&);
-private:
-    void sendTo(const IPC::DataReference&, RTCNetwork::SocketAddress&&, RTCPacketOptions&&);
-    void close();
-    void setOption(int option, int value);
-
-    uint64_t m_identifier;
-    NetworkRTCProvider& m_rtcProvider;
+    rtc::PacketOptions options;
 };
 
-} // namespace WebKit
+}
 
 #endif // USE(LIBWEBRTC)
