@@ -11,17 +11,17 @@
 // TODO(deadbeef): Move this out of api/; it's an implementation detail and
 // shouldn't be used externally.
 
-#ifndef WEBRTC_API_JSEPSESSIONDESCRIPTION_H_
-#define WEBRTC_API_JSEPSESSIONDESCRIPTION_H_
+#ifndef API_JSEPSESSIONDESCRIPTION_H_
+#define API_JSEPSESSIONDESCRIPTION_H_
 
 #include <memory>
 #include <string>
 #include <vector>
 
-#include "webrtc/api/jsep.h"
-#include "webrtc/api/jsepicecandidate.h"
-#include "webrtc/base/constructormagic.h"
-#include "webrtc/p2p/base/candidate.h"
+#include "api/candidate.h"
+#include "api/jsep.h"
+#include "api/jsepicecandidate.h"
+#include "rtc_base/constructormagic.h"
 
 namespace cricket {
 class SessionDescription;
@@ -32,11 +32,10 @@ namespace webrtc {
 // Implementation of SessionDescriptionInterface.
 class JsepSessionDescription : public SessionDescriptionInterface {
  public:
+  explicit JsepSessionDescription(SdpType type);
+  // TODO(steveanton): Remove this once callers have switched to SdpType.
   explicit JsepSessionDescription(const std::string& type);
   virtual ~JsepSessionDescription();
-
-  // |error| may be null.
-  bool Initialize(const std::string& sdp, SdpParseError* error);
 
   // Takes ownership of |description|.
   // TODO(deadbeef): Make this use an std::unique_ptr<>, so ownership logic is
@@ -57,11 +56,9 @@ class JsepSessionDescription : public SessionDescriptionInterface {
   virtual std::string session_version() const {
     return session_version_;
   }
-  virtual std::string type() const {
-    return type_;
-  }
+  virtual SdpType GetType() const { return type_; }
+  virtual std::string type() const { return SdpTypeToString(type_); }
   // Allows changing the type. Used for testing.
-  void set_type(const std::string& type) { type_ = type; }
   virtual bool AddCandidate(const IceCandidateInterface* candidate);
   virtual size_t RemoveCandidates(
       const std::vector<cricket::Candidate>& candidates);
@@ -77,7 +74,7 @@ class JsepSessionDescription : public SessionDescriptionInterface {
   std::unique_ptr<cricket::SessionDescription> description_;
   std::string session_id_;
   std::string session_version_;
-  std::string type_;
+  SdpType type_;
   std::vector<JsepCandidateCollection> candidate_collection_;
 
   bool GetMediasectionIndex(const IceCandidateInterface* candidate,
@@ -89,4 +86,4 @@ class JsepSessionDescription : public SessionDescriptionInterface {
 
 }  // namespace webrtc
 
-#endif  // WEBRTC_API_JSEPSESSIONDESCRIPTION_H_
+#endif  // API_JSEPSESSIONDESCRIPTION_H_

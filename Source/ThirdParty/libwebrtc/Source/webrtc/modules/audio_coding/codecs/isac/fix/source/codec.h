@@ -16,8 +16,8 @@
  *
  */
 
-#ifndef WEBRTC_MODULES_AUDIO_CODING_CODECS_ISAC_FIX_SOURCE_CODEC_H_
-#define WEBRTC_MODULES_AUDIO_CODING_CODECS_ISAC_FIX_SOURCE_CODEC_H_
+#ifndef MODULES_AUDIO_CODING_CODECS_ISAC_FIX_SOURCE_CODEC_H_
+#define MODULES_AUDIO_CODING_CODECS_ISAC_FIX_SOURCE_CODEC_H_
 
 #include "structs.h"
 
@@ -67,7 +67,7 @@ void WebRtcIsacfix_InitPlc(PLCstr* State);
 
 /* transform functions */
 
-void WebRtcIsacfix_InitTransform();
+void WebRtcIsacfix_InitTransform(void);
 
 typedef void (*Time2Spec)(int16_t* inre1Q9,
                           int16_t* inre2Q9,
@@ -225,4 +225,4 @@ extern FilterMaLoopFix WebRtcIsacfix_FilterMaLoopFix;
 }  // extern "C"
 #endif
 
-#endif /* WEBRTC_MODULES_AUDIO_CODING_CODECS_ISAC_FIX_SOURCE_CODEC_H_ */
+#endif /* MODULES_AUDIO_CODING_CODECS_ISAC_FIX_SOURCE_CODEC_H_ */

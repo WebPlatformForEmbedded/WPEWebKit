@@ -8,15 +8,19 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#ifndef WEBRTC_MODULES_PACING_ALR_DETECTOR_H_
-#define WEBRTC_MODULES_PACING_ALR_DETECTOR_H_
+#ifndef MODULES_PACING_ALR_DETECTOR_H_
+#define MODULES_PACING_ALR_DETECTOR_H_
 
-#include "webrtc/base/rate_statistics.h"
-#include "webrtc/common_types.h"
-#include "webrtc/modules/pacing/paced_sender.h"
-#include "webrtc/typedefs.h"
+#include "api/optional.h"
+#include "common_types.h"  // NOLINT(build/include)
+#include "modules/pacing/interval_budget.h"
+#include "modules/pacing/paced_sender.h"
+#include "rtc_base/rate_statistics.h"
+#include "typedefs.h"  // NOLINT(build/include)
 
 namespace webrtc {
+
+class RtcEventLog;
 
 // Application limited region detector is a class that utilizes signals of
 // elapsed time and bytes sent to estimate whether network traffic is
@@ -28,9 +32,10 @@ namespace webrtc {
 class AlrDetector {
  public:
   AlrDetector();
+  explicit AlrDetector(RtcEventLog* event_log);
   ~AlrDetector();
 
-  void OnBytesSent(size_t bytes_sent, int64_t now_ms);
+  void OnBytesSent(size_t bytes_sent, int64_t delta_time_ms);
 
   // Set current estimated bandwidth.
   void SetEstimatedBitrate(int bitrate_bps);
@@ -39,14 +44,29 @@ class AlrDetector {
   // started or empty result if the sender is currently not application-limited.
   rtc::Optional<int64_t> GetApplicationLimitedRegionStartTime() const;
 
- private:
-  RateStatistics rate_;
-  int estimated_bitrate_bps_ = 0;
+  // Sent traffic percentage as a function of network capacity used to determine
+  // application-limited region. ALR region start when bandwidth usage drops
+  // below kAlrStartUsagePercent and ends when it raises above
+  // kAlrEndUsagePercent. NOTE: This is intentionally conservative at the moment
+  // until BW adjustments of application limited region is fine tuned.
+  static constexpr int kDefaultAlrBandwidthUsagePercent = 65;
+  static constexpr int kDefaultAlrStartBudgetLevelPercent = 80;
+  static constexpr int kDefaultAlrStopBudgetLevelPercent = 50;
 
-  // Non-empty in ALR state.
+  void UpdateBudgetWithElapsedTime(int64_t delta_time_ms);
+  void UpdateBudgetWithBytesSent(size_t bytes_sent);
+
+ private:
+  int bandwidth_usage_percent_;
+  int alr_start_budget_level_percent_;
+  int alr_stop_budget_level_percent_;
+
+  IntervalBudget alr_budget_;
   rtc::Optional<int64_t> alr_started_time_ms_;
+
+  RtcEventLog* event_log_;
 };
 
 }  // namespace webrtc
 
-#endif  // WEBRTC_MODULES_PACING_ALR_DETECTOR_H_
+#endif  // MODULES_PACING_ALR_DETECTOR_H_

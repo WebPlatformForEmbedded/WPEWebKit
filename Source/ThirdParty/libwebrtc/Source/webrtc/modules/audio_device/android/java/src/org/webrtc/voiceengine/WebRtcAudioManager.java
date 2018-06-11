@@ -48,6 +48,8 @@ public class WebRtcAudioManager {
   // specified in WebRtcAudioUtils.BLACKLISTED_OPEN_SL_ES_MODELS.
   // Allows an app to take control over which devices to exclude from using
   // the OpenSL ES audio output path
+  // TODO(bugs.webrtc.org/8491): Remove NoSynchronizedMethodCheck suppression.
+  @SuppressWarnings("NoSynchronizedMethodCheck")
   public static synchronized void setBlacklistDeviceForOpenSLESUsage(boolean enable) {
     blacklistDeviceForOpenSLESUsageIsOverridden = true;
     blacklistDeviceForOpenSLESUsage = enable;
@@ -55,18 +57,28 @@ public class WebRtcAudioManager {
 
   // Call these methods to override the default mono audio modes for the specified direction(s)
   // (input and/or output).
+  // TODO(bugs.webrtc.org/8491): Remove NoSynchronizedMethodCheck suppression.
+  @SuppressWarnings("NoSynchronizedMethodCheck")
   public static synchronized void setStereoOutput(boolean enable) {
     Logging.w(TAG, "Overriding default output behavior: setStereoOutput(" + enable + ')');
     useStereoOutput = enable;
   }
+
+  // TODO(bugs.webrtc.org/8491): Remove NoSynchronizedMethodCheck suppression.
+  @SuppressWarnings("NoSynchronizedMethodCheck")
   public static synchronized void setStereoInput(boolean enable) {
     Logging.w(TAG, "Overriding default input behavior: setStereoInput(" + enable + ')');
     useStereoInput = enable;
   }
 
+  // TODO(bugs.webrtc.org/8491): Remove NoSynchronizedMethodCheck suppression.
+  @SuppressWarnings("NoSynchronizedMethodCheck")
   public static synchronized boolean getStereoOutput() {
     return useStereoOutput;
   }
+
+  // TODO(bugs.webrtc.org/8491): Remove NoSynchronizedMethodCheck suppression.
+  @SuppressWarnings("NoSynchronizedMethodCheck")
   public static synchronized boolean getStereoInput() {
     return useStereoInput;
   }
@@ -76,11 +88,6 @@ public class WebRtcAudioManager {
   private static final int BITS_PER_SAMPLE = 16;
 
   private static final int DEFAULT_FRAME_PER_BUFFER = 256;
-
-  // List of possible audio modes.
-  private static final String[] AUDIO_MODES = new String[] {
-      "MODE_NORMAL", "MODE_RINGTONE", "MODE_IN_CALL", "MODE_IN_COMMUNICATION",
-  };
 
   // Private utility class that periodically checks and logs the volume level
   // of the audio stream that is currently controlled by the volume control.
@@ -113,6 +120,7 @@ public class WebRtcAudioManager {
         this.maxVoiceCallVolume = maxVoiceCallVolume;
       }
 
+      @Override
       public void run() {
         final int mode = audioManager.getMode();
         if (mode == AudioManager.MODE_RINGTONE) {
@@ -176,7 +184,8 @@ public class WebRtcAudioManager {
     if (initialized) {
       return true;
     }
-    Logging.d(TAG, "audio mode is: " + AUDIO_MODES[audioManager.getMode()]);
+    Logging.d(TAG, "audio mode is: "
+        + WebRtcAudioUtils.modeToString(audioManager.getMode()));
     initialized = true;
     volumeLogger.start();
     return true;
@@ -199,7 +208,7 @@ public class WebRtcAudioManager {
         ? blacklistDeviceForOpenSLESUsage
         : WebRtcAudioUtils.deviceIsBlacklistedForOpenSLESUsage();
     if (blacklisted) {
-      Logging.e(TAG, Build.MODEL + " is blacklisted for OpenSL ES usage!");
+      Logging.d(TAG, Build.MODEL + " is blacklisted for OpenSL ES usage!");
     }
     return blacklisted;
   }

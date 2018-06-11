@@ -15,7 +15,7 @@
 #import "RTCRtpParameters+Private.h"
 #import "WebRTC/RTCLogging.h"
 
-#include "webrtc/api/mediastreaminterface.h"
+#include "api/mediastreaminterface.h"
 
 namespace webrtc {
 
@@ -58,7 +58,7 @@ void RtpReceiverDelegateAdapter::OnFirstPacketReceived(
   }
 }
 
-- (RTCMediaStreamTrack *)track {
+- (nullable RTCMediaStreamTrack *)track {
   rtc::scoped_refptr<webrtc::MediaStreamTrackInterface> nativeTrack(
     _nativeRtpReceiver->track());
   if (nativeTrack) {

@@ -8,7 +8,7 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#include "webrtc/media/base/mediaconstants.h"
+#include "media/base/mediaconstants.h"
 
 #include <string>
 
@@ -25,6 +25,7 @@ const float kProcessCpuThreshold = 0.10f;
 const char kRtxCodecName[] = "rtx";
 const char kRedCodecName[] = "red";
 const char kUlpfecCodecName[] = "ulpfec";
+const char kStereoCodecName[] = "stereo";
 
 // TODO(brandtr): Change this to 'flexfec' when we are confident that the
 // header format is not changing anymore.
@@ -34,6 +35,7 @@ const char kFlexfecCodecName[] = "flexfec-03";
 const char kFlexfecFmtpRepairWindow[] = "repair-window";
 
 const char kCodecParamAssociatedPayloadType[] = "apt";
+const char kCodecParamAssociatedCodecName[] = "acn";
 
 const char kOpusCodecName[] = "opus";
 const char kIsacCodecName[] = "ISAC";

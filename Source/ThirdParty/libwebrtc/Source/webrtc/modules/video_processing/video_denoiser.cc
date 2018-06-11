@@ -8,9 +8,9 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#include "webrtc/common_video/libyuv/include/webrtc_libyuv.h"
-#include "webrtc/modules/video_processing/video_denoiser.h"
-#include "libyuv/planar_functions.h"
+#include "modules/video_processing/video_denoiser.h"
+#include "common_video/libyuv/include/webrtc_libyuv.h"
+#include "third_party/libyuv/include/libyuv/planar_functions.h"
 
 namespace webrtc {
 

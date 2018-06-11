@@ -8,14 +8,14 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#ifndef WEBRTC_API_TEST_MOCK_RTPRECEIVER_H_
-#define WEBRTC_API_TEST_MOCK_RTPRECEIVER_H_
+#ifndef API_TEST_MOCK_RTPRECEIVER_H_
+#define API_TEST_MOCK_RTPRECEIVER_H_
 
 #include <string>
 #include <vector>
 
-#include "webrtc/api/rtpreceiverinterface.h"
-#include "webrtc/test/gmock.h"
+#include "api/rtpreceiverinterface.h"
+#include "test/gmock.h"
 
 namespace webrtc {
 
@@ -23,14 +23,17 @@ class MockRtpReceiver : public rtc::RefCountedObject<RtpReceiverInterface> {
  public:
   MOCK_METHOD1(SetTrack, void(MediaStreamTrackInterface*));
   MOCK_CONST_METHOD0(track, rtc::scoped_refptr<MediaStreamTrackInterface>());
+  MOCK_CONST_METHOD0(streams,
+                     std::vector<rtc::scoped_refptr<MediaStreamInterface>>());
   MOCK_CONST_METHOD0(media_type, cricket::MediaType());
   MOCK_CONST_METHOD0(id, std::string());
   MOCK_CONST_METHOD0(GetParameters, RtpParameters());
   MOCK_METHOD1(SetParameters, bool(const RtpParameters&));
   MOCK_METHOD1(SetObserver, void(RtpReceiverObserverInterface*));
   MOCK_CONST_METHOD0(GetSources, std::vector<RtpSource>());
+  MOCK_CONST_METHOD0(AttachmentId, int());
 };
 
 }  // namespace webrtc
 
-#endif  // WEBRTC_API_TEST_MOCK_RTPRECEIVER_H_
+#endif  // API_TEST_MOCK_RTPRECEIVER_H_

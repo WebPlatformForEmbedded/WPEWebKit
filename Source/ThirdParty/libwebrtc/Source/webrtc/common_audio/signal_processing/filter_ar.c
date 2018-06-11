@@ -15,7 +15,7 @@
  *
  */
 
-#include "webrtc/common_audio/signal_processing/include/signal_processing_library.h"
+#include "common_audio/signal_processing/include/signal_processing_library.h"
 
 size_t WebRtcSpl_FilterAR(const int16_t* a,
                           size_t a_length,
@@ -29,7 +29,7 @@ size_t WebRtcSpl_FilterAR(const int16_t* a,
                           int16_t* filtered_low,
                           size_t filtered_low_length)
 {
-    int32_t o;
+    int64_t o;
     int32_t oLOW;
     size_t i, j, stop;
     const int16_t* x_ptr = &x[0];

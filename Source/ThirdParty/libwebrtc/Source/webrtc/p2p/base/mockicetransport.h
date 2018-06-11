@@ -8,16 +8,16 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#ifndef WEBRTC_P2P_BASE_MOCKICETRANSPORT_H_
-#define WEBRTC_P2P_BASE_MOCKICETRANSPORT_H_
+#ifndef P2P_BASE_MOCKICETRANSPORT_H_
+#define P2P_BASE_MOCKICETRANSPORT_H_
 
 #include <memory>
 #include <string>
 #include <vector>
 
-#include "webrtc/base/gunit.h"
-#include "webrtc/p2p/base/icetransportinternal.h"
-#include "webrtc/test/gmock.h"
+#include "p2p/base/icetransportinternal.h"
+#include "rtc_base/gunit.h"
+#include "test/gmock.h"
 
 using testing::_;
 using testing::Return;
@@ -41,8 +41,6 @@ class MockIceTransport : public IceTransportInternal {
   MOCK_METHOD0(GetError, int());
   MOCK_CONST_METHOD0(GetIceRole, cricket::IceRole());
   MOCK_METHOD1(GetStats, bool(cricket::ConnectionInfos* infos));
-  MOCK_CONST_METHOD0(IsDtlsActive, bool());
-  MOCK_CONST_METHOD1(GetSslRole, bool(rtc::SSLRole* role));
 
   IceTransportState GetState() const override {
     return IceTransportState::STATE_INIT;
@@ -57,9 +55,7 @@ class MockIceTransport : public IceTransportInternal {
   void SetRemoteIceParameters(const IceParameters& ice_params) override {}
   void SetRemoteIceMode(IceMode mode) override {}
   void SetIceConfig(const IceConfig& config) override {}
-  rtc::Optional<int> GetRttEstimate() override {
-    return rtc::Optional<int>();
-  }
+  rtc::Optional<int> GetRttEstimate() override { return rtc::nullopt; }
   void MaybeStartGathering() override {}
   void SetMetricsObserver(webrtc::MetricsObserverInterface* observer) override {
   }
@@ -78,4 +74,4 @@ class MockIceTransport : public IceTransportInternal {
 
 }  // namespace cricket
 
-#endif  // WEBRTC_P2P_BASE_MOCKICETRANSPORT_H_
+#endif  // P2P_BASE_MOCKICETRANSPORT_H_

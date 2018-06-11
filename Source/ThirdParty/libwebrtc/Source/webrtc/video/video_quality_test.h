@@ -7,18 +7,18 @@
  *  in the file PATENTS.  All contributing project authors may
  *  be found in the AUTHORS file in the root of the source tree.
  */
-#ifndef WEBRTC_VIDEO_VIDEO_QUALITY_TEST_H_
-#define WEBRTC_VIDEO_VIDEO_QUALITY_TEST_H_
+#ifndef VIDEO_VIDEO_QUALITY_TEST_H_
+#define VIDEO_VIDEO_QUALITY_TEST_H_
 
 #include <map>
 #include <memory>
 #include <string>
 #include <vector>
 
-#include "webrtc/modules/video_coding/codecs/vp8/simulcast_encoder_adapter.h"
-#include "webrtc/test/call_test.h"
-#include "webrtc/test/frame_generator.h"
-#include "webrtc/test/testsupport/trace_to_stderr.h"
+#include "media/engine/simulcast_encoder_adapter.h"
+#include "test/call_test.h"
+#include "test/frame_generator.h"
+#include "test/layer_filtering_transport.h"
 
 namespace webrtc {
 
@@ -34,6 +34,9 @@ class VideoQualityTest : public test::CallTest {
     struct CallConfig {
       bool send_side_bwe;
       Call::Config::BitrateConfig call_bitrate_config;
+      int num_thumbnails;
+      // Indicates if secondary_(video|ss|screenshare) structures are used.
+      bool dual_video;
     } call;
     struct Video {
       bool enabled;
@@ -50,10 +53,9 @@ class VideoQualityTest : public test::CallTest {
       int min_transmit_bps;
       bool ulpfec;
       bool flexfec;
-      std::string encoded_frame_base_path;
       std::string clip_name;  // "Generator" to generate frames instead.
       size_t capture_device_index;
-    } video;
+    } video[2];
     struct Audio {
       bool enabled;
       bool sync_video;
@@ -61,10 +63,11 @@ class VideoQualityTest : public test::CallTest {
     } audio;
     struct Screenshare {
       bool enabled;
+      bool generate_slides;
       int32_t slide_change_interval;
       int32_t scroll_duration;
       std::vector<std::string> slides;
-    } screenshare;
+    } screenshare[2];
     struct Analyzer {
       std::string test_label;
       double avg_psnr_threshold;  // (*)
@@ -74,7 +77,6 @@ class VideoQualityTest : public test::CallTest {
       std::string graph_title;
     } analyzer;
     FakeNetworkPipe::Config pipe;
-    bool logs;
     struct SS {                          // Spatial scalability.
       std::vector<VideoStream> streams;  // If empty, one stream is assumed.
       size_t selected_stream;
@@ -84,8 +86,13 @@ class VideoQualityTest : public test::CallTest {
       std::vector<SpatialLayer> spatial_layers;
       // If set, default parameters will be used instead of |streams|.
       bool infer_streams;
-    } ss;
-    int num_thumbnails;
+    } ss[2];
+    struct Logging {
+      bool logs;
+      std::string rtc_event_log_name;
+      std::string rtp_dump_name;
+      std::string encoded_frame_base_path;
+    } logging;
   };
 
   VideoQualityTest();
@@ -94,7 +101,9 @@ class VideoQualityTest : public test::CallTest {
 
   static void FillScalabilitySettings(
       Params* params,
+      size_t video_idx,
       const std::vector<std::string>& stream_descriptors,
+      int num_streams,
       size_t selected_stream,
       int num_spatial_layers,
       int selected_sl,
@@ -112,33 +121,31 @@ class VideoQualityTest : public test::CallTest {
   void CheckParams();
 
   // Helper static methods.
-  static VideoStream DefaultVideoStream(const Params& params);
+  static VideoStream DefaultVideoStream(const Params& params, size_t video_idx);
   static VideoStream DefaultThumbnailStream();
   static std::vector<int> ParseCSV(const std::string& str);
 
   // Helper methods for setting up the call.
-  void CreateCapturer();
+  void CreateVideoStreams();
+  void DestroyStreams();
+  void CreateCapturers();
+  std::unique_ptr<test::FrameGenerator> CreateFrameGenerator(size_t video_idx);
   void SetupThumbnailCapturers(size_t num_thumbnail_streams);
   void SetupVideo(Transport* send_transport, Transport* recv_transport);
   void SetupThumbnails(Transport* send_transport, Transport* recv_transport);
   void DestroyThumbnailStreams();
-  void SetupScreenshareOrSVC();
-  void SetupAudio(int send_channel_id,
-                  int receive_channel_id,
-                  Call* call,
-                  Transport* transport,
+  void SetupAudio(Transport* transport,
                   AudioReceiveStream** audio_receive_stream);
 
   void StartEncodedFrameLogs(VideoSendStream* stream);
   void StartEncodedFrameLogs(VideoReceiveStream* stream);
 
-  // We need a more general capturer than the FrameGeneratorCapturer.
-  std::unique_ptr<test::VideoCapturer> video_capturer_;
+  virtual std::unique_ptr<test::LayerFilteringTransport> CreateSendTransport();
+  virtual std::unique_ptr<test::DirectTransport> CreateReceiveTransport();
+
+  std::vector<std::unique_ptr<test::VideoCapturer>> video_capturers_;
   std::vector<std::unique_ptr<test::VideoCapturer>> thumbnail_capturers_;
-  std::unique_ptr<test::TraceToStderr> trace_to_stderr_;
-  std::unique_ptr<test::FrameGenerator> frame_generator_;
-  std::unique_ptr<VideoEncoder> video_encoder_;
-  std::unique_ptr<VideoEncoderFactory> vp8_encoder_factory_;
+  std::vector<std::unique_ptr<VideoEncoder>> video_encoders_;
 
   std::vector<std::unique_ptr<VideoEncoder>> thumbnail_encoders_;
   std::vector<VideoSendStream::Config> thumbnail_send_configs_;
@@ -146,6 +153,10 @@ class VideoQualityTest : public test::CallTest {
   std::vector<VideoSendStream*> thumbnail_send_streams_;
   std::vector<VideoReceiveStream::Config> thumbnail_receive_configs_;
   std::vector<VideoReceiveStream*> thumbnail_receive_streams_;
+
+  std::vector<VideoSendStream::Config> video_send_configs_;
+  std::vector<VideoEncoderConfig> video_encoder_configs_;
+  std::vector<VideoSendStream*> video_send_streams_;
 
   Clock* const clock_;
 
@@ -155,8 +166,13 @@ class VideoQualityTest : public test::CallTest {
   VideoSendStream::DegradationPreference degradation_preference_ =
       VideoSendStream::DegradationPreference::kMaintainFramerate;
   Params params_;
+
+  std::unique_ptr<webrtc::RtcEventLog> recv_event_log_;
+  std::unique_ptr<webrtc::RtcEventLog> send_event_log_;
+
+  size_t num_video_streams_;
 };
 
 }  // namespace webrtc
 
-#endif  // WEBRTC_VIDEO_VIDEO_QUALITY_TEST_H_
+#endif  // VIDEO_VIDEO_QUALITY_TEST_H_

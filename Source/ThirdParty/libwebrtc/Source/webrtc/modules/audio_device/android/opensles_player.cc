@@ -8,18 +8,19 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#include "webrtc/modules/audio_device/android/opensles_player.h"
+#include "modules/audio_device/android/opensles_player.h"
 
 #include <android/log.h>
 
-#include "webrtc/base/array_view.h"
-#include "webrtc/base/arraysize.h"
-#include "webrtc/base/checks.h"
-#include "webrtc/base/format_macros.h"
-#include "webrtc/base/timeutils.h"
-#include "webrtc/modules/audio_device/android/audio_common.h"
-#include "webrtc/modules/audio_device/android/audio_manager.h"
-#include "webrtc/modules/audio_device/fine_audio_buffer.h"
+#include "api/array_view.h"
+#include "modules/audio_device/android/audio_common.h"
+#include "modules/audio_device/android/audio_manager.h"
+#include "modules/audio_device/fine_audio_buffer.h"
+#include "rtc_base/arraysize.h"
+#include "rtc_base/checks.h"
+#include "rtc_base/format_macros.h"
+#include "rtc_base/platform_thread.h"
+#include "rtc_base/timeutils.h"
 
 #define TAG "OpenSLESPlayer"
 #define ALOGV(...) __android_log_print(ANDROID_LOG_VERBOSE, TAG, __VA_ARGS__)
@@ -51,7 +52,7 @@ OpenSLESPlayer::OpenSLESPlayer(AudioManager* audio_manager)
       simple_buffer_queue_(nullptr),
       volume_(nullptr),
       last_play_time_(0) {
-  ALOGD("ctor%s", GetThreadInfo().c_str());
+  ALOGD("ctor[tid=%d]", rtc::CurrentThreadId());
   // Use native audio output parameters provided by the audio manager and
   // define the PCM format structure.
   pcm_format_ = CreatePCMConfiguration(audio_parameters_.channels(),
@@ -63,7 +64,7 @@ OpenSLESPlayer::OpenSLESPlayer(AudioManager* audio_manager)
 }
 
 OpenSLESPlayer::~OpenSLESPlayer() {
-  ALOGD("dtor%s", GetThreadInfo().c_str());
+  ALOGD("dtor[tid=%d]", rtc::CurrentThreadId());
   RTC_DCHECK(thread_checker_.CalledOnValidThread());
   Terminate();
   DestroyAudioPlayer();
@@ -77,20 +78,25 @@ OpenSLESPlayer::~OpenSLESPlayer() {
 }
 
 int OpenSLESPlayer::Init() {
-  ALOGD("Init%s", GetThreadInfo().c_str());
+  ALOGD("Init[tid=%d]", rtc::CurrentThreadId());
   RTC_DCHECK(thread_checker_.CalledOnValidThread());
+  if (audio_parameters_.channels() == 2) {
+    // TODO(henrika): FineAudioBuffer needs more work to support stereo.
+    ALOGE("OpenSLESPlayer does not support stereo");
+    return -1;
+  }
   return 0;
 }
 
 int OpenSLESPlayer::Terminate() {
-  ALOGD("Terminate%s", GetThreadInfo().c_str());
+  ALOGD("Terminate[tid=%d]", rtc::CurrentThreadId());
   RTC_DCHECK(thread_checker_.CalledOnValidThread());
   StopPlayout();
   return 0;
 }
 
 int OpenSLESPlayer::InitPlayout() {
-  ALOGD("InitPlayout%s", GetThreadInfo().c_str());
+  ALOGD("InitPlayout[tid=%d]", rtc::CurrentThreadId());
   RTC_DCHECK(thread_checker_.CalledOnValidThread());
   RTC_DCHECK(!initialized_);
   RTC_DCHECK(!playing_);
@@ -105,7 +111,7 @@ int OpenSLESPlayer::InitPlayout() {
 }
 
 int OpenSLESPlayer::StartPlayout() {
-  ALOGD("StartPlayout%s", GetThreadInfo().c_str());
+  ALOGD("StartPlayout[tid=%d]", rtc::CurrentThreadId());
   RTC_DCHECK(thread_checker_.CalledOnValidThread());
   RTC_DCHECK(initialized_);
   RTC_DCHECK(!playing_);
@@ -133,7 +139,7 @@ int OpenSLESPlayer::StartPlayout() {
 }
 
 int OpenSLESPlayer::StopPlayout() {
-  ALOGD("StopPlayout%s", GetThreadInfo().c_str());
+  ALOGD("StopPlayout[tid=%d]", rtc::CurrentThreadId());
   RTC_DCHECK(thread_checker_.CalledOnValidThread());
   if (!initialized_ || !playing_) {
     return 0;
@@ -284,10 +290,10 @@ bool OpenSLESPlayer::CreateAudioPlayer() {
   SLDataSink audio_sink = {&locator_output_mix, nullptr};
 
   // Define interfaces that we indend to use and realize.
-  const SLInterfaceID interface_ids[] = {
-      SL_IID_ANDROIDCONFIGURATION, SL_IID_BUFFERQUEUE, SL_IID_VOLUME};
-  const SLboolean interface_required[] = {
-      SL_BOOLEAN_TRUE, SL_BOOLEAN_TRUE, SL_BOOLEAN_TRUE};
+  const SLInterfaceID interface_ids[] = {SL_IID_ANDROIDCONFIGURATION,
+                                         SL_IID_BUFFERQUEUE, SL_IID_VOLUME};
+  const SLboolean interface_required[] = {SL_BOOLEAN_TRUE, SL_BOOLEAN_TRUE,
+                                          SL_BOOLEAN_TRUE};
 
   // Create the audio player on the engine interface.
   RETURN_ON_ERROR(

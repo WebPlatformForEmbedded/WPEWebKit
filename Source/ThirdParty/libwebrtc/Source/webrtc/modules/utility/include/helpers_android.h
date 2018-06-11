@@ -8,8 +8,8 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#ifndef WEBRTC_MODULES_UTILITY_INCLUDE_HELPERS_ANDROID_H_
-#define WEBRTC_MODULES_UTILITY_INCLUDE_HELPERS_ANDROID_H_
+#ifndef MODULES_UTILITY_INCLUDE_HELPERS_ANDROID_H_
+#define MODULES_UTILITY_INCLUDE_HELPERS_ANDROID_H_
 
 #include <jni.h>
 #include <string>
@@ -45,12 +45,6 @@ jobject NewGlobalRef(JNIEnv* jni, jobject o);
 
 void DeleteGlobalRef(JNIEnv* jni, jobject o);
 
-// Return thread ID as a string.
-std::string GetThreadId();
-
-// Return thread ID as string suitable for debug logging.
-std::string GetThreadInfo();
-
 // Attach thread to JVM if necessary and detach at scope end if originally
 // attached.
 class AttachThreadScoped {
@@ -65,23 +59,6 @@ class AttachThreadScoped {
   JNIEnv* env_;
 };
 
-// Scoped holder for global Java refs.
-template<class T>  // T is jclass, jobject, jintArray, etc.
-class ScopedGlobalRef {
- public:
-  ScopedGlobalRef(JNIEnv* jni, T obj)
-      : jni_(jni), obj_(static_cast<T>(NewGlobalRef(jni, obj))) {}
-  ~ScopedGlobalRef() {
-    DeleteGlobalRef(jni_, obj_);
-  }
-  T operator*() const {
-    return obj_;
-  }
- private:
-  JNIEnv* jni_;
-  T obj_;
-};
-
 }  // namespace webrtc
 
-#endif  // WEBRTC_MODULES_UTILITY_INCLUDE_HELPERS_ANDROID_H_
+#endif  // MODULES_UTILITY_INCLUDE_HELPERS_ANDROID_H_

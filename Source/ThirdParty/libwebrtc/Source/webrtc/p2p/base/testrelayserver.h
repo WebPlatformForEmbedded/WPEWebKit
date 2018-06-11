@@ -8,16 +8,16 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#ifndef WEBRTC_P2P_BASE_TESTRELAYSERVER_H_
-#define WEBRTC_P2P_BASE_TESTRELAYSERVER_H_
+#ifndef P2P_BASE_TESTRELAYSERVER_H_
+#define P2P_BASE_TESTRELAYSERVER_H_
 
 #include <memory>
 
-#include "webrtc/p2p/base/relayserver.h"
-#include "webrtc/base/asynctcpsocket.h"
-#include "webrtc/base/sigslot.h"
-#include "webrtc/base/socketadapters.h"
-#include "webrtc/base/thread.h"
+#include "p2p/base/relayserver.h"
+#include "rtc_base/asynctcpsocket.h"
+#include "rtc_base/sigslot.h"
+#include "rtc_base/socketadapters.h"
+#include "rtc_base/thread.h"
 
 namespace cricket {
 
@@ -89,6 +89,7 @@ class TestRelayServer : public sigslot::has_slots<> {
   void OnExternalClose(rtc::AsyncPacketSocket* socket, int error) {
     server_.RemoveExternalSocket(socket);
   }
+
  private:
   cricket::RelayServer server_;
   std::unique_ptr<rtc::AsyncSocket> tcp_int_socket_;
@@ -99,4 +100,4 @@ class TestRelayServer : public sigslot::has_slots<> {
 
 }  // namespace cricket
 
-#endif  // WEBRTC_P2P_BASE_TESTRELAYSERVER_H_
+#endif  // P2P_BASE_TESTRELAYSERVER_H_

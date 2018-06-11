@@ -8,38 +8,23 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#include "webrtc/modules/audio_processing/aec3/adaptive_fir_filter.h"
+#include "modules/audio_processing/aec3/adaptive_fir_filter.h"
 
 #if defined(WEBRTC_HAS_NEON)
 #include <arm_neon.h>
 #endif
-#include "webrtc/typedefs.h"
+#include "typedefs.h"  // NOLINT(build/include)
 #if defined(WEBRTC_ARCH_X86_FAMILY)
 #include <emmintrin.h>
 #endif
 #include <algorithm>
 #include <functional>
 
-#include "webrtc/base/checks.h"
-#include "webrtc/modules/audio_processing/aec3/fft_data.h"
+#include "modules/audio_processing/aec3/fft_data.h"
+#include "rtc_base/checks.h"
+#include "rtc_base/logging.h"
 
 namespace webrtc {
-
-namespace {
-
-// Constrains the a partiton of the frequency domain filter to be limited in
-// time via setting the relevant time-domain coefficients to zero.
-void Constrain(const Aec3Fft& fft, FftData* H) {
-  std::array<float, kFftLength> h;
-  fft.Ifft(*H, &h);
-  constexpr float kScale = 1.0f / kFftLengthBy2;
-  std::for_each(h.begin(), h.begin() + kFftLengthBy2,
-                [kScale](float& a) { a *= kScale; });
-  std::fill(h.begin() + kFftLengthBy2, h.end(), 0.f);
-  fft.Fft(&h, H);
-}
-
-}  // namespace
 
 namespace aec3 {
 
@@ -150,7 +135,8 @@ void UpdateErlEstimator_SSE2(
 void AdaptPartitions(const RenderBuffer& render_buffer,
                      const FftData& G,
                      rtc::ArrayView<FftData> H) {
-  rtc::ArrayView<const FftData> render_buffer_data = render_buffer.Buffer();
+  rtc::ArrayView<const FftData> render_buffer_data =
+      render_buffer.GetFftBuffer();
   size_t index = render_buffer.Position();
   for (auto& H_j : H) {
     const FftData& X = render_buffer_data[index];
@@ -168,7 +154,8 @@ void AdaptPartitions(const RenderBuffer& render_buffer,
 void AdaptPartitions_NEON(const RenderBuffer& render_buffer,
                           const FftData& G,
                           rtc::ArrayView<FftData> H) {
-  rtc::ArrayView<const FftData> render_buffer_data = render_buffer.Buffer();
+  rtc::ArrayView<const FftData> render_buffer_data =
+      render_buffer.GetFftBuffer();
   const int lim1 =
       std::min(render_buffer_data.size() - render_buffer.Position(), H.size());
   const int lim2 = H.size();
@@ -225,7 +212,8 @@ void AdaptPartitions_NEON(const RenderBuffer& render_buffer,
 void AdaptPartitions_SSE2(const RenderBuffer& render_buffer,
                           const FftData& G,
                           rtc::ArrayView<FftData> H) {
-  rtc::ArrayView<const FftData> render_buffer_data = render_buffer.Buffer();
+  rtc::ArrayView<const FftData> render_buffer_data =
+      render_buffer.GetFftBuffer();
   const int lim1 =
       std::min(render_buffer_data.size() - render_buffer.Position(), H.size());
   const int lim2 = H.size();
@@ -290,7 +278,8 @@ void ApplyFilter(const RenderBuffer& render_buffer,
   S->re.fill(0.f);
   S->im.fill(0.f);
 
-  rtc::ArrayView<const FftData> render_buffer_data = render_buffer.Buffer();
+  rtc::ArrayView<const FftData> render_buffer_data =
+      render_buffer.GetFftBuffer();
   size_t index = render_buffer.Position();
   for (auto& H_j : H) {
     const FftData& X = render_buffer_data[index];
@@ -311,7 +300,8 @@ void ApplyFilter_NEON(const RenderBuffer& render_buffer,
   S->re.fill(0.f);
   S->im.fill(0.f);
 
-  rtc::ArrayView<const FftData> render_buffer_data = render_buffer.Buffer();
+  rtc::ArrayView<const FftData> render_buffer_data =
+      render_buffer.GetFftBuffer();
   const int lim1 =
       std::min(render_buffer_data.size() - render_buffer.Position(), H.size());
   const int lim2 = H.size();
@@ -370,7 +360,8 @@ void ApplyFilter_SSE2(const RenderBuffer& render_buffer,
   S->re.fill(0.f);
   S->im.fill(0.f);
 
-  rtc::ArrayView<const FftData> render_buffer_data = render_buffer.Buffer();
+  rtc::ArrayView<const FftData> render_buffer_data =
+      render_buffer.GetFftBuffer();
   const int lim1 =
       std::min(render_buffer_data.size() - render_buffer.Position(), H.size());
   const int lim2 = H.size();
@@ -424,14 +415,16 @@ void ApplyFilter_SSE2(const RenderBuffer& render_buffer,
 
 }  // namespace aec3
 
-AdaptiveFirFilter::AdaptiveFirFilter(size_t size_partitions,
+AdaptiveFirFilter::AdaptiveFirFilter(size_t max_size_partitions,
                                      Aec3Optimization optimization,
                                      ApmDataDumper* data_dumper)
     : data_dumper_(data_dumper),
       fft_(),
       optimization_(optimization),
-      H_(size_partitions),
-      H2_(size_partitions, std::array<float, kFftLengthBy2Plus1>()) {
+      max_size_partitions_(max_size_partitions),
+      H_(max_size_partitions_),
+      H2_(max_size_partitions_, std::array<float, kFftLengthBy2Plus1>()),
+      h_(GetTimeDomainLength(max_size_partitions_), 0.f) {
   RTC_DCHECK(data_dumper_);
 
   for (auto& H_j : H_) {
@@ -446,13 +439,51 @@ AdaptiveFirFilter::AdaptiveFirFilter(size_t size_partitions,
 AdaptiveFirFilter::~AdaptiveFirFilter() = default;
 
 void AdaptiveFirFilter::HandleEchoPathChange() {
+  size_t current_h_size = h_.size();
+  h_.resize(GetTimeDomainLength(max_size_partitions_));
+  std::fill(h_.begin(), h_.end(), 0.f);
+  h_.resize(current_h_size);
+
+  size_t current_size_partitions = H_.size();
+  H_.resize(max_size_partitions_);
   for (auto& H_j : H_) {
     H_j.Clear();
   }
+  H_.resize(current_size_partitions);
+
+  H2_.resize(max_size_partitions_);
   for (auto& H2_k : H2_) {
     H2_k.fill(0.f);
   }
+  H2_.resize(current_size_partitions);
+
   erl_.fill(0.f);
+}
+
+void AdaptiveFirFilter::SetSizePartitions(size_t size) {
+  RTC_DCHECK_EQ(max_size_partitions_, H_.capacity());
+  RTC_DCHECK_EQ(max_size_partitions_, H2_.capacity());
+  RTC_DCHECK_EQ(GetTimeDomainLength(max_size_partitions_), h_.capacity());
+  RTC_DCHECK_EQ(H_.size(), H2_.size());
+  RTC_DCHECK_EQ(h_.size(), GetTimeDomainLength(H_.size()));
+
+  if (size > max_size_partitions_) {
+    RTC_LOG(LS_ERROR) << "Too large adaptive filter size specificed: " << size;
+    size = max_size_partitions_;
+  }
+
+  if (size < H_.size()) {
+    for (size_t k = size; k < H_.size(); ++k) {
+      H_[k].Clear();
+      H2_[k].fill(0.f);
+    }
+
+    std::fill(h_.begin() + GetTimeDomainLength(size), h_.end(), 0.f);
+  }
+
+  H_.resize(size);
+  H2_.resize(size);
+  h_.resize(GetTimeDomainLength(size));
 }
 
 void AdaptiveFirFilter::Filter(const RenderBuffer& render_buffer,
@@ -493,10 +524,7 @@ void AdaptiveFirFilter::Adapt(const RenderBuffer& render_buffer,
   }
 
   // Constrain the filter partitions in a cyclic manner.
-  Constrain(fft_, &H_[partition_to_constrain_]);
-  partition_to_constrain_ = partition_to_constrain_ < (H_.size() - 1)
-                                ? partition_to_constrain_ + 1
-                                : 0;
+  Constrain();
 
   // Update the frequency response and echo return loss for the filter.
   switch (optimization_) {
@@ -516,6 +544,27 @@ void AdaptiveFirFilter::Adapt(const RenderBuffer& render_buffer,
       aec3::UpdateFrequencyResponse(H_, &H2_);
       aec3::UpdateErlEstimator(H2_, &erl_);
   }
+}
+
+// Constrains the a partiton of the frequency domain filter to be limited in
+// time via setting the relevant time-domain coefficients to zero.
+void AdaptiveFirFilter::Constrain() {
+  std::array<float, kFftLength> h;
+  fft_.Ifft(H_[partition_to_constrain_], &h);
+
+  static constexpr float kScale = 1.0f / kFftLengthBy2;
+  std::for_each(h.begin(), h.begin() + kFftLengthBy2,
+                [](float& a) { a *= kScale; });
+  std::fill(h.begin() + kFftLengthBy2, h.end(), 0.f);
+
+  std::copy(h.begin(), h.begin() + kFftLengthBy2,
+            h_.begin() + partition_to_constrain_ * kFftLengthBy2);
+
+  fft_.Fft(&h, &H_[partition_to_constrain_]);
+
+  partition_to_constrain_ = partition_to_constrain_ < (H_.size() - 1)
+                                ? partition_to_constrain_ + 1
+                                : 0;
 }
 
 }  // namespace webrtc

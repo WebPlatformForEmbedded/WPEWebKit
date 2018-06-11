@@ -8,8 +8,8 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#ifndef WEBRTC_MODULES_REMOTE_BITRATE_ESTIMATOR_TEST_BWE_TEST_LOGGING_H_
-#define WEBRTC_MODULES_REMOTE_BITRATE_ESTIMATOR_TEST_BWE_TEST_LOGGING_H_
+#ifndef MODULES_REMOTE_BITRATE_ESTIMATOR_TEST_BWE_TEST_LOGGING_H_
+#define MODULES_REMOTE_BITRATE_ESTIMATOR_TEST_BWE_TEST_LOGGING_H_
 
 // To enable BWE logging, run this command from trunk/ :
 // build/gyp_chromium --depth=. webrtc/modules/modules.gyp
@@ -46,8 +46,8 @@
 // Log *contexts* are names concatenated with '_' between them, with the name
 // of the logged/plotted string/value last. Plot *time* is inherited down the
 // tree. A branch is enabled by default but can be *disabled* to reduce output.
-// The difference between the LOG and PLOT macros is that PLOT prefixes the line
-// so it can be easily filtered, plus it outputs the current time.
+// The difference between the RTC_LOG and PLOT macros is that PLOT prefixes the
+// line so it can be easily filtered, plus it outputs the current time.
 
 #if !(BWE_TEST_LOGGING_COMPILE_TIME_ENABLE)
 
@@ -128,9 +128,9 @@
 #include <stack>
 #include <string>
 
-#include "webrtc/base/constructormagic.h"
-#include "webrtc/base/criticalsection.h"
-#include "webrtc/common_types.h"
+#include "common_types.h"  // NOLINT(build/include)
+#include "rtc_base/constructormagic.h"
+#include "rtc_base/criticalsection.h"
 
 #define BWE_TEST_LOGGING_GLOBAL_CONTEXT(name) \
     do { \
@@ -277,6 +277,10 @@ class Logging {
   void SetGlobalContext(const char* name);
   void SetGlobalEnable(bool enabled);
 
+#if defined(__GNUC__)
+  // Note: Implicit |this| argument counts as the first argument.
+  __attribute__((__format__(__printf__, 2, 3)))
+#endif
   void Log(const char format[], ...);
   void Plot(int figure, const std::string& name, double value);
   void Plot(int figure,
@@ -348,4 +352,4 @@ class Logging {
 }  // namespace webrtc
 
 #endif  // BWE_TEST_LOGGING_COMPILE_TIME_ENABLE
-#endif  // WEBRTC_MODULES_REMOTE_BITRATE_ESTIMATOR_TEST_BWE_TEST_LOGGING_H_
+#endif  // MODULES_REMOTE_BITRATE_ESTIMATOR_TEST_BWE_TEST_LOGGING_H_

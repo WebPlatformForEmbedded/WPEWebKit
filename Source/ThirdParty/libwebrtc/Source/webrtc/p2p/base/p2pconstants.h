@@ -8,8 +8,8 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#ifndef WEBRTC_P2P_BASE_P2PCONSTANTS_H_
-#define WEBRTC_P2P_BASE_P2PCONSTANTS_H_
+#ifndef P2P_BASE_P2PCONSTANTS_H_
+#define P2P_BASE_P2PCONSTANTS_H_
 
 #include <string>
 
@@ -39,9 +39,6 @@ extern const int ICE_CANDIDATE_COMPONENT_RTP;
 extern const int ICE_CANDIDATE_COMPONENT_RTCP;
 extern const int ICE_CANDIDATE_COMPONENT_DEFAULT;
 
-extern const char NS_JINGLE_RTP[];
-extern const char NS_JINGLE_DRAFT_SCTP[];
-
 // RFC 4145, SDP setup attribute values.
 extern const char CONNECTIONROLE_ACTIVE_STR[];
 extern const char CONNECTIONROLE_PASSIVE_STR[];
@@ -50,4 +47,4 @@ extern const char CONNECTIONROLE_HOLDCONN_STR[];
 
 }  // namespace cricket
 
-#endif  // WEBRTC_P2P_BASE_P2PCONSTANTS_H_
+#endif  // P2P_BASE_P2PCONSTANTS_H_

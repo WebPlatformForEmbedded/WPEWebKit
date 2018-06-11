@@ -8,23 +8,124 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#ifndef WEBRTC_P2P_BASE_ICETRANSPORTINTERNAL_H_
-#define WEBRTC_P2P_BASE_ICETRANSPORTINTERNAL_H_
+#ifndef P2P_BASE_ICETRANSPORTINTERNAL_H_
+#define P2P_BASE_ICETRANSPORTINTERNAL_H_
 
 #include <string>
+#include <vector>
 
-#include "webrtc/base/stringencode.h"
-#include "webrtc/p2p/base/candidate.h"
-#include "webrtc/p2p/base/candidatepairinterface.h"
-#include "webrtc/p2p/base/jseptransport.h"
-#include "webrtc/p2p/base/packettransportinternal.h"
-#include "webrtc/p2p/base/transportdescription.h"
+#include "api/candidate.h"
+#include "p2p/base/candidatepairinterface.h"
+#include "p2p/base/packettransportinternal.h"
+#include "p2p/base/port.h"
+#include "p2p/base/transportdescription.h"
+#include "rtc_base/stringencode.h"
 
 namespace webrtc {
 class MetricsObserverInterface;
 }
 
 namespace cricket {
+
+typedef std::vector<Candidate> Candidates;
+
+enum IceConnectionState {
+  kIceConnectionConnecting = 0,
+  kIceConnectionFailed,
+  kIceConnectionConnected,  // Writable, but still checking one or more
+                            // connections
+  kIceConnectionCompleted,
+};
+
+// TODO(deadbeef): Unify with PeerConnectionInterface::IceConnectionState
+// once /talk/ and /webrtc/ are combined, and also switch to ENUM_NAME naming
+// style.
+enum IceGatheringState {
+  kIceGatheringNew = 0,
+  kIceGatheringGathering,
+  kIceGatheringComplete,
+};
+
+enum ContinualGatheringPolicy {
+  // All port allocator sessions will stop after a writable connection is found.
+  GATHER_ONCE = 0,
+  // The most recent port allocator session will keep on running.
+  GATHER_CONTINUALLY,
+  // The most recent port allocator session will keep on running, and it will
+  // try to recover connectivity if the channel becomes disconnected.
+  GATHER_CONTINUALLY_AND_RECOVER,
+};
+
+// ICE Nomination mode.
+enum class NominationMode {
+  REGULAR,         // Nominate once per ICE restart (Not implemented yet).
+  AGGRESSIVE,      // Nominate every connection except that it will behave as if
+                   // REGULAR when the remote is an ICE-LITE endpoint.
+  SEMI_AGGRESSIVE  // Our current implementation of the nomination algorithm.
+                   // The details are described in P2PTransportChannel.
+};
+
+// Information about ICE configuration.
+// TODO(deadbeef): Use rtc::Optional to represent unset values, instead of
+// -1.
+struct IceConfig {
+  // The ICE connection receiving timeout value in milliseconds.
+  int receiving_timeout = -1;
+  // Time interval in milliseconds to ping a backup connection when the ICE
+  // channel is strongly connected.
+  int backup_connection_ping_interval = -1;
+
+  ContinualGatheringPolicy continual_gathering_policy = GATHER_ONCE;
+
+  bool gather_continually() const {
+    return continual_gathering_policy == GATHER_CONTINUALLY ||
+           continual_gathering_policy == GATHER_CONTINUALLY_AND_RECOVER;
+  }
+
+  // Whether we should prioritize Relay/Relay candidate when nothing
+  // is writable yet.
+  bool prioritize_most_likely_candidate_pairs = false;
+
+  // Writable connections are pinged at a slower rate once stablized.
+  int stable_writable_connection_ping_interval = -1;
+
+  // If set to true, this means the ICE transport should presume TURN-to-TURN
+  // candidate pairs will succeed, even before a binding response is received.
+  bool presume_writable_when_fully_relayed = false;
+
+  // Interval to check on all networks and to perform ICE regathering on any
+  // active network having no connection on it.
+  rtc::Optional<int> regather_on_failed_networks_interval;
+
+  // Interval to perform ICE regathering on all networks
+  // The delay in milliseconds is sampled from the uniform distribution [a, b]
+  rtc::Optional<rtc::IntervalRange> regather_all_networks_interval_range;
+
+  // The time period in which we will not switch the selected connection
+  // when a new connection becomes receiving but the selected connection is not
+  // in case that the selected connection may become receiving soon.
+  rtc::Optional<int> receiving_switching_delay;
+
+  // TODO(honghaiz): Change the default to regular nomination.
+  // Default nomination mode if the remote does not support renomination.
+  NominationMode default_nomination_mode = NominationMode::SEMI_AGGRESSIVE;
+
+  // ICE checks (STUN pings) will not be sent at higher rate (lower interval)
+  // than this, no matter what other settings there are.
+  // Measure in milliseconds.
+  rtc::Optional<int> ice_check_min_interval;
+
+  IceConfig();
+  IceConfig(int receiving_timeout_ms,
+            int backup_connection_ping_interval,
+            ContinualGatheringPolicy gathering_policy,
+            bool prioritize_most_likely_candidate_pairs,
+            int stable_writable_connection_ping_interval_ms,
+            bool presume_writable_when_fully_relayed,
+            int regather_on_failed_networks_interval_ms,
+            int receiving_switching_delay_ms);
+  ~IceConfig();
+};
 
 // TODO(zhihuang): Replace this with
 // PeerConnectionInterface::IceConnectionState.
@@ -47,11 +148,10 @@ enum IceProtocolType {
 // the IceTransportInterface will be split from this class.
 class IceTransportInternal : public rtc::PacketTransportInternal {
  public:
-  virtual ~IceTransportInternal(){};
+  IceTransportInternal();
+  ~IceTransportInternal() override;
 
   virtual IceTransportState GetState() const = 0;
-
-  virtual const std::string& transport_name() const = 0;
 
   virtual int component() const = 0;
 
@@ -66,14 +166,10 @@ class IceTransportInternal : public rtc::PacketTransportInternal {
   virtual void SetIceProtocolType(IceProtocolType) {}
 
   virtual void SetIceCredentials(const std::string& ice_ufrag,
-                                 const std::string& ice_pwd) {
-    SetIceParameters(IceParameters(ice_ufrag, ice_pwd, false));
-  }
+                                 const std::string& ice_pwd);
 
   virtual void SetRemoteIceCredentials(const std::string& ice_ufrag,
-                                       const std::string& ice_pwd) {
-    SetRemoteIceParameters(IceParameters(ice_ufrag, ice_pwd, false));
-  }
+                                       const std::string& ice_pwd);
 
   // The ufrag and pwd in |ice_params| must be set
   // before candidate gathering can start.
@@ -114,20 +210,13 @@ class IceTransportInternal : public rtc::PacketTransportInternal {
   sigslot::signal2<IceTransportInternal*, const Candidates&>
       SignalCandidatesRemoved;
 
-  // Deprecated by SignalSelectedCandidatePairChanged
+  // Deprecated by PacketTransportInternal::SignalNetworkRouteChanged.
   // This signal occurs when there is a change in the way that packets are
   // being routed, i.e. to a different remote location. The candidate
   // indicates where and how we are currently sending media.
+  // TODO(zhihuang): Update the Chrome remoting to use the new
+  // SignalNetworkRouteChanged.
   sigslot::signal2<IceTransportInternal*, const Candidate&> SignalRouteChange;
-
-  // Signalled when the current selected candidate pair has changed.
-  // The first parameter is the transport that signals the event.
-  // The second parameter is the new selected candidate pair. The third
-  // parameter is the last packet id sent on the previous candidate pair.
-  // The fourth parameter is a boolean which is true if the Transport
-  // is ready to send with this candidate pair.
-  sigslot::signal4<IceTransportInternal*, CandidatePairInterface*, int, bool>
-      SignalSelectedCandidatePairChanged;
 
   // Invoked when there is conflict in the ICE role between local and remote
   // agents.
@@ -138,13 +227,8 @@ class IceTransportInternal : public rtc::PacketTransportInternal {
 
   // Invoked when the transport is being destroyed.
   sigslot::signal1<IceTransportInternal*> SignalDestroyed;
-
-  // Debugging description of this transport.
-  std::string debug_name() const override {
-    return transport_name() + " " + rtc::ToString(component());
-  }
 };
 
 }  // namespace cricket
 
-#endif  // WEBRTC_P2P_BASE_ICETRANSPORTINTERNAL_H_
+#endif  // P2P_BASE_ICETRANSPORTINTERNAL_H_

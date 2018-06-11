@@ -8,29 +8,30 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#include "webrtc/p2p/base/turnserver.h"
+#include "p2p/base/turnserver.h"
 
 #include <tuple>  // for std::tie
+#include <utility>
 
-#include "webrtc/base/bind.h"
-#include "webrtc/base/bytebuffer.h"
-#include "webrtc/base/checks.h"
-#include "webrtc/base/helpers.h"
-#include "webrtc/base/logging.h"
-#include "webrtc/base/messagedigest.h"
-#include "webrtc/base/ptr_util.h"
-#include "webrtc/base/socketadapters.h"
-#include "webrtc/base/stringencode.h"
-#include "webrtc/base/thread.h"
-#include "webrtc/p2p/base/asyncstuntcpsocket.h"
-#include "webrtc/p2p/base/common.h"
-#include "webrtc/p2p/base/packetsocketfactory.h"
-#include "webrtc/p2p/base/stun.h"
+#include "p2p/base/asyncstuntcpsocket.h"
+#include "p2p/base/common.h"
+#include "p2p/base/packetsocketfactory.h"
+#include "p2p/base/stun.h"
+#include "rtc_base/bind.h"
+#include "rtc_base/bytebuffer.h"
+#include "rtc_base/checks.h"
+#include "rtc_base/helpers.h"
+#include "rtc_base/logging.h"
+#include "rtc_base/messagedigest.h"
+#include "rtc_base/ptr_util.h"
+#include "rtc_base/socketadapters.h"
+#include "rtc_base/stringencode.h"
+#include "rtc_base/thread.h"
 
 namespace cricket {
 
 // TODO(juberti): Move this all to a future turnmessage.h
-//static const int IPPROTO_UDP = 17;
+//  static const int IPPROTO_UDP = 17;
 static const int kNonceTimeout = 60 * 60 * 1000;              // 60 minutes
 static const int kDefaultAllocationTimeout = 10 * 60 * 1000;  // 10 minutes
 static const int kPermissionTimeout = 5 * 60 * 1000;          //  5 minutes
@@ -61,7 +62,7 @@ enum {
 class TurnServerAllocation::Permission : public rtc::MessageHandler {
  public:
   Permission(rtc::Thread* thread, const rtc::IPAddress& peer);
-  ~Permission();
+  ~Permission() override;
 
   const rtc::IPAddress& peer() const { return peer_; }
   void Refresh();
@@ -69,7 +70,7 @@ class TurnServerAllocation::Permission : public rtc::MessageHandler {
   sigslot::signal1<Permission*> SignalDestroyed;
 
  private:
-  virtual void OnMessage(rtc::Message* msg);
+  void OnMessage(rtc::Message* msg) override;
 
   rtc::Thread* thread_;
   rtc::IPAddress peer_;
@@ -82,7 +83,7 @@ class TurnServerAllocation::Channel : public rtc::MessageHandler {
  public:
   Channel(rtc::Thread* thread, int id,
                      const rtc::SocketAddress& peer);
-  ~Channel();
+  ~Channel() override;
 
   int id() const { return id_; }
   const rtc::SocketAddress& peer() const { return peer_; }
@@ -91,7 +92,7 @@ class TurnServerAllocation::Channel : public rtc::MessageHandler {
   sigslot::signal1<Channel*> SignalDestroyed;
 
  private:
-  virtual void OnMessage(rtc::Message* msg);
+  void OnMessage(rtc::Message* msg) override;
 
   rtc::Thread* thread_;
   int id_;
@@ -196,7 +197,7 @@ void TurnServer::OnInternalPacket(rtc::AsyncPacketSocket* socket,
                                   const rtc::PacketTime& packet_time) {
   // Fail if the packet is too small to even contain a channel header.
   if (size < TURN_CHANNEL_HEADER_SIZE) {
-   return;
+    return;
   }
   InternalSocketMap::iterator iter = server_sockets_.find(socket);
   RTC_DCHECK(iter != server_sockets_.end());
@@ -211,6 +212,9 @@ void TurnServer::OnInternalPacket(rtc::AsyncPacketSocket* socket,
     if (allocation) {
       allocation->HandleChannelData(data, size);
     }
+    if (stun_message_observer_ != nullptr) {
+      stun_message_observer_->ReceivedChannelData(data, size);
+    }
   }
 }
 
@@ -219,8 +223,12 @@ void TurnServer::HandleStunMessage(TurnServerConnection* conn, const char* data,
   TurnMessage msg;
   rtc::ByteBufferReader buf(data, size);
   if (!msg.Read(&buf) || (buf.Length() > 0)) {
-    LOG(LS_WARNING) << "Received invalid STUN message";
+    RTC_LOG(LS_WARNING) << "Received invalid STUN message";
     return;
+  }
+
+  if (stun_message_observer_ != nullptr) {
+    stun_message_observer_->ReceivedMessage(&msg);
   }
 
   // If it's a STUN binding request, handle that specially.
@@ -454,8 +462,8 @@ void TurnServer::SendErrorResponse(TurnServerConnection* conn,
                                    int code, const std::string& reason) {
   TurnMessage resp;
   InitErrorResponse(req, code, reason, &resp);
-  LOG(LS_INFO) << "Sending error response, type=" << resp.type()
-               << ", code=" << code << ", reason=" << reason;
+  RTC_LOG(LS_INFO) << "Sending error response, type=" << resp.type()
+                   << ", code=" << code << ", reason=" << reason;
   SendStun(conn, &resp);
 }
 

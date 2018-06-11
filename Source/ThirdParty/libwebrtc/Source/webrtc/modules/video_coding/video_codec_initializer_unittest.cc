@@ -8,12 +8,13 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#include "webrtc/api/video_codecs/video_encoder.h"
-#include "webrtc/common_video/include/video_bitrate_allocator.h"
-#include "webrtc/common_types.h"
-#include "webrtc/modules/video_coding/codecs/vp8/temporal_layers.h"
-#include "webrtc/modules/video_coding/include/video_codec_initializer.h"
-#include "webrtc/test/gtest.h"
+#include "api/video_codecs/video_encoder.h"
+#include "common_video/include/video_bitrate_allocator.h"
+#include "common_types.h"  // NOLINT(build/include)
+#include "modules/video_coding/codecs/vp8/temporal_layers.h"
+#include "modules/video_coding/include/video_codec_initializer.h"
+#include "rtc_base/refcountedobject.h"
+#include "test/gtest.h"
 
 namespace webrtc {
 
@@ -78,6 +79,7 @@ class VideoCodecInitializerTest : public ::testing::Test {
           webrtc::VideoEncoderConfig::Vp8EncoderSpecificSettings>(vp8_settings);
       settings_.payload_name = kVp8PayloadName;
       settings_.payload_type = kVp8PayloadType;
+    } else if (type == VideoCodecType::kVideoCodecStereo) {
     } else {
       ADD_FAILURE() << "Unexpected codec type: " << type;
     }
@@ -92,7 +94,8 @@ class VideoCodecInitializerTest : public ::testing::Test {
                                            &bitrate_allocator_out_)) {
       return false;
     }
-
+    if (codec_out_.codecType == VideoCodecType::kVideoCodecStereo)
+      return true;
     // Make sure temporal layers instances have been created.
     if (codec_out_.codecType == VideoCodecType::kVideoCodecVP8) {
       if (!codec_out_.VP8()->tl_factory)
@@ -212,6 +215,12 @@ TEST_F(VideoCodecInitializerTest, HighFpsSimlucastVp8Screenshare) {
   EXPECT_EQ(kHighScreenshareTl0Bps, bitrate_allocation.GetBitrate(1, 0));
   EXPECT_EQ(kHighScreenshareTl1Bps - kHighScreenshareTl0Bps,
             bitrate_allocation.GetBitrate(1, 1));
+}
+
+TEST_F(VideoCodecInitializerTest, SingleStreamStereoCodec) {
+  SetUpFor(VideoCodecType::kVideoCodecStereo, 1, 1, true);
+  streams_.push_back(DefaultStream());
+  EXPECT_TRUE(InitializeCodec());
 }
 
 }  // namespace webrtc

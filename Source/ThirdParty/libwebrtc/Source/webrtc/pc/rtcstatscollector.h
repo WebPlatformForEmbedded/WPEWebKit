@@ -8,28 +8,29 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#ifndef WEBRTC_PC_RTCSTATSCOLLECTOR_H_
-#define WEBRTC_PC_RTCSTATSCOLLECTOR_H_
+#ifndef PC_RTCSTATSCOLLECTOR_H_
+#define PC_RTCSTATSCOLLECTOR_H_
 
 #include <map>
 #include <memory>
 #include <set>
+#include <string>
 #include <vector>
 
-#include "webrtc/api/stats/rtcstats_objects.h"
-#include "webrtc/api/stats/rtcstatscollectorcallback.h"
-#include "webrtc/api/stats/rtcstatsreport.h"
-#include "webrtc/base/asyncinvoker.h"
-#include "webrtc/base/optional.h"
-#include "webrtc/base/refcount.h"
-#include "webrtc/base/scoped_ref_ptr.h"
-#include "webrtc/base/sigslot.h"
-#include "webrtc/base/sslidentity.h"
-#include "webrtc/base/timeutils.h"
-#include "webrtc/call/call.h"
-#include "webrtc/media/base/mediachannel.h"
-#include "webrtc/pc/datachannel.h"
-#include "webrtc/pc/trackmediainfomap.h"
+#include "api/optional.h"
+#include "api/stats/rtcstats_objects.h"
+#include "api/stats/rtcstatscollectorcallback.h"
+#include "api/stats/rtcstatsreport.h"
+#include "call/call.h"
+#include "media/base/mediachannel.h"
+#include "pc/datachannel.h"
+#include "pc/trackmediainfomap.h"
+#include "rtc_base/asyncinvoker.h"
+#include "rtc_base/refcount.h"
+#include "rtc_base/scoped_ref_ptr.h"
+#include "rtc_base/sigslot.h"
+#include "rtc_base/sslidentity.h"
+#include "rtc_base/timeutils.h"
 
 namespace cricket {
 class Candidate;
@@ -117,10 +118,11 @@ class RTCStatsCollector : public virtual rtc::RefCountInterface,
   void ProducePeerConnectionStats_s(
       int64_t timestamp_us, RTCStatsReport* report) const;
   // Produces |RTCInboundRTPStreamStats| and |RTCOutboundRTPStreamStats|.
-  void ProduceRTPStreamStats_n(
-      int64_t timestamp_us, const SessionStats& session_stats,
-      const TrackMediaInfoMap& track_media_info_map,
-      RTCStatsReport* report) const;
+  void ProduceRTPStreamStats_n(int64_t timestamp_us,
+                               const SessionStats& session_stats,
+                               const ChannelNamePairs& channel_name_pairs,
+                               const TrackMediaInfoMap& track_media_info_map,
+                               RTCStatsReport* report) const;
   // Produces |RTCTransportStats|.
   void ProduceTransportStats_n(
       int64_t timestamp_us, const SessionStats& session_stats,
@@ -157,6 +159,7 @@ class RTCStatsCollector : public virtual rtc::RefCountInterface,
   std::unique_ptr<ChannelNamePairs> channel_name_pairs_;
   std::unique_ptr<TrackMediaInfoMap> track_media_info_map_;
   std::map<MediaStreamTrackInterface*, std::string> track_to_id_;
+
   Call::Stats call_stats_;
 
   // A timestamp, in microseconds, that is based on a timer that is
@@ -194,4 +197,4 @@ const char* DataStateToRTCDataChannelStateForTesting(
 
 }  // namespace webrtc
 
-#endif  // WEBRTC_PC_RTCSTATSCOLLECTOR_H_
+#endif  // PC_RTCSTATSCOLLECTOR_H_

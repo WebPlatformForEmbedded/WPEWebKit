@@ -8,8 +8,8 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#ifndef WEBRTC_P2P_BASE_PORT_H_
-#define WEBRTC_P2P_BASE_PORT_H_
+#ifndef P2P_BASE_PORT_H_
+#define P2P_BASE_PORT_H_
 
 #include <map>
 #include <memory>
@@ -17,23 +17,23 @@
 #include <string>
 #include <vector>
 
-#include "webrtc/base/asyncpacketsocket.h"
-#include "webrtc/base/checks.h"
-#include "webrtc/base/network.h"
-#include "webrtc/base/optional.h"
-#include "webrtc/base/proxyinfo.h"
-#include "webrtc/base/ratetracker.h"
-#include "webrtc/base/sigslot.h"
-#include "webrtc/base/socketaddress.h"
-#include "webrtc/base/thread.h"
-#include "webrtc/p2p/base/candidate.h"
-#include "webrtc/p2p/base/candidatepairinterface.h"
-#include "webrtc/p2p/base/jseptransport.h"
-#include "webrtc/p2p/base/packetlossestimator.h"
-#include "webrtc/p2p/base/packetsocketfactory.h"
-#include "webrtc/p2p/base/portinterface.h"
-#include "webrtc/p2p/base/stun.h"
-#include "webrtc/p2p/base/stunrequest.h"
+#include "api/candidate.h"
+#include "api/optional.h"
+#include "p2p/base/candidatepairinterface.h"
+#include "p2p/base/packetlossestimator.h"
+#include "p2p/base/packetsocketfactory.h"
+#include "p2p/base/portinterface.h"
+#include "p2p/base/stun.h"
+#include "p2p/base/stunrequest.h"
+#include "rtc_base/asyncpacketsocket.h"
+#include "rtc_base/checks.h"
+#include "rtc_base/nethelper.h"
+#include "rtc_base/network.h"
+#include "rtc_base/proxyinfo.h"
+#include "rtc_base/ratetracker.h"
+#include "rtc_base/sigslot.h"
+#include "rtc_base/socketaddress.h"
+#include "rtc_base/thread.h"
 
 namespace cricket {
 
@@ -44,11 +44,6 @@ extern const char LOCAL_PORT_TYPE[];
 extern const char STUN_PORT_TYPE[];
 extern const char PRFLX_PORT_TYPE[];
 extern const char RELAY_PORT_TYPE[];
-
-extern const char UDP_PROTOCOL_NAME[];
-extern const char TCP_PROTOCOL_NAME[];
-extern const char SSLTCP_PROTOCOL_NAME[];
-extern const char TLS_PROTOCOL_NAME[];
 
 // RFC 6544, TCP candidate encoding rules.
 extern const int DISCARD_PORT;
@@ -108,6 +103,52 @@ enum class IceCandidatePairState {
   // frozen because we have not implemented ICE freezing logic.
 };
 
+// Stats that we can return about the connections for a transport channel.
+// TODO(hta): Rename to ConnectionStats
+struct ConnectionInfo {
+  ConnectionInfo();
+  ConnectionInfo(const ConnectionInfo&);
+  ~ConnectionInfo();
+
+  bool best_connection;      // Is this the best connection we have?
+  bool writable;             // Has this connection received a STUN response?
+  bool receiving;            // Has this connection received anything?
+  bool timeout;              // Has this connection timed out?
+  bool new_connection;       // Is this a newly created connection?
+  size_t rtt;                // The STUN RTT for this connection.
+  size_t sent_total_bytes;   // Total bytes sent on this connection.
+  size_t sent_bytes_second;  // Bps over the last measurement interval.
+  size_t sent_discarded_packets;  // Number of outgoing packets discarded due to
+                                  // socket errors.
+  size_t sent_total_packets;  // Number of total outgoing packets attempted for
+                              // sending.
+  size_t sent_ping_requests_total;  // Number of STUN ping request sent.
+  size_t sent_ping_requests_before_first_response;  // Number of STUN ping
+  // sent before receiving the first response.
+  size_t sent_ping_responses;  // Number of STUN ping response sent.
+
+  size_t recv_total_bytes;     // Total bytes received on this connection.
+  size_t recv_bytes_second;    // Bps over the last measurement interval.
+  size_t recv_ping_requests;   // Number of STUN ping request received.
+  size_t recv_ping_responses;  // Number of STUN ping response received.
+  Candidate local_candidate;   // The local candidate for this connection.
+  Candidate remote_candidate;  // The remote candidate for this connection.
+  void* key;                   // A static value that identifies this conn.
+  // https://w3c.github.io/webrtc-stats/#dom-rtcicecandidatepairstats-state
+  IceCandidatePairState state;
+  // https://w3c.github.io/webrtc-stats/#dom-rtcicecandidatepairstats-priority
+  uint64_t priority;
+  // https://w3c.github.io/webrtc-stats/#dom-rtcicecandidatepairstats-nominated
+  bool nominated;
+  // https://w3c.github.io/webrtc-stats/#dom-rtcicecandidatepairstats-totalroundtriptime
+  uint64_t total_round_trip_time_ms;
+  // https://w3c.github.io/webrtc-stats/#dom-rtcicecandidatepairstats-currentroundtriptime
+  rtc::Optional<uint32_t> current_round_trip_time_ms;
+};
+
+// Information about all the connections of a channel.
+typedef std::vector<ConnectionInfo> ConnectionInfos;
+
 const char* ProtoToString(ProtocolType proto);
 bool StringToProto(const char* value, ProtocolType* proto);
 
@@ -142,6 +183,13 @@ class Port : public PortInterface, public rtc::MessageHandler,
        const std::string& type,
        rtc::PacketSocketFactory* factory,
        rtc::Network* network,
+       const std::string& username_fragment,
+       const std::string& password);
+  // TODO(deadbeef): Delete this constructor once clients are moved off of it.
+  Port(rtc::Thread* thread,
+       const std::string& type,
+       rtc::PacketSocketFactory* factory,
+       rtc::Network* network,
        const rtc::IPAddress& ip,
        const std::string& username_fragment,
        const std::string& password);
@@ -149,24 +197,23 @@ class Port : public PortInterface, public rtc::MessageHandler,
        const std::string& type,
        rtc::PacketSocketFactory* factory,
        rtc::Network* network,
-       const rtc::IPAddress& ip,
        uint16_t min_port,
        uint16_t max_port,
        const std::string& username_fragment,
        const std::string& password);
-  virtual ~Port();
+  ~Port() override;
 
-  virtual const std::string& Type() const { return type_; }
-  virtual rtc::Network* Network() const { return network_; }
+  const std::string& Type() const override;
+  rtc::Network* Network() const override;
 
   // Methods to set/get ICE role and tiebreaker values.
-  IceRole GetIceRole() const { return ice_role_; }
-  void SetIceRole(IceRole role) { ice_role_ = role; }
+  IceRole GetIceRole() const override;
+  void SetIceRole(IceRole role) override;
 
-  void SetIceTiebreaker(uint64_t tiebreaker) { tiebreaker_ = tiebreaker; }
-  uint64_t IceTiebreaker() const { return tiebreaker_; }
+  void SetIceTiebreaker(uint64_t tiebreaker) override;
+  uint64_t IceTiebreaker() const override;
 
-  virtual bool SharedSocket() const { return shared_socket_; }
+  bool SharedSocket() const override;
   void ResetSharedSocket() { shared_socket_ = false; }
 
   // Should not destroy the port even if no connection is using it. Called when
@@ -219,9 +266,7 @@ class Port : public PortInterface, public rtc::MessageHandler,
   sigslot::signal2<Port*, const Candidate&> SignalCandidateReady;
 
   // Provides all of the above information in one handy object.
-  virtual const std::vector<Candidate>& Candidates() const {
-    return candidates_;
-  }
+  const std::vector<Candidate>& Candidates() const override;
 
   // SignalPortComplete is sent when port completes the task of candidates
   // allocation.
@@ -239,8 +284,7 @@ class Port : public PortInterface, public rtc::MessageHandler,
   const AddressMap& connections() { return connections_; }
 
   // Returns the connection to the given address or NULL if none exists.
-  virtual Connection* GetConnection(
-      const rtc::SocketAddress& remote_addr);
+  Connection* GetConnection(const rtc::SocketAddress& remote_addr) override;
 
   // Called each time a connection is created.
   sigslot::signal2<Port*, Connection*> SignalConnectionCreated;
@@ -249,22 +293,26 @@ class Port : public PortInterface, public rtc::MessageHandler,
   // to accept the packet based on the |remote_addr|. Currently only UDP
   // port implemented this method.
   // TODO(mallinath) - Make it pure virtual.
-  virtual bool HandleIncomingPacket(
-      rtc::AsyncPacketSocket*, const char*, size_t,
-      const rtc::SocketAddress&,
-      const rtc::PacketTime&) {
-    RTC_NOTREACHED();
-    return false;
-  }
+  virtual bool HandleIncomingPacket(rtc::AsyncPacketSocket* socket,
+                                    const char* data,
+                                    size_t size,
+                                    const rtc::SocketAddress& remote_addr,
+                                    const rtc::PacketTime& packet_time);
+
+  // Shall the port handle packet from this |remote_addr|.
+  // This method is overridden by TurnPort.
+  virtual bool CanHandleIncomingPacketsFrom(
+      const rtc::SocketAddress& remote_addr) const;
 
   // Sends a response message (normal or error) to the given request.  One of
   // these methods should be called as a response to SignalUnknownAddress.
   // NOTE: You MUST call CreateConnection BEFORE SendBindingResponse.
-  virtual void SendBindingResponse(StunMessage* request,
-                                   const rtc::SocketAddress& addr);
-  virtual void SendBindingErrorResponse(
-      StunMessage* request, const rtc::SocketAddress& addr,
-      int error_code, const std::string& reason);
+  void SendBindingResponse(StunMessage* request,
+                           const rtc::SocketAddress& addr) override;
+  void SendBindingErrorResponse(StunMessage* request,
+                                const rtc::SocketAddress& addr,
+                                int error_code,
+                                const std::string& reason) override;
 
   void set_proxy(const std::string& user_agent,
                  const rtc::ProxyInfo& proxy) {
@@ -274,16 +322,15 @@ class Port : public PortInterface, public rtc::MessageHandler,
   const std::string& user_agent() { return user_agent_; }
   const rtc::ProxyInfo& proxy() { return proxy_; }
 
-  virtual void EnablePortPackets();
+  void EnablePortPackets() override;
 
   // Called if the port has no connections and is no longer useful.
   void Destroy();
 
-  virtual void OnMessage(rtc::Message *pmsg);
+  void OnMessage(rtc::Message* pmsg) override;
 
   // Debugging description of this port
-  virtual std::string ToString() const;
-  const rtc::IPAddress& ip() const { return ip_; }
+  std::string ToString() const override;
   uint16_t min_port() { return min_port_; }
   uint16_t max_port() { return max_port_; }
 
@@ -397,7 +444,6 @@ class Port : public PortInterface, public rtc::MessageHandler,
   std::string type_;
   bool send_retransmit_count_attribute_;
   rtc::Network* network_;
-  rtc::IPAddress ip_;
   uint16_t min_port_;
   uint16_t max_port_;
   std::string content_name_;
@@ -427,7 +473,7 @@ class Port : public PortInterface, public rtc::MessageHandler,
   // A virtual cost perceived by the user, usually based on the network type
   // (WiFi. vs. Cellular). It takes precedence over the priority when
   // comparing two connections.
-  uint16_t network_cost_;
+  int16_t network_cost_;
   State state_ = State::INIT;
   int64_t last_time_all_connections_removed_ = 0;
 
@@ -449,7 +495,7 @@ class Connection : public CandidatePairInterface,
     uint32_t nomination;
   };
 
-  virtual ~Connection();
+  ~Connection() override;
 
   // The local port where this connection sends and receives packets.
   Port* port() { return port_; }
@@ -457,9 +503,9 @@ class Connection : public CandidatePairInterface,
 
   // Implementation of virtual methods in CandidatePairInterface.
   // Returns the description of the local port
-  virtual const Candidate& local_candidate() const;
+  const Candidate& local_candidate() const override;
   // Returns the description of the remote port to which we communicate.
-  virtual const Candidate& remote_candidate() const;
+  const Candidate& remote_candidate() const override;
 
   // Returns the pair priority.
   uint64_t priority() const;
@@ -666,7 +712,7 @@ class Connection : public CandidatePairInterface,
 
   uint32_t nomination() const { return nomination_; }
 
-  void OnMessage(rtc::Message *pmsg);
+  void OnMessage(rtc::Message* pmsg) override;
 
   Port* port_;
   size_t local_candidate_index_;
@@ -741,7 +787,7 @@ class ProxyConnection : public Connection {
   int Send(const void* data,
            size_t size,
            const rtc::PacketOptions& options) override;
-  int GetError() override { return error_; }
+  int GetError() override;
 
  private:
   int error_ = 0;
@@ -749,4 +795,4 @@ class ProxyConnection : public Connection {
 
 }  // namespace cricket
 
-#endif  // WEBRTC_P2P_BASE_PORT_H_
+#endif  // P2P_BASE_PORT_H_
