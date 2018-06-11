@@ -55,7 +55,7 @@ class MediaStreamTrack :
 public:
     class Observer {
     public:
-        virtual ~Observer() { }
+        virtual ~Observer() = default;
         virtual void trackDidEnd() = 0;
     };
 
@@ -95,6 +95,8 @@ public:
         std::optional<int> sampleRate;
         std::optional<int> sampleSize;
         std::optional<bool> echoCancellation;
+        std::optional<bool> displaySurface;
+        String logicalSurface;
         String deviceId;
         String groupId;
     };
@@ -135,6 +137,8 @@ public:
 
     // ActiveDOMObject API.
     bool hasPendingActivity() const final;
+
+    void setIdForTesting(String&& id) { m_private->setIdForTesting(WTFMove(id)); }
 
 protected:
     MediaStreamTrack(ScriptExecutionContext&, Ref<MediaStreamTrackPrivate>&&);

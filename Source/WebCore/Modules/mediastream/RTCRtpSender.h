@@ -43,7 +43,7 @@ public:
     public:
         virtual void replaceTrack(RTCRtpSender&, RefPtr<MediaStreamTrack>&&, DOMPromiseDeferred<void>&&) = 0;
         virtual RTCRtpParameters getParameters(RTCRtpSender&) const = 0;
-        virtual ~Backend() { }
+        virtual ~Backend() = default;
     };
 
     static Ref<RTCRtpSender> create(Ref<MediaStreamTrack>&&, Vector<String>&& mediaStreamIds, Backend&);
@@ -56,7 +56,7 @@ public:
     void setMediaStreamIds(Vector<String>&& mediaStreamIds) { m_mediaStreamIds = WTFMove(mediaStreamIds); }
 
     bool isStopped() const { return !m_backend; }
-    void stop() { m_backend = nullptr; }
+    void stop();
     void setTrack(Ref<MediaStreamTrack>&&);
     void setTrackToNull();
 

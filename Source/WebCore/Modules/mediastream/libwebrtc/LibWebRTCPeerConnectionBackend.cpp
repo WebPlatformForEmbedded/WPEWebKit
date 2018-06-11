@@ -40,6 +40,8 @@
 #include "RTCSessionDescription.h"
 #include "RealtimeIncomingAudioSource.h"
 #include "RealtimeIncomingVideoSource.h"
+#include "RealtimeOutgoingAudioSource.h"
+#include "RealtimeOutgoingVideoSource.h"
 
 namespace WebCore {
 
@@ -47,27 +49,22 @@ static std::unique_ptr<PeerConnectionBackend> createLibWebRTCPeerConnectionBacke
 {
     if (!LibWebRTCProvider::webRTCAvailable())
         return nullptr;
-    return std::make_unique<LibWebRTCPeerConnectionBackend>(peerConnection);
+
+    auto* page = downcast<Document>(*peerConnection.scriptExecutionContext()).page();
+    if (!page)
+        return nullptr;
+    return std::make_unique<LibWebRTCPeerConnectionBackend>(peerConnection, page->libWebRTCProvider());
 }
 
 CreatePeerConnectionBackend PeerConnectionBackend::create = createLibWebRTCPeerConnectionBackend;
 
-static inline LibWebRTCProvider& libWebRTCProvider(RTCPeerConnection& peerConnection)
-{
-    ASSERT(peerConnection.scriptExecutionContext()->isDocument());
-    auto* page = static_cast<Document*>(peerConnection.scriptExecutionContext())->page();
-    return page->libWebRTCProvider();
-}
-
-LibWebRTCPeerConnectionBackend::LibWebRTCPeerConnectionBackend(RTCPeerConnection& peerConnection)
+LibWebRTCPeerConnectionBackend::LibWebRTCPeerConnectionBackend(RTCPeerConnection& peerConnection, LibWebRTCProvider& provider)
     : PeerConnectionBackend(peerConnection)
-    , m_endpoint(LibWebRTCMediaEndpoint::create(*this, libWebRTCProvider(peerConnection)))
+    , m_endpoint(LibWebRTCMediaEndpoint::create(*this, provider))
 {
 }
 
-LibWebRTCPeerConnectionBackend::~LibWebRTCPeerConnectionBackend()
-{
-}
+LibWebRTCPeerConnectionBackend::~LibWebRTCPeerConnectionBackend() = default;
 
 static inline webrtc::PeerConnectionInterface::BundlePolicy bundlePolicyfromConfiguration(const MediaEndpointConfiguration& configuration)
 {
@@ -79,6 +76,9 @@ static inline webrtc::PeerConnectionInterface::BundlePolicy bundlePolicyfromConf
     case RTCBundlePolicy::Balanced:
         return webrtc::PeerConnectionInterface::kBundlePolicyBalanced;
     }
+
+    ASSERT_NOT_REACHED();
+    return webrtc::PeerConnectionInterface::kBundlePolicyMaxCompat;
 }
 
 static inline webrtc::PeerConnectionInterface::IceTransportsType iceTransportPolicyfromConfiguration(const MediaEndpointConfiguration& configuration)
@@ -89,6 +89,9 @@ static inline webrtc::PeerConnectionInterface::IceTransportsType iceTransportPol
     case RTCIceTransportPolicy::All:
         return webrtc::PeerConnectionInterface::kAll;
     }
+
+    ASSERT_NOT_REACHED();
+    return webrtc::PeerConnectionInterface::kNone;
 }
 
 static webrtc::PeerConnectionInterface::RTCConfiguration configurationFromMediaEndpointConfiguration(MediaEndpointConfiguration&& configuration)
@@ -116,7 +119,11 @@ static webrtc::PeerConnectionInterface::RTCConfiguration configurationFromMediaE
 
 bool LibWebRTCPeerConnectionBackend::setConfiguration(MediaEndpointConfiguration&& configuration)
 {
-    return m_endpoint->setConfiguration(libWebRTCProvider(m_peerConnection), configurationFromMediaEndpointConfiguration(WTFMove(configuration)));
+    auto* page = downcast<Document>(*m_peerConnection.scriptExecutionContext()).page();
+    if (!page)
+        return false;
+
+    return m_endpoint->setConfiguration(page->libWebRTCProvider(), configurationFromMediaEndpointConfiguration(WTFMove(configuration)));
 }
 
 void LibWebRTCPeerConnectionBackend::getStats(MediaStreamTrack* track, Ref<DeferredPromise>&& promise)
@@ -148,8 +155,9 @@ void LibWebRTCPeerConnectionBackend::doSetLocalDescription(RTCSessionDescription
     m_endpoint->doSetLocalDescription(description);
     if (!m_isLocalDescriptionSet) {
         if (m_isRemoteDescriptionSet) {
-            while (m_pendingCandidates.size())
-                m_endpoint->addIceCandidate(*m_pendingCandidates.takeLast().release());
+            for (auto& candidate : m_pendingCandidates)
+                m_endpoint->addIceCandidate(*candidate);
+            m_pendingCandidates.clear();
         }
         m_isLocalDescriptionSet = true;
     }
@@ -160,8 +168,8 @@ void LibWebRTCPeerConnectionBackend::doSetRemoteDescription(RTCSessionDescriptio
     m_endpoint->doSetRemoteDescription(description);
     if (!m_isRemoteDescriptionSet) {
         if (m_isLocalDescriptionSet) {
-            while (m_pendingCandidates.size())
-                m_endpoint->addIceCandidate(*m_pendingCandidates.takeLast().release());
+            for (auto& candidate : m_pendingCandidates)
+                m_endpoint->addIceCandidate(*candidate);
         }
         m_isRemoteDescriptionSet = true;
     }
@@ -190,6 +198,9 @@ void LibWebRTCPeerConnectionBackend::doStop()
 
     m_endpoint->stop();
 
+    m_audioSources.clear();
+    m_videoSources.clear();
+    m_statsPromises.clear();
     m_remoteStreams.clear();
     m_pendingReceivers.clear();
 }
@@ -201,8 +212,7 @@ void LibWebRTCPeerConnectionBackend::doAddIceCandidate(RTCIceCandidate& candidat
     std::unique_ptr<webrtc::IceCandidateInterface> rtcCandidate(webrtc::CreateIceCandidate(candidate.sdpMid().utf8().data(), sdpMLineIndex, candidate.candidate().utf8().data(), &error));
 
     if (!rtcCandidate) {
-        String message(error.description.data(), error.description.size());
-        addIceCandidateFailed(Exception { OperationError, WTFMove(message) });
+        addIceCandidateFailed(Exception { OperationError, String::fromUTF8(error.description.data(), error.description.length()) });
         return;
     }
 
@@ -229,8 +239,7 @@ void LibWebRTCPeerConnectionBackend::addVideoSource(Ref<RealtimeOutgoingVideoSou
 
 static inline Ref<RTCRtpReceiver> createReceiverForSource(ScriptExecutionContext& context, Ref<RealtimeMediaSource>&& source)
 {
-    String id = source->id();
-    auto remoteTrackPrivate = MediaStreamTrackPrivate::create(WTFMove(source), WTFMove(id));
+    auto remoteTrackPrivate = MediaStreamTrackPrivate::create(WTFMove(source), String { source->id() });
     auto remoteTrack = MediaStreamTrack::create(context, WTFMove(remoteTrackPrivate));
 
     return RTCRtpReceiver::create(WTFMove(remoteTrack));

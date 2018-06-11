@@ -45,7 +45,7 @@
 #include "RTCPeerConnectionState.h"
 #include "RTCRtpTransceiver.h"
 #include "RTCSignalingState.h"
-#include <pal/LoggerHelper.h>
+#include <wtf/LoggerHelper.h>
 
 namespace WebCore {
 
@@ -70,7 +70,7 @@ class RTCPeerConnection final
     , public EventTargetWithInlineData
     , public ActiveDOMObject
 #if !RELEASE_LOG_DISABLED
-    , public PAL::LoggerHelper
+    , private LoggerHelper
 #endif
 {
 public:
@@ -107,6 +107,7 @@ public:
     void close();
 
     bool isClosed() const { return m_connectionState == RTCPeerConnectionState::Closed; }
+    bool isStopped() const { return m_isStopped; }
 
     // 5.1 RTCPeerConnection extensions
     const Vector<std::reference_wrapper<RTCRtpSender>>& getSenders() const { return m_transceiverSet->senders(); }
@@ -160,7 +161,7 @@ public:
     bool hasPendingActivity() const final;
 
 #if !RELEASE_LOG_DISABLED
-    const PAL::Logger& logger() const final { return m_logger.get(); }
+    const Logger& logger() const final { return m_logger.get(); }
     const void* logIdentifier() const final { return m_logIdentifier; }
     const char* logClassName() const final { return "RTCPeerConnection"; }
     WTFLogChannel& logChannel() const final;
@@ -181,7 +182,7 @@ private:
     // EventTarget implementation.
     void refEventTarget() final { ref(); }
     void derefEventTarget() final { deref(); }
-    bool dispatchEvent(Event&) final;
+    void dispatchEvent(Event&) final;
 
     // ActiveDOMObject
     WEBCORE_EXPORT void stop() final;
@@ -204,7 +205,7 @@ private:
     RTCPeerConnectionState m_connectionState { RTCPeerConnectionState::New };
 
 #if !RELEASE_LOG_DISABLED
-    Ref<const PAL::Logger> m_logger;
+    Ref<const Logger> m_logger;
     const void* m_logIdentifier;
 #endif
 
