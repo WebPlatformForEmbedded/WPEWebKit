@@ -33,6 +33,7 @@
 
 #if ENABLE(WEB_RTC)
 
+#include "Document.h"
 #include "JSDOMPromiseDeferred.h"
 #include "LibWebRTCProvider.h"
 #include "RTCRtpParameters.h"

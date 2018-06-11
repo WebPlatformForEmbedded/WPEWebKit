@@ -26,7 +26,11 @@
 
 #if ENABLE(MEDIA_STREAM)
 
+#ifdef USE_LIBWEBRTC_UPSTREAM
 #include "CanvasBase.h"
+#else
+#include "HTMLCanvasElement.h"
+#endif
 #include "MediaStreamTrack.h"
 #include "Timer.h"
 #include <wtf/TypeCasts.h>
@@ -58,10 +62,15 @@ private:
         Source(HTMLCanvasElement&, std::optional<double>&&);
 
         // CanvasObserver API
+#ifdef USE_LIBWEBRTC_UPSTREAM
         void canvasChanged(CanvasBase&, const FloatRect&) final;
         void canvasResized(CanvasBase&) final;
         void canvasDestroyed(CanvasBase&) final;
-
+#else
+        void canvasChanged(HTMLCanvasElement&, const FloatRect&) final;
+        void canvasResized(HTMLCanvasElement&) final;
+        void canvasDestroyed(HTMLCanvasElement&) final;
+#endif
         // RealtimeMediaSource API
         void startProducingData() final;
         void stopProducingData()  final;

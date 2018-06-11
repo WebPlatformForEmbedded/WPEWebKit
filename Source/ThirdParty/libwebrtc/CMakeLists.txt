@@ -300,8 +300,10 @@ set(webrtc_SOURCES
     Source/third_party/libyuv/source/row_common.cc
     Source/third_party/libyuv/source/row_dspr2.cc
     Source/third_party/libyuv/source/row_gcc.cc
+    Source/third_party/libyuv/source/row_neon.cc
     Source/third_party/libyuv/source/scale.cc
     Source/third_party/libyuv/source/scale_any.cc
+    Source/third_party/libyuv/source/scale_neon.cc
     Source/third_party/libyuv/source/scale_argb.cc
     Source/third_party/libyuv/source/scale_common.cc
     Source/third_party/libyuv/source/scale_dspr2.cc
@@ -875,11 +877,8 @@ set(webrtc_SOURCES
     Source/webrtc/modules/audio_device/fine_audio_buffer.cc
     Source/webrtc/modules/audio_device/linux/alsasymboltable_linux.cc
     Source/webrtc/modules/audio_device/linux/audio_device_alsa_linux.cc
-    Source/webrtc/modules/audio_device/linux/audio_device_pulse_linux.cc
     Source/webrtc/modules/audio_device/linux/audio_mixer_manager_alsa_linux.cc
-    Source/webrtc/modules/audio_device/linux/audio_mixer_manager_pulse_linux.cc
     Source/webrtc/modules/audio_device/linux/latebindingsymboltable_linux.cc
-    Source/webrtc/modules/audio_device/linux/pulseaudiosymboltable_linux.cc
     Source/webrtc/modules/audio_mixer/audio_frame_manipulator.cc
     Source/webrtc/modules/audio_mixer/audio_mixer_impl.cc
     Source/webrtc/modules/audio_mixer/default_output_rate_calculator.cc
@@ -1376,6 +1375,14 @@ set(webrtc_SOURCES
     $<TARGET_OBJECTS:gflags>
     $<TARGET_OBJECTS:libsrtp>
 )
+
+if (ENABLE_WEBRTC_PULSE_AUDIO)
+    list(APPEND webrtc_SOURCES
+       Source/webrtc/modules/audio_device/linux/audio_device_pulse_linux.cc
+       Source/webrtc/modules/audio_device/linux/audio_mixer_manager_pulse_linux.cc
+       Source/webrtc/modules/audio_device/linux/pulseaudiosymboltable_linux.c
+    )
+endif()
 
 if (WTF_CPU_X86_64 OR WTF_CPU_X86)
     list(APPEND webrtc_SOURCES

@@ -35,9 +35,12 @@
 
 #if ENABLE(MEDIA_STREAM)
 
-// FIXME: GTK to implement its own RealtimeMediaSourceCenter.
-#if PLATFORM(GTK)
+// FIXME: GTK and WPE to implement its own RealtimeMediaSourceCenter.
+#if PLATFORM(GTK) || PLATFORM(WPE)
 #include "MockRealtimeMediaSourceCenter.h"
+#if PLATFORM(WPE)
+#include "NotImplemented.h"
+#endif
 #endif
 
 #include "CaptureDeviceManager.h"
@@ -64,7 +67,7 @@ RealtimeMediaSourceCenter& RealtimeMediaSourceCenter::singleton()
     RealtimeMediaSourceCenter* override = mediaStreamCenterOverride();
     if (override)
         return *override;
-#if PLATFORM(GTK)
+#if PLATFORM(GTK) || PLATFORM(WPE)  //FIXME override with actual implementation.
     ASSERT(isMainThread());
     notImplemented(); // Return MockRealtimeMediaSourceCenter to avoid crash.
     static NeverDestroyed<MockRealtimeMediaSourceCenter> center;

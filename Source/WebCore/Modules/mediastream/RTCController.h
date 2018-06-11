@@ -25,6 +25,7 @@
 #pragma once
 
 #include "SecurityOrigin.h"
+#include "Document.h"
 #include <wtf/Vector.h>
 
 namespace WebCore {

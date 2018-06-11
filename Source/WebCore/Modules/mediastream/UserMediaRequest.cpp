@@ -86,12 +86,21 @@ SecurityOrigin* UserMediaRequest::topLevelDocumentOrigin() const
 
 static bool isSecure(DocumentLoader& documentLoader)
 {
+#if USE_LIBWEBRTC_UPSTREAM
     auto& response = documentLoader.response();
     if (SecurityOrigin::isLocalHostOrLoopbackIPAddress(documentLoader.response().url().host()))
         return true;
     return SchemeRegistry::shouldTreatURLSchemeAsSecure(response.url().protocol().toStringWithoutCopying())
         && response.certificateInfo()
         && !response.certificateInfo()->containsNonRootSHA1SignedCertificate();
+#else
+
+    auto& response = documentLoader.response();
+    return SchemeRegistry::shouldTreatURLSchemeAsSecure(response.url().protocol().toStringWithoutCopying())
+        && response.certificateInfo()
+        && !response.certificateInfo()->containsNonRootSHA1SignedCertificate();
+
+#endif
 }
 
 static bool isAllowedToUse(Document& document, Document& topDocument, bool requiresAudio, bool requiresVideo)
