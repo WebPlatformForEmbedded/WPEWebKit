@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015 Ericsson AB. All rights reserved.
+ * Copyright (C) 2017 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -11,7 +11,7 @@
  *    notice, this list of conditions and the following disclaimer
  *    in the documentation and/or other materials provided with the
  *    distribution.
- * 3. Neither the name of Ericsson nor the names of its contributors
+ * 3. Neither the name of Google Inc. nor the names of its contributors
  *    may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
  *
@@ -29,25 +29,56 @@
  */
 
 #include "config.h"
+#include "RealtimeIncomingVideoSource.h"
 
-#if ENABLE(WEB_RTC)
-#include "SDPProcessorScriptResource.h"
+#if USE(LIBWEBRTC)
 
-#include "SDPProcessorScriptsData.h"
-#include <wtf/NeverDestroyed.h>
+#include "Logging.h"
 
 namespace WebCore {
 
-namespace SDPProcessorScriptResource {
-
-const String& scriptString()
+RealtimeIncomingVideoSource::RealtimeIncomingVideoSource(rtc::scoped_refptr<webrtc::VideoTrackInterface>&& videoTrack, String&& videoTrackId)
+    : RealtimeMediaSource(WTFMove(videoTrackId), RealtimeMediaSource::Type::Video, String())
+    , m_videoTrack(WTFMove(videoTrack))
 {
-    static NeverDestroyed<const String> script(sdpJavaScript, sizeof(sdpJavaScript));
-    return script;
+    m_currentSettings.setWidth(640);
+    m_currentSettings.setHeight(480);
+    notifyMutedChange(!m_videoTrack);
 }
 
-} // namespace SDPProcessorScriptResource
+void RealtimeIncomingVideoSource::startProducingData()
+{
+    if (m_videoTrack)
+        m_videoTrack->AddOrUpdateSink(this, rtc::VideoSinkWants());
+}
+
+void RealtimeIncomingVideoSource::setSourceTrack(rtc::scoped_refptr<webrtc::VideoTrackInterface>&& track)
+{
+    ASSERT(!m_videoTrack);
+    ASSERT(track);
+
+    m_videoTrack = WTFMove(track);
+    notifyMutedChange(!m_videoTrack);
+    if (isProducingData())
+        m_videoTrack->AddOrUpdateSink(this, rtc::VideoSinkWants());
+}
+
+void RealtimeIncomingVideoSource::stopProducingData()
+{
+    if (m_videoTrack)
+        m_videoTrack->RemoveSink(this);
+}
+
+const RealtimeMediaSourceCapabilities& RealtimeIncomingVideoSource::capabilities() const
+{
+    return RealtimeMediaSourceCapabilities::emptyCapabilities();
+}
+
+const RealtimeMediaSourceSettings& RealtimeIncomingVideoSource::settings() const
+{
+    return m_currentSettings;
+}
 
 } // namespace WebCore
 
-#endif // ENABLE(WEB_RTC)
+#endif // USE(LIBWEBRTC)

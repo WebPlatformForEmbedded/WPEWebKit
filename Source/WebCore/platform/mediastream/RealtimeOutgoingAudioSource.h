@@ -28,9 +28,9 @@
 
 #pragma once
 
+
 #if USE(LIBWEBRTC)
 
-#include "AudioSampleDataSource.h"
 #include "LibWebRTCMacros.h"
 #include "MediaStreamTrackPrivate.h"
 #include "Timer.h"
@@ -44,9 +44,10 @@ class AudioTrackSinkInterface;
 
 namespace WebCore {
 
-class RealtimeOutgoingAudioSource final : public ThreadSafeRefCounted<RealtimeOutgoingAudioSource>, public webrtc::AudioSourceInterface, private MediaStreamTrackPrivate::Observer {
+class RealtimeOutgoingAudioSource : public ThreadSafeRefCounted<RealtimeOutgoingAudioSource>, public webrtc::AudioSourceInterface, private MediaStreamTrackPrivate::Observer {
 public:
-    static Ref<RealtimeOutgoingAudioSource> create(Ref<MediaStreamTrackPrivate>&& audioSource) { return adoptRef(*new RealtimeOutgoingAudioSource(WTFMove(audioSource))); }
+    static Ref<RealtimeOutgoingAudioSource> create(Ref<MediaStreamTrackPrivate>&& audioSource);
+
     ~RealtimeOutgoingAudioSource() { stop(); }
 
     void stop();
@@ -54,14 +55,30 @@ public:
     bool setSource(Ref<MediaStreamTrackPrivate>&&);
     MediaStreamTrackPrivate& source() const { return m_audioSource.get(); }
 
-private:
+protected:
     explicit RealtimeOutgoingAudioSource(Ref<MediaStreamTrackPrivate>&&);
 
+    virtual void handleMutedIfNeeded();
+    virtual void sendSilence() { };
+    virtual void pullAudioData() { };
+
+    Vector<webrtc::AudioTrackSinkInterface*> m_sinks;
+    bool m_muted { false };
+    bool m_enabled { true };
+
+private:
     virtual void AddSink(webrtc::AudioTrackSinkInterface* sink) { m_sinks.append(sink); }
     virtual void RemoveSink(webrtc::AudioTrackSinkInterface* sink) { m_sinks.removeFirst(sink); }
 
-    int AddRef() const final { ref(); return refCount(); }
-    int Release() const final { deref(); return refCount(); }
+    void AddRef() const final { ref(); }
+    rtc::RefCountReleaseStatus Release() const final
+    {
+        callOnMainThread([this] {
+            deref();
+        });
+        return rtc::RefCountReleaseStatus::kOtherRefsRemained;
+    }
+
     SourceState state() const final { return kLive; }
     bool remote() const final { return false; }
     void RegisterObserver(webrtc::ObserverInterface*) final { }
@@ -69,37 +86,23 @@ private:
 
     void sourceMutedChanged();
     void sourceEnabledChanged();
-    void audioSamplesAvailable(const MediaTime&, const PlatformAudioData&, const AudioStreamDescription&, size_t);
+    virtual void audioSamplesAvailable(const MediaTime&, const PlatformAudioData&, const AudioStreamDescription&, size_t) { };
 
-    bool isReachingBufferedAudioDataHighLimit();
-    bool isReachingBufferedAudioDataLowLimit();
-    bool hasBufferedEngouhData();
+    virtual bool isReachingBufferedAudioDataHighLimit() { return false; };
+    virtual bool isReachingBufferedAudioDataLowLimit() { return false; };
+    virtual bool hasBufferedEnoughData() { return false; };
 
     // MediaStreamTrackPrivate::Observer API
     void trackMutedChanged(MediaStreamTrackPrivate&) final { sourceMutedChanged(); }
     void trackEnabledChanged(MediaStreamTrackPrivate&) final { sourceEnabledChanged(); }
-    void audioSamplesAvailable(MediaStreamTrackPrivate&, const MediaTime& mediaTime, const PlatformAudioData& data, const AudioStreamDescription& description, size_t sampleCount) final { audioSamplesAvailable(mediaTime, data, description, sampleCount); }
+    void audioSamplesAvailable(MediaStreamTrackPrivate&, const MediaTime& mediaTime, const PlatformAudioData& data, const AudioStreamDescription& description, size_t sampleCount) { audioSamplesAvailable(mediaTime, data, description, sampleCount); }
     void trackEnded(MediaStreamTrackPrivate&) final { }
     void trackSettingsChanged(MediaStreamTrackPrivate&) final { }
 
-    void pullAudioData();
-
     void initializeConverter();
-    void handleMutedIfNeeded();
-    void sendSilence();
 
-    Vector<webrtc::AudioTrackSinkInterface*> m_sinks;
     Ref<MediaStreamTrackPrivate> m_audioSource;
-    Ref<AudioSampleDataSource> m_sampleConverter;
-    CAAudioStreamDescription m_inputStreamDescription;
-    CAAudioStreamDescription m_outputStreamDescription;
 
-    Vector<uint8_t> m_audioBuffer;
-    uint64_t m_readCount { 0 };
-    uint64_t m_writeCount { 0 };
-    bool m_muted { false };
-    bool m_enabled { true };
-    bool m_skippingAudioData { false };
     Timer m_silenceAudioTimer;
 };
 

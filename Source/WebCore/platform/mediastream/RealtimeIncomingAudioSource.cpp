@@ -11,7 +11,7 @@
  *    notice, this list of conditions and the following disclaimer
  *    in the documentation and/or other materials provided with the
  *    distribution.
- * 3. Neither the name of Ericsson nor the names of its contributors
+ * 3. Neither the name of Google Inc. nor the names of its contributors
  *    may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
  *
@@ -28,48 +28,60 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#pragma once
+#include "config.h"
+#include "RealtimeIncomingAudioSource.h"
 
 #if USE(LIBWEBRTC)
 
-#include "LibWebRTCMacros.h"
-#include "RealtimeMediaSource.h"
-#include <CoreAudio/CoreAudioTypes.h>
-#include <webrtc/api/mediastreaminterface.h>
-#include <wtf/RetainPtr.h>
-
-typedef const struct opaqueCMFormatDescription *CMFormatDescriptionRef;
+#include "LibWebRTCAudioFormat.h"
 
 namespace WebCore {
 
-class WebAudioSourceProviderAVFObjC;
+RealtimeIncomingAudioSource::RealtimeIncomingAudioSource(rtc::scoped_refptr<webrtc::AudioTrackInterface>&& audioTrack, String&& audioTrackId)
+    : RealtimeMediaSource(WTFMove(audioTrackId), RealtimeMediaSource::Type::Audio, String())
+    , m_audioTrack(WTFMove(audioTrack))
+{
+    notifyMutedChange(!m_audioTrack);
+}
 
-class RealtimeIncomingAudioSource final : public RealtimeMediaSource, private webrtc::AudioTrackSinkInterface {
-public:
-    static Ref<RealtimeIncomingAudioSource> create(rtc::scoped_refptr<webrtc::AudioTrackInterface>&&, String&&);
+RealtimeIncomingAudioSource::~RealtimeIncomingAudioSource()
+{
+    stop();
+}
 
-    void setSourceTrack(rtc::scoped_refptr<webrtc::AudioTrackInterface>&&);
+void RealtimeIncomingAudioSource::startProducingData()
+{
+    if (m_audioTrack)
+        m_audioTrack->AddSink(this);
+}
 
-private:
-    RealtimeIncomingAudioSource(rtc::scoped_refptr<webrtc::AudioTrackInterface>&&, String&&);
-    ~RealtimeIncomingAudioSource();
+void RealtimeIncomingAudioSource::stopProducingData()
+{
+    if (m_audioTrack)
+        m_audioTrack->RemoveSink(this);
+}
 
-    // webrtc::AudioTrackSinkInterface API
-    void OnData(const void* audioData, int bitsPerSample, int sampleRate, size_t numberOfChannels, size_t numberOfFrames) final;
+void RealtimeIncomingAudioSource::setSourceTrack(rtc::scoped_refptr<webrtc::AudioTrackInterface>&& track)
+{
+    ASSERT(!m_audioTrack);
+    ASSERT(track);
 
-    // RealtimeMediaSource API
-    void startProducingData() final;
-    void stopProducingData()  final;
+    m_audioTrack = WTFMove(track);
+    notifyMutedChange(!m_audioTrack);
+    if (isProducingData())
+        m_audioTrack->AddSink(this);
+}
 
-    const RealtimeMediaSourceCapabilities& capabilities() const final;
-    const RealtimeMediaSourceSettings& settings() const final;
+const RealtimeMediaSourceCapabilities& RealtimeIncomingAudioSource::capabilities() const
+{
+    return RealtimeMediaSourceCapabilities::emptyCapabilities();
+}
 
-    RealtimeMediaSourceSettings m_currentSettings;
-    rtc::scoped_refptr<webrtc::AudioTrackInterface> m_audioTrack;
+const RealtimeMediaSourceSettings& RealtimeIncomingAudioSource::settings() const
+{
+    return m_currentSettings;
+}
 
-    uint64_t m_numberOfFrames { 0 };
-};
-
-} // namespace WebCore
+}
 
 #endif // USE(LIBWEBRTC)

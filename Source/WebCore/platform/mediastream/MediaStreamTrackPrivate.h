@@ -42,7 +42,7 @@ class MediaStreamTrackPrivate : public RefCounted<MediaStreamTrackPrivate>, publ
 public:
     class Observer {
     public:
-        virtual ~Observer() { }
+        virtual ~Observer() = default;
 
         virtual void trackStarted(MediaStreamTrackPrivate&) { };
         virtual void trackEnded(MediaStreamTrackPrivate&) = 0;
@@ -99,6 +99,8 @@ public:
 
     enum class ReadyState { None, Live, Ended };
     ReadyState readyState() const { return m_readyState; }
+
+    void setIdForTesting(String&& id) { m_id = WTFMove(id); }
 
 private:
     MediaStreamTrackPrivate(Ref<RealtimeMediaSource>&&, String&& id);

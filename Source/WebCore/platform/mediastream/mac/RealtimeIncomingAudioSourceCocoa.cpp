@@ -11,9 +11,6 @@
  *    notice, this list of conditions and the following disclaimer
  *    in the documentation and/or other materials provided with the
  *    distribution.
- * 3. Neither the name of Google Inc. nor the names of its contributors
- *    may be used to endorse or promote products derived from this
- *    software without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
@@ -29,7 +26,7 @@
  */
 
 #include "config.h"
-#include "RealtimeIncomingAudioSource.h"
+#include "RealtimeIncomingAudioSourceCocoa.h"
 
 #if USE(LIBWEBRTC)
 
@@ -40,29 +37,27 @@
 #include "WebAudioSourceProviderAVFObjC.h"
 #include <pal/avfoundation/MediaTimeAVFoundation.h>
 
-#include "CoreMediaSoftLink.h"
+#include <pal/cf/CoreMediaSoftLink.h>
 
 namespace WebCore {
+using namespace PAL;
 
 Ref<RealtimeIncomingAudioSource> RealtimeIncomingAudioSource::create(rtc::scoped_refptr<webrtc::AudioTrackInterface>&& audioTrack, String&& audioTrackId)
 {
-    auto source = adoptRef(*new RealtimeIncomingAudioSource(WTFMove(audioTrack), WTFMove(audioTrackId)));
+    auto source = RealtimeIncomingAudioSourceCocoa::create(WTFMove(audioTrack), WTFMove(audioTrackId));
     source->start();
-    return source;
+    return WTFMove(source);
 }
 
-RealtimeIncomingAudioSource::RealtimeIncomingAudioSource(rtc::scoped_refptr<webrtc::AudioTrackInterface>&& audioTrack, String&& audioTrackId)
-    : RealtimeMediaSource(WTFMove(audioTrackId), RealtimeMediaSource::Type::Audio, String())
-    , m_audioTrack(WTFMove(audioTrack))
+Ref<RealtimeIncomingAudioSourceCocoa> RealtimeIncomingAudioSourceCocoa::create(rtc::scoped_refptr<webrtc::AudioTrackInterface>&& audioTrack, String&& audioTrackId)
 {
-    notifyMutedChange(!m_audioTrack);
+    return adoptRef(*new RealtimeIncomingAudioSourceCocoa(WTFMove(audioTrack), WTFMove(audioTrackId)));
 }
 
-RealtimeIncomingAudioSource::~RealtimeIncomingAudioSource()
+RealtimeIncomingAudioSourceCocoa::RealtimeIncomingAudioSourceCocoa(rtc::scoped_refptr<webrtc::AudioTrackInterface>&& audioTrack, String&& audioTrackId)
+    : RealtimeIncomingAudioSource(WTFMove(audioTrack), WTFMove(audioTrackId))
 {
-    stop();
 }
-
 
 static inline AudioStreamBasicDescription streamDescription(size_t sampleRate, size_t channelCount)
 {
@@ -71,7 +66,7 @@ static inline AudioStreamBasicDescription streamDescription(size_t sampleRate, s
     return streamFormat;
 }
 
-void RealtimeIncomingAudioSource::OnData(const void* audioData, int bitsPerSample, int sampleRate, size_t numberOfChannels, size_t numberOfFrames)
+void RealtimeIncomingAudioSourceCocoa::OnData(const void* audioData, int bitsPerSample, int sampleRate, size_t numberOfChannels, size_t numberOfFrames)
 {
     // We may receive OnData calls with empty sound data (mono, samples equal to zero and sampleRate equal to 16000) when starting the call.
     // FIXME: For the moment we skip them, we should find a better solution at libwebrtc level to not be called until getting some real data.
@@ -100,39 +95,6 @@ void RealtimeIncomingAudioSource::OnData(const void* audioData, int bitsPerSampl
         memcpy(audioBufferList.buffer(0)->mData, audioData, audioBufferList.buffer(0)->mDataByteSize);
 
     audioSamplesAvailable(mediaTime, audioBufferList, CAAudioStreamDescription(newDescription), numberOfFrames);
-}
-
-void RealtimeIncomingAudioSource::startProducingData()
-{
-    if (m_audioTrack)
-        m_audioTrack->AddSink(this);
-}
-
-void RealtimeIncomingAudioSource::stopProducingData()
-{
-    if (m_audioTrack)
-        m_audioTrack->RemoveSink(this);
-}
-
-void RealtimeIncomingAudioSource::setSourceTrack(rtc::scoped_refptr<webrtc::AudioTrackInterface>&& track)
-{
-    ASSERT(!m_audioTrack);
-    ASSERT(track);
-
-    m_audioTrack = WTFMove(track);
-    notifyMutedChange(!m_audioTrack);
-    if (isProducingData())
-        m_audioTrack->AddSink(this);
-}
-
-const RealtimeMediaSourceCapabilities& RealtimeIncomingAudioSource::capabilities() const
-{
-    return RealtimeMediaSourceCapabilities::emptyCapabilities();
-}
-
-const RealtimeMediaSourceSettings& RealtimeIncomingAudioSource::settings() const
-{
-    return m_currentSettings;
 }
 
 }

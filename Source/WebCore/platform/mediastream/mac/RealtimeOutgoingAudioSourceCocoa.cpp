@@ -10,9 +10,6 @@
  * 2.  Redistributions in binary form must reproduce the above copyright
  *     notice, this list of conditions and the following disclaimer in the
  *     documentation and/or other materials provided with the distribution.
- * 3.  Neither the name of Apple Inc. nor the names of
- *     its contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY APPLE INC. AND ITS CONTRIBUTORS "AS IS" AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
@@ -27,7 +24,7 @@
  */
 
 #include "config.h"
-#include "RealtimeOutgoingAudioSource.h"
+#include "RealtimeOutgoingAudioSourceCocoa.h"
 
 #if USE(LIBWEBRTC)
 
@@ -46,61 +43,26 @@ static inline AudioStreamBasicDescription libwebrtcAudioFormat(Float64 sampleRat
     return streamFormat;
 }
 
-RealtimeOutgoingAudioSource::RealtimeOutgoingAudioSource(Ref<MediaStreamTrackPrivate>&& audioSource)
-    : m_audioSource(WTFMove(audioSource))
+RealtimeOutgoingAudioSourceCocoa::RealtimeOutgoingAudioSourceCocoa(Ref<MediaStreamTrackPrivate>&& audioSource)
+    : RealtimeOutgoingAudioSource(WTFMove(audioSource))
     , m_sampleConverter(AudioSampleDataSource::create(LibWebRTCAudioFormat::sampleRate * 2))
-    , m_silenceAudioTimer(*this, &RealtimeOutgoingAudioSource::sendSilence)
 {
-    m_audioSource->addObserver(*this);
-    initializeConverter();
 }
 
-bool RealtimeOutgoingAudioSource::setSource(Ref<MediaStreamTrackPrivate>&& newSource)
+Ref<RealtimeOutgoingAudioSource> RealtimeOutgoingAudioSource::create(Ref<MediaStreamTrackPrivate>&& audioSource)
 {
-    m_audioSource->removeObserver(*this);
-    m_audioSource = WTFMove(newSource);
-    m_audioSource->addObserver(*this);
-
-    initializeConverter();
-    return true;
+    return RealtimeOutgoingAudioSourceCocoa::create(WTFMove(audioSource));
 }
 
-void RealtimeOutgoingAudioSource::initializeConverter()
-{
-    m_muted = m_audioSource->muted();
-    m_enabled = m_audioSource->enabled();
-    handleMutedIfNeeded();
-}
-
-void RealtimeOutgoingAudioSource::stop()
-{
-    m_silenceAudioTimer.stop();
-    m_audioSource->removeObserver(*this);
-}
-
-void RealtimeOutgoingAudioSource::sourceMutedChanged()
-{
-    m_muted = m_audioSource->muted();
-    handleMutedIfNeeded();
-}
-
-void RealtimeOutgoingAudioSource::sourceEnabledChanged()
-{
-    m_enabled = m_audioSource->enabled();
-    handleMutedIfNeeded();
-}
-
-void RealtimeOutgoingAudioSource::handleMutedIfNeeded()
+void RealtimeOutgoingAudioSourceCocoa::handleMutedIfNeeded()
 {
     bool isSilenced = m_muted || !m_enabled;
     m_sampleConverter->setMuted(isSilenced);
-    if (isSilenced && !m_silenceAudioTimer.isActive())
-        m_silenceAudioTimer.startRepeating(1_s);
-    if (!isSilenced && m_silenceAudioTimer.isActive())
-        m_silenceAudioTimer.stop();
+
+    RealtimeOutgoingAudioSource::handleMutedIfNeeded();
 }
 
-void RealtimeOutgoingAudioSource::sendSilence()
+void RealtimeOutgoingAudioSourceCocoa::sendSilence()
 {
     LibWebRTCProvider::callOnWebRTCSignalingThread([this, protectedThis = makeRef(*this)] {
         size_t chunkSampleCount = m_outputStreamDescription.sampleRate() / 100;
@@ -116,7 +78,7 @@ void RealtimeOutgoingAudioSource::sendSilence()
     });
 }
 
-bool RealtimeOutgoingAudioSource::isReachingBufferedAudioDataHighLimit()
+bool RealtimeOutgoingAudioSourceCocoa::isReachingBufferedAudioDataHighLimit()
 {
     auto writtenAudioDuration = m_writeCount / m_inputStreamDescription.sampleRate();
     auto readAudioDuration = m_readCount / m_outputStreamDescription.sampleRate();
@@ -125,7 +87,7 @@ bool RealtimeOutgoingAudioSource::isReachingBufferedAudioDataHighLimit()
     return writtenAudioDuration > readAudioDuration + 0.5;
 }
 
-bool RealtimeOutgoingAudioSource::isReachingBufferedAudioDataLowLimit()
+bool RealtimeOutgoingAudioSourceCocoa::isReachingBufferedAudioDataLowLimit()
 {
     auto writtenAudioDuration = m_writeCount / m_inputStreamDescription.sampleRate();
     auto readAudioDuration = m_readCount / m_outputStreamDescription.sampleRate();
@@ -134,7 +96,7 @@ bool RealtimeOutgoingAudioSource::isReachingBufferedAudioDataLowLimit()
     return writtenAudioDuration < readAudioDuration + 0.1;
 }
 
-bool RealtimeOutgoingAudioSource::hasBufferedEngouhData()
+bool RealtimeOutgoingAudioSourceCocoa::hasBufferedEnoughData()
 {
     auto writtenAudioDuration = m_writeCount / m_inputStreamDescription.sampleRate();
     auto readAudioDuration = m_readCount / m_outputStreamDescription.sampleRate();
@@ -143,7 +105,7 @@ bool RealtimeOutgoingAudioSource::hasBufferedEngouhData()
     return writtenAudioDuration >= readAudioDuration + 0.01;
 }
 
-void RealtimeOutgoingAudioSource::audioSamplesAvailable(const MediaTime&, const PlatformAudioData& audioData, const AudioStreamDescription& streamDescription, size_t sampleCount)
+void RealtimeOutgoingAudioSourceCocoa::audioSamplesAvailable(const MediaTime&, const PlatformAudioData& audioData, const AudioStreamDescription& streamDescription, size_t sampleCount)
 {
     if (m_inputStreamDescription != streamDescription) {
         m_inputStreamDescription = toCAAudioStreamDescription(streamDescription);
@@ -170,7 +132,7 @@ void RealtimeOutgoingAudioSource::audioSamplesAvailable(const MediaTime&, const 
     m_sampleConverter->pushSamples(MediaTime(m_writeCount, static_cast<uint32_t>(m_inputStreamDescription.sampleRate())), audioData, sampleCount);
     m_writeCount += sampleCount;
 
-    if (!hasBufferedEngouhData())
+    if (!hasBufferedEnoughData())
         return;
 
     LibWebRTCProvider::callOnWebRTCSignalingThread([protectedThis = makeRef(*this)] {
@@ -178,7 +140,7 @@ void RealtimeOutgoingAudioSource::audioSamplesAvailable(const MediaTime&, const 
     });
 }
 
-void RealtimeOutgoingAudioSource::pullAudioData()
+void RealtimeOutgoingAudioSourceCocoa::pullAudioData()
 {
     // libwebrtc expects 10 ms chunks.
     size_t chunkSampleCount = m_outputStreamDescription.sampleRate() / 100;

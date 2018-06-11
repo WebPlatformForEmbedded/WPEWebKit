@@ -44,13 +44,14 @@
 #import <AudioToolbox/AudioConverter.h>
 #import <CoreAudio/CoreAudioTypes.h>
 
-#import "CoreMediaSoftLink.h"
+#import <pal/cf/CoreMediaSoftLink.h>
 
 SOFT_LINK_FRAMEWORK(AudioToolbox)
 
 SOFT_LINK(AudioToolbox, AudioConverterNew, OSStatus, (const AudioStreamBasicDescription* inSourceFormat, const AudioStreamBasicDescription* inDestinationFormat, AudioConverterRef* outAudioConverter), (inSourceFormat, inDestinationFormat, outAudioConverter))
 
 namespace WebCore {
+using namespace PAL;
 
 static inline size_t alignTo16Bytes(size_t size)
 {
@@ -129,12 +130,12 @@ void MockRealtimeAudioSourceMac::reconfigure()
     m_formatDescription = adoptCF(formatDescription);
 }
 
-void MockRealtimeAudioSourceMac::render(double delta)
+void MockRealtimeAudioSourceMac::render(Seconds delta)
 {
     if (!m_audioBufferList)
         reconfigure();
 
-    uint32_t totalFrameCount = alignTo16Bytes(delta * sampleRate());
+    uint32_t totalFrameCount = alignTo16Bytes(delta.seconds() * sampleRate());
     uint32_t frameCount = std::min(totalFrameCount, m_maximiumFrameCount);
 
     while (frameCount) {

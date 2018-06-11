@@ -11,9 +11,6 @@
  *    notice, this list of conditions and the following disclaimer
  *    in the documentation and/or other materials provided with the
  *    distribution.
- * 3. Neither the name of Google Inc. nor the names of its contributors
- *    may be used to endorse or promote products derived from this
- *    software without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
@@ -28,114 +25,86 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-// FIXME: Do clean-up in the includes
-
 #include "config.h"
-#include "RealtimeIncomingVideoSource.h"
+#include "RealtimeIncomingVideoSourceCocoa.h"
 
 #if USE(LIBWEBRTC)
 
-#include "GraphicsContext.h"
-#include "ImageBuffer.h"
-#include "IntRect.h"
 #include "Logging.h"
 #include "MediaSampleAVFObjC.h"
-#include <webrtc/common_video/libyuv/include/webrtc_libyuv.h>
-#include <webrtc/sdk/objc/Framework/Classes/Video/corevideo_frame_buffer.h>
-#include <wtf/MainThread.h>
+#include <pal/cf/CoreMediaSoftLink.h>
+#include <webrtc/sdk/WebKit/WebKitUtilities.h>
+#include <wtf/cf/TypeCastsCF.h>
 
-#include "CoreMediaSoftLink.h"
 #include "CoreVideoSoftLink.h"
 
 namespace WebCore {
+using namespace PAL;
 
 Ref<RealtimeIncomingVideoSource> RealtimeIncomingVideoSource::create(rtc::scoped_refptr<webrtc::VideoTrackInterface>&& videoTrack, String&& trackId)
 {
-    const OSType imageFormat = kCVPixelFormatType_32BGRA;
-    RetainPtr<CFNumberRef> imageFormatNumber = adoptCF(CFNumberCreate(nullptr,  kCFNumberIntType,  &imageFormat));
-
-    RetainPtr<CFMutableDictionaryRef> conformerOptions = adoptCF(CFDictionaryCreateMutable(0, 1, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks));
-    CFDictionarySetValue(conformerOptions.get(), kCVPixelBufferPixelFormatTypeKey, imageFormatNumber.get());
-    PixelBufferConformerCV conformer(conformerOptions.get());
-
-    auto source = adoptRef(*new RealtimeIncomingVideoSource(WTFMove(videoTrack), WTFMove(trackId), conformerOptions.get()));
+    auto source = RealtimeIncomingVideoSourceCocoa::create(WTFMove(videoTrack), WTFMove(trackId));
     source->start();
-    return source;
+    return WTFMove(source);
 }
 
-RealtimeIncomingVideoSource::RealtimeIncomingVideoSource(rtc::scoped_refptr<webrtc::VideoTrackInterface>&& videoTrack, String&& videoTrackId, CFMutableDictionaryRef conformerOptions)
-    : RealtimeMediaSource(WTFMove(videoTrackId), RealtimeMediaSource::Type::Video, String())
-    , m_videoTrack(WTFMove(videoTrack))
-    , m_conformer(conformerOptions)
+Ref<RealtimeIncomingVideoSourceCocoa> RealtimeIncomingVideoSourceCocoa::create(rtc::scoped_refptr<webrtc::VideoTrackInterface>&& videoTrack, String&& trackId)
 {
-    m_currentSettings.setWidth(640);
-    m_currentSettings.setHeight(480);
-    notifyMutedChange(!m_videoTrack);
+    return adoptRef(*new RealtimeIncomingVideoSourceCocoa(WTFMove(videoTrack), WTFMove(trackId)));
 }
 
-void RealtimeIncomingVideoSource::startProducingData()
+RealtimeIncomingVideoSourceCocoa::RealtimeIncomingVideoSourceCocoa(rtc::scoped_refptr<webrtc::VideoTrackInterface>&& videoTrack, String&& videoTrackId)
+    : RealtimeIncomingVideoSource(WTFMove(videoTrack), WTFMove(videoTrackId))
 {
-    if (m_videoTrack)
-        m_videoTrack->AddOrUpdateSink(this, rtc::VideoSinkWants());
 }
 
-void RealtimeIncomingVideoSource::setSourceTrack(rtc::scoped_refptr<webrtc::VideoTrackInterface>&& track)
+static inline CVPixelBufferRef createBlackFrame(int width, int height)
 {
-    ASSERT(!m_videoTrack);
-    ASSERT(track);
+    CVPixelBufferRef pixelBuffer = nullptr;
+    auto status = CVPixelBufferCreate(kCFAllocatorDefault, width, height, kCVPixelFormatType_420YpCbCr8Planar, nullptr, &pixelBuffer);
+    ASSERT_UNUSED(status, status == noErr);
 
-    m_videoTrack = WTFMove(track);
-    notifyMutedChange(!m_videoTrack);
-    if (isProducingData())
-        m_videoTrack->AddOrUpdateSink(this, rtc::VideoSinkWants());
+    status = CVPixelBufferLockBaseAddress(pixelBuffer, 0);
+    ASSERT(status == noErr);
+    void* data = CVPixelBufferGetBaseAddress(pixelBuffer);
+    size_t yLength = width * height;
+    memset(data, 0, yLength);
+    memset(static_cast<uint8_t*>(data) + yLength, 128, yLength / 2);
+
+    status = CVPixelBufferUnlockBaseAddress(pixelBuffer, 0);
+    ASSERT(!status);
+    return pixelBuffer;
 }
 
-void RealtimeIncomingVideoSource::stopProducingData()
-{
-    if (m_videoTrack)
-        m_videoTrack->RemoveSink(this);
-}
-
-CVPixelBufferRef RealtimeIncomingVideoSource::pixelBufferFromVideoFrame(const webrtc::VideoFrame& frame)
+CVPixelBufferRef RealtimeIncomingVideoSourceCocoa::pixelBufferFromVideoFrame(const webrtc::VideoFrame& frame)
 {
     if (muted()) {
         if (!m_blackFrame || m_blackFrameWidth != frame.width() || m_blackFrameHeight != frame.height()) {
-            CVPixelBufferRef pixelBuffer = nullptr;
-            auto status = CVPixelBufferCreate(kCFAllocatorDefault, frame.width(), frame.height(), kCVPixelFormatType_420YpCbCr8Planar, nullptr, &pixelBuffer);
-            ASSERT_UNUSED(status, status == noErr);
-
-            m_blackFrame = pixelBuffer;
             m_blackFrameWidth = frame.width();
             m_blackFrameHeight = frame.height();
-
-            status = CVPixelBufferLockBaseAddress(pixelBuffer, 0);
-            ASSERT(status == noErr);
-            void* data = CVPixelBufferGetBaseAddress(pixelBuffer);
-            size_t yLength = frame.width() * frame.height();
-            memset(data, 0, yLength);
-            memset(static_cast<uint8_t*>(data) + yLength, 128, yLength / 2);
-
-            status = CVPixelBufferUnlockBaseAddress(pixelBuffer, 0);
-            ASSERT(!status);
+            m_blackFrame = adoptCF(createBlackFrame(m_blackFrameWidth, m_blackFrameHeight));
         }
         return m_blackFrame.get();
     }
-    auto buffer = frame.video_frame_buffer();
-    ASSERT(buffer->type() == webrtc::VideoFrameBuffer::Type::kNative);
-    return static_cast<webrtc::CoreVideoFrameBuffer&>(*buffer).pixel_buffer();
+    ASSERT(frame.video_frame_buffer()->type() == webrtc::VideoFrameBuffer::Type::kNative);
+    return webrtc::pixelBufferFromFrame(frame);
 }
 
-void RealtimeIncomingVideoSource::OnFrame(const webrtc::VideoFrame& frame)
+void RealtimeIncomingVideoSourceCocoa::OnFrame(const webrtc::VideoFrame& frame)
 {
     if (!isProducingData())
         return;
 
 #if !RELEASE_LOG_DISABLED
     if (!(++m_numberOfFrames % 30))
-        RELEASE_LOG(MediaStream, "RealtimeIncomingVideoSource::OnFrame %zu frame", m_numberOfFrames);
+        RELEASE_LOG(MediaStream, "RealtimeIncomingVideoSourceCocoa::OnFrame %zu frame", m_numberOfFrames);
 #endif
 
     auto pixelBuffer = pixelBufferFromVideoFrame(frame);
+    if (!pixelBuffer) {
+        LOG_ERROR("Failed to get a pixel buffer from a frame");
+        return;
+    }
 
     // FIXME: Convert timing information from VideoFrame to CMSampleTimingInfo.
     // For the moment, we will pretend that frames should be rendered asap.
@@ -153,17 +122,17 @@ void RealtimeIncomingVideoSource::OnFrame(const webrtc::VideoFrame& frame)
 
     CMSampleBufferRef sampleBuffer;
     ostatus = CMSampleBufferCreateReadyWithImageBuffer(kCFAllocatorDefault, (CVImageBufferRef)pixelBuffer, formatDescription, &timingInfo, &sampleBuffer);
+    CFRelease(formatDescription);
     if (ostatus != noErr) {
         LOG_ERROR("Failed to create the sample buffer: %d", static_cast<int>(ostatus));
         return;
     }
-    CFRelease(formatDescription);
 
     auto sample = adoptCF(sampleBuffer);
 
     CFArrayRef attachmentsArray = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, true);
     for (CFIndex i = 0; i < CFArrayGetCount(attachmentsArray); ++i) {
-        CFMutableDictionaryRef attachments = (CFMutableDictionaryRef)CFArrayGetValueAtIndex(attachmentsArray, i);
+        CFMutableDictionaryRef attachments = checked_cf_cast<CFMutableDictionaryRef>(CFArrayGetValueAtIndex(attachmentsArray, i));
         CFDictionarySetValue(attachments, kCMSampleAttachmentKey_DisplayImmediately, kCFBooleanTrue);
     }
 
@@ -188,13 +157,12 @@ void RealtimeIncomingVideoSource::OnFrame(const webrtc::VideoFrame& frame)
         break;
     }
 
-    RefPtr<RealtimeIncomingVideoSource> protectedThis(this);
-    callOnMainThread([protectedThis = WTFMove(protectedThis), sample = WTFMove(sample), width, height, rotation] {
+    callOnMainThread([protectedThis = makeRef(*this), sample = WTFMove(sample), width, height, rotation] {
         protectedThis->processNewSample(sample.get(), width, height, rotation);
     });
 }
 
-void RealtimeIncomingVideoSource::processNewSample(CMSampleBufferRef sample, unsigned width, unsigned height, MediaSample::VideoRotation rotation)
+void RealtimeIncomingVideoSourceCocoa::processNewSample(CMSampleBufferRef sample, unsigned width, unsigned height, MediaSample::VideoRotation rotation)
 {
     m_buffer = sample;
     if (width != m_currentSettings.width() || height != m_currentSettings.height()) {
@@ -204,16 +172,6 @@ void RealtimeIncomingVideoSource::processNewSample(CMSampleBufferRef sample, uns
     }
 
     videoSampleAvailable(MediaSampleAVFObjC::create(sample, rotation));
-}
-
-const RealtimeMediaSourceCapabilities& RealtimeIncomingVideoSource::capabilities() const
-{
-    return RealtimeMediaSourceCapabilities::emptyCapabilities();
-}
-
-const RealtimeMediaSourceSettings& RealtimeIncomingVideoSource::settings() const
-{
-    return m_currentSettings;
 }
 
 } // namespace WebCore

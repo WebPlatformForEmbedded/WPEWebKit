@@ -41,7 +41,7 @@
 #include "MediaSample.h"
 #include "PlatformLayer.h"
 #include "RealtimeMediaSourceCapabilities.h"
-#include <wtf/RefCounted.h>
+#include <wtf/ThreadSafeRefCounted.h>
 #include <wtf/Vector.h>
 #include <wtf/WeakPtr.h>
 #include <wtf/text/WTFString.h>
@@ -62,11 +62,11 @@ class RealtimeMediaSourceSettings;
 
 struct CaptureSourceOrError;
 
-class WEBCORE_EXPORT RealtimeMediaSource : public RefCounted<RealtimeMediaSource> {
+class WEBCORE_EXPORT RealtimeMediaSource : public ThreadSafeRefCounted<RealtimeMediaSource> {
 public:
     class Observer {
     public:
-        virtual ~Observer() { }
+        virtual ~Observer() = default;
 
         // Source state changes.
         virtual void sourceStarted() { }
@@ -84,9 +84,9 @@ public:
         virtual void audioSamplesAvailable(const MediaTime&, const PlatformAudioData&, const AudioStreamDescription&, size_t /*numberOfFrames*/) { }
     };
 
-    template<typename Source> class SingleSourceFactory {
+    class SingleSourceFactory {
     public:
-        void setActiveSource(Source& source)
+        void setActiveSource(RealtimeMediaSource& source)
         {
             if (m_activeSource == &source)
                 return;
@@ -95,7 +95,7 @@ public:
             m_activeSource = &source;
         }
 
-        void unsetActiveSource(Source& source)
+        void unsetActiveSource(RealtimeMediaSource& source)
         {
             if (m_activeSource == &source)
                 m_activeSource = nullptr;
@@ -106,26 +106,34 @@ public:
         RealtimeMediaSource* m_activeSource { nullptr };
     };
 
-    class AudioCaptureFactory {
+    class AudioCaptureFactory
+#if PLATFORM(IOS)
+        : public RealtimeMediaSource::SingleSourceFactory
+#endif
+    {
     public:
         virtual ~AudioCaptureFactory() = default;
-        virtual CaptureSourceOrError createAudioCaptureSource(const String& audioDeviceID, const MediaConstraints*) = 0;
+        virtual CaptureSourceOrError createAudioCaptureSource(const CaptureDevice&, const MediaConstraints*) = 0;
 
     protected:
         AudioCaptureFactory() = default;
     };
 
-    class VideoCaptureFactory {
+    class VideoCaptureFactory
+#if PLATFORM(IOS)
+        : public RealtimeMediaSource::SingleSourceFactory
+#endif
+    {
     public:
         virtual ~VideoCaptureFactory() = default;
-        virtual CaptureSourceOrError createVideoCaptureSource(const String& videoDeviceID, const MediaConstraints*) = 0;
+        virtual CaptureSourceOrError createVideoCaptureSource(const CaptureDevice&, const MediaConstraints*) = 0;
         virtual void setVideoCapturePageState(bool, bool) { }
 
     protected:
         VideoCaptureFactory() = default;
     };
 
-    virtual ~RealtimeMediaSource() { }
+    virtual ~RealtimeMediaSource() = default;
 
     const String& id() const { return m_id; }
 
@@ -197,8 +205,8 @@ public:
     virtual void applyConstraints(const MediaConstraints&, SuccessHandler&&, FailureHandler&&);
     std::optional<std::pair<String, String>> applyConstraints(const MediaConstraints&);
 
-    virtual bool supportsConstraints(const MediaConstraints&, String&);
-    virtual bool supportsConstraint(const MediaConstraint&) const;
+    bool supportsConstraints(const MediaConstraints&, String&);
+    bool supportsConstraint(const MediaConstraint&) const;
 
     virtual void settingsDidChange();
 
@@ -211,7 +219,7 @@ public:
     void captureFailed();
 
     // Testing only
-    virtual void delaySamples(float) { };
+    virtual void delaySamples(Seconds) { };
 
 protected:
     RealtimeMediaSource(const String& id, Type, const String& name);
@@ -223,11 +231,12 @@ protected:
 
     enum class SelectType { ForApplyConstraints, ForSupportsConstraints };
     bool selectSettings(const MediaConstraints&, FlattenedConstraint&, String&, SelectType);
-    virtual double fitnessDistance(const MediaConstraint&);
-    virtual bool supportsSizeAndFrameRate(std::optional<IntConstraint> width, std::optional<IntConstraint> height, std::optional<DoubleConstraint>, String&, double& fitnessDistance);
+    double fitnessDistance(const MediaConstraint&);
+    void applyConstraint(const MediaConstraint&);
+    void applyConstraints(const FlattenedConstraint&);
+    bool supportsSizeAndFrameRate(std::optional<IntConstraint> width, std::optional<IntConstraint> height, std::optional<DoubleConstraint>, String&, double& fitnessDistance);
+
     virtual bool supportsSizeAndFrameRate(std::optional<int> width, std::optional<int> height, std::optional<double>);
-    virtual void applyConstraint(const MediaConstraint&);
-    virtual void applyConstraints(const FlattenedConstraint&);
     virtual void applySizeAndFrameRate(std::optional<int> width, std::optional<int> height, std::optional<double>);
 
     void notifyMutedObservers() const;

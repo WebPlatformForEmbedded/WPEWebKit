@@ -33,27 +33,27 @@
 #if USE(LIBWEBRTC)
 
 #include "LibWebRTCMacros.h"
-#include "PixelBufferConformerCV.h"
 #include "RealtimeMediaSource.h"
 #include <webrtc/api/mediastreaminterface.h>
 #include <wtf/RetainPtr.h>
-
-typedef struct opaqueCMSampleBuffer *CMSampleBufferRef;
 
 namespace WebCore {
 
 class CaptureDevice;
 
-class RealtimeIncomingVideoSource final : public RealtimeMediaSource, private rtc::VideoSinkInterface<webrtc::VideoFrame> {
+class RealtimeIncomingVideoSource : public RealtimeMediaSource, private rtc::VideoSinkInterface<webrtc::VideoFrame> {
 public:
     static Ref<RealtimeIncomingVideoSource> create(rtc::scoped_refptr<webrtc::VideoTrackInterface>&&, String&&);
     ~RealtimeIncomingVideoSource() { stopProducingData(); }
 
     void setSourceTrack(rtc::scoped_refptr<webrtc::VideoTrackInterface>&&);
 
-private:
-    RealtimeIncomingVideoSource(rtc::scoped_refptr<webrtc::VideoTrackInterface>&&, String&&, CFMutableDictionaryRef);
+protected:
+    RealtimeIncomingVideoSource(rtc::scoped_refptr<webrtc::VideoTrackInterface>&&, String&&);
 
+    RealtimeMediaSourceSettings m_currentSettings;
+
+private:
     // RealtimeMediaSource API
     void startProducingData() final;
     void stopProducingData()  final;
@@ -61,26 +61,9 @@ private:
     const RealtimeMediaSourceCapabilities& capabilities() const final;
     const RealtimeMediaSourceSettings& settings() const final;
 
-    void processNewSample(CMSampleBufferRef, unsigned, unsigned, MediaSample::VideoRotation);
-
     bool applySize(const IntSize&) final { return true; }
 
-    // rtc::VideoSinkInterface
-    void OnFrame(const webrtc::VideoFrame&) final;
-
-    CVPixelBufferRef pixelBufferFromVideoFrame(const webrtc::VideoFrame&);
-
-    RefPtr<Image> m_currentImage;
-    RealtimeMediaSourceSettings m_currentSettings;
     rtc::scoped_refptr<webrtc::VideoTrackInterface> m_videoTrack;
-    RetainPtr<CMSampleBufferRef> m_buffer;
-    PixelBufferConformerCV m_conformer;
-    RetainPtr<CVPixelBufferRef> m_blackFrame;
-    int m_blackFrameWidth { 0 };
-    int m_blackFrameHeight { 0 };
-#if !RELEASE_LOG_DISABLED
-    size_t m_numberOfFrames { 0 };
-#endif
 };
 
 } // namespace WebCore

@@ -29,19 +29,26 @@
 #if USE(LIBWEBRTC)
 #include "LibWebRTCAudioModule.h"
 #include "Logging.h"
-#include "VideoToolBoxDecoderFactory.h"
-#include "VideoToolBoxEncoderFactory.h"
 #include <dlfcn.h>
+#include <webrtc/api/audio_codecs/builtin_audio_decoder_factory.h>
+#include <webrtc/api/audio_codecs/builtin_audio_encoder_factory.h>
 #include <webrtc/api/peerconnectionfactoryproxy.h>
-#include <webrtc/base/physicalsocketserver.h>
+#include <webrtc/modules/audio_processing/include/audio_processing.h>
 #include <webrtc/p2p/client/basicportallocator.h>
 #include <webrtc/pc/peerconnectionfactory.h>
+#include <webrtc/rtc_base/physicalsocketserver.h>
 #include <wtf/Function.h>
 #include <wtf/NeverDestroyed.h>
-#include <wtf/darwin/WeakLinking.h>
 #endif
 
 namespace WebCore {
+
+#if !PLATFORM(COCOA) && !PLATFORM(GTK) && !PLATFORM(WPE)
+UniqueRef<LibWebRTCProvider> LibWebRTCProvider::create()
+{
+    return makeUniqueRef<LibWebRTCProvider>();
+}
+#endif
 
 #if USE(LIBWEBRTC)
 struct PeerConnectionFactoryAndThreads : public rtc::MessageHandler {
@@ -138,15 +145,14 @@ webrtc::PeerConnectionFactoryInterface* LibWebRTCProvider::factory()
 
     auto& factoryAndThreads = getStaticFactoryAndThreads(m_useNetworkThreadWithSocketServer);
 
-    auto decoderFactory = std::make_unique<VideoToolboxVideoDecoderFactory>();
-    auto encoderFactory = std::make_unique<VideoToolboxVideoEncoderFactory>();
-
-    m_decoderFactory = decoderFactory.get();
-    m_encoderFactory = encoderFactory.get();
-
-    m_factory = webrtc::CreatePeerConnectionFactory(factoryAndThreads.networkThread.get(), factoryAndThreads.networkThread.get(), factoryAndThreads.signalingThread.get(), factoryAndThreads.audioDeviceModule.get(), encoderFactory.release(), decoderFactory.release());
+    m_factory = createPeerConnectionFactory(factoryAndThreads.networkThread.get(), factoryAndThreads.networkThread.get(), factoryAndThreads.audioDeviceModule.get());
 
     return m_factory;
+}
+
+rtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface> LibWebRTCProvider::createPeerConnectionFactory(rtc::Thread* networkThread, rtc::Thread* signalingThread, LibWebRTCAudioModule* audioModule)
+{
+    return webrtc::CreatePeerConnectionFactory(networkThread, networkThread, signalingThread, audioModule, webrtc::CreateBuiltinAudioEncoderFactory(), webrtc::CreateBuiltinAudioDecoderFactory(), createEncoderFactory(), createDecoderFactory(), nullptr, nullptr);
 }
 
 void LibWebRTCProvider::setPeerConnectionFactory(rtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface>&& factory)
@@ -187,26 +193,5 @@ rtc::scoped_refptr<webrtc::PeerConnectionInterface> LibWebRTCProvider::createPee
 }
 
 #endif // USE(LIBWEBRTC)
-
-void LibWebRTCProvider::setActive(bool value)
-{
-#if USE(LIBWEBRTC)
-    if (m_decoderFactory)
-        m_decoderFactory->setActive(value);
-    if (m_encoderFactory)
-        m_encoderFactory->setActive(value);
-#else
-    UNUSED_PARAM(value);
-#endif
-}
-
-bool LibWebRTCProvider::webRTCAvailable()
-{
-#if USE(LIBWEBRTC)
-    return !isNullFunctionPointer(rtc::LogMessage::LogToDebug);
-#else
-    return true;
-#endif
-}
 
 } // namespace WebCore

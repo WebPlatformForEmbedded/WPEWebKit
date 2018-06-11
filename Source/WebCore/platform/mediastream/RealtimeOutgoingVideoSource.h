@@ -34,32 +34,50 @@
 #include "MediaStreamTrackPrivate.h"
 #include <Timer.h>
 #include <webrtc/api/mediastreaminterface.h>
-#include <webrtc/base/optional.h>
+#include <webrtc/api/optional.h>
 #include <webrtc/common_video/include/i420_buffer_pool.h>
-#include <webrtc/media/base/videosinkinterface.h>
+#include <webrtc/api/videosinkinterface.h>
 #include <wtf/Optional.h>
 #include <wtf/ThreadSafeRefCounted.h>
 
 namespace WebCore {
 
-class RealtimeOutgoingVideoSource final : public ThreadSafeRefCounted<RealtimeOutgoingVideoSource>, public webrtc::VideoTrackSourceInterface, private MediaStreamTrackPrivate::Observer {
+class RealtimeOutgoingVideoSource : public ThreadSafeRefCounted<RealtimeOutgoingVideoSource>, public webrtc::VideoTrackSourceInterface, private MediaStreamTrackPrivate::Observer {
 public:
-    static Ref<RealtimeOutgoingVideoSource> create(Ref<MediaStreamTrackPrivate>&& videoSource) { return adoptRef(*new RealtimeOutgoingVideoSource(WTFMove(videoSource))); }
+    static Ref<RealtimeOutgoingVideoSource> create(Ref<MediaStreamTrackPrivate>&& videoSource);
     ~RealtimeOutgoingVideoSource() { stop(); }
 
     void stop();
     bool setSource(Ref<MediaStreamTrackPrivate>&&);
     MediaStreamTrackPrivate& source() const { return m_videoSource.get(); }
 
-    int AddRef() const final { ref(); return refCount(); }
-    int Release() const final { deref(); return refCount(); }
+    void AddRef() const final { ref(); }
+    rtc::RefCountReleaseStatus Release() const final
+    {
+        callOnMainThread([this] {
+            deref();
+        });
+        return rtc::RefCountReleaseStatus::kOtherRefsRemained;
+    }
 
     void setApplyRotation(bool shouldApplyRotation) { m_shouldApplyRotation = shouldApplyRotation; }
 
-private:
-    RealtimeOutgoingVideoSource(Ref<MediaStreamTrackPrivate>&&);
+protected:
+    explicit RealtimeOutgoingVideoSource(Ref<MediaStreamTrackPrivate>&&);
 
     void sendFrame(rtc::scoped_refptr<webrtc::VideoFrameBuffer>&&);
+
+    Vector<rtc::VideoSinkInterface<webrtc::VideoFrame>*> m_sinks;
+    webrtc::I420BufferPool m_bufferPool;
+
+    bool m_enabled { true };
+    bool m_muted { false };
+    uint32_t m_width { 0 };
+    uint32_t m_height { 0 };
+    bool m_shouldApplyRotation { false };
+    webrtc::VideoRotation m_currentRotation { webrtc::kVideoRotation_0 };
+
+private:
     void sendBlackFramesIfNeeded();
     void sendOneBlackFrame();
     void initializeFromSource();
@@ -72,7 +90,7 @@ private:
     // VideoTrackSourceInterface API
     bool is_screencast() const final { return false; }
     rtc::Optional<bool> needs_denoising() const final { return rtc::Optional<bool>(); }
-    bool GetStats(Stats*) final;
+    bool GetStats(Stats*) final { return false; };
 
     // MediaSourceInterface API
     SourceState state() const final { return SourceState(); }
@@ -84,31 +102,19 @@ private:
 
     void sourceMutedChanged();
     void sourceEnabledChanged();
-    void videoSampleAvailable(MediaSample&);
 
     // MediaStreamTrackPrivate::Observer API
     void trackMutedChanged(MediaStreamTrackPrivate&) final { sourceMutedChanged(); }
     void trackEnabledChanged(MediaStreamTrackPrivate&) final { sourceEnabledChanged(); }
     void trackSettingsChanged(MediaStreamTrackPrivate&) final { initializeFromSource(); }
-    void sampleBufferUpdated(MediaStreamTrackPrivate&, MediaSample& sample) final { videoSampleAvailable(sample); }
+    void sampleBufferUpdated(MediaStreamTrackPrivate&, MediaSample&) override { }
     void trackEnded(MediaStreamTrackPrivate&) final { }
 
-    Vector<rtc::VideoSinkInterface<webrtc::VideoFrame>*> m_sinks;
-    webrtc::I420BufferPool m_bufferPool;
     Ref<MediaStreamTrackPrivate> m_videoSource;
-    bool m_enabled { true };
-    bool m_muted { false };
     std::optional<RealtimeMediaSourceSettings> m_initialSettings;
-    webrtc::VideoRotation m_currentRotation { webrtc::kVideoRotation_0 };
-    uint32_t m_width { 0 };
-    uint32_t m_height { 0 };
     bool m_isStopped { false };
     Timer m_blackFrameTimer;
     rtc::scoped_refptr<webrtc::VideoFrameBuffer> m_blackFrame;
-    bool m_shouldApplyRotation { false };
-#if !RELEASE_LOG_DISABLED
-    size_t m_numberOfFrames { 0 };
-#endif
 };
 
 } // namespace WebCore
