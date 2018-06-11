@@ -146,7 +146,7 @@ void ProcessLauncher::launchProcess()
 
     auto childWatchFunc = [](GPid pid, gint status, gpointer) {
         GUniqueOutPtr<GError> error;
-        if(!g_spawn_check_exit_status (status, &error.outPtr()))
+        if (!g_spawn_check_exit_status(status, &error.outPtr()))
             g_warning("%s", error->message);
         g_spawn_close_pid(pid);
     };
