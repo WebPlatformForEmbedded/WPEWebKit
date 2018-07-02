@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2010-2017 Apple Inc. All rights reserved.
+ * Copyright (C) 2010-2018 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -744,7 +745,7 @@ template<> struct EnumTraits<WebCore::IndexedDB::GetAllType> {
     >;
 };
 #endif
-
+# if 0  //Moved to platform mediastream
 #if ENABLE(MEDIA_STREAM)
 template<> struct EnumTraits<WebCore::CaptureDevice::DeviceType> {
     using values = EnumValues<
@@ -762,6 +763,7 @@ template<> struct EnumTraits<WebCore::RealtimeMediaSource::Type> {
         WebCore::RealtimeMediaSource::Type::Video
     >;
 };
+#endif
 #endif
 
 template<> struct EnumTraits<WebCore::MediaSelectionOption::Type> {

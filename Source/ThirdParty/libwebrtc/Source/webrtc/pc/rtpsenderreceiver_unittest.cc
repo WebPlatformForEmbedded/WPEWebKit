@@ -12,26 +12,25 @@
 #include <string>
 #include <utility>
 
-#include "webrtc/base/gunit.h"
-#include "webrtc/base/sigslot.h"
-#include "webrtc/logging/rtc_event_log/rtc_event_log.h"
-#include "webrtc/media/base/fakemediaengine.h"
-#include "webrtc/media/base/mediachannel.h"
-#include "webrtc/media/engine/fakewebrtccall.h"
-#include "webrtc/p2p/base/faketransportcontroller.h"
-#include "webrtc/pc/audiotrack.h"
-#include "webrtc/pc/channelmanager.h"
-#include "webrtc/pc/localaudiosource.h"
-#include "webrtc/pc/mediastream.h"
-#include "webrtc/pc/remoteaudiosource.h"
-#include "webrtc/pc/rtpreceiver.h"
-#include "webrtc/pc/rtpsender.h"
-#include "webrtc/pc/streamcollection.h"
-#include "webrtc/pc/test/fakevideotracksource.h"
-#include "webrtc/pc/videotrack.h"
-#include "webrtc/pc/videotracksource.h"
-#include "webrtc/test/gmock.h"
-#include "webrtc/test/gtest.h"
+#include "api/rtpparameters.h"
+#include "media/base/fakemediaengine.h"
+#include "media/base/rtpdataengine.h"
+#include "media/engine/fakewebrtccall.h"
+#include "pc/audiotrack.h"
+#include "pc/channelmanager.h"
+#include "pc/localaudiosource.h"
+#include "pc/mediastream.h"
+#include "pc/remoteaudiosource.h"
+#include "pc/rtpreceiver.h"
+#include "pc/rtpsender.h"
+#include "pc/streamcollection.h"
+#include "pc/test/faketransportcontroller.h"
+#include "pc/test/fakevideotracksource.h"
+#include "pc/videotrack.h"
+#include "pc/videotracksource.h"
+#include "rtc_base/gunit.h"
+#include "test/gmock.h"
+#include "test/gtest.h"
 
 using ::testing::_;
 using ::testing::Exactly;
@@ -56,13 +55,15 @@ class RtpSenderReceiverTest : public testing::Test,
                               public sigslot::has_slots<> {
  public:
   RtpSenderReceiverTest()
-      :  // Create fake media engine/etc. so we can create channels to use to
-         // test RtpSenders/RtpReceivers.
+      : network_thread_(rtc::Thread::Current()),
+        worker_thread_(rtc::Thread::Current()),
+        // Create fake media engine/etc. so we can create channels to use to
+        // test RtpSenders/RtpReceivers.
         media_engine_(new cricket::FakeMediaEngine()),
-        channel_manager_(
-            std::unique_ptr<cricket::MediaEngineInterface>(media_engine_),
-            rtc::Thread::Current(),
-            rtc::Thread::Current()),
+        channel_manager_(rtc::WrapUnique(media_engine_),
+                         rtc::MakeUnique<cricket::RtpDataEngine>(),
+                         worker_thread_,
+                         network_thread_),
         fake_call_(Call::Config(&event_log_)),
         local_stream_(MediaStream::Create(kStreamLabel1)) {
     // Create channels to be used by the RtpSenders and RtpReceivers.
@@ -124,22 +125,30 @@ class RtpSenderReceiverTest : public testing::Test,
   void AddVideoTrack(bool is_screencast) {
     rtc::scoped_refptr<VideoTrackSourceInterface> source(
         FakeVideoTrackSource::Create(is_screencast));
-    video_track_ = VideoTrack::Create(kVideoTrackId, source);
+    video_track_ =
+        VideoTrack::Create(kVideoTrackId, source, rtc::Thread::Current());
     EXPECT_TRUE(local_stream_->AddTrack(video_track_));
   }
 
   void CreateAudioRtpSender() { CreateAudioRtpSender(nullptr); }
 
-  void CreateAudioRtpSender(rtc::scoped_refptr<LocalAudioSource> source) {
+  void CreateAudioRtpSender(
+      const rtc::scoped_refptr<LocalAudioSource>& source) {
     audio_track_ = AudioTrack::Create(kAudioTrackId, source);
     EXPECT_TRUE(local_stream_->AddTrack(audio_track_));
     audio_rtp_sender_ =
-        new AudioRtpSender(local_stream_->GetAudioTracks()[0],
-                           local_stream_->label(), voice_channel_, nullptr);
+        new AudioRtpSender(worker_thread_, local_stream_->GetAudioTracks()[0],
+                           {local_stream_->label()}, nullptr);
+    audio_rtp_sender_->SetMediaChannel(voice_media_channel_);
     audio_rtp_sender_->SetSsrc(kAudioSsrc);
     audio_rtp_sender_->GetOnDestroyedSignal()->connect(
         this, &RtpSenderReceiverTest::OnAudioSenderDestroyed);
     VerifyVoiceChannelInput();
+  }
+
+  void CreateAudioRtpSenderWithNoTrack() {
+    audio_rtp_sender_ = new AudioRtpSender(worker_thread_, nullptr);
+    audio_rtp_sender_->SetMediaChannel(voice_media_channel_);
   }
 
   void OnAudioSenderDestroyed() { audio_sender_destroyed_signal_fired_ = true; }
@@ -149,10 +158,16 @@ class RtpSenderReceiverTest : public testing::Test,
   void CreateVideoRtpSender(bool is_screencast) {
     AddVideoTrack(is_screencast);
     video_rtp_sender_ =
-        new VideoRtpSender(local_stream_->GetVideoTracks()[0],
-                           local_stream_->label(), video_channel_);
+        new VideoRtpSender(worker_thread_, local_stream_->GetVideoTracks()[0],
+                           {local_stream_->label()});
+    video_rtp_sender_->SetMediaChannel(video_media_channel_);
     video_rtp_sender_->SetSsrc(kVideoSsrc);
     VerifyVideoChannelInput();
+  }
+
+  void CreateVideoRtpSenderWithNoTrack() {
+    video_rtp_sender_ = new VideoRtpSender(worker_thread_);
+    video_rtp_sender_->SetMediaChannel(video_media_channel_);
   }
 
   void DestroyAudioRtpSender() {
@@ -165,16 +180,20 @@ class RtpSenderReceiverTest : public testing::Test,
     VerifyVideoChannelNoInput();
   }
 
-  void CreateAudioRtpReceiver() {
-    audio_rtp_receiver_ =
-        new AudioRtpReceiver(kAudioTrackId, kAudioSsrc, voice_channel_);
+  void CreateAudioRtpReceiver(
+      std::vector<rtc::scoped_refptr<MediaStreamInterface>> streams = {}) {
+    audio_rtp_receiver_ = new AudioRtpReceiver(
+        rtc::Thread::Current(), kAudioTrackId, std::move(streams), kAudioSsrc,
+        voice_media_channel_);
     audio_track_ = audio_rtp_receiver_->audio_track();
     VerifyVoiceChannelOutput();
   }
 
-  void CreateVideoRtpReceiver() {
+  void CreateVideoRtpReceiver(
+      std::vector<rtc::scoped_refptr<MediaStreamInterface>> streams = {}) {
     video_rtp_receiver_ = new VideoRtpReceiver(
-        kVideoTrackId, rtc::Thread::Current(), kVideoSsrc, video_channel_);
+        rtc::Thread::Current(), kVideoTrackId, std::move(streams), kVideoSsrc,
+        video_media_channel_);
     video_track_ = video_rtp_receiver_->video_track();
     VerifyVideoChannelOutput();
   }
@@ -244,6 +263,8 @@ class RtpSenderReceiverTest : public testing::Test,
   }
 
  protected:
+  rtc::Thread* const network_thread_;
+  rtc::Thread* const worker_thread_;
   webrtc::RtcEventLogNullImpl event_log_;
   // |media_engine_| is actually owned by |channel_manager_|.
   cricket::FakeMediaEngine* media_engine_;
@@ -292,15 +313,24 @@ TEST_F(RtpSenderReceiverTest, AddAndDestroyVideoRtpReceiver) {
   DestroyVideoRtpReceiver();
 }
 
+TEST_F(RtpSenderReceiverTest, AddAndDestroyAudioRtpReceiverWithStreams) {
+  CreateAudioRtpReceiver({local_stream_});
+  DestroyAudioRtpReceiver();
+}
+
+TEST_F(RtpSenderReceiverTest, AddAndDestroyVideoRtpReceiverWithStreams) {
+  CreateVideoRtpReceiver({local_stream_});
+  DestroyVideoRtpReceiver();
+}
+
 // Test that the AudioRtpSender applies options from the local audio source.
 TEST_F(RtpSenderReceiverTest, LocalAudioSourceOptionsApplied) {
   cricket::AudioOptions options;
-  options.echo_cancellation = rtc::Optional<bool>(true);
+  options.echo_cancellation = true;
   auto source = LocalAudioSource::Create(&options);
   CreateAudioRtpSender(source.get());
 
-  EXPECT_EQ(rtc::Optional<bool>(true),
-            voice_media_channel_->options().echo_cancellation);
+  EXPECT_EQ(true, voice_media_channel_->options().echo_cancellation);
 
   DestroyAudioRtpSender();
 }
@@ -411,7 +441,7 @@ TEST_F(RtpSenderReceiverTest, RemoteAudioTrackSetVolume) {
 // Test that the media channel isn't enabled for sending if the audio sender
 // doesn't have both a track and SSRC.
 TEST_F(RtpSenderReceiverTest, AudioSenderWithoutTrackAndSsrc) {
-  audio_rtp_sender_ = new AudioRtpSender(voice_channel_, nullptr);
+  CreateAudioRtpSenderWithNoTrack();
   rtc::scoped_refptr<AudioTrackInterface> track =
       AudioTrack::Create(kAudioTrackId, nullptr);
 
@@ -428,7 +458,7 @@ TEST_F(RtpSenderReceiverTest, AudioSenderWithoutTrackAndSsrc) {
 // Test that the media channel isn't enabled for sending if the video sender
 // doesn't have both a track and SSRC.
 TEST_F(RtpSenderReceiverTest, VideoSenderWithoutTrackAndSsrc) {
-  video_rtp_sender_ = new VideoRtpSender(video_channel_);
+  CreateVideoRtpSenderWithNoTrack();
 
   // Track but no SSRC.
   EXPECT_TRUE(video_rtp_sender_->SetTrack(video_track_));
@@ -443,7 +473,7 @@ TEST_F(RtpSenderReceiverTest, VideoSenderWithoutTrackAndSsrc) {
 // Test that the media channel is enabled for sending when the audio sender
 // has a track and SSRC, when the SSRC is set first.
 TEST_F(RtpSenderReceiverTest, AudioSenderEarlyWarmupSsrcThenTrack) {
-  audio_rtp_sender_ = new AudioRtpSender(voice_channel_, nullptr);
+  CreateAudioRtpSenderWithNoTrack();
   rtc::scoped_refptr<AudioTrackInterface> track =
       AudioTrack::Create(kAudioTrackId, nullptr);
   audio_rtp_sender_->SetSsrc(kAudioSsrc);
@@ -456,7 +486,7 @@ TEST_F(RtpSenderReceiverTest, AudioSenderEarlyWarmupSsrcThenTrack) {
 // Test that the media channel is enabled for sending when the audio sender
 // has a track and SSRC, when the SSRC is set last.
 TEST_F(RtpSenderReceiverTest, AudioSenderEarlyWarmupTrackThenSsrc) {
-  audio_rtp_sender_ = new AudioRtpSender(voice_channel_, nullptr);
+  CreateAudioRtpSenderWithNoTrack();
   rtc::scoped_refptr<AudioTrackInterface> track =
       AudioTrack::Create(kAudioTrackId, nullptr);
   audio_rtp_sender_->SetTrack(track);
@@ -470,7 +500,7 @@ TEST_F(RtpSenderReceiverTest, AudioSenderEarlyWarmupTrackThenSsrc) {
 // has a track and SSRC, when the SSRC is set first.
 TEST_F(RtpSenderReceiverTest, VideoSenderEarlyWarmupSsrcThenTrack) {
   AddVideoTrack();
-  video_rtp_sender_ = new VideoRtpSender(video_channel_);
+  CreateVideoRtpSenderWithNoTrack();
   video_rtp_sender_->SetSsrc(kVideoSsrc);
   video_rtp_sender_->SetTrack(video_track_);
   VerifyVideoChannelInput();
@@ -482,7 +512,7 @@ TEST_F(RtpSenderReceiverTest, VideoSenderEarlyWarmupSsrcThenTrack) {
 // has a track and SSRC, when the SSRC is set last.
 TEST_F(RtpSenderReceiverTest, VideoSenderEarlyWarmupTrackThenSsrc) {
   AddVideoTrack();
-  video_rtp_sender_ = new VideoRtpSender(video_channel_);
+  CreateVideoRtpSenderWithNoTrack();
   video_rtp_sender_->SetTrack(video_track_);
   video_rtp_sender_->SetSsrc(kVideoSsrc);
   VerifyVideoChannelInput();
@@ -569,21 +599,43 @@ TEST_F(RtpSenderReceiverTest, SetAudioMaxSendBitrate) {
   webrtc::RtpParameters params = audio_rtp_sender_->GetParameters();
   EXPECT_EQ(1, params.encodings.size());
   EXPECT_FALSE(params.encodings[0].max_bitrate_bps);
-  params.encodings[0].max_bitrate_bps = rtc::Optional<int>(1000);
+  params.encodings[0].max_bitrate_bps = 1000;
   EXPECT_TRUE(audio_rtp_sender_->SetParameters(params));
 
   // Read back the parameters and verify they have been changed.
   params = audio_rtp_sender_->GetParameters();
   EXPECT_EQ(1, params.encodings.size());
-  EXPECT_EQ(rtc::Optional<int>(1000), params.encodings[0].max_bitrate_bps);
+  EXPECT_EQ(1000, params.encodings[0].max_bitrate_bps);
 
   // Verify that the audio channel received the new parameters.
   params = voice_media_channel_->GetRtpSendParameters(kAudioSsrc);
   EXPECT_EQ(1, params.encodings.size());
-  EXPECT_EQ(rtc::Optional<int>(1000), params.encodings[0].max_bitrate_bps);
+  EXPECT_EQ(1000, params.encodings[0].max_bitrate_bps);
 
   // Verify that the global bitrate limit has not been changed.
   EXPECT_EQ(-1, voice_media_channel_->max_bps());
+
+  DestroyAudioRtpSender();
+}
+
+TEST_F(RtpSenderReceiverTest, SetAudioBitratePriority) {
+  CreateAudioRtpSender();
+
+  webrtc::RtpParameters params = audio_rtp_sender_->GetParameters();
+  EXPECT_EQ(1, params.encodings.size());
+  EXPECT_EQ(webrtc::kDefaultBitratePriority,
+            params.encodings[0].bitrate_priority);
+  double new_bitrate_priority = 2.0;
+  params.encodings[0].bitrate_priority = new_bitrate_priority;
+  EXPECT_TRUE(audio_rtp_sender_->SetParameters(params));
+
+  params = audio_rtp_sender_->GetParameters();
+  EXPECT_EQ(1, params.encodings.size());
+  EXPECT_EQ(new_bitrate_priority, params.encodings[0].bitrate_priority);
+
+  params = voice_media_channel_->GetRtpSendParameters(kAudioSsrc);
+  EXPECT_EQ(1, params.encodings.size());
+  EXPECT_EQ(new_bitrate_priority, params.encodings[0].bitrate_priority);
 
   DestroyAudioRtpSender();
 }
@@ -605,21 +657,43 @@ TEST_F(RtpSenderReceiverTest, SetVideoMaxSendBitrate) {
   webrtc::RtpParameters params = video_rtp_sender_->GetParameters();
   EXPECT_EQ(1, params.encodings.size());
   EXPECT_FALSE(params.encodings[0].max_bitrate_bps);
-  params.encodings[0].max_bitrate_bps = rtc::Optional<int>(1000);
+  params.encodings[0].max_bitrate_bps = 1000;
   EXPECT_TRUE(video_rtp_sender_->SetParameters(params));
 
   // Read back the parameters and verify they have been changed.
   params = video_rtp_sender_->GetParameters();
   EXPECT_EQ(1, params.encodings.size());
-  EXPECT_EQ(rtc::Optional<int>(1000), params.encodings[0].max_bitrate_bps);
+  EXPECT_EQ(1000, params.encodings[0].max_bitrate_bps);
 
   // Verify that the video channel received the new parameters.
   params = video_media_channel_->GetRtpSendParameters(kVideoSsrc);
   EXPECT_EQ(1, params.encodings.size());
-  EXPECT_EQ(rtc::Optional<int>(1000), params.encodings[0].max_bitrate_bps);
+  EXPECT_EQ(1000, params.encodings[0].max_bitrate_bps);
 
   // Verify that the global bitrate limit has not been changed.
   EXPECT_EQ(-1, video_media_channel_->max_bps());
+
+  DestroyVideoRtpSender();
+}
+
+TEST_F(RtpSenderReceiverTest, SetVideoBitratePriority) {
+  CreateVideoRtpSender();
+
+  webrtc::RtpParameters params = video_rtp_sender_->GetParameters();
+  EXPECT_EQ(1, params.encodings.size());
+  EXPECT_EQ(webrtc::kDefaultBitratePriority,
+            params.encodings[0].bitrate_priority);
+  double new_bitrate_priority = 2.0;
+  params.encodings[0].bitrate_priority = new_bitrate_priority;
+  EXPECT_TRUE(video_rtp_sender_->SetParameters(params));
+
+  params = video_rtp_sender_->GetParameters();
+  EXPECT_EQ(1, params.encodings.size());
+  EXPECT_EQ(new_bitrate_priority, params.encodings[0].bitrate_priority);
+
+  params = video_media_channel_->GetRtpSendParameters(kVideoSsrc);
+  EXPECT_EQ(1, params.encodings.size());
+  EXPECT_EQ(new_bitrate_priority, params.encodings[0].bitrate_priority);
 
   DestroyVideoRtpSender();
 }
@@ -652,24 +726,20 @@ TEST_F(RtpSenderReceiverTest, PropagatesVideoTrackContentHint) {
   video_track_->set_enabled(true);
 
   // |video_track_| is not screencast by default.
-  EXPECT_EQ(rtc::Optional<bool>(false),
-            video_media_channel_->options().is_screencast);
+  EXPECT_EQ(false, video_media_channel_->options().is_screencast);
   // No content hint should be set by default.
   EXPECT_EQ(VideoTrackInterface::ContentHint::kNone,
             video_track_->content_hint());
   // Setting detailed should turn a non-screencast source into screencast mode.
   video_track_->set_content_hint(VideoTrackInterface::ContentHint::kDetailed);
-  EXPECT_EQ(rtc::Optional<bool>(true),
-            video_media_channel_->options().is_screencast);
+  EXPECT_EQ(true, video_media_channel_->options().is_screencast);
   // Removing the content hint should turn the track back into non-screencast
   // mode.
   video_track_->set_content_hint(VideoTrackInterface::ContentHint::kNone);
-  EXPECT_EQ(rtc::Optional<bool>(false),
-            video_media_channel_->options().is_screencast);
+  EXPECT_EQ(false, video_media_channel_->options().is_screencast);
   // Setting fluid should remain in non-screencast mode (its default).
   video_track_->set_content_hint(VideoTrackInterface::ContentHint::kFluid);
-  EXPECT_EQ(rtc::Optional<bool>(false),
-            video_media_channel_->options().is_screencast);
+  EXPECT_EQ(false, video_media_channel_->options().is_screencast);
 
   DestroyVideoRtpSender();
 }
@@ -683,23 +753,19 @@ TEST_F(RtpSenderReceiverTest,
   video_track_->set_enabled(true);
 
   // |video_track_| with a screencast source should be screencast by default.
-  EXPECT_EQ(rtc::Optional<bool>(true),
-            video_media_channel_->options().is_screencast);
+  EXPECT_EQ(true, video_media_channel_->options().is_screencast);
   // No content hint should be set by default.
   EXPECT_EQ(VideoTrackInterface::ContentHint::kNone,
             video_track_->content_hint());
   // Setting fluid should turn a screencast source into non-screencast mode.
   video_track_->set_content_hint(VideoTrackInterface::ContentHint::kFluid);
-  EXPECT_EQ(rtc::Optional<bool>(false),
-            video_media_channel_->options().is_screencast);
+  EXPECT_EQ(false, video_media_channel_->options().is_screencast);
   // Removing the content hint should turn the track back into screencast mode.
   video_track_->set_content_hint(VideoTrackInterface::ContentHint::kNone);
-  EXPECT_EQ(rtc::Optional<bool>(true),
-            video_media_channel_->options().is_screencast);
+  EXPECT_EQ(true, video_media_channel_->options().is_screencast);
   // Setting detailed should still remain in screencast mode (its default).
   video_track_->set_content_hint(VideoTrackInterface::ContentHint::kDetailed);
-  EXPECT_EQ(rtc::Optional<bool>(true),
-            video_media_channel_->options().is_screencast);
+  EXPECT_EQ(true, video_media_channel_->options().is_screencast);
 
   DestroyVideoRtpSender();
 }
@@ -712,26 +778,24 @@ TEST_F(RtpSenderReceiverTest,
   // Setting detailed overrides the default non-screencast mode. This should be
   // applied even if the track is set on construction.
   video_track_->set_content_hint(VideoTrackInterface::ContentHint::kDetailed);
-  video_rtp_sender_ =
-      new VideoRtpSender(local_stream_->GetVideoTracks()[0],
-                         local_stream_->label(), video_channel_);
+  video_rtp_sender_ = new VideoRtpSender(worker_thread_,
+                                         local_stream_->GetVideoTracks()[0],
+                                         {local_stream_->label()});
+  video_rtp_sender_->SetMediaChannel(video_media_channel_);
   video_track_->set_enabled(true);
 
   // Sender is not ready to send (no SSRC) so no option should have been set.
-  EXPECT_EQ(rtc::Optional<bool>(),
-            video_media_channel_->options().is_screencast);
+  EXPECT_EQ(rtc::nullopt, video_media_channel_->options().is_screencast);
 
   // Verify that the content hint is accounted for when video_rtp_sender_ does
   // get enabled.
   video_rtp_sender_->SetSsrc(kVideoSsrc);
-  EXPECT_EQ(rtc::Optional<bool>(true),
-            video_media_channel_->options().is_screencast);
+  EXPECT_EQ(true, video_media_channel_->options().is_screencast);
 
   // And removing the hint should go back to false (to verify that false was
   // default correctly).
   video_track_->set_content_hint(VideoTrackInterface::ContentHint::kNone);
-  EXPECT_EQ(rtc::Optional<bool>(false),
-            video_media_channel_->options().is_screencast);
+  EXPECT_EQ(false, video_media_channel_->options().is_screencast);
 
   DestroyVideoRtpSender();
 }

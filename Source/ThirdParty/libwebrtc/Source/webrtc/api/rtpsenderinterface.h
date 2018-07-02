@@ -11,19 +11,19 @@
 // This file contains interfaces for RtpSenders
 // http://w3c.github.io/webrtc-pc/#rtcrtpsender-interface
 
-#ifndef WEBRTC_API_RTPSENDERINTERFACE_H_
-#define WEBRTC_API_RTPSENDERINTERFACE_H_
+#ifndef API_RTPSENDERINTERFACE_H_
+#define API_RTPSENDERINTERFACE_H_
 
 #include <string>
 #include <vector>
 
-#include "webrtc/api/dtmfsenderinterface.h"
-#include "webrtc/api/mediatypes.h"
-#include "webrtc/api/mediastreaminterface.h"
-#include "webrtc/api/proxy.h"
-#include "webrtc/api/rtpparameters.h"
-#include "webrtc/base/refcount.h"
-#include "webrtc/base/scoped_ref_ptr.h"
+#include "api/dtmfsenderinterface.h"
+#include "api/mediastreaminterface.h"
+#include "api/mediatypes.h"
+#include "api/proxy.h"
+#include "api/rtpparameters.h"
+#include "rtc_base/refcount.h"
+#include "rtc_base/scoped_ref_ptr.h"
 
 namespace webrtc {
 
@@ -59,6 +59,13 @@ class RtpSenderInterface : public rtc::RefCountInterface {
   // Returns null for a video sender.
   virtual rtc::scoped_refptr<DtmfSenderInterface> GetDtmfSender() const = 0;
 
+  // Returns an ID that changes every time SetTrack() is called, but
+  // otherwise remains constant. Used to generate IDs for stats.
+  // The special value zero means that no track is attached.
+  // TODO(hta): Remove default implementation when callers have updated,
+  // or move function to an internal interface.
+  virtual int AttachmentId() const { return 0; }
+
  protected:
   virtual ~RtpSenderInterface() {}
 };
@@ -77,8 +84,9 @@ BEGIN_SIGNALING_PROXY_MAP(RtpSender)
   PROXY_CONSTMETHOD0(RtpParameters, GetParameters);
   PROXY_METHOD1(bool, SetParameters, const RtpParameters&)
   PROXY_CONSTMETHOD0(rtc::scoped_refptr<DtmfSenderInterface>, GetDtmfSender);
-END_PROXY_MAP()
+  PROXY_CONSTMETHOD0(int, AttachmentId);
+  END_PROXY_MAP()
 
 }  // namespace webrtc
 
-#endif  // WEBRTC_API_RTPSENDERINTERFACE_H_
+#endif  // API_RTPSENDERINTERFACE_H_

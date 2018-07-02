@@ -8,19 +8,20 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#ifndef WEBRTC_P2P_BASE_RELAYSERVER_H_
-#define WEBRTC_P2P_BASE_RELAYSERVER_H_
+#ifndef P2P_BASE_RELAYSERVER_H_
+#define P2P_BASE_RELAYSERVER_H_
 
 #include <map>
 #include <string>
 #include <vector>
 
-#include "webrtc/p2p/base/port.h"
-#include "webrtc/p2p/base/stun.h"
-#include "webrtc/base/asyncudpsocket.h"
-#include "webrtc/base/socketaddresspair.h"
-#include "webrtc/base/thread.h"
-#include "webrtc/base/timeutils.h"
+#include "p2p/base/port.h"
+#include "p2p/base/stun.h"
+#include "rtc_base/asyncudpsocket.h"
+#include "rtc_base/random.h"
+#include "rtc_base/socketaddresspair.h"
+#include "rtc_base/thread.h"
+#include "rtc_base/timeutils.h"
 
 namespace cricket {
 
@@ -34,7 +35,7 @@ class RelayServer : public rtc::MessageHandler,
  public:
   // Creates a server, which will use this thread to post messages to itself.
   explicit RelayServer(rtc::Thread* thread);
-  ~RelayServer();
+  ~RelayServer() override;
 
   rtc::Thread* thread() { return thread_; }
 
@@ -76,6 +77,7 @@ class RelayServer : public rtc::MessageHandler,
                    RelayServerConnection*> ConnectionMap;
 
   rtc::Thread* thread_;
+  webrtc::Random random_;
   bool log_bindings_;
   SocketList internal_sockets_;
   SocketList external_sockets_;
@@ -116,7 +118,7 @@ class RelayServer : public rtc::MessageHandler,
   void RemoveBinding(RelayServerBinding* binding);
 
   // Handle messages in our thread.
-  void OnMessage(rtc::Message *pmsg);
+  void OnMessage(rtc::Message* pmsg) override;
 
   // Called when the timer for checking lifetime times out.
   void OnTimeout(RelayServerBinding* binding);
@@ -185,7 +187,7 @@ class RelayServerBinding : public rtc::MessageHandler {
                      const std::string& username,
                      const std::string& password,
                      int lifetime);
-  virtual ~RelayServerBinding();
+  ~RelayServerBinding() override;
 
   RelayServer* server() { return server_; }
   int lifetime() { return lifetime_; }
@@ -214,7 +216,7 @@ class RelayServerBinding : public rtc::MessageHandler {
       const rtc::SocketAddress& ext_addr);
 
   // MessageHandler:
-  void OnMessage(rtc::Message *pmsg);
+  void OnMessage(rtc::Message* pmsg) override;
 
  private:
   RelayServer* server_;
@@ -228,9 +230,9 @@ class RelayServerBinding : public rtc::MessageHandler {
 
   int lifetime_;
   int64_t last_used_;
-  // TODO: bandwidth
+  // TODO(?): bandwidth
 };
 
 }  // namespace cricket
 
-#endif  // WEBRTC_P2P_BASE_RELAYSERVER_H_
+#endif  // P2P_BASE_RELAYSERVER_H_

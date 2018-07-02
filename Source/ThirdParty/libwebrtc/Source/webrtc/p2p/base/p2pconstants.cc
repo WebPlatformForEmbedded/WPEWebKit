@@ -8,7 +8,7 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#include "webrtc/p2p/base/p2pconstants.h"
+#include "p2p/base/p2pconstants.h"
 
 #include <string>
 
@@ -28,7 +28,7 @@ const int ICE_UFRAG_LENGTH = 4;
 const int ICE_PWD_LENGTH = 24;
 const size_t ICE_UFRAG_MIN_LENGTH = 4;
 const size_t ICE_PWD_MIN_LENGTH = 22;
-const size_t ICE_UFRAG_MAX_LENGTH = 255;
+const size_t ICE_UFRAG_MAX_LENGTH = 256;
 const size_t ICE_PWD_MAX_LENGTH = 256;
 
 // This is media-specific, so might belong
@@ -36,9 +36,6 @@ const size_t ICE_PWD_MAX_LENGTH = 256;
 const int ICE_CANDIDATE_COMPONENT_RTP = 1;
 const int ICE_CANDIDATE_COMPONENT_RTCP = 2;
 const int ICE_CANDIDATE_COMPONENT_DEFAULT = 1;
-
-const char NS_JINGLE_RTP[] = "urn:xmpp:jingle:apps:rtp:1";
-const char NS_JINGLE_DRAFT_SCTP[] = "google:jingle:sctp";
 
 // From RFC 4145, SDP setup attribute values.
 const char CONNECTIONROLE_ACTIVE_STR[] = "active";

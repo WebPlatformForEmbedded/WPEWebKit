@@ -8,23 +8,20 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#ifndef WEBRTC_COMMON_TYPES_H_
-#define WEBRTC_COMMON_TYPES_H_
+#ifndef COMMON_TYPES_H_
+#define COMMON_TYPES_H_
 
 #include <stddef.h>
 #include <string.h>
-
 #include <ostream>
 #include <string>
 #include <vector>
 
-#include "webrtc/api/video/video_content_type.h"
-#include "webrtc/api/video/video_rotation.h"
-#include "webrtc/api/video/video_timing.h"
-#include "webrtc/base/array_view.h"
-#include "webrtc/base/checks.h"
-#include "webrtc/base/optional.h"
-#include "webrtc/typedefs.h"
+#include "api/array_view.h"
+#include "api/optional.h"
+#include "rtc_base/checks.h"
+#include "rtc_base/deprecation.h"
+#include "typedefs.h"  // NOLINT(build/include)
 
 #if defined(_MSC_VER)
 // Disable "new behavior: elements of array will be default initialized"
@@ -78,71 +75,12 @@ class OutStream : public RewindableStream {
   virtual bool Write(const void* buf, size_t len) = 0;
 };
 
-enum TraceModule {
-  kTraceUndefined = 0,
-  // not a module, triggered from the engine code
-  kTraceVoice = 0x0001,
-  // not a module, triggered from the engine code
-  kTraceVideo = 0x0002,
-  // not a module, triggered from the utility code
-  kTraceUtility = 0x0003,
-  kTraceRtpRtcp = 0x0004,
-  kTraceTransport = 0x0005,
-  kTraceSrtp = 0x0006,
-  kTraceAudioCoding = 0x0007,
-  kTraceAudioMixerServer = 0x0008,
-  kTraceAudioMixerClient = 0x0009,
-  kTraceFile = 0x000a,
-  kTraceAudioProcessing = 0x000b,
-  kTraceVideoCoding = 0x0010,
-  kTraceVideoMixer = 0x0011,
-  kTraceAudioDevice = 0x0012,
-  kTraceVideoRenderer = 0x0014,
-  kTraceVideoCapture = 0x0015,
-  kTraceRemoteBitrateEstimator = 0x0017,
-};
-
-enum TraceLevel {
-  kTraceNone = 0x0000,  // no trace
-  kTraceStateInfo = 0x0001,
-  kTraceWarning = 0x0002,
-  kTraceError = 0x0004,
-  kTraceCritical = 0x0008,
-  kTraceApiCall = 0x0010,
-  kTraceDefault = 0x00ff,
-
-  kTraceModuleCall = 0x0020,
-  kTraceMemory = 0x0100,  // memory info
-  kTraceTimer = 0x0200,   // timing info
-  kTraceStream = 0x0400,  // "continuous" stream of data
-
-  // used for debug purposes
-  kTraceDebug = 0x0800,  // debug
-  kTraceInfo = 0x1000,   // debug info
-
-  // Non-verbose level used by LS_INFO of logging.h. Do not use directly.
-  kTraceTerseInfo = 0x2000,
-
-  kTraceAll = 0xffff
-};
-
-// External Trace API
-class TraceCallback {
- public:
-  virtual void Print(TraceLevel level, const char* message, int length) = 0;
-
- protected:
-  virtual ~TraceCallback() {}
-  TraceCallback() {}
-};
-
+// For the deprecated MediaFile module.
 enum FileFormats {
   kFileFormatWavFile = 1,
-  kFileFormatCompressedFile = 2,
-  kFileFormatPreencodedFile = 4,
   kFileFormatPcm16kHzFile = 7,
   kFileFormatPcm8kHzFile = 8,
-  kFileFormatPcm32kHzFile = 9
+  kFileFormatPcm32kHzFile = 9,
 };
 
 enum FrameType {
@@ -157,13 +95,19 @@ enum FrameType {
 struct RtcpStatistics {
   RtcpStatistics()
       : fraction_lost(0),
-        cumulative_lost(0),
-        extended_max_sequence_number(0),
+        packets_lost(0),
+        extended_highest_sequence_number(0),
         jitter(0) {}
 
   uint8_t fraction_lost;
-  uint32_t cumulative_lost;
-  uint32_t extended_max_sequence_number;
+  union {
+    int32_t packets_lost;  // Defined as a 24 bit signed integer in RTCP
+    RTC_DEPRECATED uint32_t cumulative_lost;
+  };
+  union {
+    uint32_t extended_highest_sequence_number;
+    RTC_DEPRECATED uint32_t extended_max_sequence_number;
+  };
   uint32_t jitter;
 };
 
@@ -361,10 +305,19 @@ struct NetworkStatistics {
   uint16_t preferredBufferSize;
   // adding extra delay due to "peaky jitter"
   bool jitterPeaksFound;
+  // Stats below correspond to similarly-named fields in the WebRTC stats spec.
+  // https://w3c.github.io/webrtc-stats/#dom-rtcmediastreamtrackstats
+  uint64_t totalSamplesReceived;
+  uint64_t concealedSamples;
+  uint64_t concealmentEvents;
+  uint64_t jitterBufferDelayMs;
+  // Stats below DO NOT correspond directly to anything in the WebRTC stats
   // Loss rate (network + late); fraction between 0 and 1, scaled to Q14.
   uint16_t currentPacketLossRate;
   // Late loss rate; fraction between 0 and 1, scaled to Q14.
-  uint16_t currentDiscardRate;
+  union {
+    RTC_DEPRECATED uint16_t currentDiscardRate;
+  };
   // fraction (of original stream) of synthesized audio inserted through
   // expansion (in Q14)
   uint16_t currentExpandRate;
@@ -378,6 +331,11 @@ struct NetworkStatistics {
   uint16_t currentAccelerateRate;
   // fraction of data coming from secondary decoding (in Q14)
   uint16_t currentSecondaryDecodedRate;
+  // Fraction of secondary data, including FEC and RED, that is discarded (in
+  // Q14). Discarding of secondary data can be caused by the reception of the
+  // primary data, obsoleting the secondary data. It can also be caused by early
+  // or late arrival of secondary data.
+  uint16_t currentSecondaryDiscardedRate;
   // clock-drift in parts-per-million (negative or positive)
   int32_t clockDriftPPM;
   // average packet waiting time in the jitter buffer (ms)
@@ -527,12 +485,13 @@ enum VideoCodecType {
   kVideoCodecULPFEC,
   kVideoCodecFlexfec,
   kVideoCodecGeneric,
+  kVideoCodecStereo,
   kVideoCodecUnknown
 };
 
 // Translates from name of codec to codec type and vice versa.
-rtc::Optional<const char*> CodecTypeToPayloadName(VideoCodecType type);
-rtc::Optional<VideoCodecType> PayloadNameToCodecType(const std::string& name);
+const char* CodecTypeToPayloadString(VideoCodecType type);
+VideoCodecType PayloadStringToCodecType(const std::string& name);
 
 union VideoCodecUnion {
   VideoCodecVP8 VP8;
@@ -631,7 +590,13 @@ class BitrateAllocation {
                   size_t temporal_index,
                   uint32_t bitrate_bps);
 
+  bool HasBitrate(size_t spatial_index, size_t temporal_index) const;
+
   uint32_t GetBitrate(size_t spatial_index, size_t temporal_index) const;
+
+  // Whether the specific spatial layers has the bitrate set in any of its
+  // temporal layers.
+  bool IsSpatialLayerUsed(size_t spatial_index) const;
 
   // Get the sum of all the temporal layer for a specific spatial layer.
   uint32_t GetSpatialLayerSum(size_t spatial_index) const;
@@ -646,9 +611,14 @@ class BitrateAllocation {
     return !(*this == other);
   }
 
+  // Expensive, please use only in tests.
+  std::string ToString() const;
+  std::ostream& operator<<(std::ostream& os) const;
+
  private:
   uint32_t sum_;
   uint32_t bitrates_[kMaxSpatialLayers][kMaxTemporalStreams];
+  bool has_bitrate_[kMaxSpatialLayers][kMaxTemporalStreams];
 };
 
 // Bandwidth over-use detector options.  These are used to drive
@@ -712,203 +682,6 @@ struct PlayoutDelay {
   int max_ms;
 };
 
-// Class to represent RtpStreamId which is a string.
-// Unlike std::string, it can be copied with memcpy and cleared with memset.
-// Empty value represent unset RtpStreamId.
-class StreamId {
- public:
-  // Stream id is limited to 16 bytes because it is the maximum length
-  // that can be encoded with one-byte header extensions.
-  static constexpr size_t kMaxSize = 16;
-
-  static bool IsLegalName(rtc::ArrayView<const char> name);
-
-  StreamId() { value_[0] = 0; }
-  explicit StreamId(rtc::ArrayView<const char> value) {
-    Set(value.data(), value.size());
-  }
-  StreamId(const StreamId&) = default;
-  StreamId& operator=(const StreamId&) = default;
-
-  bool empty() const { return value_[0] == 0; }
-  const char* data() const { return value_; }
-  size_t size() const { return strnlen(value_, kMaxSize); }
-
-  void Set(rtc::ArrayView<const uint8_t> value) {
-    Set(reinterpret_cast<const char*>(value.data()), value.size());
-  }
-  void Set(const char* data, size_t size);
-
-  friend bool operator==(const StreamId& lhs, const StreamId& rhs) {
-    return strncmp(lhs.value_, rhs.value_, kMaxSize) == 0;
-  }
-  friend bool operator!=(const StreamId& lhs, const StreamId& rhs) {
-    return !(lhs == rhs);
-  }
-
- private:
-  char value_[kMaxSize];
-};
-
-struct RTPHeaderExtension {
-  RTPHeaderExtension();
-
-  bool hasTransmissionTimeOffset;
-  int32_t transmissionTimeOffset;
-  bool hasAbsoluteSendTime;
-  uint32_t absoluteSendTime;
-  bool hasTransportSequenceNumber;
-  uint16_t transportSequenceNumber;
-
-  // Audio Level includes both level in dBov and voiced/unvoiced bit. See:
-  // https://datatracker.ietf.org/doc/draft-lennox-avt-rtp-audio-level-exthdr/
-  bool hasAudioLevel;
-  bool voiceActivity;
-  uint8_t audioLevel;
-
-  // For Coordination of Video Orientation. See
-  // http://www.etsi.org/deliver/etsi_ts/126100_126199/126114/12.07.00_60/
-  // ts_126114v120700p.pdf
-  bool hasVideoRotation;
-  VideoRotation videoRotation;
-
-  // TODO(ilnik): Refactor this and one above to be rtc::Optional() and remove
-  // a corresponding bool flag.
-  bool hasVideoContentType;
-  VideoContentType videoContentType;
-
-  bool has_video_timing;
-  VideoTiming video_timing;
-
-  PlayoutDelay playout_delay = {-1, -1};
-
-  // For identification of a stream when ssrc is not signaled. See
-  // https://tools.ietf.org/html/draft-ietf-avtext-rid-09
-  // TODO(danilchap): Update url from draft to release version.
-  StreamId stream_id;
-  StreamId repaired_stream_id;
-};
-
-struct RTPHeader {
-  RTPHeader();
-
-  bool markerBit;
-  uint8_t payloadType;
-  uint16_t sequenceNumber;
-  uint32_t timestamp;
-  uint32_t ssrc;
-  uint8_t numCSRCs;
-  uint32_t arrOfCSRCs[kRtpCsrcSize];
-  size_t paddingLength;
-  size_t headerLength;
-  int payload_type_frequency;
-  RTPHeaderExtension extension;
-};
-
-struct RtpPacketCounter {
-  RtpPacketCounter()
-      : header_bytes(0), payload_bytes(0), padding_bytes(0), packets(0) {}
-
-  void Add(const RtpPacketCounter& other) {
-    header_bytes += other.header_bytes;
-    payload_bytes += other.payload_bytes;
-    padding_bytes += other.padding_bytes;
-    packets += other.packets;
-  }
-
-  void Subtract(const RtpPacketCounter& other) {
-    RTC_DCHECK_GE(header_bytes, other.header_bytes);
-    header_bytes -= other.header_bytes;
-    RTC_DCHECK_GE(payload_bytes, other.payload_bytes);
-    payload_bytes -= other.payload_bytes;
-    RTC_DCHECK_GE(padding_bytes, other.padding_bytes);
-    padding_bytes -= other.padding_bytes;
-    RTC_DCHECK_GE(packets, other.packets);
-    packets -= other.packets;
-  }
-
-  void AddPacket(size_t packet_length, const RTPHeader& header) {
-    ++packets;
-    header_bytes += header.headerLength;
-    padding_bytes += header.paddingLength;
-    payload_bytes +=
-        packet_length - (header.headerLength + header.paddingLength);
-  }
-
-  size_t TotalBytes() const {
-    return header_bytes + payload_bytes + padding_bytes;
-  }
-
-  size_t header_bytes;   // Number of bytes used by RTP headers.
-  size_t payload_bytes;  // Payload bytes, excluding RTP headers and padding.
-  size_t padding_bytes;  // Number of padding bytes.
-  uint32_t packets;      // Number of packets.
-};
-
-// Data usage statistics for a (rtp) stream.
-struct StreamDataCounters {
-  StreamDataCounters();
-
-  void Add(const StreamDataCounters& other) {
-    transmitted.Add(other.transmitted);
-    retransmitted.Add(other.retransmitted);
-    fec.Add(other.fec);
-    if (other.first_packet_time_ms != -1 &&
-        (other.first_packet_time_ms < first_packet_time_ms ||
-         first_packet_time_ms == -1)) {
-      // Use oldest time.
-      first_packet_time_ms = other.first_packet_time_ms;
-    }
-  }
-
-  void Subtract(const StreamDataCounters& other) {
-    transmitted.Subtract(other.transmitted);
-    retransmitted.Subtract(other.retransmitted);
-    fec.Subtract(other.fec);
-    if (other.first_packet_time_ms != -1 &&
-        (other.first_packet_time_ms > first_packet_time_ms ||
-         first_packet_time_ms == -1)) {
-      // Use youngest time.
-      first_packet_time_ms = other.first_packet_time_ms;
-    }
-  }
-
-  int64_t TimeSinceFirstPacketInMs(int64_t now_ms) const {
-    return (first_packet_time_ms == -1) ? -1 : (now_ms - first_packet_time_ms);
-  }
-
-  // Returns the number of bytes corresponding to the actual media payload (i.e.
-  // RTP headers, padding, retransmissions and fec packets are excluded).
-  // Note this function does not have meaning for an RTX stream.
-  size_t MediaPayloadBytes() const {
-    return transmitted.payload_bytes - retransmitted.payload_bytes -
-           fec.payload_bytes;
-  }
-
-  int64_t first_packet_time_ms;    // Time when first packet is sent/received.
-  RtpPacketCounter transmitted;    // Number of transmitted packets/bytes.
-  RtpPacketCounter retransmitted;  // Number of retransmitted packets/bytes.
-  RtpPacketCounter fec;            // Number of redundancy packets/bytes.
-};
-
-// Callback, called whenever byte/packet counts have been updated.
-class StreamDataCountersCallback {
- public:
-  virtual ~StreamDataCountersCallback() {}
-
-  virtual void DataCountersUpdated(const StreamDataCounters& counters,
-                                   uint32_t ssrc) = 0;
-};
-
-// RTCP mode to use. Compound mode is described by RFC 4585 and reduced-size
-// RTCP mode is described by RFC 5506.
-enum class RtcpMode { kOff, kCompound, kReducedSize };
-
-enum NetworkState {
-  kNetworkUp,
-  kNetworkDown,
-};
-
 }  // namespace webrtc
 
-#endif  // WEBRTC_COMMON_TYPES_H_
+#endif  // COMMON_TYPES_H_

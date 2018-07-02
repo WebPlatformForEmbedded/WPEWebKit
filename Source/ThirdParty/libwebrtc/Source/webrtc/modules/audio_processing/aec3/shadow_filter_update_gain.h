@@ -8,31 +8,42 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#ifndef WEBRTC_MODULES_AUDIO_PROCESSING_AEC3_SHADOW_FILTER_UPDATE_GAIN_H_
-#define WEBRTC_MODULES_AUDIO_PROCESSING_AEC3_SHADOW_FILTER_UPDATE_GAIN_H_
+#ifndef MODULES_AUDIO_PROCESSING_AEC3_SHADOW_FILTER_UPDATE_GAIN_H_
+#define MODULES_AUDIO_PROCESSING_AEC3_SHADOW_FILTER_UPDATE_GAIN_H_
 
-#include "webrtc/base/constructormagic.h"
-#include "webrtc/modules/audio_processing/aec3/aec3_common.h"
-#include "webrtc/modules/audio_processing/aec3/render_buffer.h"
-#include "webrtc/modules/audio_processing/aec3/render_signal_analyzer.h"
+#include "modules/audio_processing/aec3/aec3_common.h"
+#include "modules/audio_processing/aec3/render_buffer.h"
+#include "modules/audio_processing/aec3/render_signal_analyzer.h"
+#include "modules/audio_processing/include/audio_processing.h"
+#include "rtc_base/constructormagic.h"
 
 namespace webrtc {
 
 // Provides functionality for computing the fixed gain for the shadow filter.
 class ShadowFilterUpdateGain {
  public:
+  explicit ShadowFilterUpdateGain(
+      const EchoCanceller3Config::Filter::ShadowConfiguration& config);
+
   // Takes action in the case of a known echo path change.
   void HandleEchoPathChange();
 
   // Computes the gain.
-  void Compute(const RenderBuffer& render_buffer,
+  void Compute(const std::array<float, kFftLengthBy2Plus1>& render_power,
                const RenderSignalAnalyzer& render_signal_analyzer,
                const FftData& E_shadow,
                size_t size_partitions,
                bool saturated_capture_signal,
                FftData* G);
 
+  // Sets a new config.
+  void SetConfig(
+      const EchoCanceller3Config::Filter::ShadowConfiguration& config) {
+    config_ = config;
+  }
+
  private:
+  EchoCanceller3Config::Filter::ShadowConfiguration config_;
   // TODO(peah): Check whether this counter should instead be initialized to a
   // large value.
   size_t poor_signal_excitation_counter_ = 0;
@@ -41,4 +52,4 @@ class ShadowFilterUpdateGain {
 
 }  // namespace webrtc
 
-#endif  // WEBRTC_MODULES_AUDIO_PROCESSING_AEC3_SHADOW_FILTER_UPDATE_GAIN_H_
+#endif  // MODULES_AUDIO_PROCESSING_AEC3_SHADOW_FILTER_UPDATE_GAIN_H_

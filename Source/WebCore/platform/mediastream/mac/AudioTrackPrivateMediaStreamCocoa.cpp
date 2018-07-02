@@ -31,11 +31,11 @@
 #include "AudioSession.h"
 #include "CAAudioStreamDescription.h"
 #include "Logging.h"
-#include <pal/Logger.h>
 
-#include "CoreMediaSoftLink.h"
+#include <pal/cf/CoreMediaSoftLink.h>
+#include <pal/spi/cocoa/AudioToolboxSPI.h>
 
-#if ENABLE(VIDEO_TRACK)
+#if ENABLE(VIDEO_TRACK) && ENABLE(MEDIA_STREAM)
 
 namespace WebCore {
 
@@ -170,6 +170,7 @@ void AudioTrackPrivateMediaStreamCocoa::audioSamplesAvailable(const MediaTime& s
     // This function is called on a background thread. The following protectedThis object ensures the object is not
     // destroyed on the main thread before this function exits.
     Ref<AudioTrackPrivateMediaStreamCocoa> protectedThis { *this };
+
     ASSERT(description.platformDescription().type == PlatformDescription::CAAudioStreamBasicType);
 
     if (!m_inputDescription || *m_inputDescription != description) {
@@ -241,4 +242,4 @@ OSStatus AudioTrackPrivateMediaStreamCocoa::inputProc(void* userData, AudioUnitR
 
 } // namespace WebCore
 
-#endif // ENABLE(VIDEO_TRACK)
+#endif // ENABLE(VIDEO_TRACK) && ENABLE(MEDIA_STREAM)

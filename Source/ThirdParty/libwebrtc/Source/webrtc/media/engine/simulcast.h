@@ -8,13 +8,14 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#ifndef WEBRTC_MEDIA_ENGINE_SIMULCAST_H_
-#define WEBRTC_MEDIA_ENGINE_SIMULCAST_H_
+#ifndef MEDIA_ENGINE_SIMULCAST_H_
+#define MEDIA_ENGINE_SIMULCAST_H_
 
+#include <string>
 #include <vector>
 
-#include "webrtc/base/basictypes.h"
-#include "webrtc/config.h"
+#include "call/video_config.h"
+#include "rtc_base/basictypes.h"
 
 namespace cricket {
 struct StreamParams;
@@ -51,6 +52,7 @@ std::vector<webrtc::VideoStream> GetSimulcastConfig(size_t max_streams,
                                                     int width,
                                                     int height,
                                                     int max_bitrate_bps,
+                                                    double bitrate_priority,
                                                     int max_qp,
                                                     int max_framerate,
                                                     bool is_screencast = false);
@@ -59,4 +61,4 @@ bool UseSimulcastScreenshare();
 
 }  // namespace cricket
 
-#endif  // WEBRTC_MEDIA_ENGINE_SIMULCAST_H_
+#endif  // MEDIA_ENGINE_SIMULCAST_H_

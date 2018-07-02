@@ -13,6 +13,7 @@ config("media_file_config") {
 }
 
 rtc_static_library("media_file") {
+  visibility = [ "*" ]
   sources = [
     "media_file.h",
     "media_file_defines.h",
@@ -35,9 +36,9 @@ rtc_static_library("media_file") {
   deps = [
     "..:module_api",
     "../..:webrtc_common",
-    "../../base:rtc_base_approved",
+    "../../:typedefs",
     "../../common_audio",
-    "../../system_wrappers",
+    "../../rtc_base:rtc_base_approved",
   ]
 }
 
@@ -45,18 +46,11 @@ if (rtc_include_tests) {
   rtc_source_set("media_file_unittests") {
     testonly = true
 
-    # Skip restricting visibility on mobile platforms since the tests on those
-    # gets additional generated targets which would require many lines here to
-    # cover (which would be confusing to read and hard to maintain).
-    if (!is_android && !is_ios) {
-      visibility = [ "//webrtc/modules:modules_unittests" ]
-    }
     sources = [
       "media_file_unittest.cc",
     ]
     deps = [
       ":media_file",
-      "../../system_wrappers:system_wrappers",
       "../../test:test_support",
     ]
     if (is_win) {

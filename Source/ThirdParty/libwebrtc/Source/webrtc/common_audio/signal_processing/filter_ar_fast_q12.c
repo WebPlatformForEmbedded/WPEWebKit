@@ -8,8 +8,8 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#include "webrtc/base/checks.h"
-#include "webrtc/common_audio/signal_processing/include/signal_processing_library.h"
+#include "rtc_base/checks.h"
+#include "common_audio/signal_processing/include/signal_processing_library.h"
 
 // TODO(bjornv): Change the return type to report errors.
 
@@ -25,8 +25,8 @@ void WebRtcSpl_FilterARFastQ12(const int16_t* data_in,
   RTC_DCHECK_GT(coefficients_length, 1);
 
   for (i = 0; i < data_length; i++) {
-    int32_t output = 0;
-    int32_t sum = 0;
+    int64_t output = 0;
+    int64_t sum = 0;
 
     for (j = coefficients_length - 1; j > 0; j--) {
       sum += coefficients[j] * data_out[i - j];

@@ -8,19 +8,18 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#ifndef WEBRTC_MEDIA_BASE_TESTUTILS_H_
-#define WEBRTC_MEDIA_BASE_TESTUTILS_H_
+#ifndef MEDIA_BASE_TESTUTILS_H_
+#define MEDIA_BASE_TESTUTILS_H_
 
 #include <string>
 #include <vector>
 
-#include "webrtc/base/arraysize.h"
-#include "webrtc/base/basictypes.h"
-#include "webrtc/base/sigslot.h"
-#include "webrtc/base/window.h"
-#include "webrtc/media/base/mediachannel.h"
-#include "webrtc/media/base/videocapturer.h"
-#include "webrtc/media/base/videocommon.h"
+#include "media/base/mediachannel.h"
+#include "media/base/videocapturer.h"
+#include "media/base/videocommon.h"
+#include "rtc_base/arraysize.h"
+#include "rtc_base/basictypes.h"
+#include "rtc_base/sigslot.h"
 
 namespace rtc {
 class ByteBufferReader;
@@ -104,20 +103,6 @@ class VideoCapturerListener
   bool resolution_changed_;
 };
 
-class VideoMediaErrorCatcher : public sigslot::has_slots<> {
- public:
-  VideoMediaErrorCatcher() : ssrc_(0), error_(VideoMediaChannel::ERROR_NONE) { }
-  uint32_t ssrc() const { return ssrc_; }
-  VideoMediaChannel::Error error() const { return error_; }
-  void OnError(uint32_t ssrc, VideoMediaChannel::Error error) {
-    ssrc_ = ssrc;
-    error_ = error;
-  }
- private:
-  uint32_t ssrc_;
-  VideoMediaChannel::Error error_;
-};
-
 // Checks whether |codecs| contains |codec|; checks using Codec::Matches().
 template <class C>
 bool ContainsMatchingCodec(const std::vector<C>& codecs, const C& codec) {
@@ -148,4 +133,4 @@ cricket::StreamParams CreatePrimaryWithFecFrStreamParams(
 
 }  // namespace cricket
 
-#endif  // WEBRTC_MEDIA_BASE_TESTUTILS_H_
+#endif  // MEDIA_BASE_TESTUTILS_H_

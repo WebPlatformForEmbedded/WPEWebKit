@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015 Apple Inc. All rights reserved.
+ * Copyright (C) 2015-2017 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -35,6 +35,7 @@
 #include "CaptureDevice.h"
 #include "Logging.h"
 #include "MediaConstraints.h"
+#include "MockRealtimeMediaSourceCenter.h"
 #include "NotImplemented.h"
 #include "RealtimeMediaSourceSettings.h"
 #include <wtf/UUID.h>
@@ -42,15 +43,13 @@
 namespace WebCore {
 
 class MockRealtimeAudioSourceFactory : public RealtimeMediaSource::AudioCaptureFactory
-#if PLATFORM(IOS)
-    , public RealtimeMediaSource::SingleSourceFactory<MockRealtimeAudioSource>
-#endif
 {
 public:
-    CaptureSourceOrError createAudioCaptureSource(const String& deviceID, const MediaConstraints* constraints) final {
-        for (auto& device : MockRealtimeMediaSource::audioDevices()) {
-            if (device.persistentId() == deviceID)
-                return MockRealtimeAudioSource::create(deviceID, device.label(), constraints);
+    CaptureSourceOrError createAudioCaptureSource(const CaptureDevice& device, const MediaConstraints* constraints) final
+    {
+        for (auto& mockDevice : MockRealtimeMediaSource::audioDevices()) {
+            if (mockDevice.persistentId() == device.persistentId())
+                return MockRealtimeAudioSource::create(mockDevice.persistentId(), mockDevice.label(), constraints);
         }
         return { };
     }
@@ -66,13 +65,6 @@ CaptureSourceOrError MockRealtimeAudioSource::create(const String& deviceID, con
     return CaptureSourceOrError(WTFMove(source));
 }
 #endif
-
-Ref<MockRealtimeAudioSource> MockRealtimeAudioSource::createMuted(const String& name)
-{
-    auto source = adoptRef(*new MockRealtimeAudioSource(String { }, name));
-    source->notifyMutedChange(true);
-    return source;
-}
 
 static MockRealtimeAudioSourceFactory& mockAudioCaptureSourceFactory()
 {
@@ -94,7 +86,7 @@ MockRealtimeAudioSource::MockRealtimeAudioSource(const String& deviceID, const S
 MockRealtimeAudioSource::~MockRealtimeAudioSource()
 {
 #if PLATFORM(IOS)
-    mockAudioCaptureSourceFactory().unsetActiveSource(*this);
+    MockRealtimeMediaSourceCenter::audioCaptureSourceFactory().unsetActiveSource(*this);
 #endif
 }
 
@@ -122,52 +114,52 @@ void MockRealtimeAudioSource::initializeSupportedConstraints(RealtimeMediaSource
 void MockRealtimeAudioSource::startProducingData()
 {
 #if PLATFORM(IOS)
-    mockAudioCaptureSourceFactory().setActiveSource(*this);
+    MockRealtimeMediaSourceCenter::audioCaptureSourceFactory().setActiveSource(*this);
 #endif
 
     if (!sampleRate())
-        setSampleRate(!deviceIndex() ? 44100 : 48000);
+        setSampleRate(device() == MockRealtimeMediaSource::MockDevice::Microphone1 ? 44100 : 48000);
 
-    m_startTime = monotonicallyIncreasingTime();
+    m_startTime = MonotonicTime::now();
     m_timer.startRepeating(renderInterval());
 }
 
 void MockRealtimeAudioSource::stopProducingData()
 {
     m_timer.stop();
-    m_elapsedTime += monotonicallyIncreasingTime() - m_startTime;
-    m_startTime = NAN;
+    m_elapsedTime += MonotonicTime::now() - m_startTime;
+    m_startTime = MonotonicTime::nan();
 }
 
-double MockRealtimeAudioSource::elapsedTime()
+Seconds MockRealtimeAudioSource::elapsedTime()
 {
     if (std::isnan(m_startTime))
         return m_elapsedTime;
 
-    return m_elapsedTime + (monotonicallyIncreasingTime() - m_startTime);
+    return m_elapsedTime + (MonotonicTime::now() - m_startTime);
 }
 
 void MockRealtimeAudioSource::tick()
 {
     if (std::isnan(m_lastRenderTime))
-        m_lastRenderTime = monotonicallyIncreasingTime();
+        m_lastRenderTime = MonotonicTime::now();
 
-    double now = monotonicallyIncreasingTime();
+    MonotonicTime now = MonotonicTime::now();
 
     if (m_delayUntil) {
         if (m_delayUntil < now)
             return;
-        m_delayUntil = 0;
+        m_delayUntil = MonotonicTime();
     }
 
-    double delta = now - m_lastRenderTime;
+    Seconds delta = now - m_lastRenderTime;
     m_lastRenderTime = now;
     render(delta);
 }
 
-void MockRealtimeAudioSource::delaySamples(float delta)
+void MockRealtimeAudioSource::delaySamples(Seconds delta)
 {
-    m_delayUntil = monotonicallyIncreasingTime() + delta;
+    m_delayUntil = MonotonicTime::now() + delta;
 }
 
 } // namespace WebCore

@@ -152,8 +152,10 @@ void UserMediaPermissionRequestManager::userMediaAccessWasGranted(uint64_t reque
     if (!request)
         return;
     removeMediaRequestFromMaps(*request);
-
+// FIXME Modify function or add allow attribute based on webkit version.
+#ifdef USE_LIBWEBRTC_UPSTREAM
     request->allow(WTFMove(audioDeviceUID), WTFMove(videoDeviceUID), WTFMove(deviceIdentifierHashSalt));
+#endif
 }
 
 void UserMediaPermissionRequestManager::userMediaAccessWasDenied(uint64_t requestID, WebCore::UserMediaRequest::MediaAccessDenialReason reason, String&& invalidConstraint)

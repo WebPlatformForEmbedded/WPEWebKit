@@ -8,8 +8,8 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#ifndef WEBRTC_MEDIA_BASE_MEDIACONSTANTS_H_
-#define WEBRTC_MEDIA_BASE_MEDIACONSTANTS_H_
+#ifndef MEDIA_BASE_MEDIACONSTANTS_H_
+#define MEDIA_BASE_MEDIACONSTANTS_H_
 
 #include <string>
 
@@ -30,11 +30,13 @@ extern const char kRtxCodecName[];
 extern const char kRedCodecName[];
 extern const char kUlpfecCodecName[];
 extern const char kFlexfecCodecName[];
+extern const char kStereoCodecName[];
 
 extern const char kFlexfecFmtpRepairWindow[];
 
 // Codec parameters
 extern const char kCodecParamAssociatedPayloadType[];
+extern const char kCodecParamAssociatedCodecName[];
 
 extern const char kOpusCodecName[];
 extern const char kIsacCodecName[];
@@ -134,4 +136,4 @@ extern const char kH264ProfileLevelConstrainedBaseline[];
 extern const int kDefaultVideoMaxFramerate;
 }  // namespace cricket
 
-#endif  // WEBRTC_MEDIA_BASE_MEDIACONSTANTS_H_
+#endif  // MEDIA_BASE_MEDIACONSTANTS_H_

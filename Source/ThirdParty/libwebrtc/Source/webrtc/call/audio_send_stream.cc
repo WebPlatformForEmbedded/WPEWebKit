@@ -8,7 +8,7 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#include "webrtc/call/audio_send_stream.h"
+#include "call/audio_send_stream.h"
 
 #include <string>
 
@@ -26,7 +26,6 @@ std::string AudioSendStream::Config::ToString() const {
   std::stringstream ss;
   ss << "{rtp: " << rtp.ToString();
   ss << ", send_transport: " << (send_transport ? "(Transport)" : "null");
-  ss << ", voe_channel_id: " << voe_channel_id;
   ss << ", min_bitrate_bps: " << min_bitrate_bps;
   ss << ", max_bitrate_bps: " << max_bitrate_bps;
   ss << ", send_codec_spec: "

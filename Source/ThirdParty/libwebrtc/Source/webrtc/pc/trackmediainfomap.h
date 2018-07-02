@@ -8,18 +8,18 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#ifndef WEBRTC_PC_TRACKMEDIAINFOMAP_H_
-#define WEBRTC_PC_TRACKMEDIAINFOMAP_H_
+#ifndef PC_TRACKMEDIAINFOMAP_H_
+#define PC_TRACKMEDIAINFOMAP_H_
 
 #include <map>
 #include <memory>
 #include <vector>
 
-#include "webrtc/api/mediastreaminterface.h"
-#include "webrtc/api/rtpreceiverinterface.h"
-#include "webrtc/api/rtpsenderinterface.h"
-#include "webrtc/base/refcount.h"
-#include "webrtc/media/base/mediachannel.h"
+#include "api/mediastreaminterface.h"
+#include "api/rtpreceiverinterface.h"
+#include "api/rtpsenderinterface.h"
+#include "media/base/mediachannel.h"
+#include "rtc_base/refcount.h"
 
 namespace webrtc {
 
@@ -58,6 +58,13 @@ class TrackMediaInfoMap {
   const cricket::VideoReceiverInfo* GetVideoReceiverInfo(
       const VideoTrackInterface& remote_video_track) const;
 
+  const cricket::VoiceSenderInfo* GetVoiceSenderInfoBySsrc(uint32_t ssrc) const;
+  const cricket::VoiceReceiverInfo* GetVoiceReceiverInfoBySsrc(
+      uint32_t ssrc) const;
+  const cricket::VideoSenderInfo* GetVideoSenderInfoBySsrc(uint32_t ssrc) const;
+  const cricket::VideoReceiverInfo* GetVideoReceiverInfoBySsrc(
+      uint32_t ssrc) const;
+
   rtc::scoped_refptr<AudioTrackInterface> GetAudioTrack(
       const cricket::VoiceSenderInfo& voice_sender_info) const;
   rtc::scoped_refptr<AudioTrackInterface> GetAudioTrack(
@@ -66,6 +73,13 @@ class TrackMediaInfoMap {
       const cricket::VideoSenderInfo& video_sender_info) const;
   rtc::scoped_refptr<VideoTrackInterface> GetVideoTrack(
       const cricket::VideoReceiverInfo& video_receiver_info) const;
+
+  // TODO(hta): Remove this function, and redesign the callers not to need it.
+  // It is not going to work if a track is attached multiple times, and
+  // it is not going to work if a received track is attached as a sending
+  // track (loopback).
+  rtc::Optional<int> GetAttachmentIdByTrack(
+      const MediaStreamTrackInterface* track) const;
 
  private:
   std::unique_ptr<cricket::VoiceMediaInfo> voice_media_info_;
@@ -95,8 +109,19 @@ class TrackMediaInfoMap {
   std::map<const cricket::VideoReceiverInfo*,
            rtc::scoped_refptr<VideoTrackInterface>>
       video_track_by_receiver_info_;
+  // Map of tracks to attachment IDs.
+  // Necessary because senders and receivers live on the signaling thread,
+  // but the attachment IDs are needed while building stats on the networking
+  // thread, so we can't look them up in the senders/receivers without
+  // thread jumping.
+  std::map<const MediaStreamTrackInterface*, int> attachment_id_by_track_;
+  // These maps map SSRCs to the corresponding voice or video info objects.
+  std::map<uint32_t, cricket::VoiceSenderInfo*> voice_info_by_sender_ssrc_;
+  std::map<uint32_t, cricket::VoiceReceiverInfo*> voice_info_by_receiver_ssrc_;
+  std::map<uint32_t, cricket::VideoSenderInfo*> video_info_by_sender_ssrc_;
+  std::map<uint32_t, cricket::VideoReceiverInfo*> video_info_by_receiver_ssrc_;
 };
 
 }  // namespace webrtc
 
-#endif  // WEBRTC_PC_TRACKMEDIAINFOMAP_H_
+#endif  // PC_TRACKMEDIAINFOMAP_H_

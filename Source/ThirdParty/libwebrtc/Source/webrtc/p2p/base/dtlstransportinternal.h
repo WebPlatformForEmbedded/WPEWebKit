@@ -8,20 +8,32 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#ifndef WEBRTC_P2P_BASE_DTLSTRANSPORTINTERNAL_H_
-#define WEBRTC_P2P_BASE_DTLSTRANSPORTINTERNAL_H_
+#ifndef P2P_BASE_DTLSTRANSPORTINTERNAL_H_
+#define P2P_BASE_DTLSTRANSPORTINTERNAL_H_
 
 #include <memory>
 #include <string>
 #include <vector>
 
-#include "webrtc/base/sslstreamadapter.h"
-#include "webrtc/base/stringencode.h"
-#include "webrtc/p2p/base/icetransportinternal.h"
-#include "webrtc/p2p/base/jseptransport.h"
-#include "webrtc/p2p/base/packettransportinternal.h"
+#include "p2p/base/icetransportinternal.h"
+#include "p2p/base/packettransportinternal.h"
+#include "rtc_base/sslstreamadapter.h"
+#include "rtc_base/stringencode.h"
 
 namespace cricket {
+
+enum DtlsTransportState {
+  // Haven't started negotiating.
+  DTLS_TRANSPORT_NEW = 0,
+  // Have started negotiating.
+  DTLS_TRANSPORT_CONNECTING,
+  // Negotiated, and has a secure connection.
+  DTLS_TRANSPORT_CONNECTED,
+  // Transport is closed.
+  DTLS_TRANSPORT_CLOSED,
+  // Failed due to some error in the handshake process.
+  DTLS_TRANSPORT_FAILED,
+};
 
 enum PacketFlags {
   PF_NORMAL = 0x00,       // A normal packet.
@@ -37,11 +49,11 @@ enum PacketFlags {
 // the DtlsTransportInterface will be split from this class.
 class DtlsTransportInternal : public rtc::PacketTransportInternal {
  public:
-  virtual ~DtlsTransportInternal() {}
+  ~DtlsTransportInternal() override;
+
+  virtual const rtc::CryptoOptions& crypto_options() const = 0;
 
   virtual DtlsTransportState dtls_state() const = 0;
-
-  virtual const std::string& transport_name() const = 0;
 
   virtual int component() const = 0;
 
@@ -91,13 +103,8 @@ class DtlsTransportInternal : public rtc::PacketTransportInternal {
   // Emitted whenever the Dtls handshake failed on some transport channel.
   sigslot::signal1<rtc::SSLHandshakeError> SignalDtlsHandshakeError;
 
-  // Debugging description of this transport.
-  std::string debug_name() const override {
-    return transport_name() + " " + rtc::ToString(component());
-  }
-
  protected:
-  DtlsTransportInternal() {}
+  DtlsTransportInternal();
 
  private:
   RTC_DISALLOW_COPY_AND_ASSIGN(DtlsTransportInternal);
@@ -105,4 +112,4 @@ class DtlsTransportInternal : public rtc::PacketTransportInternal {
 
 }  // namespace cricket
 
-#endif  // WEBRTC_P2P_BASE_DTLSTRANSPORTINTERNAL_H_
+#endif  // P2P_BASE_DTLSTRANSPORTINTERNAL_H_

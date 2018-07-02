@@ -122,6 +122,13 @@ list(APPEND WebCore_SOURCES
     platform/soup/SharedBufferSoup.cpp
     platform/soup/URLSoup.cpp
 
+    platform/mediastream/gstreamer/RealtimeIncomingAudioSourceLibWebRTC.cpp
+    platform/mediastream/gstreamer/RealtimeIncomingVideoSourceLibWebRTC.cpp
+    platform/mediastream/gstreamer/RealtimeOutgoingAudioSourceLibWebRTC.cpp
+    platform/mediastream/gstreamer/RealtimeOutgoingVideoSourceLibWebRTC.cpp
+    platform/mediastream/libwebrtc/LibWebRTCAudioModule.cpp
+    platform/mediastream/libwebrtc/LibWebRTCProviderGlib.cpp
+
     platform/text/Hyphenation.cpp
     platform/text/LocaleICU.cpp
     platform/text/TextCodecICU.cpp

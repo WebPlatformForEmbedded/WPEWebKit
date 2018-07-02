@@ -59,7 +59,7 @@ class MediaStream final
 public:
     class Observer {
     public:
-        virtual ~Observer() { }
+        virtual ~Observer() = default;
         virtual void didAddOrRemoveTrack() = 0;
     };
 
@@ -151,7 +151,7 @@ private:
     bool shouldOverrideBackgroundPlaybackRestriction(PlatformMediaSession::InterruptionType) const final { return false; }
     String sourceApplicationIdentifier() const final;
     bool canProduceAudio() const final;
-    const Document* hostingDocument() const final { return document(); }
+    Document* hostingDocument() const final { return document(); }
     bool processingUserGestureForMedia() const final;
 
     // ActiveDOMObject API.

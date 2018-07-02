@@ -180,7 +180,6 @@ MediaStreamTrackVector MediaStream::getTracks() const
     MediaStreamTrackVector tracks;
     tracks.reserveCapacity(m_trackSet.size());
     copyValuesToVector(m_trackSet, tracks);
-
     return tracks;
 }
 
@@ -338,8 +337,10 @@ void MediaStream::statusDidChange()
     m_mediaSession->canProduceAudioChanged();
 
     if (Document* document = this->document()) {
-        if (m_isActive)
-            document->setHasActiveMediaStreamTrack();
+        if (!m_isActive)
+            return;
+        document->setHasActiveMediaStreamTrack();
+        document->updateIsPlayingMedia();
     }
 }
 

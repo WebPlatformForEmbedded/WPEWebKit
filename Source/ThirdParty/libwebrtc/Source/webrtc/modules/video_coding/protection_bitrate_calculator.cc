@@ -8,23 +8,11 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#include "webrtc/modules/video_coding/protection_bitrate_calculator.h"
+#include "modules/video_coding/protection_bitrate_calculator.h"
 
 namespace webrtc {
 
 using rtc::CritScope;
-
-struct ProtectionBitrateCalculator::EncodedFrameSample {
-  EncodedFrameSample(size_t size_bytes,
-                     uint32_t timestamp,
-                     int64_t time_complete_ms)
-      : size_bytes(size_bytes),
-        timestamp(timestamp),
-        time_complete_ms(time_complete_ms) {}
-  size_t size_bytes;
-  uint32_t timestamp;
-  int64_t time_complete_ms;
-};
 
 ProtectionBitrateCalculator::ProtectionBitrateCalculator(
     Clock* clock,

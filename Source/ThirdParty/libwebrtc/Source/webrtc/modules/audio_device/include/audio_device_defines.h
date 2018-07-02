@@ -8,12 +8,14 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#ifndef WEBRTC_MODULES_AUDIO_DEVICE_INCLUDE_AUDIO_DEVICE_DEFINES_H_
-#define WEBRTC_MODULES_AUDIO_DEVICE_INCLUDE_AUDIO_DEVICE_DEFINES_H_
+#ifndef MODULES_AUDIO_DEVICE_INCLUDE_AUDIO_DEVICE_DEFINES_H_
+#define MODULES_AUDIO_DEVICE_INCLUDE_AUDIO_DEVICE_DEFINES_H_
 
 #include <stddef.h>
 
-#include "webrtc/typedefs.h"
+#include "rtc_base/checks.h"
+#include "rtc_base/deprecation.h"
+#include "typedefs.h"  // NOLINT(build/include)
 
 namespace webrtc {
 
@@ -23,22 +25,6 @@ static const int kAdmMaxGuidSize = 128;
 
 static const int kAdmMinPlayoutBufferSizeMs = 10;
 static const int kAdmMaxPlayoutBufferSizeMs = 250;
-
-// ----------------------------------------------------------------------------
-//  AudioDeviceObserver
-// ----------------------------------------------------------------------------
-
-class AudioDeviceObserver {
- public:
-  enum ErrorCode { kRecordingError = 0, kPlayoutError = 1 };
-  enum WarningCode { kRecordingWarning = 0, kPlayoutWarning = 1 };
-
-  virtual void OnErrorIsReported(const ErrorCode error) = 0;
-  virtual void OnWarningIsReported(const WarningCode warning) = 0;
-
- protected:
-  virtual ~AudioDeviceObserver() {}
-};
 
 // ----------------------------------------------------------------------------
 //  AudioTransport
@@ -70,17 +56,19 @@ class AudioTransport {
   // The data will not undergo audio processing.
   // |voe_channel| is the id of the VoE channel which is the sink to the
   // capture data.
-  virtual void PushCaptureData(int voe_channel,
-                               const void* audio_data,
-                               int bits_per_sample,
-                               int sample_rate,
-                               size_t number_of_channels,
-                               size_t number_of_frames) = 0;
+  // TODO(bugs.webrtc.org/8659): Remove this method once clients updated.
+  RTC_DEPRECATED virtual void PushCaptureData(
+      int /* voe_channel */,
+      const void* /* audio_data */,
+      int /* bits_per_sample */,
+      int /* sample_rate */,
+      size_t /* number_of_channels */,
+      size_t /* number_of_frames */) {
+    RTC_NOTREACHED();
+  }
 
   // Method to pull mixed render audio data from all active VoE channels.
   // The data will not be passed as reference for audio processing internally.
-  // TODO(xians): Support getting the unmixed render data from specific VoE
-  // channel.
   virtual void PullRenderData(int bits_per_sample,
                               int sample_rate,
                               size_t number_of_channels,
@@ -165,4 +153,4 @@ class AudioParameters {
 
 }  // namespace webrtc
 
-#endif  // WEBRTC_MODULES_AUDIO_DEVICE_INCLUDE_AUDIO_DEVICE_DEFINES_H_
+#endif  // MODULES_AUDIO_DEVICE_INCLUDE_AUDIO_DEVICE_DEFINES_H_

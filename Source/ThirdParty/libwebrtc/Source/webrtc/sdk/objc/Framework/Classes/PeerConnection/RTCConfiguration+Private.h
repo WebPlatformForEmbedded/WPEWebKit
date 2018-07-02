@@ -10,7 +10,7 @@
 
 #import "WebRTC/RTCConfiguration.h"
 
-#include "webrtc/api/peerconnectioninterface.h"
+#include "api/peerconnectioninterface.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -62,8 +62,7 @@ NS_ASSUME_NONNULL_BEGIN
  * RTCConfiguration struct representation of this RTCConfiguration. This is
  * needed to pass to the underlying C++ APIs.
  */
-- (webrtc::PeerConnectionInterface::RTCConfiguration *)
-    createNativeConfiguration;
+- (nullable webrtc::PeerConnectionInterface::RTCConfiguration *)createNativeConfiguration;
 
 - (instancetype)initWithNativeConfiguration:
     (const webrtc::PeerConnectionInterface::RTCConfiguration &)config NS_DESIGNATED_INITIALIZER;

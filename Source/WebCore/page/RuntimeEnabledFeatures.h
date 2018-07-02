@@ -108,6 +108,8 @@ public:
     void setMediaDevicesEnabled(bool isEnabled) { m_isMediaDevicesEnabled = isEnabled; }
     bool mediaStreamEnabled() const { return m_isMediaStreamEnabled; }
     void setMediaStreamEnabled(bool isEnabled) { m_isMediaStreamEnabled = isEnabled; }
+    bool screenCaptureEnabled() const { return m_isScreenCaptureEnabled; }
+    void setScreenCaptureEnabled(bool isEnabled) { m_isScreenCaptureEnabled = isEnabled; }
 #endif
 
 #if ENABLE(WEB_RTC)
@@ -115,6 +117,8 @@ public:
     void setPeerConnectionEnabled(bool isEnabled) { m_isPeerConnectionEnabled = isEnabled; }
     bool webRTCLegacyAPIEnabled() const { return m_webRTCLegacyAPIEnabled; }
     void setWebRTCLegacyAPIEnabled(bool isEnabled) { m_webRTCLegacyAPIEnabled = isEnabled; }
+    bool mdnsICECandidatesEnabled() const { return m_mdnsICECandidatesEnabled; }
+    void setMDNSICECandidatesEnabled(bool isEnabled) { m_mdnsICECandidatesEnabled = isEnabled; }
 #endif
 
 #if ENABLE(LEGACY_CSS_VENDOR_PREFIXES)
@@ -266,11 +270,13 @@ private:
 #if ENABLE(MEDIA_STREAM)
     bool m_isMediaDevicesEnabled { false };
     bool m_isMediaStreamEnabled { true };
+    bool m_isScreenCaptureEnabled { false };
 #endif
 
 #if ENABLE(WEB_RTC)
     bool m_isPeerConnectionEnabled { true };
     bool m_webRTCLegacyAPIEnabled { true };
+    bool m_mdnsICECandidatesEnabled { false };
 #endif
 
 #if ENABLE(LEGACY_CSS_VENDOR_PREFIXES)

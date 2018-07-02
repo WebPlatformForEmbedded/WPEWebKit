@@ -8,16 +8,16 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#ifndef WEBRTC_MODULES_AUDIO_PROCESSING_AEC3_AEC3_FFT_H_
-#define WEBRTC_MODULES_AUDIO_PROCESSING_AEC3_AEC3_FFT_H_
+#ifndef MODULES_AUDIO_PROCESSING_AEC3_AEC3_FFT_H_
+#define MODULES_AUDIO_PROCESSING_AEC3_AEC3_FFT_H_
 
 #include <array>
 
-#include "webrtc/base/array_view.h"
-#include "webrtc/base/constructormagic.h"
-#include "webrtc/modules/audio_processing/aec3/aec3_common.h"
-#include "webrtc/modules/audio_processing/aec3/fft_data.h"
-#include "webrtc/modules/audio_processing/utility/ooura_fft.h"
+#include "api/array_view.h"
+#include "modules/audio_processing/aec3/aec3_common.h"
+#include "modules/audio_processing/aec3/fft_data.h"
+#include "modules/audio_processing/utility/ooura_fft.h"
+#include "rtc_base/constructormagic.h"
 
 namespace webrtc {
 
@@ -25,6 +25,8 @@ namespace webrtc {
 // FftData type.
 class Aec3Fft {
  public:
+  enum class Window { kRectangular, kHanning };
+
   Aec3Fft() = default;
   // Computes the FFT. Note that both the input and output are modified.
   void Fft(std::array<float, kFftLength>* x, FftData* X) const {
@@ -40,8 +42,11 @@ class Aec3Fft {
     ooura_fft_.InverseFft(x->data());
   }
 
-  // Pads the input with kFftLengthBy2 initial zeros before computing the Fft.
-  void ZeroPaddedFft(rtc::ArrayView<const float> x, FftData* X) const;
+  // Windows the input using a Hanning window, and then adds padding of
+  // kFftLengthBy2 initial zeros before computing the Fft.
+  void ZeroPaddedFft(rtc::ArrayView<const float> x,
+                     Window window,
+                     FftData* X) const;
 
   // Concatenates the kFftLengthBy2 values long x and x_old before computing the
   // Fft. After that, x is copied to x_old.
@@ -57,4 +62,4 @@ class Aec3Fft {
 
 }  // namespace webrtc
 
-#endif  // WEBRTC_MODULES_AUDIO_PROCESSING_AEC3_AEC3_FFT_H_
+#endif  // MODULES_AUDIO_PROCESSING_AEC3_AEC3_FFT_H_

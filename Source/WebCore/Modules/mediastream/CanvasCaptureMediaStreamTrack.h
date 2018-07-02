@@ -61,7 +61,6 @@ private:
         void canvasChanged(HTMLCanvasElement&, const FloatRect&) final;
         void canvasResized(HTMLCanvasElement&) final;
         void canvasDestroyed(HTMLCanvasElement&) final;
-
         // RealtimeMediaSource API
         void startProducingData() final;
         void stopProducingData()  final;

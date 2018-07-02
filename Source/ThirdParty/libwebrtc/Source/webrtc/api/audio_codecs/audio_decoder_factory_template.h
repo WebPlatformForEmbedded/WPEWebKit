@@ -8,14 +8,15 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#ifndef WEBRTC_API_AUDIO_CODECS_AUDIO_DECODER_FACTORY_TEMPLATE_H_
-#define WEBRTC_API_AUDIO_CODECS_AUDIO_DECODER_FACTORY_TEMPLATE_H_
+#ifndef API_AUDIO_CODECS_AUDIO_DECODER_FACTORY_TEMPLATE_H_
+#define API_AUDIO_CODECS_AUDIO_DECODER_FACTORY_TEMPLATE_H_
 
 #include <memory>
 #include <vector>
 
-#include "webrtc/api/audio_codecs/audio_decoder_factory.h"
-#include "webrtc/base/scoped_ref_ptr.h"
+#include "api/audio_codecs/audio_decoder_factory.h"
+#include "rtc_base/refcountedobject.h"
+#include "rtc_base/scoped_ref_ptr.h"
 
 namespace webrtc {
 
@@ -45,6 +46,10 @@ struct Helper<T, Ts...> {
   }
   static bool IsSupportedDecoder(const SdpAudioFormat& format) {
     auto opt_config = T::SdpToConfig(format);
+    static_assert(std::is_same<decltype(opt_config),
+                               rtc::Optional<typename T::Config>>::value,
+                  "T::SdpToConfig() must return a value of type "
+                  "rtc::Optional<T::Config>");
     return opt_config ? true : Helper<Ts...>::IsSupportedDecoder(format);
   }
   static std::unique_ptr<AudioDecoder> MakeAudioDecoder(
@@ -95,7 +100,8 @@ class AudioDecoderFactoryT : public AudioDecoderFactory {
 //   std::unique_ptr<AudioDecoder> MakeAudioDecoder(const ConfigType& config);
 //
 // ConfigType should be a type that encapsulates all the settings needed to
-// create an AudioDecoder.
+// create an AudioDecoder. T::Config (where T is the decoder struct) should
+// either be the config type, or an alias for it.
 //
 // Whenever it tries to do something, the new factory will try each of the
 // decoder types in the order they were specified in the template argument
@@ -121,4 +127,4 @@ rtc::scoped_refptr<AudioDecoderFactory> CreateAudioDecoderFactory() {
 
 }  // namespace webrtc
 
-#endif  // WEBRTC_API_AUDIO_CODECS_AUDIO_DECODER_FACTORY_TEMPLATE_H_
+#endif  // API_AUDIO_CODECS_AUDIO_DECODER_FACTORY_TEMPLATE_H_

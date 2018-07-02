@@ -8,18 +8,19 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#ifndef WEBRTC_P2P_BASE_STUN_H_
-#define WEBRTC_P2P_BASE_STUN_H_
+#ifndef P2P_BASE_STUN_H_
+#define P2P_BASE_STUN_H_
 
 // This file contains classes for dealing with the STUN protocol, as specified
 // in RFC 5389, and its descendants.
 
+#include <memory>
 #include <string>
 #include <vector>
 
-#include "webrtc/base/basictypes.h"
-#include "webrtc/base/bytebuffer.h"
-#include "webrtc/base/socketaddress.h"
+#include "rtc_base/basictypes.h"
+#include "rtc_base/bytebuffer.h"
+#include "rtc_base/socketaddress.h"
 
 namespace cricket {
 
@@ -132,7 +133,7 @@ class StunUInt16ListAttribute;
 class StunMessage {
  public:
   StunMessage();
-  virtual ~StunMessage() = default;
+  virtual ~StunMessage();
 
   int type() const { return type_; }
   size_t length() const { return length_; }
@@ -164,6 +165,9 @@ class StunMessage {
   // Takes ownership of the specified attribute and adds it to the message.
   void AddAttribute(std::unique_ptr<StunAttribute> attr);
 
+  // Remove the last occurrence of an attribute.
+  std::unique_ptr<StunAttribute> RemoveAttribute(int type);
+
   // Validates that a raw STUN message has a correct MESSAGE-INTEGRITY value.
   // This can't currently be done on a StunMessage, since it is affected by
   // padding data (which we discard when reading a StunMessage).
@@ -188,7 +192,7 @@ class StunMessage {
   bool Write(rtc::ByteBufferWriter* buf) const;
 
   // Creates an empty message. Overridable by derived classes.
-  virtual StunMessage* CreateNew() const { return new StunMessage(); }
+  virtual StunMessage* CreateNew() const;
 
  protected:
   // Verifies that the given attribute is allowed for this message.
@@ -233,7 +237,7 @@ class StunAttribute {
                                uint16_t type,
                                uint16_t length,
                                StunMessage* owner);
-  // TODO: Allow these create functions to take parameters, to reduce
+  // TODO(?): Allow these create functions to take parameters, to reduce
   // the amount of work callers need to do to initialize attributes.
   static std::unique_ptr<StunAddressAttribute> CreateAddress(uint16_t type);
   static std::unique_ptr<StunXorAddressAttribute> CreateXorAddress(
@@ -265,9 +269,7 @@ class StunAddressAttribute : public StunAttribute {
   StunAddressAttribute(uint16_t type, const rtc::SocketAddress& addr);
   StunAddressAttribute(uint16_t type, uint16_t length);
 
-  virtual StunAttributeValueType value_type() const {
-    return STUN_VALUE_ADDRESS;
-  }
+  StunAttributeValueType value_type() const override;
 
   StunAddressFamily family() const {
     switch (address_.ipaddr().family()) {
@@ -293,8 +295,8 @@ class StunAddressAttribute : public StunAttribute {
   }
   void SetPort(uint16_t port) { address_.SetPort(port); }
 
-  virtual bool Read(rtc::ByteBufferReader* buf);
-  virtual bool Write(rtc::ByteBufferWriter* buf) const;
+  bool Read(rtc::ByteBufferReader* buf) override;
+  bool Write(rtc::ByteBufferWriter* buf) const override;
 
  private:
   void EnsureAddressLength() {
@@ -324,14 +326,10 @@ class StunXorAddressAttribute : public StunAddressAttribute {
   StunXorAddressAttribute(uint16_t type, const rtc::SocketAddress& addr);
   StunXorAddressAttribute(uint16_t type, uint16_t length, StunMessage* owner);
 
-  virtual StunAttributeValueType value_type() const {
-    return STUN_VALUE_XOR_ADDRESS;
-  }
-  virtual void SetOwner(StunMessage* owner) {
-    owner_ = owner;
-  }
-  virtual bool Read(rtc::ByteBufferReader* buf);
-  virtual bool Write(rtc::ByteBufferWriter* buf) const;
+  StunAttributeValueType value_type() const override;
+  void SetOwner(StunMessage* owner) override;
+  bool Read(rtc::ByteBufferReader* buf) override;
+  bool Write(rtc::ByteBufferWriter* buf) const override;
 
  private:
   rtc::IPAddress GetXoredIP() const;
@@ -345,9 +343,7 @@ class StunUInt32Attribute : public StunAttribute {
   StunUInt32Attribute(uint16_t type, uint32_t value);
   explicit StunUInt32Attribute(uint16_t type);
 
-  virtual StunAttributeValueType value_type() const {
-    return STUN_VALUE_UINT32;
-  }
+  StunAttributeValueType value_type() const override;
 
   uint32_t value() const { return bits_; }
   void SetValue(uint32_t bits) { bits_ = bits; }
@@ -355,8 +351,8 @@ class StunUInt32Attribute : public StunAttribute {
   bool GetBit(size_t index) const;
   void SetBit(size_t index, bool value);
 
-  virtual bool Read(rtc::ByteBufferReader* buf);
-  virtual bool Write(rtc::ByteBufferWriter* buf) const;
+  bool Read(rtc::ByteBufferReader* buf) override;
+  bool Write(rtc::ByteBufferWriter* buf) const override;
 
  private:
   uint32_t bits_;
@@ -368,15 +364,13 @@ class StunUInt64Attribute : public StunAttribute {
   StunUInt64Attribute(uint16_t type, uint64_t value);
   explicit StunUInt64Attribute(uint16_t type);
 
-  virtual StunAttributeValueType value_type() const {
-    return STUN_VALUE_UINT64;
-  }
+  StunAttributeValueType value_type() const override;
 
   uint64_t value() const { return bits_; }
   void SetValue(uint64_t bits) { bits_ = bits; }
 
-  virtual bool Read(rtc::ByteBufferReader* buf);
-  virtual bool Write(rtc::ByteBufferWriter* buf) const;
+  bool Read(rtc::ByteBufferReader* buf) override;
+  bool Write(rtc::ByteBufferWriter* buf) const override;
 
  private:
   uint64_t bits_;
@@ -389,11 +383,9 @@ class StunByteStringAttribute : public StunAttribute {
   StunByteStringAttribute(uint16_t type, const std::string& str);
   StunByteStringAttribute(uint16_t type, const void* bytes, size_t length);
   StunByteStringAttribute(uint16_t type, uint16_t length);
-  ~StunByteStringAttribute();
+  ~StunByteStringAttribute() override;
 
-  virtual StunAttributeValueType value_type() const {
-    return STUN_VALUE_BYTE_STRING;
-  }
+  StunAttributeValueType value_type() const override;
 
   const char* bytes() const { return bytes_; }
   std::string GetString() const { return std::string(bytes_, length()); }
@@ -404,8 +396,8 @@ class StunByteStringAttribute : public StunAttribute {
   uint8_t GetByte(size_t index) const;
   void SetByte(size_t index, uint8_t value);
 
-  virtual bool Read(rtc::ByteBufferReader* buf);
-  virtual bool Write(rtc::ByteBufferWriter* buf) const;
+  bool Read(rtc::ByteBufferReader* buf) override;
+  bool Write(rtc::ByteBufferWriter* buf) const override;
 
  private:
   void SetBytes(char* bytes, size_t length);
@@ -419,11 +411,9 @@ class StunErrorCodeAttribute : public StunAttribute {
   static const uint16_t MIN_SIZE;
   StunErrorCodeAttribute(uint16_t type, int code, const std::string& reason);
   StunErrorCodeAttribute(uint16_t type, uint16_t length);
-  ~StunErrorCodeAttribute();
+  ~StunErrorCodeAttribute() override;
 
-  virtual StunAttributeValueType value_type() const {
-    return STUN_VALUE_ERROR_CODE;
-  }
+  StunAttributeValueType value_type() const override;
 
   // The combined error and class, e.g. 0x400.
   int code() const;
@@ -437,8 +427,8 @@ class StunErrorCodeAttribute : public StunAttribute {
   void SetNumber(uint8_t number) { number_ = number; }
   void SetReason(const std::string& reason);
 
-  bool Read(rtc::ByteBufferReader* buf);
-  bool Write(rtc::ByteBufferWriter* buf) const;
+  bool Read(rtc::ByteBufferReader* buf) override;
+  bool Write(rtc::ByteBufferWriter* buf) const override;
 
  private:
   uint8_t class_;
@@ -450,19 +440,17 @@ class StunErrorCodeAttribute : public StunAttribute {
 class StunUInt16ListAttribute : public StunAttribute {
  public:
   StunUInt16ListAttribute(uint16_t type, uint16_t length);
-  ~StunUInt16ListAttribute();
+  ~StunUInt16ListAttribute() override;
 
-  virtual StunAttributeValueType value_type() const {
-    return STUN_VALUE_UINT16_LIST;
-  }
+  StunAttributeValueType value_type() const override;
 
   size_t Size() const;
   uint16_t GetType(int index) const;
   void SetType(int index, uint16_t value);
   void AddType(uint16_t value);
 
-  bool Read(rtc::ByteBufferReader* buf);
-  bool Write(rtc::ByteBufferWriter* buf) const;
+  bool Read(rtc::ByteBufferReader* buf) override;
+  bool Write(rtc::ByteBufferWriter* buf) const override;
 
  private:
   std::vector<uint16_t>* attr_types_;
@@ -492,11 +480,23 @@ bool IsStunErrorResponseType(int msg_type);
 bool ComputeStunCredentialHash(const std::string& username,
     const std::string& realm, const std::string& password, std::string* hash);
 
-// TODO: Move the TURN/ICE stuff below out to separate files.
+// Make a copy af |attribute| and return a new StunAttribute.
+//   This is useful if you don't care about what kind of attribute you
+//   are handling.
+//
+// The implementation copies by calling Write() followed by Read().
+//
+// If |tmp_buffer| is supplied this buffer will be used, otherwise
+// a buffer will created in the method.
+std::unique_ptr<StunAttribute> CopyStunAttribute(
+    const StunAttribute& attribute,
+    rtc::ByteBufferWriter* tmp_buffer_ptr = 0);
+
+// TODO(?): Move the TURN/ICE stuff below out to separate files.
 extern const char TURN_MAGIC_COOKIE_VALUE[4];
 
 // "GTURN" STUN methods.
-// TODO: Rename these methods to GTURN_ to make it clear they aren't
+// TODO(?): Rename these methods to GTURN_ to make it clear they aren't
 // part of standard STUN/TURN.
 enum RelayMessageType {
   // For now, using the same defs from TurnMessageType below.
@@ -510,7 +510,7 @@ enum RelayMessageType {
 };
 
 // "GTURN"-specific STUN attributes.
-// TODO: Rename these attributes to GTURN_ to avoid conflicts.
+// TODO(?): Rename these attributes to GTURN_ to avoid conflicts.
 enum RelayAttributeType {
   STUN_ATTR_LIFETIME                    = 0x000d,  // UInt32
   STUN_ATTR_MAGIC_COOKIE                = 0x000f,  // ByteString, 4 bytes
@@ -524,19 +524,8 @@ enum RelayAttributeType {
 // A "GTURN" STUN message.
 class RelayMessage : public StunMessage {
  protected:
-  virtual StunAttributeValueType GetAttributeValueType(int type) const {
-    switch (type) {
-      case STUN_ATTR_LIFETIME:            return STUN_VALUE_UINT32;
-      case STUN_ATTR_MAGIC_COOKIE:        return STUN_VALUE_BYTE_STRING;
-      case STUN_ATTR_BANDWIDTH:           return STUN_VALUE_UINT32;
-      case STUN_ATTR_DESTINATION_ADDRESS: return STUN_VALUE_ADDRESS;
-      case STUN_ATTR_SOURCE_ADDRESS2:     return STUN_VALUE_ADDRESS;
-      case STUN_ATTR_DATA:                return STUN_VALUE_BYTE_STRING;
-      case STUN_ATTR_OPTIONS:             return STUN_VALUE_UINT32;
-      default: return StunMessage::GetAttributeValueType(type);
-    }
-  }
-  virtual StunMessage* CreateNew() const { return new RelayMessage(); }
+  StunAttributeValueType GetAttributeValueType(int type) const override;
+  StunMessage* CreateNew() const override;
 };
 
 // Defined in TURN RFC 5766.
@@ -586,21 +575,8 @@ extern const char STUN_ERROR_REASON_WRONG_CREDENTIALS[];
 extern const char STUN_ERROR_REASON_UNSUPPORTED_PROTOCOL[];
 class TurnMessage : public StunMessage {
  protected:
-  virtual StunAttributeValueType GetAttributeValueType(int type) const {
-    switch (type) {
-      case STUN_ATTR_CHANNEL_NUMBER:      return STUN_VALUE_UINT32;
-      case STUN_ATTR_TURN_LIFETIME:       return STUN_VALUE_UINT32;
-      case STUN_ATTR_XOR_PEER_ADDRESS:    return STUN_VALUE_XOR_ADDRESS;
-      case STUN_ATTR_DATA:                return STUN_VALUE_BYTE_STRING;
-      case STUN_ATTR_XOR_RELAYED_ADDRESS: return STUN_VALUE_XOR_ADDRESS;
-      case STUN_ATTR_EVEN_PORT:           return STUN_VALUE_BYTE_STRING;
-      case STUN_ATTR_REQUESTED_TRANSPORT: return STUN_VALUE_UINT32;
-      case STUN_ATTR_DONT_FRAGMENT:       return STUN_VALUE_BYTE_STRING;
-      case STUN_ATTR_RESERVATION_TOKEN:   return STUN_VALUE_BYTE_STRING;
-      default: return StunMessage::GetAttributeValueType(type);
-    }
-  }
-  virtual StunMessage* CreateNew() const { return new TurnMessage(); }
+  StunAttributeValueType GetAttributeValueType(int type) const override;
+  StunMessage* CreateNew() const override;
 };
 
 // RFC 5245 ICE STUN attributes.
@@ -624,21 +600,10 @@ extern const char STUN_ERROR_REASON_ROLE_CONFLICT[];
 // A RFC 5245 ICE STUN message.
 class IceMessage : public StunMessage {
  protected:
-  virtual StunAttributeValueType GetAttributeValueType(int type) const {
-    switch (type) {
-      case STUN_ATTR_PRIORITY:
-      case STUN_ATTR_NETWORK_INFO:
-      case STUN_ATTR_NOMINATION:
-        return STUN_VALUE_UINT32;
-      case STUN_ATTR_USE_CANDIDATE:   return STUN_VALUE_BYTE_STRING;
-      case STUN_ATTR_ICE_CONTROLLED:  return STUN_VALUE_UINT64;
-      case STUN_ATTR_ICE_CONTROLLING: return STUN_VALUE_UINT64;
-      default: return StunMessage::GetAttributeValueType(type);
-    }
-  }
-  virtual StunMessage* CreateNew() const { return new IceMessage(); }
+  StunAttributeValueType GetAttributeValueType(int type) const override;
+  StunMessage* CreateNew() const override;
 };
 
 }  // namespace cricket
 
-#endif  // WEBRTC_P2P_BASE_STUN_H_
+#endif  // P2P_BASE_STUN_H_

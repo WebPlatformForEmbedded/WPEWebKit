@@ -184,6 +184,15 @@ RTC_EXPORT
            completionHandler:
     (nullable void (^)(NSError * _Nullable error))completionHandler;
 
+/** Limits the bandwidth allocated for all RTP streams sent by this
+ *  PeerConnection. Nil parameters will be unchanged. Setting
+ * |currentBitrateBps| will force the available bitrate estimate to the given
+ *  value. Returns YES if the parameters were successfully updated.
+ */
+- (BOOL)setBweMinBitrateBps:(nullable NSNumber *)minBitrateBps
+          currentBitrateBps:(nullable NSNumber *)currentBitrateBps
+              maxBitrateBps:(nullable NSNumber *)maxBitrateBps;
+
 /** Start or stop recording an Rtc EventLog. */
 - (BOOL)startRtcEventLogWithFilePath:(NSString *)filePath
                       maxSizeInBytes:(int64_t)maxSizeInBytes;
@@ -193,9 +202,8 @@ RTC_EXPORT
 
 @interface RTCPeerConnection (Media)
 
-/**
- * Create an RTCRtpSender with the specified kind and media stream ID.
- * See RTCMediaStreamTrack.h for available kinds.
+/** Create an RTCRtpSender with the specified kind and media stream ID.
+ *  See RTCMediaStreamTrack.h for available kinds.
  */
 - (RTCRtpSender *)senderWithKind:(NSString *)kind streamId:(NSString *)streamId;
 
@@ -204,8 +212,8 @@ RTC_EXPORT
 @interface RTCPeerConnection (DataChannel)
 
 /** Create a new data channel with the given label and configuration. */
-- (RTCDataChannel *)dataChannelForLabel:(NSString *)label
-    configuration:(RTCDataChannelConfiguration *)configuration;
+- (nullable RTCDataChannel *)dataChannelForLabel:(NSString *)label
+                                   configuration:(RTCDataChannelConfiguration *)configuration;
 
 @end
 

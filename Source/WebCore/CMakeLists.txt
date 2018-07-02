@@ -1098,8 +1098,6 @@ set(WebCore_SOURCES
     Modules/mediastream/MediaDevices.cpp
     Modules/mediastream/MediaDevicesEnumerationRequest.cpp
     Modules/mediastream/MediaDevicesRequest.cpp
-    Modules/mediastream/MediaEndpointPeerConnection.cpp
-    Modules/mediastream/MediaEndpointSessionDescription.cpp
     Modules/mediastream/MediaStream.cpp
     Modules/mediastream/MediaStreamEvent.cpp
     Modules/mediastream/MediaStreamRegistry.cpp
@@ -1121,7 +1119,6 @@ set(WebCore_SOURCES
     Modules/mediastream/RTCRtpTransceiver.cpp
     Modules/mediastream/RTCSessionDescription.cpp
     Modules/mediastream/RTCTrackEvent.cpp
-    Modules/mediastream/SDPProcessor.cpp
     Modules/mediastream/UserMediaController.cpp
     Modules/mediastream/UserMediaRequest.cpp
 
@@ -2272,6 +2269,7 @@ set(WebCore_SOURCES
     page/WindowFeatures.cpp
     page/WindowFocusAllowedIndicator.cpp
     page/WorkerNavigator.cpp
+    page/DeprecatedGlobalSettings.cpp
 
     page/animation/AnimationBase.cpp
     page/animation/CSSAnimationController.cpp
@@ -2554,16 +2552,18 @@ set(WebCore_SOURCES
     platform/mediastream/RealtimeMediaSourceSupportedConstraints.cpp
     platform/mediastream/RTCIceCandidateDescriptor.cpp
     platform/mediastream/RTCSessionDescriptionDescriptor.cpp
+    platform/mediastream/RealtimeIncomingAudioSource.cpp
+    platform/mediastream/RealtimeIncomingVideoSource.cpp
     platform/mediastream/RealtimeMediaSource.cpp
     platform/mediastream/RealtimeMediaSourceCenter.cpp
     platform/mediastream/RealtimeMediaSourceSettings.cpp
-    platform/mediastream/SDPProcessorScriptResource.cpp
+    platform/mediastream/RealtimeOutgoingAudioSource.cpp
+    platform/mediastream/RealtimeOutgoingVideoSource.cpp
 
     platform/mediastream/libwebrtc/LibWebRTCProvider.cpp
 
     platform/mock/DeviceOrientationClientMock.cpp
     platform/mock/GeolocationClientMock.cpp
-    platform/mock/MockMediaEndpoint.cpp
     platform/mock/MockRealtimeAudioSource.cpp
     platform/mock/MockRealtimeMediaSource.cpp
     platform/mock/MockRealtimeMediaSourceCenter.cpp
@@ -2583,6 +2583,7 @@ set(WebCore_SOURCES
     platform/network/Cookie.cpp
     platform/network/CredentialBase.cpp
     platform/network/CredentialStorage.cpp
+    platform/network/DNS.cpp
     platform/network/DNSResolveQueue.cpp
     platform/network/DataURLDecoder.cpp
     platform/network/FormData.cpp
@@ -3670,6 +3671,17 @@ if (USE_XDGMIME)
     list(APPEND WebCore_LIBRARIES xdgmime)
 endif ()
 
+if (USE_LIBWEBRTC)
+    list(APPEND WebCore_INCLUDE_DIRECTORIES "${THIRDPARTY_DIR}/libwebrtc/Source/"
+        "${THIRDPARTY_DIR}/libwebrtc/Source/webrtc")
+    list(APPEND WebCore_LIBRARIES webrtc)
+    list(APPEND WebCore_SOURCES
+        Modules/mediastream/libwebrtc/LibWebRTCDataChannelHandler.cpp
+        Modules/mediastream/libwebrtc/LibWebRTCMediaEndpoint.cpp
+        Modules/mediastream/libwebrtc/LibWebRTCPeerConnectionBackend.cpp
+    )
+endif ()
+
 set(WebCoreTestSupport_INCLUDE_DIRECTORIES
     "${WEBCORE_DIR}/platform/mock"
     "${WEBCORE_DIR}/testing"
@@ -3886,22 +3898,17 @@ if (WebCore_USER_AGENT_SCRIPTS)
     list(APPEND WebCore_DERIVED_SOURCES ${DERIVED_SOURCES_WEBCORE_DIR}/UserAgentScriptsData.cpp)
 endif ()
 
-if (ENABLE_WEB_RTC)
+if (ENABLE_WEB_RTC) #FIXME Enable if required.
     # Necessary variables:
     # WebCore_SDP_PROCESSOR_SCRIPTS containing the JavaScript sources list
     # WebCore_SDP_PROCESSOR_SCRIPTS_DEPENDENCIES containing the source file that will load the scripts to add the proper
     #   dependency and having them built at the right moment
-    set(WebCore_SDP_PROCESSOR_SCRIPTS ${WEBCORE_DIR}/Modules/mediastream/sdp.js)
-    set(WebCore_SDP_PROCESSOR_SCRIPTS_DEPENDENCIES ${WEBCORE_DIR}/platform/mediastream/SDPProcessorScriptResource.cpp)
-
-    MAKE_JS_FILE_ARRAYS(
-        ${DERIVED_SOURCES_WEBCORE_DIR}/SDPProcessorScriptsData.cpp
-        ${DERIVED_SOURCES_WEBCORE_DIR}/SDPProcessorScriptsData.h
-        WebCore
-        WebCore_SDP_PROCESSOR_SCRIPTS
-        WebCore_SDP_PROCESSOR_SCRIPTS_DEPENDENCIES
-    )
-    list(APPEND WebCore_DERIVED_SOURCES ${DERIVED_SOURCES_WEBCORE_DIR}/SDPProcessorScriptsData.cpp)
+    #set(WebCore_SDP_PROCESSOR_SCRIPTS ${WEBCORE_DIR}/Modules/mediastream/sdp.js)
+    #MAKE_JS_FILE_ARRAYS(
+    #    WebCore
+    #    WebCore_SDP_PROCESSOR_SCRIPTS
+    #    WebCore_SDP_PROCESSOR_SCRIPTS_DEPENDENCIES
+    #)
 endif ()
 
 # Generate plug-in resources

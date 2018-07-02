@@ -8,16 +8,17 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#ifndef WEBRTC_PC_REMOTEAUDIOSOURCE_H_
-#define WEBRTC_PC_REMOTEAUDIOSOURCE_H_
+#ifndef PC_REMOTEAUDIOSOURCE_H_
+#define PC_REMOTEAUDIOSOURCE_H_
 
 #include <list>
 #include <string>
 
-#include "webrtc/api/call/audio_sink.h"
-#include "webrtc/api/notifier.h"
-#include "webrtc/base/criticalsection.h"
-#include "webrtc/pc/channel.h"
+#include "api/call/audio_sink.h"
+#include "api/notifier.h"
+#include "pc/channel.h"
+#include "rtc_base/criticalsection.h"
+#include "rtc_base/messagehandler.h"
 
 namespace rtc {
 struct Message;
@@ -27,12 +28,14 @@ class Thread;
 namespace webrtc {
 
 // This class implements the audio source used by the remote audio track.
-class RemoteAudioSource : public Notifier<AudioSourceInterface> {
+class RemoteAudioSource : public Notifier<AudioSourceInterface>,
+                          rtc::MessageHandler {
  public:
   // Creates an instance of RemoteAudioSource.
   static rtc::scoped_refptr<RemoteAudioSource> Create(
-      uint32_t ssrc,
-      cricket::VoiceChannel* channel);
+      rtc::Thread* worker_thread,
+      cricket::VoiceMediaChannel* media_channel,
+      uint32_t ssrc);
 
   // MediaSourceInterface implementation.
   MediaSourceInterface::SourceState state() const override;
@@ -47,7 +50,9 @@ class RemoteAudioSource : public Notifier<AudioSourceInterface> {
 
   // Post construction initialize where we can do things like save a reference
   // to ourselves (need to be fully constructed).
-  void Initialize(uint32_t ssrc, cricket::VoiceChannel* channel);
+  void Initialize(rtc::Thread* worker_thread,
+                  cricket::VoiceMediaChannel* media_channel,
+                  uint32_t ssrc);
 
  private:
   typedef std::list<AudioObserver*> AudioObserverList;
@@ -61,8 +66,7 @@ class RemoteAudioSource : public Notifier<AudioSourceInterface> {
   void OnData(const AudioSinkInterface::Data& audio);
   void OnAudioChannelGone();
 
-  class MessageHandler;
-  void OnMessage(rtc::Message* msg);
+  void OnMessage(rtc::Message* msg) override;
 
   AudioObserverList audio_observers_;
   rtc::CriticalSection sink_lock_;
@@ -73,4 +77,4 @@ class RemoteAudioSource : public Notifier<AudioSourceInterface> {
 
 }  // namespace webrtc
 
-#endif  // WEBRTC_PC_REMOTEAUDIOSOURCE_H_
+#endif  // PC_REMOTEAUDIOSOURCE_H_

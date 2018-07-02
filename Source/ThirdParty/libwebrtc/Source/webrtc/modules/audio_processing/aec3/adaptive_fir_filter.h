@@ -8,20 +8,20 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#ifndef WEBRTC_MODULES_AUDIO_PROCESSING_AEC3_ADAPTIVE_FIR_FILTER_H_
-#define WEBRTC_MODULES_AUDIO_PROCESSING_AEC3_ADAPTIVE_FIR_FILTER_H_
+#ifndef MODULES_AUDIO_PROCESSING_AEC3_ADAPTIVE_FIR_FILTER_H_
+#define MODULES_AUDIO_PROCESSING_AEC3_ADAPTIVE_FIR_FILTER_H_
 
 #include <array>
 #include <memory>
 #include <vector>
 
-#include "webrtc/base/array_view.h"
-#include "webrtc/base/constructormagic.h"
-#include "webrtc/modules/audio_processing/aec3/aec3_common.h"
-#include "webrtc/modules/audio_processing/aec3/aec3_fft.h"
-#include "webrtc/modules/audio_processing/aec3/fft_data.h"
-#include "webrtc/modules/audio_processing/aec3/render_buffer.h"
-#include "webrtc/modules/audio_processing/logging/apm_data_dumper.h"
+#include "api/array_view.h"
+#include "modules/audio_processing/aec3/aec3_common.h"
+#include "modules/audio_processing/aec3/aec3_fft.h"
+#include "modules/audio_processing/aec3/fft_data.h"
+#include "modules/audio_processing/aec3/render_buffer.h"
+#include "modules/audio_processing/logging/apm_data_dumper.h"
+#include "rtc_base/constructormagic.h"
 
 namespace webrtc {
 namespace aec3 {
@@ -91,7 +91,7 @@ void ApplyFilter_SSE2(const RenderBuffer& render_buffer,
 // Provides a frequency domain adaptive filter functionality.
 class AdaptiveFirFilter {
  public:
-  AdaptiveFirFilter(size_t size_partitions,
+  AdaptiveFirFilter(size_t max_size_partitions,
                     Aec3Optimization optimization,
                     ApmDataDumper* data_dumper);
 
@@ -110,6 +110,9 @@ class AdaptiveFirFilter {
   // Returns the filter size.
   size_t SizePartitions() const { return H_.size(); }
 
+  // Sets the filter size.
+  void SetSizePartitions(size_t size);
+
   // Returns the filter based echo return loss.
   const std::array<float, kFftLengthBy2Plus1>& Erl() const { return erl_; }
 
@@ -119,19 +122,30 @@ class AdaptiveFirFilter {
     return H2_;
   }
 
+  // Returns the estimate of the impulse response.
+  const std::vector<float>& FilterImpulseResponse() const { return h_; }
+
   void DumpFilter(const char* name) {
+    size_t current_size_partitions = H_.size();
+    H_.resize(max_size_partitions_);
     for (auto& H : H_) {
       data_dumper_->DumpRaw(name, H.re);
       data_dumper_->DumpRaw(name, H.im);
     }
+    H_.resize(current_size_partitions);
   }
 
  private:
+  // Constrain the filter partitions in a cyclic manner.
+  void Constrain();
+
   ApmDataDumper* const data_dumper_;
   const Aec3Fft fft_;
   const Aec3Optimization optimization_;
+  const size_t max_size_partitions_;
   std::vector<FftData> H_;
   std::vector<std::array<float, kFftLengthBy2Plus1>> H2_;
+  std::vector<float> h_;
   std::array<float, kFftLengthBy2Plus1> erl_;
   size_t partition_to_constrain_ = 0;
 
@@ -140,4 +154,4 @@ class AdaptiveFirFilter {
 
 }  // namespace webrtc
 
-#endif  // WEBRTC_MODULES_AUDIO_PROCESSING_AEC3_ADAPTIVE_FIR_FILTER_H_
+#endif  // MODULES_AUDIO_PROCESSING_AEC3_ADAPTIVE_FIR_FILTER_H_

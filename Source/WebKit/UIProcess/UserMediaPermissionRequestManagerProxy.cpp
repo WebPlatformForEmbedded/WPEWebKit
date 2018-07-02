@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2014 Igalia S.L.
  * Copyright (C) 2016 Apple Inc. All rights reserved.
+ * Copyright (C) 2016-2017 Apple Inc. All rights reserved.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -268,7 +269,14 @@ void UserMediaPermissionRequestManagerProxy::requestUserMediaPermissionForFrame(
 
         denyRequest(userMediaID, UserMediaPermissionRequestProxy::UserMediaAccessDenialReason::InvalidConstraint, invalidConstraint);
     };
-
+/*FIXME Current version of class UserMediaPermissionRequestManagerProxy is NoT
+        compatiblie with Upstream mediastream.
+        Upstream class UserMediaPermissionRequestManagerProxy could
+        not be downstreamed as it is used by multiple modules.
+        So the following code is diables.
+        Enable after finalising the webkit version.
+*/
+#if  0
     WebCore::RealtimeMediaSourceCenter::ValidConstraintsHandler validHandler = [this, userMediaID, frameID, userMediaDocumentOrigin = userMediaDocumentOrigin.copyRef(), topLevelDocumentOrigin = topLevelDocumentOrigin.copyRef()](Vector<String>&& audioDeviceUIDs, Vector<String>&& videoDeviceUIDs, String&& deviceIdentifierHashSalt) mutable {
         if (!m_page.isValid() || !m_page.mainFrame())
             return;
@@ -331,11 +339,11 @@ void UserMediaPermissionRequestManagerProxy::requestUserMediaPermissionForFrame(
         videoConstraints.deviceIDHashSalt = deviceIdentifierHashSalt;
 
         syncWithWebCorePrefs();
-        
+
         RealtimeMediaSourceCenter::singleton().validateRequestConstraints(WTFMove(validHandler), WTFMove(invalidHandler), audioConstraints, videoConstraints, WTFMove(deviceIdentifierHashSalt));
     };
-
     getUserMediaPermissionInfo(userMediaID, frameID, WTFMove(haveDeviceSaltHandler), WTFMove(userMediaDocumentOrigin), WTFMove(topLevelDocumentOrigin));
+#endif
 #else
     UNUSED_PARAM(userMediaID);
     UNUSED_PARAM(frameID);
