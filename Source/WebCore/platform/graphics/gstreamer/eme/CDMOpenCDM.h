@@ -59,36 +59,7 @@ private:
     CDMInstanceOpenCDM(const CDMInstanceOpenCDM&) = delete;
     CDMInstanceOpenCDM& operator=(const CDMInstanceOpenCDM&) = delete;
 
-    class Session : public ThreadSafeRefCounted<Session> {
-    public:
-        static Ref<Session> create(const media::OpenCdm& source, Ref<WebCore::SharedBuffer>&& initData);
-
-        bool isValid() const { return m_url.empty() == false; }
-        const std::string& url() const { return m_url; }
-        const std::string& message() const { return m_message; }
-        bool needsIndividualization() const { return m_needsIndividualization; }
-        const Ref<WebCore::SharedBuffer>& initData() const { return m_initData; }
-        media::OpenCdm::KeyStatus update(const uint8_t* data, const uint16_t length, std::string& response) { m_lastStatus = m_session.Update(data, length, response); return m_lastStatus; }
-        int load(std::string& response) { return m_session.Load(response); }
-        int remove(std::string& response) { return m_session.Remove(response); }
-        int close() { return m_session.Close(); }
-        media::OpenCdm::KeyStatus lastStatus() const { return m_lastStatus; }
-        bool containsInitData(const String& initData) const {
-            return m_initData->size() >= initData.sizeInBytes() && memmem(m_initData->data(), m_initData->size(), initData.characters8(), initData.sizeInBytes());
-        }
-
-    private:
-        Session() = delete;
-        Session(const media::OpenCdm& source, Ref<WebCore::SharedBuffer>&& initData);
-        WTF_MAKE_NONCOPYABLE(Session);
-
-        media::OpenCdm m_session;
-        std::string m_message;
-        std::string m_url;
-        bool m_needsIndividualization { false };
-        Ref<WebCore::SharedBuffer> m_initData;
-        media::OpenCdm::KeyStatus m_lastStatus { media::OpenCdm::KeyStatus::StatusPending };
-    };
+    class Session;
 
 public:
     CDMInstanceOpenCDM(media::OpenCdm&, const String&);
@@ -114,7 +85,7 @@ public:
     void removeSessionData(const String&, LicenseType, RemoveSessionDataCallback) final;
     void storeRecordOfKeyUsage(const String&) final { }
 
-    // The init data, is the only way to find a proper session id.
+    // FIXME: For now, the init data is the only way to find a proper session id.
     String sessionIdByInitData(const InitData&) const;
     bool isSessionIdUsable(const String&) const;
 
@@ -123,15 +94,14 @@ private:
     bool removeSession(const String& sessionId);
     RefPtr<Session> lookupSession(const String& sessionId) const;
 
-    media::OpenCdm m_openCDM;
+    String m_keySystem;
     const char* m_mimeType;
+    media::OpenCdm m_openCDM;
     // Protects against concurrent access to m_sessionsMap. In addition to the main thread
     // the GStreamer decryptor elements running in the streaming threads have a need to
     // lookup values in this map.
     mutable Lock m_sessionMapMutex;
-    HashMap<String, RefPtr<CDMInstanceOpenCDM::Session>> m_sessionsMap;
-
-    String m_keySystem;
+    HashMap<String, RefPtr<Session>> m_sessionsMap;
 };
 
 } // namespace WebCore
