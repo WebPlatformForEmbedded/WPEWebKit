@@ -478,10 +478,15 @@ static gboolean webkitMediaCommonEncryptionDecryptSinkEventHandler(GstBaseTransf
             gst_event_unref(event);
             result = TRUE;
             LockHolder locker(priv->m_mutex);
-            priv->m_keyReceived = klass->attemptToDecryptWithLocalInstance(self, priv->m_initDatas.get(WebCore::GStreamerEMEUtilities::keySystemToUuid(priv->m_cdmInstance->keySystem())));
-            GST_DEBUG_OBJECT(self, "attempted to decrypt with local instance %p, key received %s", priv->m_cdmInstance.get(), WTF::boolForPrinting(priv->m_keyReceived));
-            if (priv->m_keyReceived)
-                priv->m_condition.notifyOne();
+            if (!priv->m_cdmInstance) {
+                GST_DEBUG_OBJECT(self, "requesting CDM instance on attempted to decrypt");
+                gst_element_post_message(GST_ELEMENT(self), gst_message_new_element(GST_OBJECT(self), gst_structure_new_empty("drm-cdm-instance-needed")));
+            } else {
+                priv->m_keyReceived = klass->attemptToDecryptWithLocalInstance(self, priv->m_initDatas.get(WebCore::GStreamerEMEUtilities::keySystemToUuid(priv->m_cdmInstance->keySystem())));
+                GST_DEBUG_OBJECT(self, "attempted to decrypt with local instance %p, key received %s", priv->m_cdmInstance.get(), WTF::boolForPrinting(priv->m_keyReceived));
+                if (priv->m_keyReceived)
+                    priv->m_condition.notifyOne();
+            }
         }
         break;
     }
