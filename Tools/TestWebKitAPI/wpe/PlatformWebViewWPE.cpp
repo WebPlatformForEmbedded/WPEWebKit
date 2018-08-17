@@ -75,7 +75,7 @@ void PlatformWebView::initialize(WKPageConfigurationRef configuration)
     else
         m_backend = wpe_view_backend_create();
 
-    m_view = WKViewCreate(m_window ? m_window->backend() : m_backend, configuration);
+    m_view = WKViewCreateWithViewBackend(m_window ? m_window->backend() : m_backend, configuration);
 }
 
 WKPageRef PlatformWebView::page() const

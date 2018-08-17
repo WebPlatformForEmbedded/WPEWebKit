@@ -53,8 +53,6 @@ View::View(struct wpe_view_backend* backend, const API::PageConfiguration& baseC
     , m_compositingManagerProxy(*this)
     , m_backend(backend)
 {
-    ASSERT(m_backend);
-
     auto configuration = baseConfiguration.copy();
     auto* preferences = configuration->preferences();
     if (!preferences && configuration->pageGroup()) {
