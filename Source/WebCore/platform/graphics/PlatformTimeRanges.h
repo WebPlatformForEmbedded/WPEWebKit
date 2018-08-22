@@ -109,7 +109,8 @@ private:
             return range.m_start >= m_end;
         }
     };
-    
+
+    unsigned int getNearestSmallerStart(const MediaTime& start, const MediaTime& end) const; 
     Vector<Range> m_ranges;
 };
 
