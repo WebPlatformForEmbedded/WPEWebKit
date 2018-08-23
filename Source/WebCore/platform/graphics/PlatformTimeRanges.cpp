@@ -132,31 +132,32 @@ MediaTime PlatformTimeRanges::maximumBufferedTime() const
     return m_ranges[length() - 1].m_end;
 }
 
-unsigned int PlatformTimeRanges::getNearestSmallerStart(const MediaTime& start, const MediaTime& end) const
+// This function either returns the nearest index of smaller start value or returns zero
+size_t PlatformTimeRanges::getNearestSmallerStartOrZero(const MediaTime& start, const MediaTime& end) const
 {
     ASSERT(start <= end);
     Range range(start, end);
-    unsigned first, last, middle;
-    unsigned index = 0;
+    size_t first, last, middle;
+    size_t index = 0;
 
     // if the range size is <=2 then better return 0
     if(m_ranges.size() <= 2) {
-       return index;
+        return index;
     }
 
     first = 0;
     last = m_ranges.size() - 1;
-    middle = (first+last)/2;
+    middle = first + ((last - first)/2);
 
     while (first < last && middle > 0) {
         if ( m_ranges[middle].isBeforeRange(range) ) {
             index = middle;
             first = middle + 1;
-   } else {
+        } else {
             last = middle - 1;
         }
 
-        middle = (first + last)/2;
+        middle = first + ((last - first)/2);
     }
     return index;
 }
@@ -164,7 +165,7 @@ unsigned int PlatformTimeRanges::getNearestSmallerStart(const MediaTime& start, 
 void PlatformTimeRanges::add(const MediaTime& start, const MediaTime& end)
 {
     ASSERT(start <= end);
-    unsigned overlappingArcIndex;
+    size_t overlappingArcIndex;
     Range addedRange(start, end);
 
     // For each present range check if we need to:
@@ -174,8 +175,8 @@ void PlatformTimeRanges::add(const MediaTime& start, const MediaTime& end)
     //
     // TODO: Given that we assume that ranges are correctly ordered, this could be optimized.
 
-    // Assigning overlappingArcIndex = getNearestSmallerStart() considering the range is ordered
-    for (overlappingArcIndex = getNearestSmallerStart(start, end); overlappingArcIndex < m_ranges.size(); overlappingArcIndex++) {
+    // Assigning overlappingArcIndex = getNearestSmallerStartOrZero() considering the range is ordered
+    for (overlappingArcIndex = getNearestSmallerStartOrZero(start, end); overlappingArcIndex < m_ranges.size(); overlappingArcIndex++) {
         if (addedRange.isOverlappingRange(m_ranges[overlappingArcIndex]) || addedRange.isContiguousWithRange(m_ranges[overlappingArcIndex])) {
             // We need to merge the addedRange and that range.
             addedRange = addedRange.unionWithOverlappingOrContiguousRange(m_ranges[overlappingArcIndex]);
