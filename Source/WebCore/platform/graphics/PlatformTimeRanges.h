@@ -142,6 +142,7 @@ private:
 
     PlatformTimeRanges(Vector<Range>&&);
 
+    size_t getNearestSmallerStartOrZero(const MediaTime& start, const MediaTime& end) const;
     Vector<Range> m_ranges;
 };
 
