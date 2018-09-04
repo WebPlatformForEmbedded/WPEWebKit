@@ -63,14 +63,14 @@ public:
     GStreamerVideoEncoder(const cricket::VideoCodec&)
         : m_pictureId(0)
         , m_firstFramePts(GST_CLOCK_TIME_NONE)
-        , m_restrictionCaps(adoptGRef(gst_caps_new_empty_simple("video/x-raw")))
+        , m_restrictionCaps(adoptGRef(GetDefaultRestrictions()))
         , m_bitrateSetter(nullptr)
     {
     }
     GStreamerVideoEncoder()
         : m_pictureId(0)
         , m_firstFramePts(GST_CLOCK_TIME_NONE)
-        , m_restrictionCaps(adoptGRef(gst_caps_new_empty_simple("video/x-raw")))
+        , m_restrictionCaps(adoptGRef(GetDefaultRestrictions()))
         , m_bitrateSetter(nullptr)
     {
     }
@@ -391,6 +391,14 @@ public:
             g_object_set(m_profile.get(), "restriction-caps", caps, nullptr);
 
         m_restrictionCaps = caps;
+    }
+
+    GstCaps *GetDefaultRestrictions()
+    {
+        if (adoptGRef(gst_element_factory_find ("omxh264enc")))
+            return gst_caps_from_string("video/x-raw, format=I420");
+
+        return gst_caps_new_empty_simple("video/x-raw");
     }
 
 protected:
