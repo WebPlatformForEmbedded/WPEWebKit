@@ -547,8 +547,8 @@ MediaTime MediaPlayerPrivateGStreamer::durationMediaTime() const
         // For some mp3 files duration query fails even at EOS.
         // Below is workaround for the case when we reach EOS and duration query still fails
         // then we return the cached position if it is valid.
-        if(m_isEndReached ) {
-            if(m_cachedPosition.isValid())
+        if (m_isEndReached) {
+            if (m_cachedPosition.isValid())
                 return m_cachedPosition;
         }
 
