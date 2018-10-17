@@ -60,6 +60,10 @@ std::unique_ptr<GLContextEGL> GLContextEGL::createWPEContext(PlatformDisplay& pl
     }
 
     auto* target = wpe_renderer_backend_egl_offscreen_target_create();
+    if (!target) {
+        WTFLogAlways("Cannot create EGL offscreen target");
+        return nullptr;
+    }
     wpe_renderer_backend_egl_offscreen_target_initialize(target, downcast<PlatformDisplayWPE>(platformDisplay).backend());
     EGLNativeWindowType window = wpe_renderer_backend_egl_offscreen_target_get_native_window(target);
     if (!window) {
