@@ -140,6 +140,8 @@ private:
 
     static bool isAvailable();
 
+    void syncOnClock(bool sync);
+
     GstElement* createAudioSink() override;
 
     MediaTime playbackPosition() const;
