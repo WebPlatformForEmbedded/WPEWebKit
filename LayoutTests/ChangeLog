@@ -1,3 +1,13 @@
+2018-11-16  Thibault Saunier  <tsaunier@igalia.com>
+
+        [GStreamer][MediaStream] Handle track addition and removal
+        https://bugs.webkit.org/show_bug.cgi?id=191599
+
+        Reviewed by Xabier Rodriguez-Calvar.
+
+        * fast/mediastream/MediaStream-video-element-remove-track-expected.txt: Added.
+        * fast/mediastream/MediaStream-video-element-remove-track.html: Added.
+
 2018-10-11  Alejandro G. Castro  <alex@igalia.com>
 
         [GTK][WPE] Add mediaDevices.enumerateDevices support
