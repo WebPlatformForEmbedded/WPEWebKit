@@ -408,11 +408,11 @@ private:
     Vector<FrameData> m_framesData;
 };
 
-class H264Encoder : public GStreamerVideoEncoder {
+class GStreamerH264Encoder : public GStreamerVideoEncoder {
 public:
-    H264Encoder() { }
+    GStreamerH264Encoder() { }
 
-    H264Encoder(const webrtc::SdpVideoFormat& format)
+    GStreamerH264Encoder(const webrtc::SdpVideoFormat& format)
         : m_parser(gst_h264_nal_parser_new())
         , packetizationMode(webrtc::H264PacketizationMode::NonInterleaved)
     {
@@ -506,10 +506,10 @@ public:
     webrtc::H264PacketizationMode packetizationMode;
 };
 
-class VP8Encoder : public GStreamerVideoEncoder {
+class GStreamerVP8Encoder : public GStreamerVideoEncoder {
 public:
-    VP8Encoder() { }
-    VP8Encoder(const webrtc::SdpVideoFormat&) { }
+    GStreamerVP8Encoder() { }
+    GStreamerVP8Encoder(const webrtc::SdpVideoFormat&) { }
     const gchar* Caps() final { return "video/x-vp8"; }
     const gchar* Name() final { return cricket::kVp8CodecName; }
     webrtc::VideoCodecType CodecType() final { return webrtc::kVideoCodecVP8; }
@@ -536,11 +536,22 @@ public:
 
 std::unique_ptr<webrtc::VideoEncoder> GStreamerVideoEncoderFactory::CreateVideoEncoder(const webrtc::SdpVideoFormat& format)
 {
-    if (format.name == cricket::kVp8CodecName)
-        return std::make_unique<VP8Encoder>(format);
+    if (format.name == cricket::kVp8CodecName) {
+        GRefPtr<GstElement> webrtcencoder = adoptGRef(GST_ELEMENT(g_object_ref_sink(gst_element_factory_make("webrtcvideoencoder", NULL))));
+        GRefPtr<GstElement> encoder = nullptr;
+
+        g_object_set(webrtcencoder.get(), "format", adoptGRef(gst_caps_from_string("video/x-vp8")).get(), NULL);
+        g_object_get(webrtcencoder.get(), "encoder", &encoder.outPtr(), NULL);
+
+        if (encoder)
+            return std::make_unique<GStreamerVP8Encoder>(format);
+
+        GST_INFO("Using VP8 Encoder from LibWebRTC.");
+        return webrtc::VP8Encoder::Create();
+    }
 
     if (format.name == cricket::kH264CodecName)
-        return std::make_unique<H264Encoder>(format);
+        return std::make_unique<GStreamerH264Encoder>(format);
 
     return nullptr;
 }
@@ -559,8 +570,8 @@ std::vector<webrtc::SdpVideoFormat> GStreamerVideoEncoderFactory::GetSupportedFo
 {
     std::vector<webrtc::SdpVideoFormat> supportedCodecs;
 
-    VP8Encoder().AddCodecIfSupported(&supportedCodecs);
-    H264Encoder().AddCodecIfSupported(&supportedCodecs);
+    supportedCodecs.push_back(webrtc::SdpVideoFormat(cricket::kVp8CodecName));
+    GStreamerH264Encoder().AddCodecIfSupported(&supportedCodecs);
 
     return supportedCodecs;
 }
