@@ -233,6 +233,7 @@ const RealtimeMediaSourceCapabilities& GStreamerVideoCaptureSource::capabilities
         capabilities.setWidth(CapabilityValueOrRange(minWidth, maxWidth));
         capabilities.setHeight(CapabilityValueOrRange(minHeight, maxHeight));
         capabilities.setFrameRate(CapabilityValueOrRange(minFramerate, maxFramerate));
+        capabilities.addFacingMode(RealtimeMediaSourceSettings::Unknown);
         m_capabilities = WTFMove(capabilities);
     }
 
