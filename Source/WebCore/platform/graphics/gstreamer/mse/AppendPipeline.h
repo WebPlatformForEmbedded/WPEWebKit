@@ -106,8 +106,6 @@ private:
     void removeAppsrcDataLeavingProbe();
     void setAppsrcDataLeavingProbe();
     void demuxerNoMorePads();
-    void consumeAppSinkAvailableSamples();
-
     void consumeAppsinkAvailableSamples();
 
     GstPadProbeReturn appsrcEndOfAppendCheckerProbe(GstPadProbeInfo*);

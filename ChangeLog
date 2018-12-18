@@ -1,3 +1,200 @@
+2018-12-13  Adrian Perez de Castro  <aperez@igalia.com>
+
+        Unreviewed. Update OptionsWPE.cmake for the 2.22.3 release.
+
+        * Source/cmake/OptionsWPE.cmake: Bump version numbers.
+
+2018-12-13  Adrian Perez de Castro  <aperez@igalia.com>
+
+        Unreviewed. Update OptionsGTK.cmake for the 2.22.5 release.
+
+        * Source/cmake/OptionsGTK.cmake: Bump version numbers.
+
+2018-08-23  Don Olmstead  <don.olmstead@sony.com>
+
+        [CMake] Have checks are not getting set inside CMake properly
+        https://bugs.webkit.org/show_bug.cgi?id=188901
+
+        Reviewed by Michael Catanzaro.
+
+        Make sure the variable's value is sent to SET_AND_EXPOSE_TO_BUILD
+        within the WEBKIT_CHECK_HAVE_* macros.
+
+        * Source/cmake/WebKitFeatures.cmake:
+
+2018-10-27  Charlie Turner  <cturner@igalia.com>
+
+        Make VIDEO enabled if ENCRYPTED_MEDIA is enabled.
+        https://bugs.webkit.org/show_bug.cgi?id=190983
+
+        Unreviewed build update.
+
+        * Source/cmake/WebKitFeatures.cmake:
+
+2018-11-28  Michael Catanzaro  <mcatanzaro@igalia.com>
+
+        [CMake] Automatically disable JIT and enable USE_SYSTEM_MALLOC on unfamiliar architectures
+        https://bugs.webkit.org/show_bug.cgi?id=186722
+
+        Reviewed by Žan Doberšek.
+
+        Time for part #2! This change was defeated for GTK and WPE by the code that makes the
+        options public. We have three options: (a) duplicate the architecture check currently in
+        WebKitFeatures.cmake in both OptionsGTK.cmake and OptionsWPE.cmake, (b) rely on the result
+        of that check in OptionsGTK.cmake and OptionsWPE.cmake by using ENABLE_JIT_DEFAULT and
+        USE_SYSTEM_MALLOC_DEFAULT, a fragile encapsulation violation, or (c) just make the options
+        private. They have been public up until now because they needed to be turned off on
+        unsupported architectures. But now they are off by default and enabled only for particular
+        whitelisted architectures, so they shouldn't be needed anymore.
+
+        Note we have to hide ENABLE_SAMPLING_PROFILER as well, since it needs to match the value of
+        ENABLE_JIT. Again, this is handled properly in WebKitFeatures.cmake, and defeated here in
+        OptionsGTK.cmake. (This is not a problem for WPE.)
+
+        * Source/cmake/OptionsGTK.cmake:
+        * Source/cmake/OptionsWPE.cmake:
+
+2018-12-06  Carlos Eduardo Ramalho  <cadubentzen@gmail.com>
+
+        [GStreamer] -DENABLE_VIDEO=ON -DENABLE_OPENGL=OFF still tries to build GstreamerGL
+        https://bugs.webkit.org/show_bug.cgi?id=191998
+
+        Reviewed by Philippe Normand.
+
+        Fix compilation with -DENABLE_VIDEO=ON and -DENABLE_OPENGL=OFF due to GStreamerGL.
+
+        * Source/cmake/GStreamerDependencies.cmake: "DEFINED ENABLE_OPENGL" is always false because ENABLE_OPENGL
+        is not a CMake variable (WEBKIT_OPTION_DEFINE macro does not define ENABLE_OPENGL variable per se, but other
+        variables and appends it to a list).
+        * Source/cmake/OptionsGTK.cmake: GStreamerDefinitions.cmake was included twice by mistake. Second should be GStreamerDependencies.cmake.
+
+2018-12-06  Carlos Eduardo Ramalho  <cadubentzen@gmail.com>
+
+        REGRESSION(r231043): [GTK] Undefined references to WebCore::LayerRepresentation::* with -DENABLE_OPENGL=OFF builds
+        https://bugs.webkit.org/show_bug.cgi?id=191997
+
+        Reviewed by Philippe Normand.
+
+        Fix build with -DENABLE_OPENGL=OFF and -DENABLE_VIDEO=OFF
+
+        * Source/cmake/OptionsGTK.cmake: make ENABLE_ASYNC_SCROLLING depend on ENABLE_OPENGL
+
+2018-11-21  Adrian Perez de Castro  <aperez@igalia.com>
+
+        Unreviewed. Update OptionsWPE.cmake and NEWS for 2.22.2 release.
+
+        * Source/cmake/OptionsWPE.cmake: Bump version numbers.
+
+2018-11-21  Adrian Perez de Castro  <aperez@igalia.com>
+
+        Unreviewed. Update OptionsGTK.cmake and NEWS for 2.22.4 release.
+
+        * Source/cmake/OptionsGTK.cmake: Bump version numbers.
+
+2018-11-06  Adrian Perez de Castro  <aperez@igalia.com>
+
+        Unreviewed. Update OptionsWPE.cmake and NEWS for 2.22.1 release.
+
+        * Source/cmake/OptionsWPE.cmake: Bump version numbers.
+
+2018-11-05  Michael Catanzaro  <mcatanzaro@igalia.com>
+
+        [WPE][GTK] Expose ENABLE_MEDIA_SOURCE as public option
+        https://bugs.webkit.org/show_bug.cgi?id=191223
+
+        Reviewed by Xabier Rodriguez-Calvar.
+
+        This option should be public because it needs to be disabled to build with GStreamer older
+        than 1.14.4.
+
+        * Source/cmake/GStreamerDefinitions.cmake:
+
+2018-10-29  Adrian Perez de Castro  <aperez@igalia.com>
+
+        Unreviewed. Update OptionsGTK.cmake and NEWS for 2.22.3 release.
+
+        * Source/cmake/OptionsGTK.cmake: Bump version numbers.
+
+2018-10-02  Adrian Perez de Castro  <aperez@igalia.com>
+
+        Unreviewed. Update OptionsWPE.cmake and NEWS for the 2.22.0 release.
+
+        * Source/cmake/OptionsWPE.cmake: Bump version numbers.
+
+2018-10-02  Philippe Normand  <pnormand@igalia.com>
+
+        [GStreamer][MSE] Ubuntu LTS build broken since r236409
+        https://bugs.webkit.org/show_bug.cgi?id=190036
+
+        Reviewed by Michael Catanzaro.
+
+        Interrupt the build if MSE is enabled but no supported (1.14)
+        GStreamer version was found.
+
+        * Source/cmake/GStreamerChecks.cmake:
+
+2018-09-21  Adrian Perez de Castro  <aperez@igalia.com>
+
+        Unreviewed. Update OptionsGTK.cmake and NEWS for 2.22.1 release.
+
+        * Source/cmake/OptionsGTK.cmake: Bump version numbers.
+
+2018-09-20  Carlos Garcia Campos  <cgarcia@igalia.com>
+
+        Unreviewed. Update OptionsGTK.cmake and NEWS for 2.22.1 release.
+
+        * Source/cmake/OptionsGTK.cmake: Bump version numbers.
+
+2018-09-06  Adrian Perez de Castro  <aperez@igalia.com>
+
+        Unreviewed. Update OptionsWPE.cmake and NEWS for 2.21.92 release.
+
+        * Source/cmake/OptionsWPE.cmake: Bump version numbers.
+
+2018-09-03  Carlos Garcia Campos  <cgarcia@igalia.com>
+
+        Unreviewed. Update OptionsGTK.cmake and NEWS for 2.22.0 release.
+
+        * Source/cmake/OptionsGTK.cmake: Bump version numbers.
+
+2018-08-22  Alberto Garcia  <berto@igalia.com>
+
+        Don't use WTF_CPU_MIPS when building for mips64
+        https://bugs.webkit.org/show_bug.cgi?id=188858
+
+        Reviewed by Michael Catanzaro.
+
+        * CMakeLists.txt: Use WTF_CPU_MIPS64 for this architecture.
+
+2018-08-24  Carlos Garcia Campos  <cgarcia@igalia.com>
+
+        Unreviewed. Update OptionsGTK.cmake and NEWS for 2.21.92 release.
+
+        * Source/cmake/OptionsGTK.cmake: Bump version numbers.
+
+2018-08-21  Adrian Perez de Castro  <aperez@igalia.com>
+
+        [WPE] Update to use libwpe-1.0.0 and WPEBackend-fdo-1.0.0
+        https://bugs.webkit.org/show_bug.cgi?id=188782
+
+        Reviewed by Michael Catanzaro.
+
+        Make the build depend on wpe-0.2, and change the Flatpak and JHBuild development
+        environments to use version 1.0.0 of libwpe and WPEBackend-fdo.
+
+        * Source/cmake/FindWPE.cmake: Renamed from Source/cmake/FindWPEBackend.cmake and changed
+        to check for libwpe-0.2.
+        * Source/cmake/OptionsWPE.cmake: Adapt to the rename to FindWPE.cmake.
+
+2018-08-18  Michael Catanzaro  <mcatanzaro@igalia.com>
+
+        Adjust CMAKE_MODULE_LINKER_FLAGS for asan
+        https://bugs.webkit.org/show_bug.cgi?id=188699
+
+        Reviewed by Konstantin Tokarev.
+
+        * Source/cmake/WebKitCompilerFlags.cmake:
+
 2018-10-02  Adrian Perez de Castro  <aperez@igalia.com>
 
         Unreviewed. Update OptionsWPE.cmake and NEWS for the 2.22.0 release.

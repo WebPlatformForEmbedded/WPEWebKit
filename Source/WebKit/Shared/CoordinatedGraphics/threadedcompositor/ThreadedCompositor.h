@@ -57,6 +57,7 @@ public:
         virtual uint64_t nativeSurfaceHandleForCompositing() = 0;
         virtual void didDestroyGLContext() = 0;
 
+        virtual void resize(const WebCore::IntSize&) = 0;
         virtual void willRenderFrame() = 0;
         virtual void didRenderFrame() = 0;
     };

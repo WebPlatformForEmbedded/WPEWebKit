@@ -1325,10 +1325,6 @@ AllowDisplayOfInsecureContent:
   type: bool
   defaultValue: false
 
-AllowScriptsToCloseWindows:
-  type: bool
-  defaultValue: false
-
 ScrollToFocusedElementEnabled:
   type: bool
   defaultValue: false

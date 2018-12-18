@@ -33,7 +33,6 @@
 #include "CallFrame.h"
 #include "ClonedArguments.h"
 #include "CodeProfiling.h"
-#include "CommonSlowPathsExceptions.h"
 #include "DefinePropertyAttributes.h"
 #include "DirectArguments.h"
 #include "Error.h"
@@ -164,16 +163,26 @@ namespace JSC {
             CALL_END_IMPL(cceExec, LLInt::callToThrow(cceExec), ExceptionHandlerPtrTag); \
     } while (false)
 
+static void throwArityCheckStackOverflowError(ExecState* exec, ThrowScope& scope)
+{
+    JSObject* error = createStackOverflowError(exec);
+    throwException(exec, scope, error);
+#if LLINT_TRACING
+    if (UNLIKELY(Options::traceLLIntSlowPath()))
+        dataLog("Throwing exception ", JSValue(scope.exception()), ".\n");
+#endif
+}
+
 SLOW_PATH_DECL(slow_path_call_arityCheck)
 {
     BEGIN();
     int slotsToAdd = CommonSlowPaths::arityCheckFor(exec, vm, CodeForCall);
     if (slotsToAdd < 0) {
-        exec = exec->callerFrame();
-        vm.topCallFrame = exec;
+        exec->convertToStackOverflowFrame(vm);
+        NativeCallFrameTracer tracer(&vm, exec);
         ErrorHandlingScope errorScope(vm);
         throwScope.release();
-        CommonSlowPaths::interpreterThrowInCaller(exec, createStackOverflowError(exec));
+        throwArityCheckStackOverflowError(exec, throwScope);
         RETURN_TWO(bitwise_cast<void*>(static_cast<uintptr_t>(1)), exec);
     }
     RETURN_TWO(0, bitwise_cast<void*>(static_cast<uintptr_t>(slotsToAdd)));
@@ -184,10 +193,10 @@ SLOW_PATH_DECL(slow_path_construct_arityCheck)
     BEGIN();
     int slotsToAdd = CommonSlowPaths::arityCheckFor(exec, vm, CodeForConstruct);
     if (slotsToAdd < 0) {
-        exec = exec->callerFrame();
-        vm.topCallFrame = exec;
+        exec->convertToStackOverflowFrame(vm);
+        NativeCallFrameTracer tracer(&vm, exec);
         ErrorHandlingScope errorScope(vm);
-        CommonSlowPaths::interpreterThrowInCaller(exec, createStackOverflowError(exec));
+        throwArityCheckStackOverflowError(exec, throwScope);
         RETURN_TWO(bitwise_cast<void*>(static_cast<uintptr_t>(1)), exec);
     }
     RETURN_TWO(0, bitwise_cast<void*>(static_cast<uintptr_t>(slotsToAdd)));
@@ -813,6 +822,7 @@ SLOW_PATH_DECL(slow_path_has_generic_property)
     JSObject* base = OP(2).jsValue().toObject(exec);
     CHECK_EXCEPTION();
     JSValue property = OP(3).jsValue();
+    ASSERT(property.isString());
     JSString* string = asString(property);
     auto propertyName = string->toIdentifier(exec);
     CHECK_EXCEPTION();
@@ -824,6 +834,7 @@ SLOW_PATH_DECL(slow_path_get_direct_pname)
     BEGIN();
     JSValue baseValue = OP_C(2).jsValue();
     JSValue property = OP(3).jsValue();
+    ASSERT(property.isString());
     JSString* string = asString(property);
     auto propertyName = string->toIdentifier(exec);
     CHECK_EXCEPTION();

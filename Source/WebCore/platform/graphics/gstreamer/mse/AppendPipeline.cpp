@@ -536,7 +536,6 @@ void AppendPipeline::setAppendState(AppendState newAppendState)
         GST_TRACE("%s --> %s", dumpAppendState(oldAppendState), dumpAppendState(newAppendState));
 
     bool ok = false;
-    bool mustCheckEndOfAppend = false;
 
     switch (oldAppendState) {
     case AppendState::NotStarted:
@@ -657,9 +656,6 @@ void AppendPipeline::setAppendState(AppendState newAppendState)
 
     ASSERT(ok);
 
-    if (mustCheckEndOfAppend)
-        checkEndOfAppend();
-
     if (nextAppendState != AppendState::Invalid)
         setAppendState(nextAppendState);
 }
@@ -740,15 +736,6 @@ void AppendPipeline::handleEndOfAppend()
 void AppendPipeline::appsinkNewSample(GRefPtr<GstSample>&& sample)
 {
     ASSERT(WTF::isMainThread());
-
-    // Ignore samples if we're not expecting them. Refuse processing if we're in Invalid state.
-    if (m_appendState != AppendState::Ongoing && m_appendState != AppendState::Sampling) {
-        GST_WARNING("Unexpected sample, appendState=%s", dumpAppendState(m_appendState));
-        // FIXME: Return ERROR and find a more robust way to detect that all the
-        // data has been processed, so we don't need to resort to these hacks.
-        // All in all, return OK, even if it's not the proper thing to do. We don't want to break the demuxer.
-        return;
-    }
 
     if (UNLIKELY(!gst_sample_get_buffer(sample.get()))) {
         GST_WARNING("Received sample without buffer from appsink.");

@@ -27,6 +27,7 @@
 #include "Error.h"
 #include "JSObject.h"
 #include "Lookup.h"
+#include "StructureInlines.h"
 
 namespace JSC {
 
@@ -173,6 +174,11 @@ inline bool JSObject::getOwnPropertySlotInline(ExecState* exec, PropertyName pro
     return JSObject::getOwnPropertySlot(this, exec, propertyName, slot);
 }
 
+inline bool JSObject::mayInterceptIndexedAccesses(VM& vm)
+{
+    return structure(vm)->mayInterceptIndexedAccesses();
+}
+
 inline void JSObject::putDirectWithoutTransition(VM& vm, PropertyName propertyName, JSValue value, unsigned attributes)
 {
     ASSERT(!value.isGetterSetter() && !(attributes & PropertyAttribute::Accessor));
@@ -273,6 +279,7 @@ ALWAYS_INLINE bool JSObject::putDirectInternal(VM& vm, PropertyName propertyName
 {
     ASSERT(value);
     ASSERT(value.isGetterSetter() == !!(attributes & PropertyAttribute::Accessor));
+    ASSERT(value.isCustomGetterSetter() == !!(attributes & PropertyAttribute::CustomAccessorOrValue));
     ASSERT(!Heap::heap(value) || Heap::heap(value) == Heap::heap(this));
     ASSERT(!parseIndex(propertyName));
 
@@ -291,7 +298,7 @@ ALWAYS_INLINE bool JSObject::putDirectInternal(VM& vm, PropertyName propertyName
             putDirect(vm, offset, value);
             structure->didReplaceProperty(offset);
 
-            if ((attributes & PropertyAttribute::Accessor) != (currentAttributes & PropertyAttribute::Accessor) || (attributes & PropertyAttribute::CustomAccessor) != (currentAttributes & PropertyAttribute::CustomAccessor)) {
+            if ((attributes & PropertyAttribute::Accessor) != (currentAttributes & PropertyAttribute::Accessor) || (attributes & PropertyAttribute::CustomAccessorOrValue) != (currentAttributes & PropertyAttribute::CustomAccessorOrValue)) {
                 ASSERT(!(attributes & PropertyAttribute::ReadOnly));
                 setStructure(vm, Structure::attributeChangeTransition(vm, structure, propertyName, attributes));
             } else
@@ -354,7 +361,7 @@ ALWAYS_INLINE bool JSObject::putDirectInternal(VM& vm, PropertyName propertyName
 
         putDirect(vm, offset, value);
 
-        if ((attributes & PropertyAttribute::Accessor) != (currentAttributes & PropertyAttribute::Accessor) || (attributes & PropertyAttribute::CustomAccessor) != (currentAttributes & PropertyAttribute::CustomAccessor)) {
+        if ((attributes & PropertyAttribute::Accessor) != (currentAttributes & PropertyAttribute::Accessor) || (attributes & PropertyAttribute::CustomAccessorOrValue) != (currentAttributes & PropertyAttribute::CustomAccessorOrValue)) {
             ASSERT(!(attributes & PropertyAttribute::ReadOnly));
             setStructure(vm, Structure::attributeChangeTransition(vm, structure, propertyName, attributes));
         } else

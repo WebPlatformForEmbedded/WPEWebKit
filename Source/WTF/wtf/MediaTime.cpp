@@ -61,7 +61,7 @@ static int64_t signum(int64_t val)
     return (0 < val) - (val < 0);
 }
 
-const uint32_t MediaTime::MaximumTimeScale = 0x7fffffffL;
+const uint32_t MediaTime::MaximumTimeScale = 1000000000;
 
 MediaTime::MediaTime()
     : m_timeValue(0)
@@ -328,13 +328,15 @@ MediaTime MediaTime::operator*(int32_t rhs) const
 bool MediaTime::operator!() const
 {
     return (m_timeFlags == Valid && !m_timeValue)
-        || (m_timeFlags == (Valid | DoubleValue) && !m_timeValueAsDouble);
+        || (m_timeFlags == (Valid | DoubleValue) && !m_timeValueAsDouble)
+        || isInvalid();
 }
 
 MediaTime::operator bool() const
 {
     return !(m_timeFlags == Valid && !m_timeValue)
-        && !(m_timeFlags == (Valid | DoubleValue) && !m_timeValueAsDouble);
+        && !(m_timeFlags == (Valid | DoubleValue) && !m_timeValueAsDouble)
+        && !isInvalid();
 }
 
 MediaTime::ComparisonFlags MediaTime::compare(const MediaTime& rhs) const

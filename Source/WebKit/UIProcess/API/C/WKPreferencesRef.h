@@ -360,10 +360,6 @@ WK_EXPORT bool WKPreferencesGetAllowRunningOfInsecureContent(WKPreferencesRef pr
 WK_EXPORT void WKPreferencesSetAllowDisplayOfInsecureContent(WKPreferencesRef preferencesRef, bool enabled);
 WK_EXPORT bool WKPreferencesGetAllowDisplayOfInsecureContent(WKPreferencesRef preferencesRef);
 
-// Default to false.
-WK_EXPORT void WKPreferencesSetAllowScriptsToCloseWindow(WKPreferencesRef preferencesRef, bool allow);
-WK_EXPORT bool WKPreferencesGetAllowScriptsToCloseWindow(WKPreferencesRef preferencesRef);
-
 // Defaults to true.
 WK_EXPORT void WKPreferencesSetWebSecurityEnabled(WKPreferencesRef preferences, bool enabled);
 WK_EXPORT bool WKPreferencesGetWebSecurityEnabled(WKPreferencesRef preferences);
