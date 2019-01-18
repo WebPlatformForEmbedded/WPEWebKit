@@ -875,11 +875,7 @@ set(webrtc_SOURCES
     Source/webrtc/modules/audio_device/fine_audio_buffer.cc
     Source/webrtc/modules/audio_device/linux/alsasymboltable_linux.cc
     Source/webrtc/modules/audio_device/linux/audio_device_alsa_linux.cc
-    Source/webrtc/modules/audio_device/linux/audio_device_pulse_linux.cc
-    Source/webrtc/modules/audio_device/linux/audio_mixer_manager_alsa_linux.cc
-    Source/webrtc/modules/audio_device/linux/audio_mixer_manager_pulse_linux.cc
     Source/webrtc/modules/audio_device/linux/latebindingsymboltable_linux.cc
-    Source/webrtc/modules/audio_device/linux/pulseaudiosymboltable_linux.cc
     Source/webrtc/modules/audio_mixer/audio_frame_manipulator.cc
     Source/webrtc/modules/audio_mixer/audio_mixer_impl.cc
     Source/webrtc/modules/audio_mixer/default_output_rate_calculator.cc
@@ -1385,6 +1381,17 @@ if (WTF_CPU_X86_64 OR WTF_CPU_X86)
         Source/webrtc/modules/video_processing/util/denoiser_filter_sse2.cc
     )
 endif()
+
+find_package(Libpulse)
+if (NOT LIBPULSE_FOUND)
+    message("libpulse is not found, not building support.")
+else()
+    list(APPEND webrtc_SOURCES
+        Source/webrtc/modules/audio_device/linux/audio_device_pulse_linux.cc
+        Source/webrtc/modules/audio_device/linux/audio_mixer_manager_pulse_linux.cc
+        Source/webrtc/modules/audio_device/linux/pulseaudiosymboltable_linux.cc
+    )
+endif ()
 
 add_library(webrtc STATIC ${webrtc_SOURCES})
 
