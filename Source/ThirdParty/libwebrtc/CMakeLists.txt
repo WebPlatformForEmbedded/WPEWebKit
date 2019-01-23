@@ -290,22 +290,30 @@ set(webrtc_SOURCES
     Source/third_party/libyuv/source/mjpeg_decoder.cc
     Source/third_party/libyuv/source/mjpeg_validate.cc
     Source/third_party/libyuv/source/planar_functions.cc
+    Source/third_party/libyuv/source/compare_neon.cc
+    Source/third_party/libyuv/source/compare_neon64.cc
     Source/third_party/libyuv/source/rotate.cc
     Source/third_party/libyuv/source/rotate_any.cc
     Source/third_party/libyuv/source/rotate_argb.cc
     Source/third_party/libyuv/source/rotate_common.cc
     Source/third_party/libyuv/source/rotate_dspr2.cc
     Source/third_party/libyuv/source/rotate_gcc.cc
+    Source/third_party/libyuv/source/rotate_neon.cc
+    Source/third_party/libyuv/source/rotate_neon64.cc
     Source/third_party/libyuv/source/row_any.cc
     Source/third_party/libyuv/source/row_common.cc
     Source/third_party/libyuv/source/row_dspr2.cc
     Source/third_party/libyuv/source/row_gcc.cc
+    Source/third_party/libyuv/source/row_neon.cc
+    Source/third_party/libyuv/source/row_neon64.cc
     Source/third_party/libyuv/source/scale.cc
     Source/third_party/libyuv/source/scale_any.cc
     Source/third_party/libyuv/source/scale_argb.cc
     Source/third_party/libyuv/source/scale_common.cc
     Source/third_party/libyuv/source/scale_dspr2.cc
     Source/third_party/libyuv/source/scale_gcc.cc
+    Source/third_party/libyuv/source/scale_neon.cc
+    Source/third_party/libyuv/source/scale_neon64.cc
     Source/third_party/libyuv/source/video_common.cc
     Source/third_party/opus/src/celt/bands.c
     Source/third_party/opus/src/celt/celt.c
@@ -1440,6 +1448,16 @@ target_compile_definitions(webrtc PRIVATE
   __Userspace__
   __Userspace_os_Linux
 )
+
+if (WTF_CPU_ARM)
+    target_compile_definitions(webrtc PRIVATE
+        WEBRTC_ARCH_ARM=1
+    )
+elseif (WTF_CPU_ARM64)
+    target_compile_definitions(webrtc PRIVATE
+        WEBRTC_ARCH_ARM64=1
+    )
+endif()
 
 target_include_directories(webrtc PRIVATE
     Source
