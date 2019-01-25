@@ -355,7 +355,9 @@ public:
     {
         auto factory = GstDecoderFactory("video/x-vp8");
 
-        if (factory && !g_strcmp0(GST_OBJECT_NAME(GST_OBJECT(factory.get())), "vp8dec")) {
+        if (factory && !g_strcmp0(GST_OBJECT_NAME(GST_OBJECT(factory.get())), "vp8dec") &&
+                // FIXME - Fix omxvp8dec usage, it work "sometimes" only right now.
+                !g_strcmp0(GST_OBJECT_NAME(GST_OBJECT(factory.get())), "omxvp8dec")) {
             GST_INFO("Our best GStreamer VP8 decoder is vp8dec, better use the one from LibWebRTC");
 
             return webrtc::VP8Decoder::Create();
