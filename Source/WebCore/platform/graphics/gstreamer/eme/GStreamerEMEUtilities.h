@@ -28,6 +28,14 @@
 #include <wtf/text/WTFString.h>
 #include <wtf/Seconds.h>
 
+#if ENABLE(ENCRYPTED_MEDIA)
+#include <gst/gstprotection.h>
+
+#ifndef GST_PROTECTION_UNSPECIFIED_SYSTEM_ID
+#define GST_PROTECTION_UNSPECIFIED_SYSTEM_ID "org.gstreamer.unspecified"
+#endif
+#endif
+
 #define WEBCORE_GSTREAMER_EME_UTILITIES_CLEARKEY_UUID "58147ec8-0423-4659-92e6-f52c5ce8c3cc"
 #if USE(OPENCDM)
 #define WEBCORE_GSTREAMER_EME_UTILITIES_PLAYREADY_UUID "9a04f079-9840-4286-ab92-e65be0885f95"
