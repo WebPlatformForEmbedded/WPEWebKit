@@ -29,6 +29,7 @@
 
 namespace WebCore {
 
+const char* GStreamerEMEUtilities::s_CommonEncUUID = WEBCORE_GSTREAMER_EME_UTILITIES_COMMON_ENC_UUID;
 const char* GStreamerEMEUtilities::s_ClearKeyUUID = WEBCORE_GSTREAMER_EME_UTILITIES_CLEARKEY_UUID;
 const char* GStreamerEMEUtilities::s_ClearKeyKeySystem = "org.w3.clearkey";
 const char* GStreamerEMEUtilities::s_UnspecifiedUUID = GST_PROTECTION_UNSPECIFIED_SYSTEM_ID;

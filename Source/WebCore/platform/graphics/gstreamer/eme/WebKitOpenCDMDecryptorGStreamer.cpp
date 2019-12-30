@@ -87,8 +87,10 @@ static GRefPtr<GstCaps> createSinkPadTemplateCaps()
     std::string emptyString;
     GRefPtr<GstCaps> caps = adoptGRef(gst_caps_new_empty());
 
-    if (!opencdm_is_type_supported(WebCore::GStreamerEMEUtilities::s_ClearKeyKeySystem, emptyString.c_str()))
+    if (!opencdm_is_type_supported(WebCore::GStreamerEMEUtilities::s_ClearKeyKeySystem, emptyString.c_str())) {
         addKeySystemToSinkPadCaps(caps, WEBCORE_GSTREAMER_EME_UTILITIES_CLEARKEY_UUID);
+        addKeySystemToSinkPadCaps(caps, WEBCORE_GSTREAMER_EME_UTILITIES_COMMON_ENC_UUID);
+    }
 
     if (!opencdm_is_type_supported(WebCore::GStreamerEMEUtilities::s_PlayReadyKeySystems[0], emptyString.c_str()))
         addKeySystemToSinkPadCaps(caps, WEBCORE_GSTREAMER_EME_UTILITIES_PLAYREADY_UUID);

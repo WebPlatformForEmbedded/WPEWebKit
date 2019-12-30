@@ -28,6 +28,7 @@
 #include <wtf/text/WTFString.h>
 #include <wtf/Seconds.h>
 
+#define WEBCORE_GSTREAMER_EME_UTILITIES_COMMON_ENC_UUID "1077efec-c0b2-4d02-ace3-3c1e52e2fb4b"
 #define WEBCORE_GSTREAMER_EME_UTILITIES_CLEARKEY_UUID "58147ec8-0423-4659-92e6-f52c5ce8c3cc"
 #if USE(OPENCDM)
 #define WEBCORE_GSTREAMER_EME_UTILITIES_PLAYREADY_UUID "9a04f079-9840-4286-ab92-e65be0885f95"
@@ -52,6 +53,8 @@ public:
     static const char* s_UnspecifiedKeySystem;
 
 #if USE(OPENCDM)
+    static const char* s_CommonEncUUID;
+
     static const char* s_PlayReadyUUID;
     static std::array<const char*, 2> s_PlayReadyKeySystems;
 #endif
@@ -86,9 +89,6 @@ public:
 
     static const char* keySystemToUuid(const String& keySystem)
     {
-        if (isClearKeyKeySystem(keySystem))
-            return s_ClearKeyUUID;
-
         if (isUnspecifiedKeySystem(keySystem)) {
 #if USE(OPENCDM)
             return s_WidevineUUID;
@@ -98,12 +98,18 @@ public:
         }
 
 #if USE(OPENCDM)
+        if (isClearKeyKeySystem(keySystem))
+            return s_CommonEncUUID;
+
         if (isPlayReadyKeySystem(keySystem))
             return s_PlayReadyUUID;
 
         if (isWidevineKeySystem(keySystem))
             return s_WidevineUUID;
 #endif
+
+        if (isClearKeyKeySystem(keySystem))
+            return s_ClearKeyUUID;
 
         ASSERT_NOT_REACHED();
         return nullptr;
@@ -122,6 +128,9 @@ public:
 #endif
 
 #if USE(OPENCDM)
+        if (uuid == s_CommonEncUUID)
+            return s_ClearKeyKeySystem;
+
         if (uuid == s_PlayReadyUUID)
             return s_PlayReadyKeySystems[0];
 
