@@ -42,16 +42,20 @@ namespace WebKit {
 
 static void loadResourcesIfNeeded()
 {
-    static std::once_flag flag;
-    std::call_once(flag, [] {
-        GModule* resourcesModule = g_module_open("libWPEWebInspectorResources.so", G_MODULE_BIND_LAZY);
-        if (!resourcesModule) {
-            WTFLogAlways("Error loading libWPEWebInspectorResources.so: %s", g_module_error());
-            return;
-	}
-
-        g_module_make_resident(resourcesModule);
-    });
+GModule* resourcesModule;
+static bool flag = false;
+if(!flag){
+    if (resourcesModule = g_module_open("/media/apps/web-inspector-plugin/usr/lib/libWPEWebInspectorResources.so", G_MODULE_BIND_LAZY))
+        flag = true;
+    else if (resourcesModule = g_module_open("/tmp/web-inspector-plugin/usr/lib/libWPEWebInspectorResources.so", G_MODULE_BIND_LAZY))
+        flag = true;
+    if (!resourcesModule) {
+        WTFLogAlways("Error loading libWPEWebInspectorResources.so: %s", g_module_error());
+        return;
+    }
+    WTFLogAlways("Successfully loaded libWPEWebInspectorResources.so");
+    g_module_make_resident(resourcesModule);
+}
 }
 
 bool WebInspectorServer::platformResourceForPath(const String& path, Vector<char>& data, String& contentType)
@@ -110,6 +114,8 @@ void WebInspectorServer::buildPageList(Vector<char>& data, String& contentType)
     builder.appendLiteral("[ ");
     ClientMap::iterator end = m_clientMap.end();
     for (ClientMap::iterator it = m_clientMap.begin(); it != end; ++it) {
+        if(isLocalHost(it->key))
+            continue;
         WebPageProxy* webPage = it->value->inspectedPage();
         if (it != m_clientMap.begin())
             builder.appendLiteral(", ");
