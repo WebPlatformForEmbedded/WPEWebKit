@@ -152,9 +152,9 @@ static SessionResult webKitMediaOpenCDMDecryptorResetSessionFromKeyIdIfNeeded(We
 
     LockHolder locker(priv->m_mutex);
     RefPtr<WebCore::CDMInstance> cdmInstance = webKitMediaCommonEncryptionDecryptCDMInstance(self);
-    ASSERT(cdmInstance && is<WebCore::CDMInstanceOpenCDM>(*cdmInstance));
 
-    if(!cdmInstance){
+    if( !cdmInstance || !is<WebCore::CDMInstanceOpenCDM>(*cdmInstance) )
+        ASSERT_NOT_REACHED();
         GST_WARNING_OBJECT(self, "CDM instance is not available yet!");
         return InvalidSession;
     }
