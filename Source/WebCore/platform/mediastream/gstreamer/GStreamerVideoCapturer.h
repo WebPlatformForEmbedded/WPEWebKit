@@ -40,6 +40,9 @@ public:
     bool setSize(int width, int height);
     bool setFrameRate(double);
     GstVideoInfo getBestFormat();
+    std::string getPreferredCodec();
+    GstElementFactory* getEncoder (const char* format);
+    GstElementFactory* getParser (const char* format);
 };
 
 } // namespace WebCore
