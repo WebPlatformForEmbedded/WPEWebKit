@@ -50,9 +50,12 @@ GstElement* GStreamerVideoCapturer::createConverter()
         GstElementFactory *h264encoder = getEncoder ("video/x-h264");
         GstElementFactory *h264parser = getParser ("video/x-h264");
 
-        char *videoInput = g_strdup_printf ("videoscale ! videoconvert ! videorate ! %s ! %s", GST_ELEMENT_NAME(h264encoder), GST_ELEMENT_NAME(h264parser));
-        converter = gst_parse_bin_from_description(videoInput, TRUE, nullptr);
-        m_caps = adoptGRef(gst_caps_new_empty_simple("video/x-h264"));
+        if (h264encoder && h264parser)
+        {
+            char *videoInput = g_strdup_printf ("videoscale ! videoconvert ! videorate ! %s ! %s", GST_ELEMENT_NAME(h264encoder), GST_ELEMENT_NAME(h264parser));
+            converter = gst_parse_bin_from_description(videoInput, TRUE, nullptr);
+            m_caps = adoptGRef(gst_caps_new_empty_simple("video/x-h264"));
+        }
     }
     else
     {
