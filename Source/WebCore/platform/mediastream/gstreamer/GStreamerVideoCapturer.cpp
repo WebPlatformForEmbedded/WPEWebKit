@@ -42,23 +42,25 @@ GstElement* GStreamerVideoCapturer::createConverter()
 #if USE(WESTEROS_SINK)
 // If camera supports only x-raw, westerossink expects encoded form. So pass through an h264 encoder and parser after probing platform.
 // If camera supports encoded formats, use a dummy identity element to skip converting to x-raw.
-    const char* codec = getPreferredCodec().c_str();
+    const char* codec = getPreferredCodec();
     GST_INFO_OBJECT(m_pipeline.get(), "Preferred codec is %s ", codec);
 
     if (strcmp (codec, "video/x-raw") == 0)
     {
-        GstElementFactory *h264encoder = getEncoder ("video/x-h264");
-        GstElementFactory *h264parser = getParser ("video/x-h264");
+        GRefPtr<GstElementFactory> h264encoder = getEncoder ("video/x-h264");
+        GRefPtr<GstElementFactory> h264parser = getParser ("video/x-h264");
 
         if (h264encoder && h264parser)
         {
-            char *videoInput = g_strdup_printf ("videoscale ! videoconvert ! videorate ! %s ! %s", GST_ELEMENT_NAME(h264encoder), GST_ELEMENT_NAME(h264parser));
+            char *videoInput = g_strdup_printf ("videoscale ! videoconvert ! videorate ! %s ! %s", GST_ELEMENT_NAME(h264encoder.get()), GST_ELEMENT_NAME(h264parser.get()));
+            gst_object_unref (converter);
             converter = gst_parse_bin_from_description(videoInput, TRUE, nullptr);
             m_caps = adoptGRef(gst_caps_new_empty_simple("video/x-h264"));
         }
     }
     else
     {
+        gst_object_unref (converter);
         converter = gst_parse_bin_from_description("identity", TRUE, nullptr);
         m_caps = adoptGRef(gst_caps_new_empty_simple(codec));
     }
@@ -69,24 +71,24 @@ GstElement* GStreamerVideoCapturer::createConverter()
     return converter;
 }
 
-std::string GStreamerVideoCapturer::getPreferredCodec()
+const char * GStreamerVideoCapturer::getPreferredCodec()
 {
-    GstCaps* caps = gst_device_get_caps(m_device.get());
-    const std::string videoCaps = gst_caps_to_string(caps);
+    GRefPtr<GstCaps> caps = adoptGRef(gst_device_get_caps(m_device.get()));
+    GUniquePtr<gchar> videoCaps = GUniquePtr<gchar>(gst_caps_to_string(caps.get()));
 
-    if( videoCaps.find("video/x-av1") != std::string::npos )
+    if ( g_strstr_len(videoCaps.get(), -1, "video/x-av1"))
         return "video/x-av1";
-    else if( videoCaps.find("video/x-vp9") != std::string::npos )
+    else if( g_strstr_len(videoCaps.get(), -1, "video/x-vp9"))
         return "video/x-vp9";
-    else if( videoCaps.find("video/x-vp8") != std::string::npos )
+    else if( g_strstr_len(videoCaps.get(), -1, "video/x-vp8"))
         return "video/x-vp8";
-    else if( videoCaps.find("video/x-h265") != std::string::npos )
+    else if( g_strstr_len(videoCaps.get(), -1, "video/x-h265"))
         return "video/x-h265";
-    else if( videoCaps.find("video/x-h264") != std::string::npos )
+    else if( g_strstr_len(videoCaps.get(), -1, "video/x-h264"))
         return "video/x-h264";
-    else if( videoCaps.find("video/x-mpeg") != std::string::npos )
+    else if( g_strstr_len(videoCaps.get(), -1, "video/x-mpeg"))
         return "video/x-mpeg";
-    else if( videoCaps.find("video/x-raw") != std::string::npos )
+    else if( g_strstr_len(videoCaps.get(), -1, "video/x-raw"))
         return "video/x-raw";
 
     return " ";
@@ -95,12 +97,11 @@ std::string GStreamerVideoCapturer::getPreferredCodec()
 GstElementFactory* GStreamerVideoCapturer::getEncoder (const char* format)
 {
     GList *encoder_list, *encoders;
-    GstCaps *caps_str;
     GstElementFactory *encoder_factory;
-    caps_str = gst_caps_from_string (format);
+    GRefPtr<GstCaps> caps_str = adoptGRef(gst_caps_from_string (format));
 
     encoder_list = gst_element_factory_list_get_elements (GST_ELEMENT_FACTORY_TYPE_ENCODER, GST_RANK_MARGINAL);
-    encoders = gst_element_factory_list_filter(encoder_list, caps_str, GST_PAD_SRC, false);
+    encoders = gst_element_factory_list_filter(encoder_list, caps_str.get(), GST_PAD_SRC, false);
 
     if (!(g_list_length(encoders)))
     {
@@ -112,7 +113,6 @@ GstElementFactory* GStreamerVideoCapturer::getEncoder (const char* format)
     encoder_factory = GST_ELEMENT_FACTORY (g_list_first(encoders)->data);
     GST_INFO("Found H264 encoder : %s ", GST_ELEMENT_NAME(encoder_factory));
 
-    gst_caps_unref (caps_str);
     gst_plugin_feature_list_free (encoder_list);
     gst_plugin_feature_list_free (encoders);
 
@@ -122,12 +122,11 @@ GstElementFactory* GStreamerVideoCapturer::getEncoder (const char* format)
 GstElementFactory* GStreamerVideoCapturer::getParser (const char* format)
 {
     GList *parser_list, *parsers;
-    GstCaps *caps_str;
     GstElementFactory *parser_factory;
-    caps_str = gst_caps_from_string (format);
+    GRefPtr<GstCaps> caps_str = adoptGRef(gst_caps_from_string (format));
 
     parser_list = gst_element_factory_list_get_elements (GST_ELEMENT_FACTORY_TYPE_PARSER, GST_RANK_MARGINAL);
-    parsers = gst_element_factory_list_filter(parser_list, caps_str, GST_PAD_SINK, false);
+    parsers = gst_element_factory_list_filter(parser_list, caps_str.get(), GST_PAD_SINK, false);
 
     if (!(g_list_length(parsers)))
     {
@@ -139,7 +138,6 @@ GstElementFactory* GStreamerVideoCapturer::getParser (const char* format)
     parser_factory = GST_ELEMENT_FACTORY (g_list_first(parsers)->data);
     GST_INFO("Found H264 parser : %s ", GST_ELEMENT_NAME(parser_factory));
 
-    gst_caps_unref (caps_str);
     gst_plugin_feature_list_free (parser_list);
     gst_plugin_feature_list_free (parsers);
 
