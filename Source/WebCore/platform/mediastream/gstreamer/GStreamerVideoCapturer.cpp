@@ -47,8 +47,8 @@ GstElement* GStreamerVideoCapturer::createConverter()
 
     if (strcmp (codec, "video/x-raw") == 0)
     {
-        GRefPtr<GstElementFactory> h264encoder = getEncoder ("video/x-h264");
-        GRefPtr<GstElementFactory> h264parser = getParser ("video/x-h264");
+        GRefPtr<GstElementFactory> h264encoder = adoptGRef(getEncoder ("video/x-h264"));
+        GRefPtr<GstElementFactory> h264parser = adoptGRef(getParser ("video/x-h264"));
 
         if (h264encoder && h264parser)
         {
@@ -112,6 +112,7 @@ GstElementFactory* GStreamerVideoCapturer::getEncoder (const char* format)
     }
     encoder_factory = GST_ELEMENT_FACTORY (g_list_first(encoders)->data);
     GST_INFO("Found H264 encoder : %s ", GST_ELEMENT_NAME(encoder_factory));
+    gst_object_ref(encoder_factory);
 
     gst_plugin_feature_list_free (encoder_list);
     gst_plugin_feature_list_free (encoders);
@@ -137,6 +138,7 @@ GstElementFactory* GStreamerVideoCapturer::getParser (const char* format)
     }
     parser_factory = GST_ELEMENT_FACTORY (g_list_first(parsers)->data);
     GST_INFO("Found H264 parser : %s ", GST_ELEMENT_NAME(parser_factory));
+    gst_object_ref(parser_factory);
 
     gst_plugin_feature_list_free (parser_list);
     gst_plugin_feature_list_free (parsers);
