@@ -341,13 +341,6 @@ target_link_libraries(WPEWebInspectorResources ${WPEWebInspectorResources_LIBRAR
 target_include_directories(WPEWebInspectorResources SYSTEM PUBLIC ${WPEWebInspectorResources_SYSTEM_INCLUDE_DIRECTORIES})
 install(TARGETS WPEWebInspectorResources DESTINATION "${LIB_INSTALL_DIR}/wpe-webkit-${WPE_API_VERSION}")
 
-add_library(WPEInjectedBundle MODULE "${WEBKIT_DIR}/WebProcess/InjectedBundle/API/glib/WebKitInjectedBundleMain.cpp")
-ADD_WEBKIT_PREFIX_HEADER(WPEInjectedBundle)
-target_link_libraries(WPEInjectedBundle WebKit)
-
-target_include_directories(WPEInjectedBundle PRIVATE ${WebKit_INCLUDE_DIRECTORIES})
-target_include_directories(WPEInjectedBundle SYSTEM PRIVATE ${WebKit_SYSTEM_INCLUDE_DIRECTORIES})
-
 if (EXPORT_DEPRECATED_WEBKIT2_C_API)
     set(WPE_INSTALLED_WEBKIT_HEADERS
         ${WEBKIT_DIR}/Shared/API/c/WKArray.h
@@ -483,10 +476,6 @@ if (EXPORT_DEPRECATED_WEBKIT2_C_API)
         COMPONENT "Development"
     )
 endif()
-
-install(TARGETS WPEInjectedBundle
-        DESTINATION "${LIB_INSTALL_DIR}/wpe-webkit-${WPE_API_VERSION}/injected-bundle"
-)
 
 install(FILES "${CMAKE_BINARY_DIR}/wpe-webkit-${WPE_API_VERSION}.pc"
               "${CMAKE_BINARY_DIR}/wpe-web-extension-${WPE_API_VERSION}.pc"
