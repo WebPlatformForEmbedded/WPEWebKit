@@ -723,6 +723,11 @@ bool MediaPlayer::supportsScanning() const
     return m_private->supportsScanning();
 }
 
+bool MediaPlayer::supportsProgressMonitoring() const
+{
+    return m_private->supportsProgressMonitoring();
+}
+
 bool MediaPlayer::requiresImmediateCompositing() const
 {
     return m_private->requiresImmediateCompositing();

@@ -301,6 +301,7 @@ public:
     bool supportsPictureInPicture() const;
     bool supportsFullscreen() const;
     bool supportsScanning() const;
+    bool supportsProgressMonitoring() const;
     bool canSaveMediaData() const;
     bool requiresImmediateCompositing() const;
     bool doesHaveAttribute(const AtomString&, AtomString* value = nullptr) const;

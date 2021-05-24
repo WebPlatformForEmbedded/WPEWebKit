@@ -2885,6 +2885,8 @@ void HTMLMediaElement::progressEventTimerFired()
     ASSERT(m_player);
     if (m_networkState != NETWORK_LOADING)
         return;
+    if (!m_player->supportsProgressMonitoring())
+        return;
 
     MonotonicTime time = MonotonicTime::now();
     Seconds timedelta = time - m_previousProgressTime;
