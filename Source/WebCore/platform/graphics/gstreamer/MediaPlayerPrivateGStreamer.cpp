@@ -2859,6 +2859,22 @@ void MediaPlayerPrivateGStreamer::createGSTPlayBin(const gchar* playbinName, con
 
     ASSERT(!m_pipeline);
 
+#if PLATFORM(BCM_NEXUS)
+    {
+        auto registry = gst_registry_get();
+        GRefPtr<GstPluginFeature> brcmaudfilter = gst_registry_lookup_feature(registry, "brcmaudfilter");
+        GRefPtr<GstPluginFeature> mpegaudioparse = gst_registry_lookup_feature(registry, "mpegaudioparse");
+
+        if(brcmaudfilter && mpegaudioparse)
+        {
+            GST_INFO("overriding mpegaudioparse rank with brcmaudfilter rank + 1");
+            gst_plugin_feature_set_rank(
+                mpegaudioparse.get(),
+                gst_plugin_feature_get_rank(brcmaudfilter.get()) + 1);
+        }
+    }
+#endif
+
 #if GST_CHECK_VERSION(1, 10, 0)
     if (g_getenv("USE_PLAYBIN3"))
         playbinName = "playbin3";
@@ -2884,13 +2900,13 @@ void MediaPlayerPrivateGStreamer::createGSTPlayBin(const gchar* playbinName, con
 #else
     unsigned flagText = 0x0;
 #endif
-    
+
     unsigned flagAudio = getGstPlayFlag("audio");
     unsigned flagVideo = getGstPlayFlag("video");
-    
-#if ENABLE(NATIVE_VIDEO)    
+
+#if ENABLE(NATIVE_VIDEO)
     unsigned flagNativeVideo = getGstPlayFlag("native-video");
-#else    
+#else
     unsigned flagNativeVideo = 0x0;
 #endif
 
@@ -2899,7 +2915,7 @@ void MediaPlayerPrivateGStreamer::createGSTPlayBin(const gchar* playbinName, con
 #else
     unsigned flagNativeAudio = 0x0;
 #endif
-    
+
     g_object_set(m_pipeline.get(), "flags", flagText | flagAudio | flagVideo | flagNativeVideo | flagNativeAudio, nullptr);
 
     GRefPtr<GstBus> bus = adoptGRef(gst_pipeline_get_bus(GST_PIPELINE(m_pipeline.get())));
