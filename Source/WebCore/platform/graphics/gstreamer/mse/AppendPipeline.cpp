@@ -150,6 +150,10 @@ public:
             if (!GST_BUFFER_DURATION_IS_VALID(buffer)) {
                 if (m_sampleDuration.isValid()) {
                     // Some containers like webm and audio/x-opus don't supply a duration. Let's use the one supplied by the caps.
+                    auto ptsDelta = abs(MediaTime(GST_BUFFER_PTS(buffer), GST_SECOND) - m_lastPts);
+                    if(ptsDelta < MediaTime(1, 24) && m_sampleDuration != ptsDelta) {
+                       m_sampleDuration = ptsDelta;
+                    }
                     GST_BUFFER_DURATION(buffer) = toGstClockTime(m_sampleDuration);
                 } else if (m_lastPts.isValid()) {
                     m_sampleDuration = MediaTime(GST_BUFFER_PTS(buffer), GST_SECOND) - m_lastPts;
