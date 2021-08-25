@@ -82,7 +82,7 @@ static inline MediaTime roundTowardsTimeScaleWithRoundingMargin(const MediaTime&
     }
 };
 
-static const double ExponentialMovingAverageCoefficient = 0.1;
+static const double ExponentialMovingAverageCoefficient = 0.2;
 
 struct SourceBuffer::TrackBuffer {
     MediaTime lastDecodeTimestamp;
