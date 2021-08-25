@@ -76,7 +76,7 @@ static inline MediaTime roundTowardsTimeScaleWithRoundingMargin(const MediaTime&
     }
 };
 
-static const double ExponentialMovingAverageCoefficient = 0.1;
+static const double ExponentialMovingAverageCoefficient = 0.2;
 
 // Do not enqueue samples spanning a significant unbuffered gap.
 // NOTE: one second is somewhat arbitrary. MediaSource::monitorSourceBuffers() is run
