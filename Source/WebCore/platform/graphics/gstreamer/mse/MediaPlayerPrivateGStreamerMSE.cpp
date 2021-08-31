@@ -978,8 +978,12 @@ MediaPlayer::SupportsType MediaPlayerPrivateGStreamerMSE::supportsType(const Med
     }
 
     bool ok;
-    unsigned channels = parameters.type.parameter("channels"_s).toUInt(&ok);
-    if (ok && channels > MEDIA_MAX_AAC_CHANNELS)
+    int channels = parameters.type.parameter("channels"_s).toInt(&ok);
+    if (ok && (channels > MEDIA_MAX_AAC_CHANNELS || channels <= 0))
+        return result;
+
+    String features = parameters.type.parameter("features"_s);
+    if (!features.isEmpty() && !supportsFeatures(features))
         return result;
 
     float width = parameters.type.parameter("width"_s).toFloat(&ok);
@@ -1007,6 +1011,16 @@ MediaPlayer::SupportsType MediaPlayerPrivateGStreamerMSE::supportsType(const Med
     }
 
     return extendedSupportsType(parameters, result);
+}
+
+bool MediaPlayerPrivateGStreamerMSE::supportsFeatures(const String& features)
+{
+    // Apple TV requires this one for DD+
+    constexpr auto dolbyDigitalPlusJOC = "joc";
+    if (features == dolbyDigitalPlusJOC)
+        return true;
+
+    return false;
 }
 
 void MediaPlayerPrivateGStreamerMSE::markEndOfStream(MediaSourcePrivate::EndOfStreamStatus status)
