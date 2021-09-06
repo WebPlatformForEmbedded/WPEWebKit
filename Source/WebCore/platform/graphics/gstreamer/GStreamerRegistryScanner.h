@@ -79,6 +79,8 @@ protected:
     bool isAVC1CodecSupported(const String& codec, bool shouldCheckForHardwareUse) const;
 
 private:
+    bool supportsFeatures(const String& features) const;
+
     bool m_isMediaSource;
     GList* m_audioDecoderFactories;
     GList* m_audioParserFactories;

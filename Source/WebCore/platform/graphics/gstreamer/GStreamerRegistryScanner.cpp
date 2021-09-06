@@ -32,6 +32,15 @@ namespace WebCore {
 GST_DEBUG_CATEGORY_STATIC(webkit_media_gst_registry_scanner_debug);
 #define GST_CAT_DEFAULT webkit_media_gst_registry_scanner_debug
 
+// We shouldn't accept media that the player can't actually play.
+// AAC supports up to 96 channels.
+#define MEDIA_MAX_AAC_CHANNELS 96
+
+// Assume hardware video decoding acceleration up to 8K@60fps for the generic case. Some embedded platforms might want to tune this.
+#define MEDIA_MAX_WIDTH 7680.0f
+#define MEDIA_MAX_HEIGHT 4320.0f
+#define MEDIA_MAX_FRAMERATE 60.0f
+
 GStreamerRegistryScanner& GStreamerRegistryScanner::singleton()
 {
     static NeverDestroyed<GStreamerRegistryScanner> sharedInstance;
@@ -346,12 +355,43 @@ bool GStreamerRegistryScanner::isCodecSupported(String codec, bool shouldCheckFo
     return supported;
 }
 
+bool GStreamerRegistryScanner::supportsFeatures(const String& features) const
+{
+    // Apple TV requires this one for DD+.
+    constexpr auto dolbyDigitalPlusJOC = "joc";
+    if (features == dolbyDigitalPlusJOC)
+        return true;
+
+    return false;
+}
+
 MediaPlayerEnums::SupportsType GStreamerRegistryScanner::isContentTypeSupported(const ContentType& contentType, const Vector<ContentType>& contentTypesRequiringHardwareSupport) const
 {
     using SupportsType = MediaPlayerEnums::SupportsType;
 
     const auto& containerType = contentType.containerType();
     if (!isContainerTypeSupported(containerType))
+        return SupportsType::IsNotSupported;
+
+    bool ok = false;
+    int channels = contentType.parameter("channels"_s).toInt(&ok);
+    if (ok && (channels > MEDIA_MAX_AAC_CHANNELS || channels <= 0))
+        return SupportsType::IsNotSupported;
+
+    String features = contentType.parameter("features"_s);
+    if (!features.isEmpty() && !supportsFeatures(features))
+        return SupportsType::IsNotSupported;
+
+    float width = contentType.parameter("width"_s).toFloat(&ok);
+    if (ok && width > MEDIA_MAX_WIDTH)
+        return SupportsType::IsNotSupported;
+
+    float height = contentType.parameter("height"_s).toFloat(&ok);
+    if (ok && height > MEDIA_MAX_HEIGHT)
+        return SupportsType::IsNotSupported;
+
+    float framerate = contentType.parameter("framerate"_s).toFloat(&ok);
+    if (ok && framerate > MEDIA_MAX_FRAMERATE)
         return SupportsType::IsNotSupported;
 
     const auto& codecs = contentType.codecs();
