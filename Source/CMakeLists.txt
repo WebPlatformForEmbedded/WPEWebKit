@@ -13,6 +13,10 @@ endif ()
 
 add_subdirectory(JavaScriptCore)
 
+if (ENABLE_MEMCHECK)
+    add_subdirectory(ThirdParty/memcheck)
+endif()
+
 if (WIN32 AND ENABLE_GRAPHICS_CONTEXT_3D)
     add_subdirectory(ThirdParty/ANGLE)
 endif ()
