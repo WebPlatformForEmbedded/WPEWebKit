@@ -49,7 +49,7 @@ DynamicsCompressorNode::DynamicsCompressorNode(AudioContext& context, float samp
     m_threshold = AudioParam::create(context, "threshold", -24, -100, 0);
     m_knee = AudioParam::create(context, "knee", 30, 0, 40);
     m_ratio = AudioParam::create(context, "ratio", 12, 1, 20);
-    m_reduction = AudioParam::create(context, "reduction", 0, -20, 0);
+    m_reduction = 0;
     m_attack = AudioParam::create(context, "attack", 0.003, 0, 1);
     m_release = AudioParam::create(context, "release", 0.250, 0, 1);
 
@@ -81,7 +81,7 @@ void DynamicsCompressorNode::process(size_t framesToProcess)
     m_dynamicsCompressor->process(input(0)->bus(), outputBus, framesToProcess);
 
     float reduction = m_dynamicsCompressor->parameterValue(DynamicsCompressor::ParamReduction);
-    m_reduction->setValue(reduction);
+    m_reduction = reduction;
 }
 
 void DynamicsCompressorNode::reset()
