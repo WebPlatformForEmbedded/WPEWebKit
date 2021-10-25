@@ -28,6 +28,6 @@
     Constructor(unsigned long numberOfChannels, unsigned long numberOfFrames, unrestricted float sampleRate),
     ConstructorMayThrowException,
     ConstructorCallWith=ScriptExecutionContext,
-    InterfaceName=webkitOfflineAudioContext
+    InterfaceName=OfflineAudioContext
 ] interface OfflineAudioContext : AudioContext {
 };
