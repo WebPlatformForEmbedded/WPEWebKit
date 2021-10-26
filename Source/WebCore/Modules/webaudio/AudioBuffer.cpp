@@ -42,7 +42,7 @@ namespace WebCore {
 
 RefPtr<AudioBuffer> AudioBuffer::create(unsigned numberOfChannels, size_t numberOfFrames, float sampleRate)
 {
-    if (sampleRate < 22050 || sampleRate > 96000 || numberOfChannels > AudioContext::maxNumberOfChannels() || !numberOfFrames)
+    if (!AudioContext::isSupportedSampleRate(sampleRate) || numberOfChannels > AudioContext::maxNumberOfChannels() || !numberOfFrames)
         return nullptr;
 
     auto buffer = adoptRef(*new AudioBuffer(numberOfChannels, numberOfFrames, sampleRate));

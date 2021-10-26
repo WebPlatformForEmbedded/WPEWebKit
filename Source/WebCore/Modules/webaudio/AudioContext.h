@@ -264,11 +264,11 @@ public:
 
     void nodeWillBeginPlayback();
 
+    static bool isSupportedSampleRate(float sampleRate);
+
 protected:
     explicit AudioContext(Document&);
     AudioContext(Document&, unsigned numberOfChannels, size_t numberOfFrames, float sampleRate);
-    
-    static bool isSampleRateRangeGood(float sampleRate);
     
 private:
     void constructCommon();

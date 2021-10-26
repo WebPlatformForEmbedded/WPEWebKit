@@ -106,11 +106,9 @@ namespace WebCore {
 
 #define RELEASE_LOG_IF_ALLOWED(fmt, ...) RELEASE_LOG_IF(document()->page() && document()->page()->isAlwaysOnLoggingAllowed(), Media, "%p - AudioContext::" fmt, this, ##__VA_ARGS__)
     
-bool AudioContext::isSampleRateRangeGood(float sampleRate)
+bool AudioContext::isSupportedSampleRate(float sampleRate)
 {
-    // FIXME: It would be nice if the minimum sample-rate could be less than 44.1KHz,
-    // but that will require some fixes in HRTFPanner::fftSizeForSampleRate(), and some testing there.
-    return sampleRate >= 44100 && sampleRate <= 96000;
+    return sampleRate >= 3000 && sampleRate <= 384000;
 }
 
 // Don't allow more than this number of simultaneous AudioContexts talking to hardware.

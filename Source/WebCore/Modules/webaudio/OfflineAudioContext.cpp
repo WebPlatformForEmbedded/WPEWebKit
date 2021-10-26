@@ -42,7 +42,7 @@ ExceptionOr<Ref<OfflineAudioContext>> OfflineAudioContext::create(ScriptExecutio
     // FIXME: Add support for workers.
     if (!is<Document>(context))
         return Exception { NotSupportedError };
-    if (!numberOfChannels || numberOfChannels > 10 || !numberOfFrames || !isSampleRateRangeGood(sampleRate))
+    if (!numberOfChannels || numberOfChannels > 10 || !numberOfFrames || !isSupportedSampleRate(sampleRate))
         return Exception { SyntaxError };
     auto audioContext = adoptRef(*new OfflineAudioContext(downcast<Document>(context), numberOfChannels, numberOfFrames, sampleRate));
     audioContext->suspendIfNeeded();
