@@ -428,6 +428,9 @@ void CoordinatedGraphicsScene::assignImageBackingToLayer(TextureMapperLayer* lay
 
     auto it = m_imageBackings.find(imageID);
     ASSERT(it != m_imageBackings.end());
+    if (it == m_imageBackings.end()) {
+        return;
+    }
     layer->setContentsLayer(it->value.get());
 }
 
