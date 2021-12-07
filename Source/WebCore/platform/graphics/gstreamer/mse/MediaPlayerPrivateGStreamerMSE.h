@@ -117,7 +117,7 @@ private:
 
     bool doSeek(const MediaTime&, float, GstSeekFlags) override;
     bool doSeek();
-    void maybeFinishSeek();
+    void maybeFinishSeek() override;
     void updatePlaybackRate() override;
     void asyncStateChangeDone() override;
 

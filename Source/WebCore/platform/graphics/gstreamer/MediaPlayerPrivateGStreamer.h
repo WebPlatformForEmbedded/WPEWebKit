@@ -169,6 +169,7 @@ private:
     void purgeInvalidTextTracks(Vector<String> validTrackIds);
 #endif
     virtual bool doSeek(const MediaTime& position, float rate, GstSeekFlags seekType);
+    virtual void maybeFinishSeek();
     virtual void updatePlaybackRate();
 
     String engineDescription() const override { return "GStreamer"; }
