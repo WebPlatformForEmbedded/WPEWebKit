@@ -274,6 +274,7 @@ private:
     float m_lastPlaybackRate;
     Timer m_fillTimer;
     MediaTime m_maxTimeLoaded;
+    float m_dataReadProgress;
     bool m_loadingStalled { false };
     MediaPlayer::Preload m_preload;
     bool m_delayingLoad;

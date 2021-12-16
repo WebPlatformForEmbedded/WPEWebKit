@@ -211,6 +211,7 @@ MediaPlayerPrivateGStreamer::MediaPlayerPrivateGStreamer(MediaPlayer* player)
     , m_lastPlaybackRate(1)
     , m_fillTimer(*this, &MediaPlayerPrivateGStreamer::fillTimerFired)
     , m_maxTimeLoaded(MediaTime::zeroTime())
+    , m_dataReadProgress(0.0)
     , m_preload(player->preload())
     , m_delayingLoad(false)
     , m_maxTimeLoadedAtLastDidLoadingProgress(MediaTime::zeroTime())
@@ -1515,11 +1516,12 @@ void MediaPlayerPrivateGStreamer::handleMessage(GstMessage* message)
                     MediaTime mediaDuration = durationMediaTime();
                     // Update maxTimeLoaded only if the media duration is
                     // available. Otherwise we can't compute it.
-                    if (mediaDuration && httpResponseTotalSize) {
-                        const double fillStatus = static_cast<double>(networkReadPosition) / static_cast<double>(httpResponseTotalSize);
-
-                        m_maxTimeLoaded = MediaTime(fillStatus * static_cast<double>(toGstUnsigned64Time(mediaDuration)), GST_SECOND);
-                        GST_DEBUG("Updated maxTimeLoaded base on network read position: %s", toString(m_maxTimeLoaded).utf8().data());
+                    if (httpResponseTotalSize) {
+                        m_dataReadProgress = static_cast<double>(networkReadPosition) / static_cast<double>(httpResponseTotalSize);
+                        if (mediaDuration) {
+                            m_maxTimeLoaded = MediaTime(m_dataReadProgress * static_cast<double>(toGstUnsigned64Time(mediaDuration)), GST_SECOND);
+                            GST_DEBUG("Updated maxTimeLoaded base on network read position: %s", toString(m_maxTimeLoaded).utf8().data());
+                        }
                     }
                 }
             } else if (gst_structure_has_name(structure, "GstCacheDownloadComplete")) {
@@ -1867,6 +1869,13 @@ MediaTime MediaPlayerPrivateGStreamer::maxTimeLoaded() const
         return MediaTime::zeroTime();
 
     MediaTime loaded = m_maxTimeLoaded;
+    if (!loaded && m_dataReadProgress > 0.0) {
+      MediaTime mediaDuration = durationMediaTime();
+      if (mediaDuration) {
+        loaded = MediaTime(m_dataReadProgress * static_cast<double>(toGstUnsigned64Time(mediaDuration)), GST_SECOND);
+        GST_DEBUG("maxTimeLoaded based on dataReadProgress=%d", (int)(m_dataReadProgress*100));
+      }
+    }
     if (!loaded && !m_fillTimer.isActive()){
         if (m_cachedPosition.isValid() && m_cachedPosition > MediaTime::zeroTime())
             loaded = m_cachedPosition;
