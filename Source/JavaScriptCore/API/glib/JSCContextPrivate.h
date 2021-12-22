@@ -33,7 +33,7 @@ typedef const struct OpaqueJSValue* JSValueRef;
 typedef struct OpaqueJSValue* JSObjectRef;
 
 JS_EXPORT_PRIVATE GRefPtr<JSCContext> jscContextGetOrCreate(JSGlobalContextRef);
-JS_EXPORT_PRIVATE JSGlobalContextRef jscContextGetJSContext(JSCContext*);
+G_BEGIN_DECLS JSC_API JS_EXPORT_PRIVATE JSGlobalContextRef jscContextGetJSContext(JSCContext*); G_END_DECLS
 JS_EXPORT_PRIVATE GRefPtr<JSCValue> jscContextGetOrCreateValue(JSCContext*, JSValueRef);
 void jscContextValueDestroyed(JSCContext*, JSValueRef);
 JSC::JSObject* jscContextGetJSWrapper(JSCContext*, gpointer);

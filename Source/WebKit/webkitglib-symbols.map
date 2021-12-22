@@ -2,6 +2,8 @@
 global:
   jsc_*;
   webkit_*;
+  JS*;
+  jscContextGetJSContext;
   extern "C++" {
     "WebKit::NetworkProcessMain(int, char**)";
     "WebKit::WebProcessExtensionManager::initialize(WebKit::InjectedBundle*, API::Object*)";
