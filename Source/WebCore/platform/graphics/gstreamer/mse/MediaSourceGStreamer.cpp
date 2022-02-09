@@ -50,9 +50,11 @@
 
 namespace WebCore {
 
-void MediaSourceGStreamer::open(MediaSourcePrivateClient& mediaSource, MediaPlayerPrivateGStreamerMSE& playerPrivate)
+Ref<MediaSourceGStreamer> MediaSourceGStreamer::open(MediaSourcePrivateClient& mediaSource, MediaPlayerPrivateGStreamerMSE& playerPrivate)
 {
-    mediaSource.setPrivateAndOpen(adoptRef(*new MediaSourceGStreamer(mediaSource, playerPrivate)));
+    auto mediaSourcePrivate = adoptRef(*new MediaSourceGStreamer(mediaSource, playerPrivate));
+    mediaSource.setPrivateAndOpen(mediaSourcePrivate.copyRef());
+    return mediaSourcePrivate;
 }
 
 MediaSourceGStreamer::MediaSourceGStreamer(MediaSourcePrivateClient& mediaSource, MediaPlayerPrivateGStreamerMSE& playerPrivate)

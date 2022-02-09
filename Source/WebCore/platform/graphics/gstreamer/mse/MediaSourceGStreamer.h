@@ -52,7 +52,7 @@ class PlatformTimeRanges;
 // FIXME: Should this be called MediaSourcePrivateGStreamer?
 class MediaSourceGStreamer final : public MediaSourcePrivate {
 public:
-    static void open(MediaSourcePrivateClient&, MediaPlayerPrivateGStreamerMSE&);
+    static Ref<MediaSourceGStreamer> open(MediaSourcePrivateClient&, MediaPlayerPrivateGStreamerMSE&);
     virtual ~MediaSourceGStreamer();
 
     MediaSourceClientGStreamerMSE& client() { return m_client.get(); }

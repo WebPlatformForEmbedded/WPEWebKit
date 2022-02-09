@@ -136,6 +136,7 @@ private:
     bool m_gstSeekCompleted = true;
     RefPtr<MediaSourcePrivateClient> m_mediaSource;
     RefPtr<MediaSourceClientGStreamerMSE> m_mediaSourceClient;
+    RefPtr<MediaSourceGStreamer> m_mediaSourcePrivate;
     MediaTime m_mediaTimeDuration;
     bool m_mseSeekCompleted = true;
     RefPtr<PlaybackPipeline> m_playbackPipeline;
