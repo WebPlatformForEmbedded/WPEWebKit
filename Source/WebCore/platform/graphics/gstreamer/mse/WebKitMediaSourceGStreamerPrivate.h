@@ -97,8 +97,10 @@ enum OnSeekDataAction {
 };
 
 enum WebKitMediaSrcMainThreadNotification {
-    ReadyForMoreSamples = 1 << 0,
-    SeekNeedsData = 1 << 1
+    VideoReadyForMoreSamples = 1 << 0,
+    AudioReadyForMoreSamples = 1 << 1,
+    TextReadyForMoreSamples = 1 << 2,
+    SeekNeedsData = 1 << 3
 };
 
 struct _WebKitMediaSrcPrivate {
