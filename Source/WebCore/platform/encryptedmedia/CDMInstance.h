@@ -54,7 +54,7 @@ public:
     virtual void issueMessage(MessageType, Ref<SharedBuffer>&&) = 0;
 };
 
-class CDMInstance : public RefCounted<CDMInstance> {
+class CDMInstance : public ThreadSafeRefCounted<CDMInstance> {
 public:
     virtual ~CDMInstance() = default;
 
