@@ -253,6 +253,17 @@ void MediaPlayerPrivateGStreamer::setPlaybinURL(const URL& url)
 
 void MediaPlayerPrivateGStreamer::load(const String& urlString)
 {
+#if PLATFORM(BCM_NEXUS) || PLATFORM(BROADCOM)
+    GstRegistry* reg = gst_registry_get();
+    GstPluginFeature *feature = gst_registry_lookup_feature(reg, "brcmtsdemux");
+
+    if(feature) {
+        gst_plugin_feature_set_rank(feature, GST_RANK_NONE);
+        gst_object_unref(feature);
+        g_print("brcmtsdemux disabled\n");
+    }
+#endif
+
     loadFull(urlString, nullptr, String());
 }
 
