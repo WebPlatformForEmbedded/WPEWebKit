@@ -260,7 +260,7 @@ void MediaPlayerPrivateGStreamer::load(const String& urlString)
     if(feature) {
         gst_plugin_feature_set_rank(feature, GST_RANK_NONE);
         gst_object_unref(feature);
-        g_print("brcmtsdemux disabled\n");
+        GST_INFO("brcmtsdemux is disabled\n");
     }
 #endif
 
