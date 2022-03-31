@@ -185,7 +185,7 @@ static SessionResult webKitMediaOpenCDMDecryptorResetSessionFromKeyIdIfNeeded(We
         GST_DEBUG_OBJECT(self, "new session %s is usable", session.utf8().data());
         returnValue = NewSession;
     } else {
-        GST_DEBUG_OBJECT(self, "same session %s", session.utf8().data());
+        GST_LOG_OBJECT(self, "same session %s", session.utf8().data());
         returnValue = OldSession;
     }
 

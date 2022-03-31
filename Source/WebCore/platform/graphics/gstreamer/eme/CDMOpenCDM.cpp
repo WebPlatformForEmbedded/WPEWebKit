@@ -653,7 +653,7 @@ String CDMInstanceOpenCDM::sessionIdByKeyId(const SharedBuffer& keyId) const
     if (result.isEmpty())
         GST_WARNING("Unknown session, nothing will be returned");
     else
-        GST_DEBUG("Found session for initdata: %s", result.utf8().data());
+        GST_LOG("Found session for initdata: %s", result.utf8().data());
 
     return result;
 }

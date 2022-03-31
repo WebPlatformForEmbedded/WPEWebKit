@@ -1395,7 +1395,7 @@ void AppendPipeline::handleProtectedBufferProbeInformation(GstPadProbeInfo* info
     if (!protectionMeta)
         return;
 
-    GST_DEBUG("adding %u protection events to buffer %p", listSize, buffer);
+    GST_LOG("adding %u protection events to buffer %p", listSize, buffer);
     gst_structure_set_value(protectionMeta->info, "stream-encryption-events", &m_cachedProtectionEvents);
 }
 
