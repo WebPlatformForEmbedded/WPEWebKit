@@ -59,6 +59,7 @@ Color nativeImageSinglePixelSolidColor(const NativeImagePtr& image)
 
 void drawNativeImage(const NativeImagePtr& image, GraphicsContext& context, const FloatRect& destRect, const FloatRect& srcRect, const IntSize& imageSize, CompositeOperator compositeOperator, BlendMode blendMode, const ImageOrientation& orientation)
 {
+    renderingStarted();
     context.drawNativeImage(image, imageSize, destRect, srcRect, compositeOperator, blendMode, orientation);
 }
 

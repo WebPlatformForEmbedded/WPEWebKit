@@ -28,6 +28,7 @@
 
 #if ENABLE(VIDEO) && USE(GSTREAMER)
 
+#include "CairoUtilities.h"
 #include "FileSystem.h"
 #include "GStreamerCommon.h"
 #include "HTTPHeaderNames.h"
@@ -1411,6 +1412,8 @@ void MediaPlayerPrivateGStreamer::handleMessage(GstMessage* message)
 
         if (!messageSourceIsPlaybin || m_delayingLoad)
             break;
+
+        WebCore::renderingStarted();
         updateStates();
 
         // Construct a filename for the graphviz dot file output.

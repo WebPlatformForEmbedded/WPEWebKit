@@ -29,6 +29,8 @@
 
 #if USE(CAIRO)
 
+#include <atomic>
+
 #include "AffineTransform.h"
 #include "Color.h"
 #include "FloatPoint.h"
@@ -53,6 +55,10 @@
 #if OS(WINDOWS)
 #include <cairo-win32.h>
 #endif
+
+namespace {
+    std::atomic_flag renderingStartedFlag = ATOMIC_FLAG_INIT;
+}
 
 namespace WebCore {
 
@@ -389,6 +395,18 @@ RefPtr<cairo_region_t> toCairoRegion(const Region& region)
 cairo_matrix_t toCairoMatrix(const AffineTransform& transform)
 {
     return cairo_matrix_t { transform.a(), transform.b(), transform.c(), transform.d(), transform.e(), transform.f() };
+}
+
+void resetRenderingStartedFlag()
+{
+    renderingStartedFlag.clear();
+}
+
+void renderingStarted()
+{
+    if (!renderingStartedFlag.test_and_set()) {
+        WTFLogAlways("renderingStarted");
+    }
 }
 
 } // namespace WebCore

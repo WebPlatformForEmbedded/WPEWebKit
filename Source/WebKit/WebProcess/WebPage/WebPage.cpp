@@ -216,6 +216,7 @@
 #include <WebCore/VisibleUnits.h>
 #include <WebCore/WebGLStateTracker.h>
 #include <WebCore/markup.h>
+#include <WebCore/platform/graphics/cairo/CairoUtilities.h>
 #include <pal/SessionID.h>
 #include <wtf/ProcessID.h>
 #include <wtf/RunLoop.h>
@@ -1297,6 +1298,7 @@ void WebPage::loadRequest(LoadParameters&& loadParameters)
     corePage()->userInputBridge().loadRequest(WTFMove(frameLoadRequest));
 
     ASSERT(!m_pendingNavigationID);
+    WebCore::resetRenderingStartedFlag();
 }
 
 void WebPage::loadDataImpl(uint64_t navigationID, Ref<SharedBuffer>&& sharedBuffer, const String& MIMEType, const String& encodingName, const URL& baseURL, const URL& unreachableURL, const UserData& userData)
