@@ -30,6 +30,7 @@
 
 #include "Blob.h"
 #include "BlobCallback.h"
+#include "CairoUtilities.h"
 #include "CanvasGradient.h"
 #include "CanvasPattern.h"
 #include "CanvasRenderingContext2D.h"
@@ -428,9 +429,11 @@ WebGLRenderingContextBase* HTMLCanvasElement::getContextWebGL(const String& type
     if (m_context && !m_context->isWebGL())
         return nullptr;
 
-    if (!m_context)
-        return createContextWebGL(type, WTFMove(attrs));
-    return &downcast<WebGLRenderingContextBase>(*m_context);
+    auto context = (!m_context) ? createContextWebGL(type, WTFMove(attrs)) : &downcast<WebGLRenderingContextBase>(*m_context);
+
+    WebCore::renderingStarted();
+
+    return context;
 }
 
 #endif // ENABLE(WEBGL)

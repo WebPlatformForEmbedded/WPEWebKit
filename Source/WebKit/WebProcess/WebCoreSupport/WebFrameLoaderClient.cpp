@@ -94,6 +94,7 @@
 #include <wtf/NeverDestroyed.h>
 #include <wtf/ProcessID.h>
 #include <wtf/ProcessPrivilege.h>
+#include <WebCore/platform/graphics/cairo/CairoUtilities.h>
 
 namespace WebKit {
 using namespace WebCore;
@@ -483,6 +484,13 @@ void WebFrameLoaderClient::dispatchDidStartProvisionalLoad()
 
     // Notify the UIProcess.
     webPage->send(Messages::WebPageProxy::DidStartProvisionalLoadForFrame(m_frame->frameID(), provisionalLoader.navigationID(), url, unreachableURL, UserData(WebProcess::singleton().transformObjectsToHandles(userData.get()).get())));
+
+    // ARRISEOS-40003: for this scenario we need to send renderingStarted event: application which redirects during startup
+    //                 may have to call WebFrameLoaderClient::dispatchDidFailLoad before next provisional URL start
+    if (m_sendRenderingAfterFailedLoad) {
+        m_sendRenderingAfterFailedLoad = false;
+        WebCore::resetRenderingStartedFlag();
+    }
 }
 
 static constexpr unsigned maxTitleLength = 1000; // Closest power of 10 above the W3C recommendation for Title length.
@@ -556,6 +564,10 @@ void WebFrameLoaderClient::dispatchDidFailProvisionalLoad(const ResourceError& e
     // If we have a load listener, notify it.
     if (WebFrame::LoadListener* loadListener = m_frame->loadListener())
         loadListener->didFailLoad(m_frame, error.isCancellation());
+
+    // ARRISAPOL-1754: Skip sending renderingStarted event for failed URLs
+    m_sendRenderingAfterFailedLoad = true;
+    WebCore::setRenderingStartedFlag();
 }
 
 void WebFrameLoaderClient::dispatchDidFailLoad(const ResourceError& error)
@@ -577,6 +589,10 @@ void WebFrameLoaderClient::dispatchDidFailLoad(const ResourceError& error)
     // If we have a load listener, notify it.
     if (WebFrame::LoadListener* loadListener = m_frame->loadListener())
         loadListener->didFailLoad(m_frame, error.isCancellation());
+
+    // ARRISAPOL-1754: Skip sending renderingStarted event for failed URLs
+    m_sendRenderingAfterFailedLoad = true;
+    WebCore::setRenderingStartedFlag();
 }
 
 void WebFrameLoaderClient::dispatchDidFinishDocumentLoad()

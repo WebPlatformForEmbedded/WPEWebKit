@@ -402,6 +402,10 @@ void resetRenderingStartedFlag()
     renderingStartedFlag.clear();
 }
 
+void setRenderingStartedFlag() {
+    renderingStartedFlag.test_and_set();
+}
+
 void renderingStarted()
 {
     if (!renderingStartedFlag.test_and_set()) {

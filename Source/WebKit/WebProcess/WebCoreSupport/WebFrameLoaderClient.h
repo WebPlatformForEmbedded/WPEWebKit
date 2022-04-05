@@ -285,6 +285,7 @@ private:
     bool m_frameHasCustomContentProvider;
     bool m_frameCameFromPageCache;
     bool m_useIconLoadingClient { false };
+    bool m_sendRenderingAfterFailedLoad { false };
 #if HAVE(CFNETWORK_STORAGE_PARTITIONING)
     bool m_hasFrameSpecificStorageAccess { false };
 #endif
