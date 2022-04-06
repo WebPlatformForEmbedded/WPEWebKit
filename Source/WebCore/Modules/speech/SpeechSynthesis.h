@@ -67,7 +67,7 @@ private:
     void didPauseSpeaking(PlatformSpeechSynthesisUtterance&) override;
     void didResumeSpeaking(PlatformSpeechSynthesisUtterance&) override;
     void didFinishSpeaking(PlatformSpeechSynthesisUtterance&) override;
-    void speakingErrorOccurred(PlatformSpeechSynthesisUtterance&) override;
+    void speakingErrorOccurred(PlatformSpeechSynthesisUtterance&, SpeechError) override;
     void boundaryEventOccurred(PlatformSpeechSynthesisUtterance&, SpeechBoundary, unsigned charIndex) override;
 
     // SpeechSynthesisClient override methods
@@ -80,8 +80,9 @@ private:
     void voicesChanged() override;
     
     void startSpeakingImmediately(SpeechSynthesisUtterance&);
-    void handleSpeakingCompleted(SpeechSynthesisUtterance&, bool errorOccurred);
+    void handleSpeakingCompleted(SpeechSynthesisUtterance&, bool errorOccurred, SpeechError error = SpeechErrorNone);
     void fireEvent(const AtomString& type, SpeechSynthesisUtterance&, unsigned long charIndex, const String& name);
+    void fireErrorEvent(SpeechSynthesisUtterance&, SpeechError);
 
 #if PLATFORM(IOS_FAMILY)
     // Restrictions to change default behaviors.

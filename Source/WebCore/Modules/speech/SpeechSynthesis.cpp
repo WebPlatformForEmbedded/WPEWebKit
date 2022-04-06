@@ -31,10 +31,31 @@
 #include "EventNames.h"
 #include "PlatformSpeechSynthesisVoice.h"
 #include "PlatformSpeechSynthesizer.h"
+#include "SpeechSynthesisErrorEvent.h"
 #include "SpeechSynthesisEvent.h"
 #include "SpeechSynthesisUtterance.h"
 #include "UserGestureIndicator.h"
 #include <wtf/NeverDestroyed.h>
+
+namespace {
+WebCore::SpeechSynthesisErrorEvent::Code toSpeechSynthesisErrorEventCode(WebCore::SpeechError error) {
+    switch(error) {
+        case WebCore::SpeechErrorCanceled:               return WebCore::SpeechSynthesisErrorEvent::Code::Canceled;
+        case WebCore::SpeechErrorInterrupted:            return WebCore::SpeechSynthesisErrorEvent::Code::Interrupted;
+        case WebCore::SpeechErrorAudioBusy:              return WebCore::SpeechSynthesisErrorEvent::Code::AudioBusy;
+        case WebCore::SpeechErrorAudioHardware:          return WebCore::SpeechSynthesisErrorEvent::Code::AudioHardware;
+        case WebCore::SpeechErrorNetwork:                return WebCore::SpeechSynthesisErrorEvent::Code::Network;
+        case WebCore::SpeechErrorSynthesisUnavailable:   return WebCore::SpeechSynthesisErrorEvent::Code::SynthesisUnavailable;
+        case WebCore::SpeechErrorSynthesisFailed:        return WebCore::SpeechSynthesisErrorEvent::Code::SynthesisFailed;
+        case WebCore::SpeechErrorLanguageUnavailable:    return WebCore::SpeechSynthesisErrorEvent::Code::LanguageUnavailable;
+        case WebCore::SpeechErrorVoiceUnavailable:       return WebCore::SpeechSynthesisErrorEvent::Code::VoiceUnavailable;
+        case WebCore::SpeechErrorTextTooLong:            return WebCore::SpeechSynthesisErrorEvent::Code::TextTooLong;
+        case WebCore::SpeechErrorInvalidArgument:        return WebCore::SpeechSynthesisErrorEvent::Code::InvalidArgument;
+        case WebCore::SpeechErrorNotAllowed:             return WebCore::SpeechSynthesisErrorEvent::Code::NotAllowed;
+        default: ASSERT(false, "Invalid SpeechError code"); return WebCore::SpeechSynthesisErrorEvent::Code::Interrupted;
+    }
+}
+} // namespace
 
 namespace WebCore {
 
@@ -185,14 +206,24 @@ void SpeechSynthesis::fireEvent(const AtomString& type, SpeechSynthesisUtterance
     utterance.dispatchEvent(SpeechSynthesisEvent::create(type, charIndex, (MonotonicTime::now() - utterance.startTime()).seconds(), name));
 }
 
-void SpeechSynthesis::handleSpeakingCompleted(SpeechSynthesisUtterance& utterance, bool errorOccurred)
+void SpeechSynthesis::fireErrorEvent(SpeechSynthesisUtterance& utterance, SpeechError error)
+{
+    utterance.dispatchEvent(SpeechSynthesisErrorEvent::create(toSpeechSynthesisErrorEventCode(error)));
+}
+
+void SpeechSynthesis::handleSpeakingCompleted(SpeechSynthesisUtterance& utterance, bool errorOccurred, SpeechError error)
 {
     ASSERT(m_currentSpeechUtterance);
     Ref<SpeechSynthesisUtterance> protect(utterance);
 
-    m_currentSpeechUtterance = nullptr;
+    if (m_currentSpeechUtterance == &utterance)
+        m_currentSpeechUtterance = nullptr;
 
-    fireEvent(errorOccurred ? eventNames().errorEvent : eventNames().endEvent, utterance, 0, String());
+    // For older PlatformSpeechSynthesizers that doesn't support ErrorEvent yet
+    if (!errorOccurred || error == SpeechErrorNone)
+        fireEvent(errorOccurred ? eventNames().errorEvent : eventNames().endEvent, utterance, 0, String());
+    else
+        fireErrorEvent(utterance, error);
 
     if (m_utteranceQueue.size()) {
         Ref<SpeechSynthesisUtterance> firstUtterance = m_utteranceQueue.takeFirst();
@@ -255,7 +286,7 @@ void SpeechSynthesis::speakingErrorOccurred()
 {
     if (!m_currentSpeechUtterance)
         return;
-    speakingErrorOccurred(*m_currentSpeechUtterance->platformUtterance());
+    speakingErrorOccurred(*m_currentSpeechUtterance->platformUtterance(), SpeechErrorNone);
 }
 
 void SpeechSynthesis::boundaryEventOccurred(bool wordBoundary, unsigned charIndex)
@@ -296,10 +327,10 @@ void SpeechSynthesis::didFinishSpeaking(PlatformSpeechSynthesisUtterance& uttera
         handleSpeakingCompleted(static_cast<SpeechSynthesisUtterance&>(*utterance.client()), false);
 }
 
-void SpeechSynthesis::speakingErrorOccurred(PlatformSpeechSynthesisUtterance& utterance)
+void SpeechSynthesis::speakingErrorOccurred(PlatformSpeechSynthesisUtterance& utterance, SpeechError error)
 {
     if (utterance.client())
-        handleSpeakingCompleted(static_cast<SpeechSynthesisUtterance&>(*utterance.client()), true);
+        handleSpeakingCompleted(static_cast<SpeechSynthesisUtterance&>(*utterance.client()), true, error);
 }
 
 } // namespace WebCore

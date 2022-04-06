@@ -418,6 +418,7 @@ set(WebCore_NON_SVG_IDL_FILES
     Modules/speech/DOMWindowSpeechSynthesis.idl
     Modules/speech/SpeechSynthesis.idl
     Modules/speech/SpeechSynthesisEvent.idl
+    Modules/speech/SpeechSynthesisErrorEvent.idl
     Modules/speech/SpeechSynthesisUtterance.idl
     Modules/speech/SpeechSynthesisVoice.idl
 

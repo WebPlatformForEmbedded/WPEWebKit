@@ -2225,7 +2225,7 @@ private:
     void didFinishSpeaking(WebCore::PlatformSpeechSynthesisUtterance&) override;
     void didPauseSpeaking(WebCore::PlatformSpeechSynthesisUtterance&) override;
     void didResumeSpeaking(WebCore::PlatformSpeechSynthesisUtterance&) override;
-    void speakingErrorOccurred(WebCore::PlatformSpeechSynthesisUtterance&) override;
+    void speakingErrorOccurred(WebCore::PlatformSpeechSynthesisUtterance&, WebCore::SpeechError) override;
     void boundaryEventOccurred(WebCore::PlatformSpeechSynthesisUtterance&, WebCore::SpeechBoundary, unsigned charIndex) override;
     void voicesDidChange() override;
 

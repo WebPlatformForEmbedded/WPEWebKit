@@ -43,6 +43,22 @@ enum class SpeechBoundary : uint8_t {
     SpeechSentenceBoundary
 };
 
+enum SpeechError {
+    SpeechErrorNone,
+    SpeechErrorCanceled,
+    SpeechErrorInterrupted,
+    SpeechErrorAudioBusy,
+    SpeechErrorAudioHardware,
+    SpeechErrorNetwork,
+    SpeechErrorSynthesisUnavailable,
+    SpeechErrorSynthesisFailed,
+    SpeechErrorLanguageUnavailable,
+    SpeechErrorVoiceUnavailable,
+    SpeechErrorTextTooLong,
+    SpeechErrorInvalidArgument,
+    SpeechErrorNotAllowed
+};
+
 class PlatformSpeechSynthesisUtterance;
 
 class PlatformSpeechSynthesizerClient {
@@ -51,7 +67,7 @@ public:
     virtual void didFinishSpeaking(PlatformSpeechSynthesisUtterance&) = 0;
     virtual void didPauseSpeaking(PlatformSpeechSynthesisUtterance&) = 0;
     virtual void didResumeSpeaking(PlatformSpeechSynthesisUtterance&) = 0;
-    virtual void speakingErrorOccurred(PlatformSpeechSynthesisUtterance&) = 0;
+    virtual void speakingErrorOccurred(PlatformSpeechSynthesisUtterance&, SpeechError) = 0;
     virtual void boundaryEventOccurred(PlatformSpeechSynthesisUtterance&, SpeechBoundary, unsigned charIndex) = 0;
     virtual void voicesDidChange() = 0;
 protected:
