@@ -498,6 +498,7 @@ void SourceBuffer::removedFromMediaSource()
 
     m_private->removedFromMediaSource();
     m_source = nullptr;
+    m_reportedExtraMemoryCost = 0;
 }
 
 void SourceBuffer::seekToTime(const MediaTime& time)
@@ -914,6 +915,10 @@ void SourceBuffer::removeCodedFrames(const MediaTime& start, const MediaTime& en
     // No-op
 
     LOG(Media, "SourceBuffer::removeCodedFrames(%p) - buffered = %s", this, toString(m_buffered->ranges()).utf8().data());
+
+    size_t extraMemoryCost = this->extraMemoryCost();
+    if (m_reportedExtraMemoryCost > extraMemoryCost)
+        m_reportedExtraMemoryCost = extraMemoryCost;
 }
 
 void SourceBuffer::removeTimerFired()
@@ -2358,9 +2363,9 @@ void SourceBuffer::reportExtraMemoryAllocated()
         return;
 
     size_t extraMemoryCostDelta = extraMemoryCost - m_reportedExtraMemoryCost;
-    m_reportedExtraMemoryCost = extraMemoryCost;
 
     JSC::JSLockHolder lock(scriptExecutionContext()->vm());
+    m_reportedExtraMemoryCost = extraMemoryCost;
     // FIXME: Adopt reportExtraMemoryVisited, and switch to reportExtraMemoryAllocated.
     // https://bugs.webkit.org/show_bug.cgi?id=142595
     scriptExecutionContext()->vm().heap.deprecatedReportExtraMemory(extraMemoryCostDelta);
@@ -2437,6 +2442,11 @@ ExceptionOr<void> SourceBuffer::setMode(AppendMode newMode)
     m_mode = newMode;
 
     return { };
+}
+
+size_t SourceBuffer::memoryCost() const
+{
+    return sizeof(SourceBuffer) + m_reportedExtraMemoryCost;
 }
 
 #if !RELEASE_LOG_DISABLED

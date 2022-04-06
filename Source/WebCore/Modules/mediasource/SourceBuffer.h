@@ -130,6 +130,8 @@ public:
     MediaTime highestPresentationTimestamp() const;
     void readyStateChanged();
 
+    size_t memoryCost() const;
+
     void trySignalAllSamplesEnqueued();
 
 #if !RELEASE_LOG_DISABLED

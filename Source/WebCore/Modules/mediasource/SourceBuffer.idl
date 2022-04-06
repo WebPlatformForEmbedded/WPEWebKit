@@ -37,6 +37,7 @@
     ActiveDOMObject,
     Conditional=MEDIA_SOURCE,
     ExportMacro=WEBCORE_EXPORT,
+    ReportExtraMemoryCost,
 ] interface SourceBuffer : EventTarget {
     attribute AppendMode mode;
 
