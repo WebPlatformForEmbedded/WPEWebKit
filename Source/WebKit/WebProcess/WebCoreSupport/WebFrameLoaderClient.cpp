@@ -248,6 +248,10 @@ void WebFrameLoaderClient::dispatchDidReceiveResponse(DocumentLoader*, unsigned 
         return;
 
     webPage->injectedBundleResourceLoadClient().didReceiveResponseForResource(*webPage, *m_frame, identifier, response);
+    if (response.httpStatusCode() >= 400) {
+        String message = "Failed to load resource: the server responded with a status of " + String::number(response.httpStatusCode()) + " (" + response.httpStatusText() + ')';
+        webPage->send(Messages::WebPageProxy::WillAddDetailedMessageToConsole("Network", "Error", 0, 0, message, response.url().string()));
+    }
 }
 
 void WebFrameLoaderClient::dispatchDidReceiveContentLength(DocumentLoader*, unsigned long identifier, int dataLength)
@@ -287,6 +291,13 @@ void WebFrameLoaderClient::dispatchDidFailLoading(DocumentLoader*, unsigned long
 
     webPage->injectedBundleResourceLoadClient().didFailLoadForResource(*webPage, *m_frame, identifier, error);
     webPage->removeResourceRequest(identifier);
+
+    StringBuilder message;
+    if (!error.localizedDescription().isEmpty()) {
+        message.appendLiteral(": ");
+        message.append(error.localizedDescription());
+    }
+    webPage->send(Messages::WebPageProxy::WillAddDetailedMessageToConsole("Network", "Error", 0, 0, message.toString(), error.failingURL()));
 }
 
 bool WebFrameLoaderClient::dispatchDidLoadResourceFromMemoryCache(DocumentLoader*, const ResourceRequest&, const ResourceResponse&, int /*length*/)
