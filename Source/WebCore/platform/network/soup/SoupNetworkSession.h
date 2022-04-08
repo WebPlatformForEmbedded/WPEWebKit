@@ -35,6 +35,11 @@
 #include <wtf/text/WTFString.h>
 #include "Proxy.h"
 
+#define ENABLE_NETWORK_CHANGE_DETECTION 1
+#if ENABLE(NETWORK_CHANGE_DETECTION)
+#include <wtf/RunLoop.h>
+#endif
+
 typedef struct _SoupCache SoupCache;
 typedef struct _SoupCookieJar SoupCookieJar;
 typedef struct _SoupMessage SoupMessage;
@@ -79,12 +84,23 @@ public:
     static void setCustomProtocolRequestType(GType);
     void setupCustomProtocols();
 
+#if ENABLE(NETWORK_CHANGE_DETECTION)
+    void scheduleNetworkChangeCheck();
+#endif
+
 private:
     void setHTTPProxy(const char* httpProxy, const char* httpProxyExceptions);
 
     void setupLogger();
 
     GRefPtr<SoupSession> m_soupSession;
+
+#if ENABLE(NETWORK_CHANGE_DETECTION)
+    RunLoop::Timer<SoupNetworkSession> m_networkChangeCheckTimer;
+    String m_defaultNetworkInterfaceIPV4;
+    String m_defaultNetworkInterfaceIPV6;
+    void networkChangeCheckTimerFired();
+#endif
 };
 
 } // namespace WebCore
