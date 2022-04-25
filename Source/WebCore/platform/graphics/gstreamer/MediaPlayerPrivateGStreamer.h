@@ -317,6 +317,7 @@ private:
 #endif
 #if PLATFORM(BCM_NEXUS) || PLATFORM(BROADCOM)
     GRefPtr<GstElement> m_vidfilter;
+    GRefPtr<GstElement> m_multiqueue;
 #endif
 
     DemuxMonitor _demuxMonitor;
