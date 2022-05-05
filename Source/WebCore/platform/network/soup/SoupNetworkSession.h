@@ -35,7 +35,6 @@
 #include <wtf/text/WTFString.h>
 #include "Proxy.h"
 
-#define ENABLE_NETWORK_CHANGE_DETECTION 1
 #if ENABLE(NETWORK_CHANGE_DETECTION)
 #include <wtf/RunLoop.h>
 #endif
