@@ -2189,10 +2189,16 @@ void HTMLMediaElement::mediaLoadingFailedFatally(MediaPlayer::NetworkState error
     detachMediaSource();
 #endif
 
-    // 4 - Set the element's networkState attribute to the NETWORK_EMPTY value and queue a
-    // task to fire a simple event called emptied at the element.
-    m_networkState = NETWORK_EMPTY;
-    scheduleEvent(eventNames().emptiedEvent);
+    // 4 - If the media element's readyState attribute has a value equal to HAVE_NOTHING,
+    // set the element's networkState attribute to the NETWORK_EMPTY value and queue a task
+    // to fire a simple event named emptied at the element.
+    // Otherwise, set the element's networkState attribute to the NETWORK_IDLE value.
+    if (m_readyState == HAVE_NOTHING) {
+        m_networkState = NETWORK_EMPTY;
+        scheduleEvent(eventNames().emptiedEvent);
+    } else {
+        m_networkState = NETWORK_IDLE;
+    }
 
     // 5 - Set the element's delaying-the-load-event flag to false. This stops delaying the load event.
     setShouldDelayLoadEvent(false);
