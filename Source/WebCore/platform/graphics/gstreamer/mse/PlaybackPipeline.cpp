@@ -177,10 +177,6 @@ void PlaybackPipeline::attachTrack(RefPtr<SourceBufferPrivateGStreamer> sourceBu
     const char* mediaType = capsMediaType(caps);
     GST_DEBUG_OBJECT(webKitMediaSrc, "Configured track %s: appsrc=%s, padId=%u, mediaType=%s", trackPrivate->id().string().utf8().data(), GST_ELEMENT_NAME(stream->appsrc), padId, mediaType);
 
-    GST_OBJECT_LOCK(webKitMediaSrc);
-    stream->type = Unknown;
-    GST_OBJECT_UNLOCK(webKitMediaSrc);
-
     GRefPtr<GstPad> sourcePad = adoptGRef(gst_element_get_static_pad(stream->appsrc, "src"));
     ASSERT(sourcePad);
 
@@ -208,6 +204,8 @@ void PlaybackPipeline::attachTrack(RefPtr<SourceBufferPrivateGStreamer> sourceBu
         signal = SIGNAL_TEXT_CHANGED;
 
         // FIXME: Support text tracks.
+    } else {
+        stream->type = Unknown;
     }
     GST_OBJECT_UNLOCK(webKitMediaSrc);
 
