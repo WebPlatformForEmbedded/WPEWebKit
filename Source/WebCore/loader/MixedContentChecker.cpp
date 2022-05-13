@@ -121,7 +121,7 @@ bool MixedContentChecker::canRunInsecureContent(SecurityOrigin& securityOrigin, 
     bool allowed = !m_frame.document()->isStrictMixedContentMode() && m_frame.settings().allowRunningOfInsecureContent() && !m_frame.document()->geolocationAccessed() && !m_frame.document()->secureCookiesAccessed();
 
     // When mixed content is enabled check if URL is whitelisted
-    if (!allowed && isUrlWhitelisted(url)) allowed = true;
+    if (!allowed && isUrlWhitelisted(url)) return true;
 
     if (!allowed)
         logWarning(allowed, "run", url);
