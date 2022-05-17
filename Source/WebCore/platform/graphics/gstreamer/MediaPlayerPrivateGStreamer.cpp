@@ -1959,12 +1959,19 @@ void MediaPlayerPrivateGStreamer::handleMessage(GstMessage* message)
 #if USE(GSTREAMER_HOLEPUNCH)
         if (currentState == GST_STATE_NULL && newState == GST_STATE_READY) {
             // If we didn't create a video sink, store a reference to the created one.
-            if (!m_videoSink)
-                g_object_get(pipeline(), "video-sink", &m_videoSink.outPtr(), nullptr);
+            if (!m_videoSink) {
+                // Detect a video sink element
+                GstElement* element = GST_ELEMENT(GST_MESSAGE_SRC(message));
+                if (GST_IS_BASE_SINK(element)) {
+                    const gchar* klass_str = gst_element_get_metadata(element, "klass");
+                    if (strstr(klass_str, "Sink") && strstr(klass_str, "Video")) {
+                        m_videoSink = element;
 
-            // Ensure that there's a buffer with the transparent rectangle available when playback is going to start.
-            if (m_videoSink)
-                pushNextHolePunchBuffer();
+                        // Ensure that there's a buffer with the transparent rectangle available when playback is going to start.
+                        pushNextHolePunchBuffer();
+                    }
+                 }
+            }
         }
 #endif
 
