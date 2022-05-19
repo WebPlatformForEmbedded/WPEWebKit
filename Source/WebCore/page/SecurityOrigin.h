@@ -292,7 +292,7 @@ template<class Decoder> inline RefPtr<SecurityOrigin> SecurityOrigin::decode(Dec
     if (!decoder.decode(origin->m_isLocal))
         return nullptr;
 
-    return WTFMove(origin);
+    return origin;
 }
 
 } // namespace WebCore

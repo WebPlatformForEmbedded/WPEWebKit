@@ -404,7 +404,7 @@ std::optional<MediaKeySystemConfiguration> CDM::getSupportedConfiguration(const 
     if ((accumulatedConfiguration.distinctiveIdentifier == MediaKeysRequirement::Required || accumulatedConfiguration.persistentState == MediaKeysRequirement::Required) && !origin.canAccessLocalStorage(&topOrigin))
         return std::nullopt;
 
-    return WTFMove(accumulatedConfiguration);
+    return accumulatedConfiguration;
     // NOTE: Continued in getConsentStatus().
 }
 

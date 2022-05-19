@@ -2638,7 +2638,7 @@ private:
         if (!read(point.w))
             return std::nullopt;
 
-        return WTFMove(point);
+        return point;
     }
 
     JSValue readDOMQuad()
@@ -3297,7 +3297,7 @@ static ExceptionOr<std::unique_ptr<ArrayBufferContentsArray>> transferArrayBuffe
             return Exception { TypeError };
     }
 
-    return WTFMove(contents);
+    return contents;
 }
 
 static void maybeThrowExceptionIfSerializationFailed(ExecState& state, SerializationReturnCode code)

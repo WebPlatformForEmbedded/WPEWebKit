@@ -90,7 +90,7 @@ std::optional<NPIdentifierData> NPIdentifierData::decode(IPC::Decoder& decoder)
 
     if (!decoder.decode(result.m_number))
         return std::nullopt;
-    return WTFMove(result);
+    return result;
 }
 
 } // namespace WebKit

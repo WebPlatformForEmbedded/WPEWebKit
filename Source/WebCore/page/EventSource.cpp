@@ -77,7 +77,7 @@ ExceptionOr<Ref<EventSource>> EventSource::create(ScriptExecutionContext& contex
     source->setPendingActivity(source.ptr());
     source->scheduleInitialConnect();
     source->suspendIfNeeded();
-    return WTFMove(source);
+    return source;
 }
 
 EventSource::~EventSource()

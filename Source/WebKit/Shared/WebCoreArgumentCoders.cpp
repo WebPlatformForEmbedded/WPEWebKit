@@ -574,7 +574,7 @@ std::optional<FloatPoint> ArgumentCoder<FloatPoint>::decode(Decoder& decoder)
     FloatPoint floatPoint;
     if (!SimpleArgumentCoder<FloatPoint>::decode(decoder, floatPoint))
         return std::nullopt;
-    return WTFMove(floatPoint);
+    return floatPoint;
 }
 
 void ArgumentCoder<FloatPoint3D>::encode(Encoder& encoder, const FloatPoint3D& floatPoint)
@@ -603,7 +603,7 @@ std::optional<FloatRect> ArgumentCoder<FloatRect>::decode(Decoder& decoder)
     FloatRect floatRect;
     if (!SimpleArgumentCoder<FloatRect>::decode(decoder, floatRect))
         return std::nullopt;
-    return WTFMove(floatRect);
+    return floatRect;
 }
 
 
@@ -650,7 +650,7 @@ std::optional<FloatQuad> ArgumentCoder<FloatQuad>::decode(Decoder& decoder)
     FloatQuad floatQuad;
     if (!SimpleArgumentCoder<FloatQuad>::decode(decoder, floatQuad))
         return std::nullopt;
-    return WTFMove(floatQuad);
+    return floatQuad;
 }
 
 void ArgumentCoder<ViewportArguments>::encode(Encoder& encoder, const ViewportArguments& viewportArguments)
@@ -668,7 +668,7 @@ std::optional<ViewportArguments> ArgumentCoder<ViewportArguments>::decode(Decode
     ViewportArguments viewportArguments;
     if (!SimpleArgumentCoder<ViewportArguments>::decode(decoder, viewportArguments))
         return std::nullopt;
-    return WTFMove(viewportArguments);
+    return viewportArguments;
 }
 #endif // PLATFORM(IOS)
 
@@ -688,7 +688,7 @@ std::optional<WebCore::IntPoint> ArgumentCoder<IntPoint>::decode(Decoder& decode
     IntPoint intPoint;
     if (!SimpleArgumentCoder<IntPoint>::decode(decoder, intPoint))
         return std::nullopt;
-    return WTFMove(intPoint);
+    return intPoint;
 }
 
 void ArgumentCoder<IntRect>::encode(Encoder& encoder, const IntRect& intRect)
@@ -706,7 +706,7 @@ std::optional<IntRect> ArgumentCoder<IntRect>::decode(Decoder& decoder)
     IntRect rect;
     if (!decode(decoder, rect))
         return std::nullopt;
-    return WTFMove(rect);
+    return rect;
 }
 
 void ArgumentCoder<IntSize>::encode(Encoder& encoder, const IntSize& intSize)
@@ -724,7 +724,7 @@ std::optional<IntSize> ArgumentCoder<IntSize>::decode(Decoder& decoder)
     IntSize intSize;
     if (!SimpleArgumentCoder<IntSize>::decode(decoder, intSize))
         return std::nullopt;
-    return WTFMove(intSize);
+    return intSize;
 }
 
 void ArgumentCoder<LayoutSize>::encode(Encoder& encoder, const LayoutSize& layoutSize)
@@ -896,7 +896,7 @@ std::optional<Region::Span> ArgumentCoder<Region::Span>::decode(Decoder& decoder
         return std::nullopt;
     
     span.segmentIndex = segmentIndex;
-    return WTFMove(span);
+    return span;
 }
 
 void ArgumentCoder<Region>::encode(Encoder& encoder, const Region& region)
@@ -962,7 +962,7 @@ std::optional<MimeClassInfo> ArgumentCoder<MimeClassInfo>::decode(Decoder& decod
     if (!decoder.decode(mimeClassInfo.extensions))
         return std::nullopt;
 
-    return WTFMove(mimeClassInfo);
+    return mimeClassInfo;
 }
 
 
@@ -1002,7 +1002,7 @@ std::optional<WebCore::PluginInfo> ArgumentCoder<PluginInfo>::decode(Decoder& de
         return std::nullopt;
 #endif
 
-    return WTFMove(pluginInfo);
+    return pluginInfo;
 }
 
 void ArgumentCoder<AuthenticationChallenge>::encode(Encoder& encoder, const AuthenticationChallenge& challenge)
@@ -1400,7 +1400,7 @@ std::optional<SelectionRect> ArgumentCoder<SelectionRect>::decode(Decoder& decod
         return std::nullopt;
     selectionRect.setIsHorizontal(boolValue);
 
-    return WTFMove(selectionRect);
+    return selectionRect;
 }
 
 #endif
@@ -1600,7 +1600,7 @@ std::optional<CompositionUnderline> ArgumentCoder<CompositionUnderline>::decode(
     if (!decoder.decode(underline.color))
         return std::nullopt;
 
-    return WTFMove(underline);
+    return underline;
 }
 
 void ArgumentCoder<DatabaseDetails>::encode(Encoder& encoder, const DatabaseDetails& details)
@@ -2412,7 +2412,7 @@ std::optional<BlobPart> ArgumentCoder<BlobPart>::decode(Decoder& decoder)
         return std::nullopt;
     }
 
-    return WTFMove(blobPart);
+    return blobPart;
 }
 
 void ArgumentCoder<TextIndicatorData>::encode(Encoder& encoder, const TextIndicatorData& textIndicatorData)
@@ -2469,7 +2469,7 @@ std::optional<TextIndicatorData> ArgumentCoder<TextIndicatorData>::decode(Decode
     if (!decodeOptionalImage(decoder, textIndicatorData.contentImageWithoutSelection))
         return std::nullopt;
 
-    return WTFMove(textIndicatorData);
+    return textIndicatorData;
 }
 
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
@@ -2685,7 +2685,7 @@ std::optional<ResourceLoadStatistics> ArgumentCoder<ResourceLoadStatistics>::dec
     if (!decoder.decode(statistics.dataRecordsRemoved))
         return std::nullopt;
 
-    return WTFMove(statistics);
+    return statistics;
 }
 
 #if ENABLE(MEDIA_STREAM)
@@ -2828,7 +2828,7 @@ auto ArgumentCoder<ScrollOffsetRange<float>>::decode(Decoder& decoder) -> std::o
 
     range.start = start;
     range.end = end;
-    return WTFMove(range);
+    return range;
 }
 
 #endif

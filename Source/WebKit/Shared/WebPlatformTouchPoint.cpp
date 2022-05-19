@@ -83,7 +83,7 @@ std::optional<WebPlatformTouchPoint> WebPlatformTouchPoint::decode(IPC::Decoder&
     if (!decoder.decode(result.m_force))
         return std::nullopt;
 
-    return WTFMove(result);
+    return result;
 }
 
 } // namespace WebKit

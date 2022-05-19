@@ -85,32 +85,6 @@ static void CairoGetGlyphWidthAndExtents(cairo_scaled_font_t* scaledFont, hb_cod
     }
 }
 
-static hb_bool_t harfBuzzGetGlyph(hb_font_t*, void* fontData, hb_codepoint_t unicode, hb_codepoint_t, hb_codepoint_t* glyph, void*)
-{
-    auto& hbFontData = *static_cast<HarfBuzzFontData*>(fontData);
-    auto* scaledFont = hbFontData.cairoScaledFont.get();
-    ASSERT(scaledFont);
-
-    auto result = hbFontData.glyphCacheForFaceCacheEntry.add(unicode, 0);
-    if (result.isNewEntry) {
-        cairo_glyph_t* glyphs = 0;
-        int numGlyphs = 0;
-        char buffer[U8_MAX_LENGTH];
-        size_t bufferLength = 0;
-        if (FontCascade::treatAsSpace(unicode) && unicode != '\t')
-            unicode = ' ';
-        else if (FontCascade::treatAsZeroWidthSpaceInComplexScript(unicode))
-            unicode = zeroWidthSpace;
-        U8_APPEND_UNSAFE(buffer, bufferLength, unicode);
-        if (cairo_scaled_font_text_to_glyphs(scaledFont, 0, 0, buffer, bufferLength, &glyphs, &numGlyphs, nullptr, nullptr, nullptr) != CAIRO_STATUS_SUCCESS || !numGlyphs)
-            return false;
-        result.iterator->value = glyphs[0].index;
-        cairo_glyph_free(glyphs);
-    }
-    *glyph = result.iterator->value;
-    return !!*glyph;
-}
-
 static hb_position_t harfBuzzGetGlyphHorizontalAdvance(hb_font_t*, void* fontData, hb_codepoint_t glyph, void*)
 {
     auto& hbFontData = *static_cast<HarfBuzzFontData*>(fontData);
@@ -147,7 +121,32 @@ static hb_font_funcs_t* harfBuzzCairoTextGetFontFuncs()
     // Harfbuzz will use the fallback implementation if they aren't set.
     if (!harfBuzzCairoFontFuncs) {
         harfBuzzCairoFontFuncs = hb_font_funcs_create();
-        hb_font_funcs_set_glyph_func(harfBuzzCairoFontFuncs, harfBuzzGetGlyph, 0, 0);
+#if HB_VERSION_ATLEAST(1, 2, 3)
+        hb_font_funcs_set_nominal_glyph_func(harfBuzzCairoFontFuncs, [](hb_font_t*, void* context, hb_codepoint_t unicode, hb_codepoint_t* glyph, void*) -> hb_bool_t {
+            auto& font = *static_cast<Font*>(context);
+            *glyph = font.glyphForCharacter(unicode);
+            return !!*glyph;
+        }, nullptr, nullptr);
+
+        hb_font_funcs_set_variation_glyph_func(harfBuzzCairoFontFuncs, [](hb_font_t*, void* context, hb_codepoint_t unicode, hb_codepoint_t variation, hb_codepoint_t* glyph, void*) -> hb_bool_t {
+            auto& font = *static_cast<Font*>(context);
+            auto* scaledFont = font.platformData().scaledFont();
+            ASSERT(scaledFont);
+
+            CairoFtFaceLocker cairoFtFaceLocker(scaledFont);
+            if (FT_Face ftFace = cairoFtFaceLocker.ftFace()) {
+                *glyph = FT_Face_GetCharVariantIndex(ftFace, unicode, variation);
+                return !!*glyph;
+            }
+            return false;
+            }, nullptr, nullptr);
+#else
+        hb_font_funcs_set_glyph_func(harfBuzzCairoFontFuncs, [](hb_font_t*, void* context, hb_codepoint_t unicode, hb_codepoint_t, hb_codepoint_t* glyph, void*) -> hb_bool_t {
+            auto& font = *static_cast<Font*>(context);
+            *glyph = font.glyphForCharacter(unicode);
+            return !!*glyph;
+        }, nullptr, nullptr);
+#endif
         hb_font_funcs_set_glyph_h_advance_func(harfBuzzCairoFontFuncs, harfBuzzGetGlyphHorizontalAdvance, 0, 0);
         hb_font_funcs_set_glyph_h_origin_func(harfBuzzCairoFontFuncs, harfBuzzGetGlyphHorizontalOrigin, 0, 0);
         hb_font_funcs_set_glyph_extents_func(harfBuzzCairoFontFuncs, harfBuzzGetGlyphExtents, 0, 0);

@@ -80,7 +80,7 @@ std::optional<IDBValue> IDBValue::decode(Decoder& decoder)
     if (!decoder.decode(result.m_blobFilePaths))
         return std::nullopt;
 
-    return WTFMove(result);
+    return result;
 }
 
 } // namespace WebCore

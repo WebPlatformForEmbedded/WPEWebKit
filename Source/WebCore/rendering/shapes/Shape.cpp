@@ -220,7 +220,7 @@ std::unique_ptr<Shape> Shape::createRasterShape(Image* image, float threshold, c
     auto rasterShape = std::make_unique<RasterShape>(WTFMove(intervals), marginRect.size());
     rasterShape->m_writingMode = writingMode;
     rasterShape->m_margin = margin;
-    return WTFMove(rasterShape);
+    return rasterShape;
 }
 
 std::unique_ptr<Shape> Shape::createBoxShape(const RoundedRect& roundedRect, WritingMode writingMode, float margin)
@@ -233,7 +233,7 @@ std::unique_ptr<Shape> Shape::createBoxShape(const RoundedRect& roundedRect, Wri
     shape->m_writingMode = writingMode;
     shape->m_margin = margin;
 
-    return WTFMove(shape);
+    return shape;
 }
 
 } // namespace WebCore

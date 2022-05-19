@@ -1104,13 +1104,13 @@ ExceptionOr<Ref<DocumentFragment>> createFragmentForInnerOuterHTML(Element& cont
 
     if (document->isHTMLDocument()) {
         fragment->parseHTML(markup, &contextElement, parserContentPolicy);
-        return WTFMove(fragment);
+        return fragment;
     }
 
     bool wasValid = fragment->parseXML(markup, &contextElement, parserContentPolicy);
     if (!wasValid)
         return Exception { SyntaxError };
-    return WTFMove(fragment);
+    return fragment;
 }
 
 RefPtr<DocumentFragment> createFragmentForTransformToFragment(Document& outputDoc, const String& sourceString, const String& sourceMIMEType)
@@ -1189,7 +1189,7 @@ ExceptionOr<Ref<DocumentFragment>> createContextualFragment(Element& element, co
     for (auto& element : toRemove)
         removeElementFromFragmentPreservingChildren(fragment, element);
 
-    return WTFMove(fragment);
+    return fragment;
 }
 
 static inline bool hasOneChild(ContainerNode& node)

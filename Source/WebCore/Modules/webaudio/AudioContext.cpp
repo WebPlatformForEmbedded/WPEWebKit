@@ -445,7 +445,7 @@ ExceptionOr<Ref<MediaElementAudioSourceNode>> AudioContext::createMediaElementSo
     mediaElement.setAudioSourceNode(node.ptr());
 
     refNode(node.get()); // context keeps reference until node is disconnected
-    return WTFMove(node);
+    return node;
 }
 
 #endif
@@ -476,7 +476,7 @@ ExceptionOr<Ref<MediaStreamAudioSourceNode>> AudioContext::createMediaStreamSour
     node->setFormat(2, sampleRate());
 
     refNode(node); // context keeps reference until node is disconnected
-    return WTFMove(node);
+    return node;
 }
 
 Ref<MediaStreamAudioDestinationNode> AudioContext::createMediaStreamDestination()
@@ -543,7 +543,7 @@ ExceptionOr<Ref<ScriptProcessorNode>> AudioContext::createScriptProcessor(size_t
     auto node = ScriptProcessorNode::create(*this, m_destinationNode->sampleRate(), bufferSize, numberOfInputChannels, numberOfOutputChannels);
 
     refNode(node); // context keeps reference until we stop making javascript rendering callbacks
-    return WTFMove(node);
+    return node;
 }
 
 Ref<BiquadFilterNode> AudioContext::createBiquadFilter()

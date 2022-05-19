@@ -76,7 +76,7 @@ std::optional<WebCompiledContentRuleListData> WebCompiledContentRuleListData::de
     if (!decoder.decode(compiledContentRuleListData.topURLFiltersBytecodeSize))
         return std::nullopt;
 
-    return WTFMove(compiledContentRuleListData);
+    return compiledContentRuleListData;
 }
 
 } // namespace WebKit

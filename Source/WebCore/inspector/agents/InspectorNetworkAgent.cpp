@@ -313,7 +313,7 @@ RefPtr<Inspector::Protocol::Network::Response> InspectorNetworkAgent::buildObjec
     if (resourceLoader)
         responseObject->setTiming(buildObjectForTiming(response.deprecatedNetworkLoadMetrics(), *resourceLoader));
 
-    return WTFMove(responseObject);
+    return responseObject;
 }
 
 Ref<Inspector::Protocol::Network::CachedResource> InspectorNetworkAgent::buildObjectForCachedResource(CachedResource* cachedResource)
@@ -651,7 +651,7 @@ RefPtr<Inspector::Protocol::Network::Initiator> InspectorNetworkAgent::buildInit
             .setType(Inspector::Protocol::Network::Initiator::Type::Script)
             .release();
         initiatorObject->setStackTrace(stackTrace->buildInspectorArray());
-        return WTFMove(initiatorObject);
+        return initiatorObject;
     }
 
     if (document && document->scriptableDocumentParser()) {
@@ -660,7 +660,7 @@ RefPtr<Inspector::Protocol::Network::Initiator> InspectorNetworkAgent::buildInit
             .release();
         initiatorObject->setUrl(document->url().string());
         initiatorObject->setLineNumber(document->scriptableDocumentParser()->textPosition().m_line.oneBasedInt());
-        return WTFMove(initiatorObject);
+        return initiatorObject;
     }
 
     if (m_isRecalculatingStyle && m_styleRecalculationInitiator)

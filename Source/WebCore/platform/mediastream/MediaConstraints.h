@@ -710,7 +710,7 @@ public:
         if (!decoder.decode(map.m_groupId))
             return std::nullopt;
 
-        return WTFMove(map);
+        return map;
     }
 
 private:

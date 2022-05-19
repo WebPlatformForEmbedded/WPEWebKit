@@ -51,6 +51,11 @@ public:
         s_count--;
     }
 
+    ScriptDisallowedScope& operator=(const ScriptDisallowedScope&)
+    {
+        return *this;
+    }
+
     static bool isEventAllowedInMainThread()
     {
         return !isMainThread() || !s_count;

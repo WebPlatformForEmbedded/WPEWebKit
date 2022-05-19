@@ -79,7 +79,7 @@ static std::optional<Vector<uint8_t>> calculateSignature(int algorithm, const Ve
         return std::nullopt;
 
     signature.resize(digestLength);
-    return WTFMove(signature);
+    return signature;
 }
 
 ExceptionOr<Vector<uint8_t>> CryptoAlgorithmHMAC::platformSign(const CryptoKeyHMAC& key, const Vector<uint8_t>& data)

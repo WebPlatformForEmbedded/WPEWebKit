@@ -70,7 +70,7 @@ RefPtr<HTTPRequest> HTTPRequest::parseHTTPRequestFromBuffer(const char* data, si
 
     // We should have processed the entire input.
     ASSERT(!remainingLength);
-    return WTFMove(request);
+    return request;
 }
 
 size_t HTTPRequest::parseRequestLine(const char* data, size_t length, String& failureReason)

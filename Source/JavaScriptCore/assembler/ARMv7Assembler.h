@@ -534,6 +534,9 @@ public:
             data.realTypes.m_linkType = LinkInvalid;
             data.realTypes.m_condition = condition;
         }
+
+        LinkRecord(const LinkRecord& other) = default;
+
         void operator=(const LinkRecord& other)
         {
             data.copyTypes.content[0] = other.data.copyTypes.content[0];

@@ -145,7 +145,7 @@ std::optional<IDBDatabaseIdentifier> IDBDatabaseIdentifier::decode(Decoder& deco
     identifier.m_databaseName = WTFMove(*databaseName); // FIXME: When decoding from IPC, databaseName can be null, and the non-empty constructor asserts that this is not the case.
     identifier.m_openingOrigin = WTFMove(*openingOrigin);
     identifier.m_mainFrameOrigin = WTFMove(*mainFrameOrigin);
-    return WTFMove(identifier);
+    return identifier;
 }
 
 } // namespace WebCore

@@ -476,14 +476,14 @@ ExceptionOr<Ref<KeyframeEffectReadOnly>> KeyframeEffectReadOnly::create(ExecStat
     if (processKeyframesResult.hasException())
         return processKeyframesResult.releaseException();
 
-    return WTFMove(keyframeEffect);
+    return keyframeEffect;
 }
 
 ExceptionOr<Ref<KeyframeEffectReadOnly>> KeyframeEffectReadOnly::create(JSC::ExecState&, Ref<KeyframeEffectReadOnly>&& source)
 {
     auto keyframeEffect = adoptRef(*new KeyframeEffectReadOnly(KeyframeEffectReadOnlyClass, AnimationEffectTimingReadOnly::create(), nullptr));
     keyframeEffect->copyPropertiesFromSource(WTFMove(source));
-    return WTFMove(keyframeEffect);
+    return keyframeEffect;
 }
 
 Ref<KeyframeEffectReadOnly> KeyframeEffectReadOnly::create(const Element& target)
@@ -1353,7 +1353,7 @@ Ref<const Animation> KeyframeEffectReadOnly::backingAnimationForCompositedRender
         break;
     }
 
-    return WTFMove(animation);
+    return animation;
 }
 
 RenderElement* KeyframeEffectReadOnly::renderer() const

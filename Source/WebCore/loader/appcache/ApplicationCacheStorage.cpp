@@ -1206,7 +1206,7 @@ RefPtr<ApplicationCache> ApplicationCacheStorage::loadCache(unsigned storageID)
     
     cache->setStorageID(storageID);
 
-    return WTFMove(cache);
+    return cache;
 }    
     
 void ApplicationCacheStorage::remove(ApplicationCache* cache)
@@ -1330,7 +1330,7 @@ std::optional<Vector<URL>> ApplicationCacheStorage::manifestURLs()
     while (selectURLs.step() == SQLITE_ROW)
         urls.append(URL(ParsedURLString, selectURLs.getColumnText(0)));
 
-    return WTFMove(urls);
+    return urls;
 }
 
 bool ApplicationCacheStorage::deleteCacheGroupRecord(const String& manifestURL)

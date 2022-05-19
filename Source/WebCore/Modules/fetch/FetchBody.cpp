@@ -77,7 +77,7 @@ std::optional<FetchBody> FetchBody::fromFormData(FormData& formData)
     if (auto buffer = formData.asSharedBuffer()) {
         FetchBody body;
         body.m_consumer.setData(buffer.releaseNonNull());
-        return WTFMove(body);
+        return body;
     }
 
     auto url = formData.asBlobURL();
@@ -241,9 +241,9 @@ RefPtr<FormData> FetchBody::bodyAsFormData(ScriptExecutionContext& context) cons
     if (isURLSearchParams())
         return FormData::create(UTF8Encoding().encode(urlSearchParamsBody().toString(), UnencodableHandling::Entities));
     if (isBlob()) {
-        RefPtr<FormData> body = FormData::create();
+        auto body = FormData::create();
         body->appendBlob(blobBody().url());
-        return body;
+        return body.copyRef();
     }
     if (isArrayBuffer())
         return FormData::create(arrayBufferBody().data(), arrayBufferBody().byteLength());
@@ -251,9 +251,9 @@ RefPtr<FormData> FetchBody::bodyAsFormData(ScriptExecutionContext& context) cons
         return FormData::create(arrayBufferViewBody().baseAddress(), arrayBufferViewBody().byteLength());
     if (isFormData()) {
         ASSERT(!context.isWorkerGlobalScope());
-        RefPtr<FormData> body = const_cast<FormData*>(&formDataBody());
+        auto body = makeRef(const_cast<FormData&>(formDataBody()));
         body->generateFiles(&downcast<Document>(context));
-        return body;
+        return body.copyRef();
     }
     if (auto* data = m_consumer.data())
         return FormData::create(data->data(), data->size());
@@ -274,7 +274,7 @@ FetchBody::TakenData FetchBody::take()
     if (isBlob()) {
         auto body = FormData::create();
         body->appendBlob(blobBody().url());
-        return WTFMove(body);
+        return body.copyRef();
     }
 
     if (isFormData())

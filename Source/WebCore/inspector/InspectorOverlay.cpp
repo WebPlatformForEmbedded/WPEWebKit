@@ -452,7 +452,7 @@ static RefPtr<JSON::ArrayOf<Inspector::Protocol::OverlayTypes::FragmentHighlight
     buildRendererHighlight(renderer, config, highlight, InspectorOverlay::CoordinateSystem::View);
     arrayOfFragments->addItem(buildObjectForHighlight(highlight));
 
-    return WTFMove(arrayOfFragments);
+    return arrayOfFragments;
 }
 
 static FloatPoint localPointToRoot(RenderObject* renderer, const FrameView* mainView, const FrameView* view, const FloatPoint& point)
@@ -554,7 +554,7 @@ static RefPtr<Inspector::Protocol::OverlayTypes::ShapeOutsideData> buildObjectFo
         }
     }
 
-    return WTFMove(shapeObject);
+    return shapeObject;
 }
 
 static RefPtr<Inspector::Protocol::OverlayTypes::ElementData> buildObjectForElementData(Node* node, HighlightType)
@@ -628,7 +628,7 @@ static RefPtr<Inspector::Protocol::OverlayTypes::ElementData> buildObjectForElem
             elementData->setRole(axObject->computedRoleString());
     }
 
-    return WTFMove(elementData);
+    return elementData;
 }
 
 RefPtr<Inspector::Protocol::OverlayTypes::NodeHighlightData> InspectorOverlay::buildHighlightObjectForNode(Node* node, HighlightType type) const
@@ -657,7 +657,7 @@ RefPtr<Inspector::Protocol::OverlayTypes::NodeHighlightData> InspectorOverlay::b
             nodeHighlightObject->setElementData(WTFMove(elementData));
     }
 
-    return WTFMove(nodeHighlightObject);
+    return nodeHighlightObject;
 }
 
 Ref<JSON::ArrayOf<Inspector::Protocol::OverlayTypes::NodeHighlightData>> InspectorOverlay::buildObjectForHighlightedNodes() const

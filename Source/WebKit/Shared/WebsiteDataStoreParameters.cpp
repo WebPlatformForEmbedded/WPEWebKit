@@ -64,7 +64,7 @@ std::optional<WebsiteDataStoreParameters> WebsiteDataStoreParameters::decode(IPC
     decoder >> pendingCookies;
     if (!pendingCookies)
         return std::nullopt;
-    return {{ WTFMove(*uiProcessCookieStorageIdentifier), WTFMove(*cookieStoragePathExtensionHandle), WTFMove(*pendingCookies), WTFMove(*networkSessionParameters)}};
+    return {{ *uiProcessCookieStorageIdentifier, WTFMove(*cookieStoragePathExtensionHandle), WTFMove(*pendingCookies), WTFMove(*networkSessionParameters)}};
 }
 
 WebsiteDataStoreParameters WebsiteDataStoreParameters::privateSessionParameters(PAL::SessionID sessionID)

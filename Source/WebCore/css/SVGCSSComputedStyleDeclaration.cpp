@@ -57,7 +57,7 @@ static RefPtr<CSSValue> strokeDashArrayToCSSValueList(const Vector<SVGLengthValu
     for (auto& length : dashes)
         list->append(SVGLengthValue::toCSSPrimitiveValue(length));
 
-    return WTFMove(list);
+    return list;
 }
 
 RefPtr<CSSValue> ComputedStyleExtractor::adjustSVGPaintForCurrentColor(SVGPaintType paintType, const String& url, const Color& color, const Color& currentColor) const

@@ -51,7 +51,7 @@ struct MediaStreamRequest {
     {
         MediaStreamRequest request;
         if (decoder.decodeEnum(request.type) && decoder.decode(request.audioConstraints) && decoder.decode(request.videoConstraints))
-            return WTFMove(request);
+            return request;
 
         return std::nullopt;
     }

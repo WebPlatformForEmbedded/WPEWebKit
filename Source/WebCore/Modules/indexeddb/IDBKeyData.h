@@ -266,7 +266,7 @@ std::optional<IDBKeyData> IDBKeyData::decode(Decoder& decoder)
         return std::nullopt;
 
     if (keyData.m_isNull)
-        return WTFMove(keyData);
+        return keyData;
 
     if (!decoder.decodeEnum(keyData.m_type))
         return std::nullopt;
@@ -299,7 +299,7 @@ std::optional<IDBKeyData> IDBKeyData::decode(Decoder& decoder)
         break;
     }
 
-    return WTFMove(keyData);
+    return keyData;
 }
 
 using IDBKeyDataSet = StdSet<IDBKeyData>;

@@ -149,7 +149,7 @@ std::optional<FormDataElement> FormDataElement::decode(Decoder& decoder)
         if (!decoder.decode(result.m_data))
             return std::nullopt;
 
-        return WTFMove(result);
+        return result;
 
     case Type::EncodedFile:
         if (!decoder.decode(result.m_filename))
@@ -170,7 +170,7 @@ std::optional<FormDataElement> FormDataElement::decode(Decoder& decoder)
         if (!decoder.decode(result.m_expectedFileModificationTime))
             return std::nullopt;
 
-        return WTFMove(result);
+        return result;
 
     case Type::EncodedBlob: {
         String blobURLString;
@@ -179,7 +179,7 @@ std::optional<FormDataElement> FormDataElement::decode(Decoder& decoder)
 
         result.m_url = URL(URL(), blobURLString);
 
-        return WTFMove(result);
+        return result;
     }
     }
 

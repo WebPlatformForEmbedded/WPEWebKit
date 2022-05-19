@@ -347,7 +347,7 @@ std::optional<WebPageCreationParameters> WebPageCreationParameters::decode(IPC::
     if (!decoder.decode(parameters.localStorageQuota))
         return std::nullopt;
 
-    return WTFMove(parameters);
+    return parameters;
 }
 
 } // namespace WebKit

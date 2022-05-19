@@ -180,8 +180,7 @@ static size_t calculateGraphicsMemoryUsage()
             {
                 if(pos==6)
                 {
-                    ssize_t length = strlen(token);
-                    strncpy(appUsedPercentage,token,length);
+                    strncpy(appUsedPercentage,token,(ssize_t)(maxAppPerLength-1));
                 }
 
                 if((pos==8) && ((!strncmp(token,"APP",3)) || (!strncmp(token,"GFX",3))))

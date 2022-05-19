@@ -2552,7 +2552,7 @@ RefPtr<Range> TextIterator::rangeFromLocationAndLength(ContainerNode* scope, int
     if (!rangeLocation && !rangeLength && it.atEnd()) {
         resultRange->setStart(textRunRange->startContainer(), 0);
         resultRange->setEnd(textRunRange->startContainer(), 0);
-        return WTFMove(resultRange);
+        return resultRange;
     }
 
     for (; !it.atEnd(); it.advance()) {
@@ -2615,7 +2615,7 @@ RefPtr<Range> TextIterator::rangeFromLocationAndLength(ContainerNode* scope, int
     if (rangeLength && rangeEnd > docTextPosition) // rangeEnd is out of bounds
         resultRange->setEnd(textRunRange->endContainer(), textRunRange->endOffset());
     
-    return WTFMove(resultRange);
+    return resultRange;
 }
 
 bool TextIterator::getLocationAndLengthFromRange(Node* scope, const Range* range, size_t& location, size_t& length)

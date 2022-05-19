@@ -228,7 +228,7 @@ template<class Decoder> std::optional<IDBResultData> IDBResultData::decode(Decod
         result.m_getAllResult = WTFMove(object);
     }
 
-    return WTFMove(result);
+    return result;
 }
 
 } // namespace WebCore

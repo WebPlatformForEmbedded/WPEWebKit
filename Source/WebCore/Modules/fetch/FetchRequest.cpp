@@ -254,7 +254,7 @@ ExceptionOr<Ref<FetchRequest>> FetchRequest::create(ScriptExecutionContext& cont
             return result.releaseException();
     }
 
-    return WTFMove(request);
+    return request;
 }
 
 String FetchRequest::referrer() const
@@ -293,7 +293,7 @@ ExceptionOr<Ref<FetchRequest>> FetchRequest::clone(ScriptExecutionContext& conte
 
     auto clone = adoptRef(*new FetchRequest(context, std::nullopt, FetchHeaders::create(m_headers.get()), ResourceRequest { m_request }, FetchOptions { m_options}, String { m_referrer }));
     clone->cloneBody(*this);
-    return WTFMove(clone);
+    return clone;
 }
 
 const char* FetchRequest::activeDOMObjectName() const

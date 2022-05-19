@@ -319,7 +319,7 @@ String tryMakeStringFromAdapters(StringTypeAdapter adapter, StringTypeAdapters .
 
         makeStringAccumulator(buffer, adapter, adapters...);
 
-        return WTFMove(resultImpl);
+        return resultImpl;
     }
 
     UChar* buffer;
@@ -329,7 +329,7 @@ String tryMakeStringFromAdapters(StringTypeAdapter adapter, StringTypeAdapters .
 
     makeStringAccumulator(buffer, adapter, adapters...);
 
-    return WTFMove(resultImpl);
+    return resultImpl;
 }
 
 template<typename... StringTypes>

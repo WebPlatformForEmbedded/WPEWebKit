@@ -7005,7 +7005,7 @@ RefPtr<PlatformMediaResourceLoader> HTMLMediaElement::mediaPlayerCreateResourceL
 
     m_lastMediaResourceLoaderForTesting = makeWeakPtr(mediaResourceLoader.get());
 
-    return WTFMove(mediaResourceLoader);
+    return mediaResourceLoader;
 }
 
 const MediaResourceLoader* HTMLMediaElement::lastMediaResourceLoaderForTesting() const
