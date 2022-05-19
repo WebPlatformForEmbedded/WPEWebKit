@@ -674,7 +674,7 @@ void CoordinatedGraphicsLayer::syncFilters()
 
 void CoordinatedGraphicsLayer::syncImageBacking()
 {
-    if (m_coordinator->nonCompositedWebGLEnabled())
+    if (m_coordinator && m_coordinator->nonCompositedWebGLEnabled())
         return;
 
     if (!m_shouldSyncImageBacking)
@@ -1046,7 +1046,7 @@ void CoordinatedGraphicsLayer::updateContentBuffersIncludingSubLayers()
 
 void CoordinatedGraphicsLayer::updateContentBuffers()
 {
-    if (m_coordinator->nonCompositedWebGLEnabled())
+    if (m_coordinator && m_coordinator->nonCompositedWebGLEnabled())
         return;
 
     if (!shouldHaveBackingStore()) {
