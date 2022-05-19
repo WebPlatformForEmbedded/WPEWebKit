@@ -47,8 +47,10 @@ bool RemoteInspectorHTTPServer::start(GRefPtr<GSocketAddress>&& socketAddress, u
 {
     m_server = adoptGRef(soup_server_new("server-header", "WebKitInspectorHTTPServer ", nullptr));
 
+    guint16 port = g_inet_socket_address_get_port(G_INET_SOCKET_ADDRESS(socketAddress.get()));
+
     GUniqueOutPtr<GError> error;
-    if (!soup_server_listen(m_server.get(), socketAddress.get(), static_cast<SoupServerListenOptions>(0), &error.outPtr())) {
+    if (!soup_server_listen_all(m_server.get(), port, static_cast<SoupServerListenOptions>(0), &error.outPtr())) {
         GUniquePtr<char> address(g_socket_connectable_to_string(G_SOCKET_CONNECTABLE(socketAddress.get())));
         g_warning("Failed to start remote inspector HTTP server on %s: %s", address.get(), error->message);
         return false;
