@@ -1224,27 +1224,72 @@ void AppendPipeline::disconnectDemuxerSrcPadFromAppsinkFromAnyThread(GstPad* dem
     GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS(GST_BIN(m_pipeline.get()), GST_DEBUG_GRAPH_SHOW_ALL, "pad-removed-before");
 
     // Reconnect the other pad if it's the only remaining after removing this one and wasn't connected yet (has a black hole probe).
-    if (m_demux->numsrcpads == 1) {
-        auto remainingPad = GST_PAD(m_demux->srcpads->data);
+    auto getPadType = [](GstPad *pad) -> const char* {
+        auto padCaps = adoptGRef(gst_pad_get_current_caps(pad));
+        return padCaps ? capsMediaType(padCaps.get()) : nullptr;
+    };
 
+    const char* demuxerSrcPadType = getPadType(demuxerSrcPad);
+
+    auto oldPeerPad = adoptGRef(gst_element_get_static_pad(m_appsink.get(), "sink"));
+    while (gst_pad_is_linked(oldPeerPad.get())) {
+        // Get sink pad of the parser before appsink.
+        // All the expected elements between the demuxer and appsink are supposed to have pads named "sink".
+        oldPeerPad = adoptGRef(gst_pad_get_peer(oldPeerPad.get()));
+        auto element = adoptGRef(gst_pad_get_parent_element(oldPeerPad.get()));
+        oldPeerPad = adoptGRef(gst_element_get_static_pad(element.get(), "sink"));
+        ASSERT(oldPeerPad);
+    }
+
+    const char* oldPeerPadType = getPadType(oldPeerPad.get());
+
+    GstPad* remainingPad = nullptr;
+    // Check if a pad compatible with the appsink is being removed and, if so, look for a remaining compatible pad.
+    if (oldPeerPadType && !g_strcmp0(oldPeerPadType, demuxerSrcPadType)) {
+        // If there are multiple pads present check if any pad matching pipeline stream type exists. If only one pad exists, connect it as main pad.
+        if (GstIterator* iter = gst_element_iterate_src_pads(m_demux.get())) {
+            bool done = false;
+            while (!done) {
+                GValue item = G_VALUE_INIT;
+                switch (gst_iterator_next(iter, &item)) {
+                case GST_ITERATOR_OK:
+                    {
+                        GstPad* pad = static_cast<GstPad*>(g_value_get_object(&item));
+                        const char* padType = getPadType(pad);
+                        if (padType && !g_strcmp0(padType, oldPeerPadType)) {
+                            if (remainingPad) {
+                                remainingPad = nullptr;
+                                done = true;
+                            } else {
+                                remainingPad = pad;
+                            }
+                        }
+                    }
+                break;
+                case GST_ITERATOR_RESYNC:
+                    remainingPad = nullptr;
+                    gst_iterator_resync (iter);
+                    break;
+                case GST_ITERATOR_ERROR:
+                    FALLTHROUGH;
+                case GST_ITERATOR_DONE:
+                    done = true;
+                    break;
+                }
+            }
+            gst_iterator_free (iter);
+        }
+    }
+    if (remainingPad) {
         auto probeId = GPOINTER_TO_ULONG(g_object_get_data(G_OBJECT(remainingPad), "blackHoleProbeId"));
         if (remainingPad && probeId) {
-            auto oldPeerPad = adoptGRef(gst_element_get_static_pad(m_appsink.get(), "sink"));
-            while (gst_pad_is_linked(oldPeerPad.get())) {
-                // Get sink pad of the parser before appsink.
-                // All the expected elements between the demuxer and appsink are supposed to have pads named "sink".
-                oldPeerPad = adoptGRef(gst_pad_get_peer(oldPeerPad.get()));
-                auto element = adoptGRef(gst_pad_get_parent_element(oldPeerPad.get()));
-                oldPeerPad = adoptGRef(gst_element_get_static_pad(element.get(), "sink"));
-                ASSERT(oldPeerPad);
-            }
 
             gst_pad_remove_probe(remainingPad, probeId);
 
             // FIXME: Unlike in upstream (2020-09-10), demuxerSrcPad and oldPeerPad always have null caps at this point, so it doesn't
             // make much sense to try to check if they're incompatible (see original patch).
 
-            GST_DEBUG("The remaining pad has a blackHoleProbe, reconnecting as main pad. oldPad: %" GST_PTR_FORMAT ", newPad: %" GST_PTR_FORMAT ", peerPad: %" GST_PTR_FORMAT, demuxerSrcPad, remainingPad, oldPeerPad.get());
+            GST_DEBUG("The remaining compatible pad has a blackHoleProbe, reconnecting as main pad. oldPad: %" GST_PTR_FORMAT ", newPad: %" GST_PTR_FORMAT ", peerPad: %" GST_PTR_FORMAT, demuxerSrcPad, remainingPad, oldPeerPad.get());
 
             gst_pad_link(remainingPad, oldPeerPad.get());
             if (m_parser)
