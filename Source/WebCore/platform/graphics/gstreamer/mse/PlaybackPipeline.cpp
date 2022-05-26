@@ -166,6 +166,7 @@ void PlaybackPipeline::removeSourceBuffer(RefPtr<SourceBufferPrivateGStreamer> s
 void PlaybackPipeline::attachTrack(RefPtr<SourceBufferPrivateGStreamer> sourceBufferPrivate, RefPtr<TrackPrivateBase> trackPrivate, GstCaps* caps)
 {
     WebKitMediaSrc* webKitMediaSrc = m_webKitMediaSrc.get();
+    int signal = -1;
 
     GST_OBJECT_LOCK(webKitMediaSrc);
     Stream* stream = getStreamBySourceBufferPrivate(webKitMediaSrc, sourceBufferPrivate.get());
@@ -173,30 +174,11 @@ void PlaybackPipeline::attachTrack(RefPtr<SourceBufferPrivateGStreamer> sourceBu
     GST_OBJECT_UNLOCK(webKitMediaSrc);
 
     ASSERT(stream);
+    ASSERT(stream->parent->priv->mediaPlayerPrivate);
 
     GST_OBJECT_LOCK(webKitMediaSrc);
     unsigned padId = stream->parent->priv->numberOfPads;
     stream->parent->priv->numberOfPads++;
-    GST_OBJECT_UNLOCK(webKitMediaSrc);
-
-    const char* mediaType = capsMediaType(caps);
-    GST_DEBUG_OBJECT(webKitMediaSrc, "Configured track %s: appsrc=%s, padId=%u, mediaType=%s", trackPrivate->id().string().utf8().data(), GST_ELEMENT_NAME(stream->appsrc), padId, mediaType);
-
-    GST_OBJECT_LOCK(webKitMediaSrc);
-    stream->type = Unknown;
-    GST_OBJECT_UNLOCK(webKitMediaSrc);
-
-    GRefPtr<GstPad> sourcePad = adoptGRef(gst_element_get_static_pad(stream->appsrc, "src"));
-    ASSERT(sourcePad);
-
-    // FIXME: Is padId the best way to identify the Stream? What about trackId?
-    g_object_set_data(G_OBJECT(sourcePad.get()), "padId", GINT_TO_POINTER(padId));
-    webKitMediaSrcLinkSourcePad(sourcePad.get(), caps, stream);
-
-    ASSERT(stream->parent->priv->mediaPlayerPrivate);
-    int signal = -1;
-
-    GST_OBJECT_LOCK(webKitMediaSrc);
     if (doCapsHaveType(caps, GST_AUDIO_CAPS_TYPE_PREFIX)) {
         stream->type = Audio;
         stream->parent->priv->numberOfAudioStreams++;
@@ -213,8 +195,20 @@ void PlaybackPipeline::attachTrack(RefPtr<SourceBufferPrivateGStreamer> sourceBu
         signal = SIGNAL_TEXT_CHANGED;
 
         // FIXME: Support text tracks.
+    } else {
+        stream->type = Unknown;
     }
     GST_OBJECT_UNLOCK(webKitMediaSrc);
+
+    const char* mediaType = capsMediaType(caps);
+    GST_DEBUG_OBJECT(webKitMediaSrc, "Configured track %s: appsrc=%s, padId=%u, mediaType=%s", trackPrivate->id().string().utf8().data(), GST_ELEMENT_NAME(stream->appsrc), padId, mediaType);
+
+    GRefPtr<GstPad> sourcePad = adoptGRef(gst_element_get_static_pad(stream->appsrc, "src"));
+    ASSERT(sourcePad);
+
+    // FIXME: Is padId the best way to identify the Stream? What about trackId?
+    g_object_set_data(G_OBJECT(sourcePad.get()), "padId", GINT_TO_POINTER(padId));
+    webKitMediaSrcLinkSourcePad(sourcePad.get(), caps, stream);
 
     if (signal != -1)
         g_signal_emit(G_OBJECT(stream->parent), webKitMediaSrcSignals[signal], 0, nullptr);
