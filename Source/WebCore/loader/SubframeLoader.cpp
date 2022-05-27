@@ -276,8 +276,9 @@ RefPtr<Widget> SubframeLoader::createJavaAppletWidget(const IntSize& size, HTMLA
     if (!widget) {
         RenderEmbeddedObject* renderer = element.renderEmbeddedObject();
 
-        if (!renderer->isPluginUnavailable())
-            renderer->setPluginUnavailabilityReason(RenderEmbeddedObject::PluginMissing);
+        if (!renderer->isPluginUnavailable()) {
+            LOG_ERROR("Missing plug-in; Notification suppressed");
+        }
         return nullptr;
     }
 
