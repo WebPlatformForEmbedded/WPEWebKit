@@ -93,7 +93,7 @@ private:
 
 #if USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
     OptionSet<ThrottlingReason> m_throttlingReasons;
-    bool m_isUsingTimer { false };
+    bool m_isUsingTimer { true };
 #endif
 };
 
