@@ -123,25 +123,24 @@ MediaPlayerPrivateGStreamerMSE::~MediaPlayerPrivateGStreamerMSE()
         m_playbackPipeline->setWebKitMediaSrc(nullptr);
 }
 
-void MediaPlayerPrivateGStreamerMSE::load(const String& urlString)
+void MediaPlayerPrivateGStreamerMSE::load(const String&)
 {
-    if (!urlString.startsWith("mediasource")) {
-        // Properly fail so the global MediaPlayer tries to fallback to the next MediaPlayerPrivate.
-        m_networkState = MediaPlayer::NetworkState::FormatError;
-        m_player->networkStateChanged();
-        return;
-    }
-
-    if (!m_playbackPipeline)
-        m_playbackPipeline = PlaybackPipeline::create();
-
-    MediaPlayerPrivateGStreamer::load(urlString);
+    // This media engine only supports MediaSource URLs.
+    m_networkState = MediaPlayer::NetworkState::FormatError;
+    m_player->networkStateChanged();
 }
 
 void MediaPlayerPrivateGStreamerMSE::load(const String& url, MediaSourcePrivateClient* mediaSource)
 {
+    GST_DEBUG("Loading %s", url.ascii().data());
     m_mediaSource = mediaSource;
-    load(makeString("mediasource", url));
+
+    if (!m_playbackPipeline)
+        m_playbackPipeline = PlaybackPipeline::create();
+
+    MediaSourcePrivateGStreamer::open(*m_mediaSource.get(), *this);
+
+    MediaPlayerPrivateGStreamer::load(makeString("mediasource", url));
 }
 
 void MediaPlayerPrivateGStreamerMSE::pause()
@@ -501,7 +500,6 @@ void MediaPlayerPrivateGStreamerMSE::sourceSetup(GstElement* sourceElement)
 
     m_playbackPipeline->setWebKitMediaSrc(WEBKIT_MEDIA_SRC(m_source.get()));
 
-    MediaSourcePrivateGStreamer::open(*m_mediaSource.get(), *this);
     g_signal_connect_swapped(m_source.get(), "video-changed", G_CALLBACK(videoChangedCallback), this);
     g_signal_connect_swapped(m_source.get(), "audio-changed", G_CALLBACK(audioChangedCallback), this);
     g_signal_connect_swapped(m_source.get(), "text-changed", G_CALLBACK(textChangedCallback), this);

@@ -2185,15 +2185,17 @@ void HTMLMediaElement::mediaLoadingFailedFatally(MediaPlayer::NetworkState error
     // 3 - Queue a task to fire a simple event named error at the media element.
     scheduleEvent(eventNames().errorEvent);
 
-#if ENABLE(MEDIA_SOURCE)
-    detachMediaSource();
-#endif
-
     // 4 - If the media element's readyState attribute has a value equal to HAVE_NOTHING,
     // set the element's networkState attribute to the NETWORK_EMPTY value and queue a task
     // to fire a simple event named emptied at the element.
     // Otherwise, set the element's networkState attribute to the NETWORK_IDLE value.
     if (m_readyState == HAVE_NOTHING) {
+#if ENABLE(MEDIA_SOURCE)
+        // MediaSource should be detached from HTML media element in any case where
+        // the media element is going to transition to NETWORK_EMPTY...
+        detachMediaSource();
+#endif
+
         m_networkState = NETWORK_EMPTY;
         scheduleEvent(eventNames().emptiedEvent);
     } else {
