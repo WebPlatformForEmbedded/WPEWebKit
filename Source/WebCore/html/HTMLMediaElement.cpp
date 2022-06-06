@@ -2883,7 +2883,7 @@ void HTMLMediaElement::progressEventTimerFired()
         updateRenderer();
         if (hasMediaControls())
             mediaControls()->bufferingProgressed();
-    } else if (timedelta > 3_s && !m_sentStalledEvent) {
+    } else if (timedelta > 3_s && !m_sentStalledEvent && m_readyState < HAVE_ENOUGH_DATA) {
         scheduleEvent(eventNames().stalledEvent);
         m_sentStalledEvent = true;
         setShouldDelayLoadEvent(false);
