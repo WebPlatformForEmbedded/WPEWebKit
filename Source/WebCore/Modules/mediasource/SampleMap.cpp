@@ -110,10 +110,10 @@ void SampleMap::addSample(MediaSample& sample)
 {
     MediaTime presentationTime = sample.presentationTime();
 
-    presentationOrder().m_samples.insert(PresentationOrderSampleMap::MapType::value_type(presentationTime, &sample));
+    presentationOrder().m_samples.insert(presentationOrder().m_samples.end(), PresentationOrderSampleMap::MapType::value_type(presentationTime, &sample));
 
     auto decodeKey = DecodeOrderSampleMap::KeyType(sample.decodeTime(), presentationTime);
-    decodeOrder().m_samples.insert(DecodeOrderSampleMap::MapType::value_type(decodeKey, &sample));
+    decodeOrder().m_samples.insert(decodeOrder().m_samples.end(), DecodeOrderSampleMap::MapType::value_type(decodeKey, &sample));
 
     m_totalSize += sample.sizeInBytes();
 }

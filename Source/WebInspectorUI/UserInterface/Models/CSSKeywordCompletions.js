@@ -76,6 +76,8 @@ WI.CSSKeywordCompletions.forFunction = function(functionName)
         suggestions.push("url()");
     else if (functionName === "repeat")
         suggestions = suggestions.concat(["auto", "auto-fill", "auto-fit", "min-content", "max-content"]);
+    else if (functionName === "steps")
+        suggestions.push("jump-none", "jump-start", "jump-end", "jump-both", "start", "end");
     else if (functionName.endsWith("gradient")) {
         suggestions = suggestions.concat(["to", "left", "right", "top", "bottom"]);
         suggestions = suggestions.concat(WI.CSSKeywordCompletions._colors);

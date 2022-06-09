@@ -58,6 +58,8 @@ public:
     // Will block until all pending changes have been written to disk.
     void close();
 
+    void setRestoreHandler(Function<void()>&&);
+
 private:
     LocalStorageDatabase(Ref<WorkQueue>&&, Ref<LocalStorageDatabaseTracker>&&, const WebCore::SecurityOriginData&);
 
@@ -77,6 +79,7 @@ private:
     void updateDatabaseWithChangedItems(const HashMap<String, String>&);
 
     bool databaseIsEmpty();
+    void deleteCorruptDB();
 
     Ref<WorkQueue> m_queue;
     Ref<LocalStorageDatabaseTracker> m_tracker;
@@ -93,6 +96,8 @@ private:
     HashMap<String, String> m_changedItems;
 
     std::unique_ptr<WebCore::SuddenTerminationDisabler> m_disableSuddenTerminationWhileWritingToLocalStorage;
+
+    Function<void()> m_restoreHandler;
 };
 
 

@@ -37,11 +37,21 @@
 #include "NativeWebWheelEvent.h"
 #include "WebPageGroup.h"
 #include "WebProcessPool.h"
+#if ENABLE(GAMEPAD)
+#include <WebCore/WPEGamepadProvider.h>
+#endif
+#include <wtf/NeverDestroyed.h>
 #include <wpe/wpe.h>
 
 using namespace WebKit;
 
 namespace WKWPE {
+
+static Vector<View*>& viewsVector()
+{
+    static NeverDestroyed<Vector<View*>> vector;
+    return vector;
+}
 
 View::View(struct wpe_view_backend* backend, const API::PageConfiguration& baseConfiguration)
     : m_client(std::make_unique<API::ViewClient>())
@@ -147,10 +157,13 @@ View::View(struct wpe_view_backend* backend, const API::PageConfiguration& baseC
     wpe_view_backend_initialize(m_backend);
 
     m_pageProxy->initializeWebPage();
+
+    viewsVector().append(this);
 }
 
 View::~View()
 {
+    viewsVector().removeAll(this);
     m_compositingManagerProxy.finalize();
     wpe_view_backend_destroy(m_backend);
 }
@@ -180,9 +193,13 @@ void View::willStartLoad()
 
 void View::setSize(const WebCore::IntSize& size)
 {
-    m_size = size;
+    if (m_ignoreResize)
+        m_size = WebCore::IntSize(1280, 720);
+    else
+        m_size = size;
+
     if (m_pageProxy->drawingArea())
-        m_pageProxy->drawingArea()->setSize(size);
+        m_pageProxy->drawingArea()->setSize(m_size);
 }
 
 void View::setViewState(OptionSet<WebCore::ActivityState::Flag> flags)
@@ -194,11 +211,57 @@ void View::setViewState(OptionSet<WebCore::ActivityState::Flag> flags)
 
     if (changedFlags)
         m_pageProxy->activityStateDidChange(changedFlags);
+
+    if (viewState().contains(WebCore::ActivityState::IsVisible)) {
+        if (viewsVector().first() != this) {
+            viewsVector().removeAll(this);
+            viewsVector().insert(0, this);
+        }
+    }
+}
+
+void View::setIgnoreResize(bool ignoreResize)
+{
+    m_ignoreResize = ignoreResize;
+    fprintf(stderr, "WPEView will %s view port resize\n", ignoreResize ? "ignore" : "respect");
 }
 
 void View::close()
 {
     m_pageProxy->close();
 }
+
+#if ENABLE(GAMEPAD)
+WebKit::WebPageProxy* View::platformWebPageProxyForGamepadInput()
+{
+    const auto &views = viewsVector();
+    if (views.isEmpty())
+        return nullptr;
+
+    struct wpe_view_backend* viewBackend = WebCore::WPEGamepadProvider::singleton().viewForGamepadInput();
+    size_t index = notFound;
+
+    if (viewBackend) {
+        index = views.findMatching([&](View* v) {
+            return
+                v->backend() == viewBackend &&
+                v->page().isValid() &&
+                v->viewState().contains(WebCore::ActivityState::IsVisible);
+        });
+    } else {
+        index = views.findMatching([](View* v) {
+            return
+                v->page().isValid() &&
+                v->viewState().contains(WebCore::ActivityState::IsVisible);
+        });
+    }
+
+    if (index != notFound)
+        return &(views[index]->page());
+
+    return nullptr;
+}
+#endif
+
 
 } // namespace WKWPE

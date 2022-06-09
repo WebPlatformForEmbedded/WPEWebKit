@@ -986,6 +986,12 @@ void XMLHttpRequest::didSendData(unsigned long long bytesSent, unsigned long lon
 void XMLHttpRequest::didReceiveResponse(unsigned long, const ResourceResponse& response)
 {
     m_response = response;
+
+    if (response.tainting() != ResourceResponseBase::Tainting::Opaque &&
+        response.tainting() != ResourceResponseBase::Tainting::Opaqueredirect &&
+       readyState() < HEADERS_RECEIVED)
+       changeState(HEADERS_RECEIVED);
+
 }
 
 static inline bool shouldDecodeResponse(XMLHttpRequest::ResponseType type)

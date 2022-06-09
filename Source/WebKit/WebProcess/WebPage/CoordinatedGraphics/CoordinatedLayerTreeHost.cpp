@@ -99,10 +99,9 @@ void CoordinatedLayerTreeHost::setRootCompositingLayer(GraphicsLayer* graphicsLa
 
 void CoordinatedLayerTreeHost::invalidate()
 {
-    cancelPendingLayerFlush();
-
     m_coordinator.invalidate();
     LayerTreeHost::invalidate();
+    cancelPendingLayerFlush();
 }
 
 void CoordinatedLayerTreeHost::pauseRendering()

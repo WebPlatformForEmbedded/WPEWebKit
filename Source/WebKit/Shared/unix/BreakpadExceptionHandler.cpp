@@ -22,6 +22,7 @@
 #include "BreakpadExceptionHandler.h"
 #include <client/linux/handler/exception_handler.h>
 #include <signal.h>
+#include <stdio.h>
 
 namespace WebKit
 {
@@ -41,6 +42,12 @@ void installExceptionHandler()
   static google_breakpad::ExceptionHandler* excHandler = NULL;
   delete excHandler;
   const char* BREAKPAD_MINIDUMP_DIR = "/opt/minidumps";
+  FILE *fp;
+  if (( fp = fopen("/tmp/.SecureDumpEnable", "r")) != NULL)
+  {
+	 BREAKPAD_MINIDUMP_DIR = "/opt/secure/minidumps";
+	fclose(fp);
+  }
   excHandler = new google_breakpad::ExceptionHandler(google_breakpad::MinidumpDescriptor(BREAKPAD_MINIDUMP_DIR), NULL, breakpadCallback, NULL, true, -1);
 }
 }

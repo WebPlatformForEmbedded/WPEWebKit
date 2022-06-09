@@ -170,6 +170,7 @@ public:
 
 #if ENABLE(ENCRYPTED_MEDIA)
     virtual void mediaPlayerInitializationDataEncountered(const String&, RefPtr<ArrayBuffer>&&) { }
+    virtual void mediaPlayerDecryptErrorEncountered() {}
 #endif
     
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
@@ -240,6 +241,8 @@ public:
     virtual const void* mediaPlayerLogIdentifier() { return nullptr; }
     virtual const Logger& mediaPlayerLogger() = 0;
 #endif
+
+    virtual bool mediaPlayerHasSeekPending() const { return false; }
 };
 
 class MediaPlayer : public MediaPlayerEnums, public RefCounted<MediaPlayer> {
@@ -259,6 +262,10 @@ public:
     static void clearMediaCache(const String& path, WallTime modifiedSince);
     static void clearMediaCacheForOrigins(const String& path, const HashSet<RefPtr<SecurityOrigin>>&);
     static bool supportsKeySystem(const String& keySystem, const String& mimeType);
+    static void setYouTubeQuirksEnabled(bool);
+    static bool isYouTubeQuirksEnabled();
+    static void setDAZNQuirksEnabled(bool);
+    static bool isDAZNQuirksEnabled();
 
     bool supportsPictureInPicture() const;
     bool supportsFullscreen() const;
@@ -490,6 +497,7 @@ public:
 
 #if ENABLE(ENCRYPTED_MEDIA)
     void initializationDataEncountered(const String&, RefPtr<ArrayBuffer>&&);
+    void decryptErrorEncountered();
 #endif
 
     String referrer() const;
@@ -578,6 +586,8 @@ public:
     bool shouldIgnoreIntrinsicSize();
 
     String errorMessage() const;
+
+    URL url() const { return m_url; }
 
 private:
     MediaPlayer(MediaPlayerClient&);

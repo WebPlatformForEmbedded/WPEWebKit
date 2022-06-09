@@ -30,7 +30,6 @@
 #include "GStreamerEMEUtilities.h"
 #include "MediaKeyStatus.h"
 #include <open_cdm.h>
-#include <wtf/Condition.h>
 #include <wtf/HashMap.h>
 #include <wtf/text/StringHash.h>
 
@@ -105,11 +104,13 @@ public:
     CDMInstanceClient* client() const { return m_client; }
 
     OpenCDMSystem* ocdmSystem() const { return &m_openCDMSystem; }
+
+    bool hasValidSessions() const;
+
 private:
     bool addSession(const String& sessionId, RefPtr<Session>&& session);
     bool removeSession(const String& sessionId);
     RefPtr<Session> lookupSession(const String& sessionId) const;
-    RefPtr<Session> lookupSessionUnlocked(const String& sessionId) const;
 
     String m_keySystem;
     OpenCDMSystem& m_openCDMSystem;
@@ -117,8 +118,6 @@ private:
     // the GStreamer decryptor elements running in the streaming threads have a need to
     // lookup values in this map.
     mutable Lock m_sessionMapMutex;
-    mutable Condition m_sessionMapCondition;
-    unsigned m_numberOfCurrentUpdates { 0 };
     HashMap<String, RefPtr<Session>> m_sessionsMap;
     CDMInstanceClient* m_client { nullptr };
     KeyStatusVector m_keyStatuses;

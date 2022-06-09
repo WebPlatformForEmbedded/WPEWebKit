@@ -26,6 +26,7 @@
 #include "NetworkProcessMainUnix.h"
 
 #include <cstdlib>
+#include <stdio.h>
 
 #if defined (USE_BREAKPAD)
 #include "BreakpadExceptionHandler.h"
@@ -40,6 +41,7 @@ using namespace WebKit;
 int main(int argc, char** argv)
 {
 #if defined (USE_BREAKPAD)
+    fprintf(stderr, "WPENetworkProcess: Unsetting BREAKPAD_GUID: unsetenv: [%d]\n", unsetenv("BREAKPAD_GUID"));
     installExceptionHandler();
 #endif
 

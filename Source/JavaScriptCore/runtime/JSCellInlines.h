@@ -267,6 +267,7 @@ inline bool JSCell::isAPIValueWrapper() const
 
 ALWAYS_INLINE void JSCell::setStructure(VM& vm, Structure* structure)
 {
+    RELEASE_ASSERT(structure->isZapped() == false);
     ASSERT(structure->classInfo() == this->structure(vm)->classInfo());
     ASSERT(!this->structure(vm)
         || this->structure(vm)->transitionWatchpointSetHasBeenInvalidated()

@@ -37,6 +37,8 @@ static inline void initialize()
     // returned version string.
     gcry_check_version(nullptr);
 
+    // Set GCRY_SECMEM_FLAG_NO_PRIV_DROP to make sure no privileges loss
+    gcry_control(GCRYCTL_DISABLE_PRIV_DROP, nullptr);
     // Pre-allocate 16kB of secure memory and finish the initialization.
     gcry_control(GCRYCTL_INIT_SECMEM, 16384, nullptr);
     gcry_control(GCRYCTL_INITIALIZATION_FINISHED, nullptr);

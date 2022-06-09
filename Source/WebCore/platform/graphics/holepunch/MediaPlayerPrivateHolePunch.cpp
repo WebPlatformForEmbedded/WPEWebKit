@@ -52,6 +52,11 @@ MediaPlayerPrivateHolePunch::~MediaPlayerPrivateHolePunch()
 #if USE(NICOSIA)
     downcast<Nicosia::ContentLayerTextureMapperImpl>(m_nicosiaLayer->impl()).invalidateClient();
 #endif
+#if USE(TEXTURE_MAPPER_GL)
+    if (client())
+        client()->platformLayerWillBeDestroyed();
+#endif
+
 }
 
 PlatformLayer* MediaPlayerPrivateHolePunch::platformLayer() const
@@ -109,7 +114,8 @@ static HashSet<String, ASCIICaseInsensitiveHash>& mimeTypeCache()
         return cache;
 
     const char* mimeTypes[] = {
-        "video/holepunch"
+        "video/holepunch",
+        "video/ave"
     };
 
     for (unsigned i = 0; i < (sizeof(mimeTypes) / sizeof(*mimeTypes)); ++i)

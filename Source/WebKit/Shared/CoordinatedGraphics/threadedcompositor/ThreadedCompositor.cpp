@@ -113,9 +113,15 @@ void ThreadedCompositor::invalidate()
 #if USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
     m_displayRefreshMonitor->invalidate();
 #endif
+    if (m_nonCompositedWebGLEnabled) {
+        m_scene->purgeGLResources();
+    }
     m_compositingRunLoop->performTaskSync([this, protectedThis = makeRef(*this)] {
-        if (!m_context || !m_context->makeContextCurrent())
+        if (!m_context || !m_context->makeContextCurrent()) {
+            m_client.didDestroyGLContext();
+            m_scene = nullptr;
             return;
+        }
         m_scene->purgeGLResources();
         m_context = nullptr;
         m_client.didDestroyGLContext();
@@ -358,7 +364,14 @@ void ThreadedCompositor::updateSceneState(const CoordinatedGraphicsState& state)
 {
     LockHolder locker(m_attributes.lock);
     m_attributes.states.append(state);
-    m_compositingRunLoop->scheduleUpdate();
+    if (m_suspendedCount) {
+        // use renderNonCompositedWebGL to update scene state to release resources
+        m_compositingRunLoop->performTask([this, protectedThis = makeRef(*this)] {
+            renderNonCompositedWebGL();
+        });
+    }
+    else
+        m_compositingRunLoop->scheduleUpdate();
 }
 
 #if USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)

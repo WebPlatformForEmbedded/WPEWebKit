@@ -286,6 +286,8 @@ RenderLayerCompositor::RenderLayerCompositor(RenderView& renderView)
     , m_updateCompositingLayersTimer(*this, &RenderLayerCompositor::updateCompositingLayersTimerFired)
     , m_layerFlushTimer(*this, &RenderLayerCompositor::layerFlushTimerFired)
 {
+    Document *doc = renderView.frameView().frame().document();
+    m_enableYoutubeWorkarounds = doc && doc->origin().contains("www.youtube.com");
 }
 
 RenderLayerCompositor::~RenderLayerCompositor()
@@ -383,7 +385,13 @@ bool RenderLayerCompositor::updateCompositingPolicy()
         m_compositingPolicy = page().compositingPolicyOverride().value();
         return m_compositingPolicy != currentPolicy;
     }
-    
+
+    if (m_compositingPolicy != CompositingPolicy::Normal) {
+        m_compositingPolicy = CompositingPolicy::Normal;
+        return true;
+    }
+    return false;
+
     auto memoryPolicy = MemoryPressureHandler::currentMemoryUsagePolicy();
     m_compositingPolicy = memoryPolicy == WTF::MemoryUsagePolicy::Unrestricted ? CompositingPolicy::Normal : CompositingPolicy::Conservative;
     return m_compositingPolicy != currentPolicy;
@@ -2553,6 +2561,9 @@ bool RenderLayerCompositor::requiresCompositingForAnimation(RenderLayerModelObje
 {
     if (!(m_compositingTriggers & ChromeClient::AnimationTrigger))
         return false;
+
+    if (m_enableYoutubeWorkarounds && renderer.style().hasAnimationsOrTransitions() && renderer.hasTransform())
+        return true;
 
     if (auto* element = renderer.element()) {
         if (auto* timeline = element->document().existingTimeline()) {

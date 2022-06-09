@@ -669,6 +669,7 @@ private:
 
 #if ENABLE(ENCRYPTED_MEDIA)
     void mediaPlayerInitializationDataEncountered(const String&, RefPtr<ArrayBuffer>&&) final;
+    void mediaPlayerDecryptErrorEncountered() final;
 
     void attemptToDecrypt();
     void attemptToResumePlaybackIfNecessary();
@@ -899,6 +900,7 @@ private:
     void updateMediaState(UpdateState updateState = UpdateState::Synchronously);
     bool hasPlaybackTargetAvailabilityListeners() const { return m_hasPlaybackTargetAvailabilityListeners; }
 #endif
+    bool mediaPlayerHasSeekPending() const final { return m_seeking && m_pendingSeek; }
 
     bool isVideoTooSmallForInlinePlayback();
     void updateShouldAutoplay();
@@ -977,6 +979,7 @@ private:
     SeekType m_pendingSeekType { NoSeek };
 
     double m_volume { 1 };
+    double m_referenceVolume { 1 };
     bool m_volumeInitialized { false };
     MediaTime m_lastSeekTime;
     

@@ -126,6 +126,8 @@ protected:
     // Whether painting is suspended. We'll still keep track of the dirty region but we
     // won't paint until painting has resumed again.
     bool m_isPaintingSuspended { false };
+    
+    bool m_nonCompositedWebGLEnabled { false };
 
     RunLoop::Timer<AcceleratedDrawingArea> m_exitCompositingTimer;
 

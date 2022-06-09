@@ -79,9 +79,14 @@ void TextureMapperPlatformLayerProxy::activateOnCompositingThread(Compositor* co
 #endif
 }
 
-void TextureMapperPlatformLayerProxy::invalidate()
+void TextureMapperPlatformLayerProxy::invalidate(bool layerOnly)
 {
     ASSERT(m_compositorThread == &Thread::current());
+    if (layerOnly) {
+        LockHolder locker(m_lock);
+        m_targetLayer = nullptr;
+        return;
+    }
     Function<void()> updateFunction;
     {
         LockHolder locker(m_lock);

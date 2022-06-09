@@ -292,6 +292,7 @@ protected:
 
 #if ENABLE(ENCRYPTED_MEDIA)
     RefPtr<const CDMInstance> m_cdmInstance;
+    String m_lastInitData;
 #endif
 };
 

@@ -134,7 +134,9 @@ private:
     bool m_isEnded { false };
     bool m_haveProducedData { false };
     HintValue m_contentHint { HintValue::Empty };
+#if ENABLE(WEB_AUDIO)
     RefPtr<WebAudioSourceProvider> m_audioSourceProvider;
+#endif
 };
 
 typedef Vector<RefPtr<MediaStreamTrackPrivate>> MediaStreamTrackPrivateVector;

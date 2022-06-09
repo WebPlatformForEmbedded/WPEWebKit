@@ -60,10 +60,14 @@ void RealtimeIncomingVideoSourceLibWebRTC::OnFrame(const webrtc::VideoFrame& fra
         return;
 
     auto sample = GStreamerSampleFromLibWebRTCVideoFrame(frame);
+    #if 1
+    videoSampleAvailable(MediaSampleGStreamer::create(sample.get(), WebCore::FloatSize(), String()));
+    #else
     callOnMainThread([protectedThis = makeRef(*this), sample] {
         protectedThis->videoSampleAvailable(MediaSampleGStreamer::create(sample.get(),
             WebCore::FloatSize(), String()));
     });
+    #endif
 }
 
 } // namespace WebCore

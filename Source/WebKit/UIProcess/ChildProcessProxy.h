@@ -80,6 +80,7 @@ public:
     bool sendMessage(std::unique_ptr<IPC::Encoder>, OptionSet<IPC::SendOption>);
 
     void shutDownProcess();
+    void releaseMemory();
 
     WebCore::ProcessIdentifier coreProcessIdentifier() const { return m_processIdentifier; }
 

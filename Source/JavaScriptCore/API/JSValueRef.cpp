@@ -234,8 +234,9 @@ bool JSValueIsEqual(JSContextRef ctx, JSValueRef a, JSValueRef b, JSValueRef* ex
     JSValue jsB = toJS(exec, b);
 
     bool result = JSValue::equal(exec, jsA, jsB); // false if an exception is thrown
-    handleExceptionIfNeeded(scope, exec, exception);
-    
+    if (handleExceptionIfNeeded(scope, exec, exception) == ExceptionStatus::DidThrow)
+        return false;
+
     return result;
 }
 
@@ -271,7 +272,8 @@ bool JSValueIsInstanceOfConstructor(JSContextRef ctx, JSValueRef value, JSObject
     if (!jsConstructor->structure(vm)->typeInfo().implementsHasInstance())
         return false;
     bool result = jsConstructor->hasInstance(exec, jsValue); // false if an exception is thrown
-    handleExceptionIfNeeded(scope, exec, exception);
+    if (handleExceptionIfNeeded(scope, exec, exception) == ExceptionStatus::DidThrow)
+        return false;
     return result;
 }
 

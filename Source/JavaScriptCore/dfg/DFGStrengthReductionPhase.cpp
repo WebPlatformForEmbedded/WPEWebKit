@@ -896,6 +896,9 @@ private:
         case Construct:
         case TailCallInlinedCaller:
         case TailCall: {
+            #if CPU(MIPS)
+            break;
+            #endif
             ExecutableBase* executable = nullptr;
             Edge callee = m_graph.varArgChild(m_node, 0);
             CallVariant callVariant;

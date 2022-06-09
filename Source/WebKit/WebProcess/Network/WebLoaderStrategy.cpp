@@ -79,6 +79,8 @@
 namespace WebKit {
 using namespace WebCore;
 
+void throttleUpdatesForNextThreeSeconds();
+
 WebLoaderStrategy::WebLoaderStrategy()
     : m_internallyFailedLoadTimer(RunLoop::main(), this, &WebLoaderStrategy::internallyFailedLoadTimerFired)
 {
@@ -205,6 +207,16 @@ void WebLoaderStrategy::scheduleLoad(ResourceLoader& resourceLoader, CachedResou
     }
 #endif
 
+    static bool enableThrottleHack = false;
+    if (resource->type() == CachedResource::Type::MainResource)
+    {
+        enableThrottleHack = resourceLoader.request().url().string().contains("youtube.com");
+    }
+    if (enableThrottleHack && resourceLoader.request().url().string().contains("get_video_info"))
+    {
+        throttleUpdatesForNextThreeSeconds();
+    }
+
 #if ENABLE(SERVICE_WORKER)
     WebServiceWorkerProvider::singleton().handleFetch(resourceLoader, resource, sessionID, shouldClearReferrerOnHTTPSToHTTPRedirect, [trackingParameters, sessionID, shouldClearReferrerOnHTTPSToHTTPRedirect, maximumBufferingTime = maximumBufferingTime(resource), resourceLoader = makeRef(resourceLoader)] (ServiceWorkerClientFetch::Result result) mutable {
         if (result != ServiceWorkerClientFetch::Result::Unhandled) {
@@ -224,8 +236,15 @@ void WebLoaderStrategy::scheduleLoad(ResourceLoader& resourceLoader, CachedResou
             WebProcess::singleton().webLoaderStrategy().scheduleLoadFromNetworkProcess(resourceLoader.get(), resourceLoader->request(), trackingParameters, sessionID, shouldClearReferrerOnHTTPSToHTTPRedirect, maximumBufferingTime);
     });
 #else
-    if (!tryLoadingUsingURLSchemeHandler(resourceLoader))
-        scheduleLoadFromNetworkProcess(resourceLoader, resourceLoader.request(), trackingParameters, sessionID, shouldClearReferrerOnHTTPSToHTTPRedirect, maximumBufferingTime(resource));
+    if (!tryLoadingUsingURLSchemeHandler(resourceLoader)) {
+        Seconds bufferingTime;
+        if (resource && resource->type() == CachedResource::Type::RawResource && resourceLoader.request().timeoutInterval() > 0) {
+            bufferingTime = Seconds(std::min(0.25, resourceLoader.request().timeoutInterval() / 2.0));
+        } else {
+            bufferingTime = maximumBufferingTime(resource);
+        }
+        scheduleLoadFromNetworkProcess(resourceLoader, resourceLoader.request(), trackingParameters, sessionID, shouldClearReferrerOnHTTPSToHTTPRedirect, bufferingTime);
+    }
 #endif
 }
 

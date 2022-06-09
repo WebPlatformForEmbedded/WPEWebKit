@@ -25,6 +25,10 @@
 
 #include "config.h"
 #include "SpeechSynthesisUtterance.h"
+#include "ScriptExecutionContext.h"
+#include "Document.h"
+#include "Page.h"
+#include "Logging.h"
 
 #if ENABLE(SPEECH_SYNTHESIS)
 
@@ -63,6 +67,32 @@ void SpeechSynthesisUtterance::setVoice(SpeechSynthesisVoice* voice)
     
     if (voice)
         m_platformUtterance->setVoice(voice->platformVoice());
+}
+
+double SpeechSynthesisUtterance::getPageMediaVolume()
+{
+    ScriptExecutionContext *context = scriptExecutionContext();
+    if (is<Document>(context)) {
+        if (auto* page = downcast<Document>(context)->page()) {
+            return page->mediaVolume();
+        }
+    } else {
+        LOG(SpeechSynthesis, "SpeechSynthesisUtterance::getPageMediaVolume: Invalid Context");
+    }
+
+    return 0.0;
+}
+
+void SpeechSynthesisUtterance::setPageMediaVolume(double volume)
+{
+    ScriptExecutionContext *context = scriptExecutionContext();
+    if (is<Document>(context)) {
+        if (auto* page = downcast<Document>(context)->page()) {
+            page->setMediaVolume(volume);
+        }
+    } else {
+        LOG(SpeechSynthesis, "SpeechSynthesisUtterance::setPageMediaVolume: Invalid Context");
+    }
 }
 
 } // namespace WebCore

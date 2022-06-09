@@ -484,10 +484,10 @@ void CSSToStyleMap::mapAnimationTimingFunction(Animation& animation, const CSSVa
             animation.setTimingFunction(CubicBezierTimingFunction::create(CubicBezierTimingFunction::EaseInOut));
             break;
         case CSSValueStepStart:
-            animation.setTimingFunction(StepsTimingFunction::create(1, true));
+            animation.setTimingFunction(StepsTimingFunction::create(1, StepsTimingFunction::StepPosition::Start));
             break;
         case CSSValueStepEnd:
-            animation.setTimingFunction(StepsTimingFunction::create(1, false));
+            animation.setTimingFunction(StepsTimingFunction::create(1, StepsTimingFunction::StepPosition::End));
             break;
         default:
             break;
@@ -500,7 +500,7 @@ void CSSToStyleMap::mapAnimationTimingFunction(Animation& animation, const CSSVa
         animation.setTimingFunction(CubicBezierTimingFunction::create(cubicTimingFunction.x1(), cubicTimingFunction.y1(), cubicTimingFunction.x2(), cubicTimingFunction.y2()));
     } else if (is<CSSStepsTimingFunctionValue>(value)) {
         auto& stepsTimingFunction = downcast<CSSStepsTimingFunctionValue>(value);
-        animation.setTimingFunction(StepsTimingFunction::create(stepsTimingFunction.numberOfSteps(), stepsTimingFunction.stepAtStart()));
+        animation.setTimingFunction(StepsTimingFunction::create(stepsTimingFunction.numberOfSteps(), stepsTimingFunction.stepPosition()));
     } else if (is<CSSFramesTimingFunctionValue>(value)) {
         auto& framesTimingFunction = downcast<CSSFramesTimingFunctionValue>(value);
         animation.setTimingFunction(FramesTimingFunction::create(framesTimingFunction.numberOfFrames()));

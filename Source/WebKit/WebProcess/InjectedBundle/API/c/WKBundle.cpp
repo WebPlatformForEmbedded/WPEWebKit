@@ -41,6 +41,7 @@
 #include <WebCore/DatabaseTracker.h>
 #include <WebCore/ResourceLoadObserver.h>
 #include <WebCore/ServiceWorkerThreadProxy.h>
+#include <wtf/MemoryPressureHandler.h>
 
 using namespace WebCore;
 using namespace WebKit;
@@ -216,6 +217,16 @@ void WKBundleSetAsynchronousSpellCheckingEnabled(WKBundleRef bundleRef, WKBundle
 void WKBundleReportException(JSContextRef context, JSValueRef exception)
 {
     InjectedBundle::reportException(context, exception);
+}
+
+void WKBundleMemoryPressureHandlerStop()
+{
+    MemoryPressureHandler::singleton().uninstall();
+}
+
+void WKBundleMemoryPressureHandlerStart()
+{
+    MemoryPressureHandler::singleton().install();
 }
 
 void WKBundleClearAllDatabases(WKBundleRef)

@@ -41,13 +41,13 @@
 
 using namespace WebCore;
 
-static AccessibilityObject* core(AtkAction* action)
+/*static AccessibilityObject* core(AtkAction* action)
 {
     if (!WEBKIT_IS_ACCESSIBLE(action))
         return 0;
 
     return webkitAccessibleGetAccessibilityObject(WEBKIT_ACCESSIBLE(action));
-}
+}*/
 
 static gboolean webkitAccessibleActionDoAction(AtkAction* action, gint index)
 {

@@ -120,7 +120,12 @@ static void initializePeerConnectionFactoryAndThreads(PeerConnectionFactoryAndTh
 
 #if defined(NDEBUG)
 #if !LOG_DISABLED || !RELEASE_LOG_DISABLED
-    rtc::LogMessage::LogToDebug(LogWebRTC.state != WTFLogChannelOn ? rtc::LS_NONE : rtc::LS_INFO);
+    const char* logConfig = getenv("WRTC_LOG");  // ex.: WRTC_LOG="tstamp verbose debug"
+    if (logConfig) {
+        rtc::LogMessage::ConfigureLogging(logConfig);
+    } else {
+        rtc::LogMessage::LogToDebug(LogWebRTC.state != WTFLogChannelOn ? rtc::LS_NONE : rtc::LS_INFO);
+    }
 #else
     rtc::LogMessage::LogToDebug(rtc::LS_NONE);
 #endif

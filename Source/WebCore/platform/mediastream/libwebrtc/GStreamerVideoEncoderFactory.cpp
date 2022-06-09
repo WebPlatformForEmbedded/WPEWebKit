@@ -533,8 +533,45 @@ public:
     }
 };
 
+struct NoopEncoder : public webrtc::VideoEncoder
+{
+    int32_t InitEncode(const webrtc::VideoCodec*, int32_t, size_t) final
+    {
+        return WEBRTC_VIDEO_CODEC_ERROR;
+    }
+    int32_t RegisterEncodeCompleteCallback(webrtc::EncodedImageCallback*) final
+    {
+        return WEBRTC_VIDEO_CODEC_ERROR;
+    }
+    int32_t Release() final
+    {
+        return WEBRTC_VIDEO_CODEC_OK;
+    }
+    int32_t Encode(const webrtc::VideoFrame&, const webrtc::CodecSpecificInfo*, const std::vector<webrtc::FrameType>*) final
+    {
+        return WEBRTC_VIDEO_CODEC_ERROR;
+    }
+    int32_t SetChannelParameters(uint32_t, int64_t) final
+    {
+        return WEBRTC_VIDEO_CODEC_ERROR;
+    }
+    void AddCodecIfSupported(std::vector<webrtc::SdpVideoFormat>* supportedFormats)
+    {
+        auto h264Format = webrtc::SdpVideoFormat(cricket::kH264CodecName,
+            { { cricket::kH264FmtpProfileLevelId, cricket::kH264ProfileLevelConstrainedBaseline },
+                { cricket::kH264FmtpLevelAsymmetryAllowed, "1" },
+                { cricket::kH264FmtpPacketizationMode, "1" } });
+        supportedFormats->push_back(h264Format);
+    }
+};
+
+static bool useNoopEncoder() {  return true; }
+
 std::unique_ptr<webrtc::VideoEncoder> GStreamerVideoEncoderFactory::CreateVideoEncoder(const webrtc::SdpVideoFormat& format)
 {
+    if (useNoopEncoder())
+        return std::make_unique<NoopEncoder>();
+
     if (format.name == cricket::kVp8CodecName)
         return std::make_unique<VP8Encoder>(format);
 
@@ -557,6 +594,11 @@ GStreamerVideoEncoderFactory::GStreamerVideoEncoderFactory()
 std::vector<webrtc::SdpVideoFormat> GStreamerVideoEncoderFactory::GetSupportedFormats() const
 {
     std::vector<webrtc::SdpVideoFormat> supportedCodecs;
+
+    if (useNoopEncoder()) {
+        NoopEncoder().AddCodecIfSupported(&supportedCodecs);
+        return supportedCodecs;
+    }
 
     VP8Encoder().AddCodecIfSupported(&supportedCodecs);
     H264Encoder().AddCodecIfSupported(&supportedCodecs);

@@ -36,6 +36,7 @@
 #define REMOTE_INSPECTOR_CLIENT_OBJECT_PATH "/org/webkit/RemoteInspectorClient"
 #define INSPECTOR_DBUS_INTERFACE "org.webkit.Inspector"
 #define INSPECTOR_DBUS_OBJECT_PATH "/org/webkit/Inspector"
+#define WEB_INSPECTOR_PORT 9226
 
 namespace WebDriver {
 
@@ -140,43 +141,50 @@ void SessionHost::launchBrowser(Function<void (std::optional<String> error)>&& c
 {
     m_cancellable = adoptGRef(g_cancellable_new());
     GRefPtr<GSubprocessLauncher> launcher = adoptGRef(g_subprocess_launcher_new(G_SUBPROCESS_FLAGS_NONE));
-    guint16 port = freePort();
+    guint16 port = 0 ;
+    if(g_getenv("LAUNCH_STANDALONE_RDK_BROWSER"))
+        port = freePort();
+    else
+        port = WEB_INSPECTOR_PORT;
     GUniquePtr<char> inspectorAddress(g_strdup_printf("127.0.0.1:%u", port));
     g_subprocess_launcher_setenv(launcher.get(), "WEBKIT_INSPECTOR_SERVER", inspectorAddress.get(), TRUE);
 #if PLATFORM(GTK)
     g_subprocess_launcher_setenv(launcher.get(), "GTK_OVERLAY_SCROLLING", m_capabilities.useOverlayScrollbars.value() ? "1" : "0", TRUE);
 #endif
 
-    size_t browserArgumentsSize = m_capabilities.browserArguments ? m_capabilities.browserArguments->size() : 0;
-    GUniquePtr<char*> args(g_new0(char*, browserArgumentsSize + 2));
-    args.get()[0] = g_strdup(m_capabilities.browserBinary.value().utf8().data());
-    for (unsigned i = 0; i < browserArgumentsSize; ++i)
-        args.get()[i + 1] = g_strdup(m_capabilities.browserArguments.value()[i].utf8().data());
+    if(g_getenv("LAUNCH_STANDALONE_RDK_BROWSER")){
+        const auto& browserArguments = m_capabilities.browserArguments.value();
+        GUniquePtr<char*> args(g_new0(char*, browserArguments.size() + 2));
+        args.get()[0] = g_strdup(m_capabilities.browserBinary.value().utf8().data());
+        for (unsigned i = 0; i < browserArguments.size(); ++i)
+            args.get()[i + 1] = g_strdup(browserArguments[i].utf8().data());
 
-    GUniqueOutPtr<GError> error;
-    m_browser = adoptGRef(g_subprocess_launcher_spawnv(launcher.get(), args.get(), &error.outPtr()));
-    if (error) {
-        completionHandler(String::fromUTF8(error->message));
-        return;
-    }
-
-    g_subprocess_wait_async(m_browser.get(), m_cancellable.get(), [](GObject* browser, GAsyncResult* result, gpointer userData) {
         GUniqueOutPtr<GError> error;
-        g_subprocess_wait_finish(G_SUBPROCESS(browser), result, &error.outPtr());
-        if (g_error_matches(error.get(), G_IO_ERROR, G_IO_ERROR_CANCELLED))
-            return;
-        auto* sessionHost = static_cast<SessionHost*>(userData);
-        sessionHost->m_browser = nullptr;
-    }, this);
+        m_browser = adoptGRef(g_subprocess_launcher_spawnv(launcher.get(), args.get(), &error.outPtr()));
+        if (error) {
+            completionHandler(String::fromUTF8(error->message));
+           return;
+        }
 
+        g_subprocess_wait_async(m_browser.get(), m_cancellable.get(), [](GObject* browser, GAsyncResult* result, gpointer userData) {
+            GUniqueOutPtr<GError> error;
+            g_subprocess_wait_finish(G_SUBPROCESS(browser), result, &error.outPtr());
+            if (g_error_matches(error.get(), G_IO_ERROR, G_IO_ERROR_CANCELLED))
+                return;
+            auto* sessionHost = static_cast<SessionHost*>(userData);
+            sessionHost->m_browser = nullptr;
+        }, this);
+    }
     GUniquePtr<char> dbusAddress(g_strdup_printf("tcp:host=%s,port=%u", "127.0.0.1", port));
     connectToBrowser(std::make_unique<ConnectToBrowserAsyncData>(this, WTFMove(dbusAddress), m_cancellable.get(), WTFMove(completionHandler)));
 }
 
 void SessionHost::connectToBrowser(std::unique_ptr<ConnectToBrowserAsyncData>&& data)
 {
-    if (!m_browser)
-        return;
+    if(g_getenv("LAUNCH_STANDALONE_RDK_BROWSER")){
+        if (!m_browser)
+            return;
+    }
 
     RunLoop::main().dispatchAfter(100_ms, [connectToBrowserData = WTFMove(data)]() mutable {
         auto* data = connectToBrowserData.release();

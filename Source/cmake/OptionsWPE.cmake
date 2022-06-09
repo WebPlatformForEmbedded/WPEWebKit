@@ -4,7 +4,7 @@ include(VersioningUtils)
 SET_PROJECT_VERSION(2 22 0)
 set(WPE_API_VERSION 0.1)
 
-CALCULATE_LIBRARY_VERSIONS_FROM_LIBTOOL_TRIPLE(WEBKIT 4 1 2)
+CALCULATE_LIBRARY_VERSIONS_FROM_LIBTOOL_TRIPLE(WEBKIT 4 6 2)
 
 # These are shared variables, but we special case their definition so that we can use the
 # CMAKE_INSTALL_* variables that are populated by the GNUInstallDirs macro.
@@ -47,6 +47,8 @@ WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_WEBGL2 PRIVATE ${ENABLE_EXPERIMENTAL_FEA
 WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_MEDIA_STREAM PRIVATE ${ENABLE_EXPERIMENTAL_FEATURES})
 WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_WEB_RTC PRIVATE ${ENABLE_EXPERIMENTAL_FEATURES})
 WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_MEMORY_SAMPLER PUBLIC ON)
+WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_ACCESSIBILITY PUBLIC ON)
+WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_SPEECH_SYNTHESIS PUBLIC ON)
 
 # Public options specific to the WPE port. Do not add any options here unless
 # there is a strong reason we should support changing the value of the option,
@@ -74,13 +76,20 @@ if (DEVELOPER_MODE)
 endif ()
 
 # Enable the legacy inspector server.
-SET_AND_EXPOSE_TO_BUILD(ENABLE_INSPECTOR_SERVER TRUE)
+SET_AND_EXPOSE_TO_BUILD(ENABLE_INSPECTOR_SERVER ${ENABLE_REMOTE_INSPECTOR})
 WEBKIT_OPTION_DEPEND(USE_GSTREAMER_HOLEPUNCH ENABLE_VIDEO)
 WEBKIT_OPTION_DEPEND(USE_EXTERNAL_HOLEPUNCH ENABLE_VIDEO)
 
 include(GStreamerDependencies)
 
 WEBKIT_OPTION_END()
+
+if (ENABLE_ACCESSIBILITY)
+    add_definitions(-DHAVE_ACCESSIBILITY=1)
+    find_package(ATK 2.10.0 REQUIRED)
+else ()
+    add_definitions(-DHAVE_ACCESSIBILITY=0)
+endif ()
 
 find_package(Cairo 1.10.2 REQUIRED)
 find_package(Fontconfig 2.8.0 REQUIRED)
@@ -157,6 +166,24 @@ if (ENABLE_XSLT)
     find_package(LibXslt 1.1.7 REQUIRED)
 endif ()
 
+if ( ENABLE_ENCRYPTED_MEDIA )
+    if (ENABLE_SVP)
+        add_definitions(-DUSE_SVP=1)
+    endif()
+endif()
+
+if (ENABLE_HEVC)
+  add_definitions(-DENABLE_HEVC=1)
+endif()
+
+if (ENABLE_VP9_HDR)
+  add_definitions(-DENABLE_VP9_HDR=1)
+endif()
+
+if (ENABLE_DV)
+  add_definitions(-DENABLE_DV=1)
+endif()
+
 add_definitions(-DBUILDING_WPE__=1)
 add_definitions(-DGETTEXT_PACKAGE="WPE")
 add_definitions(-DJSC_GLIB_API_ENABLED)
@@ -210,12 +237,16 @@ if (COMPILER_IS_GCC_OR_CLANG AND UNIX AND NOT APPLE)
     # The GCC documentation is poor in that it says the option is target dependent,
     # but fails to decribe on which targets it is supported. I didn't fancy reading
     # the source to find out.
-    if (CMAKE_COMPILER_IS_GNUCC AND (WTF_CPU_ARM64 OR WTF_CPU_ARM))
+    if (CMAKE_COMPILER_IS_GNUCC AND (WTF_CPU_ARM64 OR WTF_CPU_ARM OR WTF_CPU_MIPS))
         set(CMAKE_COMPILER_SIZE_OPT_FLAGS " -finline-limit=90 -fsection-anchors")
     endif ()
     set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE}${CMAKE_COMPILER_SIZE_OPT_FLAGS} -ffunction-sections -fdata-sections -Wformat=1 -Wno-pragmas")
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}${CMAKE_COMPILER_SIZE_OPT_FLAGS} -ffunction-sections -fdata-sections -fno-rtti -Wformat=1 -Wno-pragmas")
     set(CMAKE_SHARED_LINKER_FLAGS_RELEASE "${CMAKE_SHARED_LINKER_FLAGS_RELEASE} -Wl,--gc-sections")
+    if (NOT ENABLE_ADDRESS_SANITIZER)
+        set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -fno-stack-protector")
+        set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -fno-stack-protector")
+    endif()
 endif ()
 
 include(GStreamerChecks)

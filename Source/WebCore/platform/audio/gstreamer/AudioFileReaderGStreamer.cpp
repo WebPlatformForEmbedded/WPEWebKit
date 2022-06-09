@@ -287,9 +287,13 @@ void AudioFileReader::plugDeinterleave(GstPad* pad)
     g_object_set(capsFilter, "caps", caps.get(), nullptr);
 
     gst_bin_add_many(GST_BIN(m_pipeline.get()), audioConvert, audioResample, capsFilter, m_deInterleave.get(), nullptr);
-
+#if PLATFORM(BROADCOM)
+    UNUSED_PARAM(pad);
+    gst_element_link_pads_full(m_decodebin.get(), "brcm-mp3-src", audioConvert, "sink", GST_PAD_LINK_CHECK_NOTHING);
+#else
     GRefPtr<GstPad> sinkPad = adoptGRef(gst_element_get_static_pad(audioConvert, "sink"));
     gst_pad_link_full(pad, sinkPad.get(), GST_PAD_LINK_CHECK_NOTHING);
+#endif
 
     gst_element_link_pads_full(audioConvert, "src", audioResample, "sink", GST_PAD_LINK_CHECK_NOTHING);
     gst_element_link_pads_full(audioResample, "src", capsFilter, "sink", GST_PAD_LINK_CHECK_NOTHING);
@@ -337,7 +341,17 @@ void AudioFileReader::decodeAudioForBusCreation()
         source = gst_element_factory_make("filesrc", nullptr);
         g_object_set(source, "location", m_filePath, nullptr);
     }
+#if PLATFORM(BROADCOM)
+    GstElement* parse = gst_element_factory_make("mpegaudioparse", NULL);
+    m_decodebin = gst_element_factory_make("brcmmp3decoder", NULL);
 
+    gst_bin_add_many(GST_BIN(m_pipeline.get()), source, parse, WTF::refGPtr(m_decodebin.get()), NULL);
+
+    gst_element_link_pads_full(source, "src", parse, "sink", GST_PAD_LINK_CHECK_NOTHING);
+    gst_element_link_pads_full(parse, "src", m_decodebin.get(), "brcm-mp3-sink", GST_PAD_LINK_CHECK_NOTHING);
+
+    plugDeinterleave(nullptr);
+#else
     m_decodebin = gst_element_factory_make("decodebin", "decodebin");
 #if PLATFORM(BCM_NEXUS)
     g_signal_connect_swapped(m_decodebin.get(), "autoplug-select", G_CALLBACK(decodebinAutoplugSelectCallback), nullptr);
@@ -346,6 +360,7 @@ void AudioFileReader::decodeAudioForBusCreation()
 
     gst_bin_add_many(GST_BIN(m_pipeline.get()), source, m_decodebin.get(), nullptr);
     gst_element_link_pads_full(source, "src", m_decodebin.get(), "sink", GST_PAD_LINK_CHECK_NOTHING);
+#endif
 
     // Catch errors here immediately, there might not be an error message if we're unlucky.
     if (gst_element_set_state(m_pipeline.get(), GST_STATE_PAUSED) == GST_STATE_CHANGE_FAILURE) {

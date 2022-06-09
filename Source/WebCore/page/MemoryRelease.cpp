@@ -94,7 +94,10 @@ static void releaseCriticalMemory(Synchronous synchronous)
         document->fontSelector().emptyCaches();
     }
 
-    GCController::singleton().deleteAllCode(JSC::DeleteAllCodeIfNotCollecting);
+    static bool enableCodeDeletion = !getenv("WPE_DISABLE_JIT_CODE_DELETION");
+    if (enableCodeDeletion && synchronous == Synchronous::Yes) {
+        GCController::singleton().deleteAllCode(JSC::DeleteAllCodeIfNotCollecting);
+    }
 
 #if ENABLE(VIDEO)
     for (auto* mediaElement : HTMLMediaElement::allMediaElements()) {
@@ -194,7 +197,25 @@ void logMemoryStatisticsAtTimeOfDeath()
 
 #if !PLATFORM(COCOA)
 void platformReleaseMemory(Critical) { }
-void jettisonExpensiveObjectsOnTopLevelNavigation() { }
+void jettisonExpensiveObjectsOnTopLevelNavigation()
+{
+    // based on code from cocoa/MemoryReleaseCocoa.mm
+    // Protect against doing excessive jettisoning during repeated navigations.
+    const auto minimumTimeSinceNavigation = 2s;
+
+    auto now = std::chrono::steady_clock::now();
+    static auto timeOfLastNavigation = now;
+    bool shouldJettison = (timeOfLastNavigation == now) || (now - timeOfLastNavigation >= minimumTimeSinceNavigation);
+    timeOfLastNavigation = now;
+
+    if (!shouldJettison)
+        return;
+
+    RunLoop::main().dispatch([]{
+        GCController::singleton().deleteAllCode(JSC::DeleteAllCodeIfNotCollecting);
+        releaseMemory(Critical::Yes, Synchronous::Yes);
+    });
+}
 void registerMemoryReleaseNotifyCallbacks() { }
 #endif
 

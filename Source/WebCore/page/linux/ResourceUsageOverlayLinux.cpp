@@ -118,6 +118,11 @@ private:
         string = "Full GC: " + gcTimerString(gData.timeOfNextFullCollection, now);
         context.drawText(m_textFont, TextRun(string), position);
         position.move(0, gFontSize + 2);
+
+        string = "Graphics Memory: " + String::format("%d%%", gData.gpu);
+        context.drawText(m_textFont, TextRun(string), position);
+        position.move(0, gFontSize + 2);
+
     }
 
     void notifyFlushRequired(const GraphicsLayer*) override

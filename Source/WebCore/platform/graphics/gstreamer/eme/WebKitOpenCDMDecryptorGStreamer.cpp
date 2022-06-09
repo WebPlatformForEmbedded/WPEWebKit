@@ -48,7 +48,7 @@ static bool webKitMediaOpenCDMDecryptorDecrypt(WebKitMediaCommonEncryptionDecryp
 static bool webKitMediaOpenCDMDecryptorHandleKeyId(WebKitMediaCommonEncryptionDecrypt* self, const WebCore::SharedBuffer&);
 static bool webKitMediaOpenCDMDecryptorAttemptToDecryptWithLocalInstance(WebKitMediaCommonEncryptionDecrypt* self, const WebCore::SharedBuffer&);
 
-static const char* cencEncryptionMediaTypes[] = { "video/mp4", "audio/mp4", "video/x-h264", "audio/mpeg", "audio/x-flac", nullptr };
+static const char* cencEncryptionMediaTypes[] = { "video/mp4", "audio/mp4", "video/x-h264", "audio/mpeg", "audio/x-eac3", "audio/x-ac3", "video/x-h265",  "audio/x-flac", nullptr };
 static const char* webmEncryptionMediaTypes[] = { "video/webm", "audio/webm", "video/x-vp9", nullptr };
 
 static GstStaticPadTemplate srcTemplate = GST_STATIC_PAD_TEMPLATE("src",
@@ -61,7 +61,10 @@ static GstStaticPadTemplate srcTemplate = GST_STATIC_PAD_TEMPLATE("src",
         "audio/mp4; "
         "audio/mpeg; "
         "audio/x-flac; "
+        "audio/x-eac3; "
+        "audio/x-ac3; "
         "video/x-h264; "
+        "video/x-h265; "
         "video/x-vp9; "));
 
 GST_DEBUG_CATEGORY(webkit_media_opencdm_decrypt_debug_category);
@@ -146,6 +149,12 @@ static void webkit_media_opencdm_decrypt_init(WebKitOpenCDMDecrypt* self)
 static void webKitMediaOpenCDMDecryptorFinalize(GObject* object)
 {
     WebKitOpenCDMDecryptPrivate* priv = GST_WEBKIT_OPENCDM_DECRYPT_GET_PRIVATE(WEBKIT_OPENCDM_DECRYPT(object));
+
+    // Let OCDM sessions know playback has stopped
+    // output restrictions can be reset now
+    if(priv->m_openCdmSession)
+        opencdm_session_resetoutputprotection(priv->m_openCdmSession.get());
+
     priv->~WebKitOpenCDMDecryptPrivate();
     GST_CALL_PARENT(G_OBJECT_CLASS, finalize, (object));
 }
@@ -216,9 +225,21 @@ static bool webKitMediaOpenCDMDecryptorDecrypt(WebKitMediaCommonEncryptionDecryp
         }
     }
 
+// Let OCDM sessions the current stream type
+   GRefPtr<GstCaps> caps = nullptr;
+   if(priv->m_openCdmSession) {
+       GRefPtr<GstPad> sinkpad = adoptGRef(gst_element_get_static_pad(reinterpret_cast<GstElement*>(self), "sink"));
+       caps = adoptGRef(gst_pad_get_current_caps(sinkpad.get()));
+
+        GstStructure *capstruct = gst_caps_get_structure(caps.get(), 0);
+        const gchar* capsinfo = gst_structure_get_string(capstruct, "original-media-type");
+        GST_DEBUG_OBJECT(self, "CAPS %p - Stream Type = %s", caps, capsinfo);
+   }
+
     // Decrypt cipher.
     GST_TRACE_OBJECT(self, "decrypting");
-    if (int errorCode = opencdm_gstreamer_session_decrypt(priv->m_openCdmSession.get(), buffer, subSamplesBuffer, subSampleCount, ivBuffer, keyIDBuffer, 0)) {
+    if (int errorCode = opencdm_gstreamer_session_decrypt_ex(priv->m_openCdmSession.get(), buffer, subSamplesBuffer, subSampleCount,
+                                                        ivBuffer, keyIDBuffer, 0, caps.get())) {
         GUniquePtr<gchar> errorMessage (g_strdup_printf("Subsample decryption failed (code=%d)", errorCode));
         gst_element_post_message(
             GST_ELEMENT(self),

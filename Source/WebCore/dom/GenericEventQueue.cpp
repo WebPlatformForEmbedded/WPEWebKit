@@ -92,6 +92,19 @@ bool GenericEventQueue::hasPendingEvents() const
     return !m_pendingEvents.isEmpty();
 }
 
+bool GenericEventQueue::hasPendingEventsListeners() const
+{
+    if (m_isClosed || m_pendingEvents.isEmpty())
+        return false;
+
+    for (auto& event : m_pendingEvents) {
+        if (m_owner.hasEventListeners(event->type()))
+            return true;
+    }
+
+    return false;
+}
+
 bool GenericEventQueue::hasPendingEventsOfType(const AtomicString& type) const
 {
     for (auto& event : m_pendingEvents) {

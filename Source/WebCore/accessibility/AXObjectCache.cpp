@@ -183,6 +183,7 @@ void AccessibilityReplacedText::postTextStateChangeNotification(AXObjectCache* c
 
 bool AXObjectCache::gAccessibilityEnabled = false;
 bool AXObjectCache::gAccessibilityEnhancedUserInterfaceEnabled = false;
+bool AXObjectCache::gAccessibilityEnabledByInspector = false;
 
 void AXObjectCache::enableAccessibility()
 {
@@ -192,6 +193,16 @@ void AXObjectCache::enableAccessibility()
 void AXObjectCache::disableAccessibility()
 {
     gAccessibilityEnabled = false;
+}
+
+void AXObjectCache::enableAccessibilityFromInspector()
+{
+    gAccessibilityEnabledByInspector = true;
+}
+
+void AXObjectCache::restoreAccessibilityFromInspector()
+{
+    gAccessibilityEnabledByInspector = false;
 }
 
 void AXObjectCache::setEnhancedUserInterfaceAccessibility(bool flag)
@@ -342,7 +353,7 @@ AccessibilityObject* AXObjectCache::focusedImageMapUIElement(HTMLAreaElement* ar
     
 AccessibilityObject* AXObjectCache::focusedUIElementForPage(const Page* page)
 {
-    if (!gAccessibilityEnabled)
+    if (!accessibilityEnabled())
         return nullptr;
 
     // get the focused node in the page
@@ -645,7 +656,7 @@ AccessibilityObject* AXObjectCache::getOrCreate(RenderObject* renderer)
     
 AccessibilityObject* AXObjectCache::rootObject()
 {
-    if (!gAccessibilityEnabled)
+    if (!accessibilityEnabled())
         return nullptr;
 
     return getOrCreate(m_document.view());
@@ -653,7 +664,7 @@ AccessibilityObject* AXObjectCache::rootObject()
 
 AccessibilityObject* AXObjectCache::rootObjectForFrame(Frame* frame)
 {
-    if (!gAccessibilityEnabled)
+    if (!accessibilityEnabled())
         return nullptr;
 
     if (!frame)

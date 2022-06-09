@@ -1096,6 +1096,11 @@ void DOMWindow::close()
         return;
     }
 
+    if (!allowScriptsToCloseWindows) {
+        console()->addMessage(MessageSource::JS, MessageLevel::Warning, "Not allowed to close windows"_s);
+        return;
+    }
+
     if (!m_frame->loader().shouldClose())
         return;
 

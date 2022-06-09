@@ -71,12 +71,18 @@ public:
 
     OptionSet<WebCore::ActivityState::Flag> viewState() const { return m_viewStateFlags; }
     void setViewState(OptionSet<WebCore::ActivityState::Flag>);
+    bool ignoreResize() const { return m_ignoreResize; }
+    void setIgnoreResize(bool);
 
     void close();
 
 #if ENABLE(FULLSCREEN_API)
     bool isFullScreen() { return m_fullScreenModeActive; };
     void setFullScreen(bool fullScreenState) { m_fullScreenModeActive = fullScreenState; };
+#endif
+
+#if ENABLE(GAMEPAD)
+    static WebKit::WebPageProxy* platformWebPageProxyForGamepadInput();
 #endif
 
 private:
@@ -89,6 +95,7 @@ private:
     std::unique_ptr<WebKit::PageClientImpl> m_pageClient;
     RefPtr<WebKit::WebPageProxy> m_pageProxy;
     WebCore::IntSize m_size;
+    bool m_ignoreResize { false };
     OptionSet<WebCore::ActivityState::Flag> m_viewStateFlags;
 
     WebKit::CompositingManagerProxy m_compositingManagerProxy;

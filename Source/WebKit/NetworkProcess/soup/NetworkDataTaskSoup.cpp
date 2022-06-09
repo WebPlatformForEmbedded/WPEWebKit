@@ -173,6 +173,8 @@ void NetworkDataTaskSoup::createRequest(ResourceRequest&& request)
 #else
     g_signal_connect(static_cast<NetworkSessionSoup&>(m_session.get()).soupSession(), "request-started", G_CALLBACK(requestStartedCallback), this);
 #endif
+
+    m_readPriority = (request.priority() >= ResourceLoadPriority::High) ? RunLoopSourcePriority::AsyncIONetwork : G_PRIORITY_DEFAULT;
 }
 
 void NetworkDataTaskSoup::clearRequest()
@@ -731,7 +733,7 @@ void NetworkDataTaskSoup::read()
     RefPtr<NetworkDataTaskSoup> protectedThis(this);
     ASSERT(m_inputStream);
     m_readBuffer.grow(gDefaultReadBufferSize);
-    g_input_stream_read_async(m_inputStream.get(), m_readBuffer.data(), m_readBuffer.size(), RunLoopSourcePriority::AsyncIONetwork, m_cancellable.get(),
+    g_input_stream_read_async(m_inputStream.get(), m_readBuffer.data(), m_readBuffer.size(), m_readPriority, m_cancellable.get(),
         reinterpret_cast<GAsyncReadyCallback>(readCallback), protectedThis.leakRef());
 }
 

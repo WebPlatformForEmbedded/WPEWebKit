@@ -162,7 +162,7 @@ void CompositingCoordinator::syncDisplayState()
 double CompositingCoordinator::nextAnimationServiceTime() const
 {
     // According to the requestAnimationFrame spec, rAF callbacks should not be faster than 60FPS.
-    static const double MinimalTimeoutForAnimations = 1. / 60.;
+    static const double MinimalTimeoutForAnimations = 1. / 30.;
     return std::max<double>(0., MinimalTimeoutForAnimations - timestamp() + m_lastAnimationServiceTime);
 }
 

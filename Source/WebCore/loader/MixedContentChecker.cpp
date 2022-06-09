@@ -75,7 +75,8 @@ bool MixedContentChecker::canDisplayInsecureContent(SecurityOrigin& securityOrig
         return true;
 
     bool allowed = !isStrictMode && (m_frame.settings().allowDisplayOfInsecureContent() || type == ContentType::ActiveCanWarn) && !m_frame.document()->geolocationAccessed();
-    logWarning(allowed, "display", url);
+    if (!allowed)
+       logWarning(allowed, "display", url);
 
     if (allowed) {
         m_frame.document()->setFoundMixedContent(SecurityContext::MixedContentType::Inactive);
@@ -94,7 +95,8 @@ bool MixedContentChecker::canRunInsecureContent(SecurityOrigin& securityOrigin, 
         return false;
 
     bool allowed = !m_frame.document()->isStrictMixedContentMode() && m_frame.settings().allowRunningOfInsecureContent() && !m_frame.document()->geolocationAccessed() && !m_frame.document()->secureCookiesAccessed();
-    logWarning(allowed, "run", url);
+    if (!allowed)
+       logWarning(allowed, "run", url);
 
     if (allowed) {
         m_frame.document()->setFoundMixedContent(SecurityContext::MixedContentType::Active);

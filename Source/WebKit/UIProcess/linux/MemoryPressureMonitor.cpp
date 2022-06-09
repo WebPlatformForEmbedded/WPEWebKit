@@ -36,16 +36,34 @@
 #include <wtf/Threading.h>
 #include <wtf/UniStdExtras.h>
 
+#include <fstream>
+
 namespace WebKit {
 
 static const size_t notSet = static_cast<size_t>(-1);
 
 static const Seconds s_minPollingInterval { 1_s };
 static const Seconds s_maxPollingInterval { 5_s };
-static const double s_minUsedMemoryPercentageForPolling = 50;
-static const double s_maxUsedMemoryPercentageForPolling = 85;
-static const int s_memoryPresurePercentageThreshold = 90;
-static const int s_memoryPresurePercentageThresholdCritical = 95;
+static double s_minUsedMemoryPercentageForPolling = 50;
+static double s_maxUsedMemoryPercentageForPolling = 85;
+static int s_memoryPresurePercentageThreshold = 90;
+static int s_memoryPresurePercentageThresholdCritical = 95;
+static bool s_useMemoryFromCgroup = false;
+
+int64_t readFromFile(const char* filename)
+{
+  int64_t value = 0;
+
+  if (filename != nullptr)
+  {
+    std::ifstream fs(filename);
+    if (!fs.fail() && !fs.eof())
+    {
+      fs >> value;
+    }
+  }
+  return value;
+};
 
 static size_t lowWatermarkPages()
 {
@@ -124,6 +142,23 @@ static size_t calculateMemoryAvailable(size_t memoryFree, size_t activeFile, siz
     // Cap this estimate at the low watermark.
     memoryAvailable += slabReclaimable - std::min(slabReclaimable / 2, lowWatermark);
     return memoryAvailable;
+}
+
+static int cgroupMemoryUsedAsPercentage()
+{
+    int64_t memoryUsed = readFromFile("/sys/fs/cgroup/memory/memory.usage_in_bytes");
+    int64_t memoryLimit = readFromFile("/sys/fs/cgroup/memory/memory.limit_in_bytes");
+
+    if (memoryLimit <= 0) {
+        return -1;
+    }
+
+    if (memoryUsed > memoryLimit)
+    {
+        memoryUsed = memoryLimit;
+    }
+
+    return (memoryUsed * 100) / memoryLimit;
 }
 
 static int systemMemoryUsedAsPercentage()
@@ -207,6 +242,29 @@ static inline Seconds pollIntervalForUsedMemoryPercentage(int usedPercentage)
         ((s_maxUsedMemoryPercentageForPolling - usedPercentage) / (s_maxUsedMemoryPercentageForPolling - s_minUsedMemoryPercentageForPolling));
 }
 
+static inline void readConfigVariables() {
+    char* env = std::getenv("WPE_MEMORY_USAGE_FROM_CGROUP");
+    if (env && env[0] == '1') {
+        s_useMemoryFromCgroup = true;
+    }
+    env = std::getenv("WPE_MIN_MEMORY_PERCENTAGE_FOR_POLLING");
+    if (env) {
+        s_minUsedMemoryPercentageForPolling = atoi(env);
+    }
+    env = std::getenv("WPE_MAX_MEMORY_PERCENTAGE_FOR_POLLING");
+    if (env) {
+        s_maxUsedMemoryPercentageForPolling = atoi(env);
+    }
+    env = std::getenv("WPE_MEMORY_PERCENTAGE_TRESHOLD");
+    if (env) {
+        s_memoryPresurePercentageThreshold = atoi(env);
+    }
+    env = std::getenv("WPE_MEMORY_PERCENTAGE_TRESHOLD_CRITICAL");
+    if (env) {
+        s_memoryPresurePercentageThresholdCritical = atoi(env);
+    }
+}
+
 MemoryPressureMonitor& MemoryPressureMonitor::singleton()
 {
     static NeverDestroyed<MemoryPressureMonitor> memoryMonitor;
@@ -219,6 +277,7 @@ void MemoryPressureMonitor::start()
         return;
 
     m_started = true;
+    readConfigVariables();
 
     Thread::create("MemoryPressureMonitor", [this] {
         Seconds pollInterval = s_maxPollingInterval;
@@ -226,6 +285,9 @@ void MemoryPressureMonitor::start()
             sleep(pollInterval);
 
             int usedPercentage = systemMemoryUsedAsPercentage();
+            if (s_useMemoryFromCgroup) {
+                usedPercentage = std::max(usedPercentage, cgroupMemoryUsedAsPercentage());
+            }
             if (usedPercentage == -1) {
                 WTFLogAlways("Failed to get the memory usage");
                 break;

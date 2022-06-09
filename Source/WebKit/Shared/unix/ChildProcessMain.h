@@ -30,6 +30,8 @@
 #include "WebKit2Initialize.h"
 #include <wtf/RunLoop.h>
 
+#include <unistd.h>
+
 namespace WebKit {
 
 class ChildProcessMainBase {
@@ -60,6 +62,9 @@ int ChildProcessMain(int argc, char** argv)
     ChildProcessType::singleton().initialize(childMain.initializationParameters());
     RunLoop::run();
     childMain.platformFinalize();
+
+    if (!getenv("RDKBROWSER2_CLEAN_EXIT_WEBPROCESS"))
+        _exit(EXIT_SUCCESS);
 
     return EXIT_SUCCESS;
 }

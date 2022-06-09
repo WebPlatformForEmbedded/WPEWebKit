@@ -2117,3 +2117,13 @@ bool WKPreferencesGetNonCompositedWebGLEnabled(WKPreferencesRef preferencesRef)
 {
     return toImpl(preferencesRef)->nonCompositedWebGLEnabled();
 }
+
+void WKPreferencesSetAccessibilityEnabled(WKPreferencesRef preferencesRef, bool accessibilityEnabled)
+{
+    toImpl(preferencesRef)->setAccessibilityEnabled(accessibilityEnabled);
+}
+
+bool WKPreferencesGetAccessibilityEnabled(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->accessibilityEnabled();
+}

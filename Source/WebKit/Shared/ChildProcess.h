@@ -121,6 +121,7 @@ private:
     void didClose(IPC::Connection&) override;
 
     void shutDown();
+    void releaseMemory();
 
     void terminationTimerFired();
 

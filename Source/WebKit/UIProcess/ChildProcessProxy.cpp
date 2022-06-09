@@ -229,4 +229,11 @@ void ChildProcessProxy::connectionWillOpen(IPC::Connection&)
 {
 }
 
+void ChildProcessProxy::releaseMemory()
+{
+    if (canSendMessage()) {
+        send(Messages::ChildProcess::ReleaseMemory(), 0);
+    }
+}
+
 } // namespace WebKit

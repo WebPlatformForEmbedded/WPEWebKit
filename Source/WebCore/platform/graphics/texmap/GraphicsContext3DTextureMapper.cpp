@@ -66,6 +66,12 @@ static Deque<GraphicsContext3D*, MaxActiveContexts>& activeContexts()
     return s_activeContexts;
 }
 
+void looseGLContext() {
+    for (auto ctx : activeContexts()) {
+        ctx->recycleContext();
+    }
+}
+
 RefPtr<GraphicsContext3D> GraphicsContext3D::create(GraphicsContext3DAttributes attributes, HostWindow* hostWindow, GraphicsContext3D::RenderStyle renderStyle)
 {
     static bool initialized = false;

@@ -599,12 +599,20 @@ void WebChromeClient::scroll(const IntSize& scrollDelta, const IntRect& scrollRe
 
 IntPoint WebChromeClient::screenToRootView(const IntPoint& point) const
 {
+#if PLATFORM(WPE)
+    return point;
+#else
     return m_page.screenToRootView(point);
+#endif
 }
 
 IntRect WebChromeClient::rootViewToScreen(const IntRect& rect) const
 {
+#if PLATFORM(WPE)
+    return rect;
+#else
     return m_page.rootViewToScreen(rect);
+#endif
 }
     
 #if PLATFORM(IOS)

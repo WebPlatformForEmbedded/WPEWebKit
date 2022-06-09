@@ -1286,6 +1286,11 @@ void MediaPlayer::initializationDataEncountered(const String& initDataType, RefP
 {
     client().mediaPlayerInitializationDataEncountered(initDataType, WTFMove(initData));
 }
+
+void MediaPlayer::decryptErrorEncountered()
+{
+    client().mediaPlayerDecryptErrorEncountered();
+}
 #endif
 
 String MediaPlayer::referrer() const
@@ -1627,6 +1632,35 @@ String MediaPlayer::errorMessage() const
     return m_private->errorMessage();
 }
 
+}
+
+namespace WebCore {
+
+namespace
+{
+bool gYouTubeQuirksEnabled = false;
+bool gDAZNQuirksEnabled = false;
+}
+
+void MediaPlayer::setYouTubeQuirksEnabled(bool enabled)
+{
+    gYouTubeQuirksEnabled = enabled;
+}
+
+bool MediaPlayer::isYouTubeQuirksEnabled()
+{
+    static bool enableYTQuirks = !!getenv("WPE_ENABLE_YT_MSE_HACKS");
+    return gYouTubeQuirksEnabled || enableYTQuirks;
+}
+void MediaPlayer::setDAZNQuirksEnabled(bool enabled)
+{
+    gDAZNQuirksEnabled = enabled;
+}
+
+bool MediaPlayer::isDAZNQuirksEnabled()
+{
+    return gDAZNQuirksEnabled;
+}
 }
 
 #endif

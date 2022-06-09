@@ -139,6 +139,7 @@ private:
     WebCore::NetworkLoadMetrics m_networkLoadMetrics;
     MonotonicTime m_startTime;
     RunLoop::Timer<NetworkDataTaskSoup> m_timeoutSource;
+    int m_readPriority;
 };
 
 } // namespace WebKit

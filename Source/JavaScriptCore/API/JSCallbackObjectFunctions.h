@@ -453,8 +453,10 @@ EncodedJSValue JSCallbackObject<Parent>::construct(ExecState* exec)
                 JSLock::DropAllLocks dropAllLocks(exec);
                 result = toJS(callAsConstructor(execRef, constructorRef, argumentCount, arguments.data(), &exception));
             }
-            if (exception)
+            if (exception) {
                 throwException(exec, scope, toJS(exec, exception));
+                return JSValue::encode(jsUndefined());
+            }
             return JSValue::encode(result);
         }
     }
@@ -526,8 +528,10 @@ EncodedJSValue JSCallbackObject<Parent>::call(ExecState* exec)
                 JSLock::DropAllLocks dropAllLocks(exec);
                 result = toJS(exec, callAsFunction(execRef, functionRef, thisObjRef, argumentCount, arguments.data(), &exception));
             }
-            if (exception)
+            if (exception) {
                 throwException(exec, scope, toJS(exec, exception));
+                return JSValue::encode(jsUndefined());
+            }
             return JSValue::encode(result);
         }
     }

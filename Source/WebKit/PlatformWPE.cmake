@@ -314,6 +314,17 @@ if (ENABLE_BREAKPAD)
     )
 endif ()
 
+if (ENABLE_ACCESSIBILITY)
+    list(APPEND WebKit_SOURCES
+        WebProcess/WebPage/atk/WebPageAccessibilityObjectAtk.cpp
+        )
+
+    list(APPEND WebKit_INCLUDE_DIRECTORIES
+        "${WEBKIT_DIR}/WebProcess/WebPage/atk"
+        ${ATK_INCLUDE_DIRS}
+        )
+endif ()
+
 add_custom_command(
     OUTPUT ${DERIVED_SOURCES_WEBINSPECTORUI_DIR}/WebKit2InspectorGResourceBundle.c
     DEPENDS ${WEBKIT_DIR}/UIProcess/API/wpe/WebKit2InspectorGResourceBundle.xml

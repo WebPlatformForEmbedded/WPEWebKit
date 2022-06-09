@@ -61,6 +61,7 @@ list(APPEND WebCore_LIBRARIES
     ${OPENCDM_LIBRARIES}
     ${UPOWERGLIB_LIBRARIES}
     ${WPE_LIBRARIES}
+    ${ATK_LIBRARIES}
 )
 
 list(APPEND WebCore_SYSTEM_INCLUDE_DIRECTORIES
@@ -74,4 +75,15 @@ list(APPEND WebCore_SYSTEM_INCLUDE_DIRECTORIES
     ${OPENCDM_INCLUDE_DIRS}
     ${UPOWERGLIB_INCLUDE_DIRS}
     ${WPE_INCLUDE_DIRS}
+    ${ATK_INCLUDE_DIRS}
 )
+
+if (ENABLE_GAMEPAD)
+    list(APPEND WebCore_INCLUDE_DIRECTORIES
+        "${WEBCORE_DIR}/platform/gamepad/wpe"
+    )
+    list(APPEND WebCore_SOURCES
+        platform/gamepad/wpe/WPEGamepad.cpp
+        platform/gamepad/wpe/WPEGamepadProvider.cpp
+    )
+endif ()

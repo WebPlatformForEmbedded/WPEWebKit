@@ -60,7 +60,7 @@ static void validate(JSCell* cell)
     // Both the cell's structure, and the cell's structure's structure should be the Structure Structure.
     // I hate this sentence.
     VM& vm = *cell->vm();
-    if (cell->structure()->structure()->JSCell::classInfo(vm) != cell->structure()->JSCell::classInfo(vm)) {
+    if (!cell->structure()->structure() || cell->structure()->structure()->JSCell::classInfo(vm) != cell->structure()->JSCell::classInfo(vm)) {
         const char* parentClassName = 0;
         const char* ourClassName = 0;
         if (cell->structure()->structure() && cell->structure()->structure()->JSCell::classInfo(vm))
@@ -75,6 +75,15 @@ static void validate(JSCell* cell)
     // Make sure we can walk the ClassInfo chain
     const ClassInfo* info = cell->classInfo(vm);
     do { } while ((info = info->parentClass));
+
+    if (!cell->structure(vm)) {
+        dataLogF("validate(): Cell %p has null structure, type %d. \n", cell, cell->type());
+        CRASH();
+    }
+    if (!cell->methodTable(vm)) {
+        dataLogF("validate(): Cell %p has null methodTable, type %d. \n", cell, cell->type());
+        CRASH();
+    }
 }
 #endif
 
@@ -379,6 +388,12 @@ ALWAYS_INLINE void SlotVisitor::visitChildren(const JSCell* cell)
         break;
         
     default:
+        if (!cell->structure(vm())) {
+            dataLogF("SlotVisitor::visitChildren(): Cell %p has null structure, type %d. \n", cell, cell->type());
+        }
+        if (!cell->methodTable(vm())) {
+            dataLogF("SlotVisitor::visitChildren(): Cell %p has null methodTable, type %d. \n", cell, cell->type());
+        }
         // FIXME: This could be so much better.
         // https://bugs.webkit.org/show_bug.cgi?id=162462
         cell->methodTable(vm())->visitChildren(const_cast<JSCell*>(cell), *this);

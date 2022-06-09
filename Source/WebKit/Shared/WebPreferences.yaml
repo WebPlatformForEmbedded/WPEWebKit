@@ -630,7 +630,7 @@ EnumeratingAllNetworkInterfacesEnabled:
 # FIXME: What is this for?
 ICECandidateFilteringEnabled:
   type: bool
-  defaultValue: true
+  defaultValue: false
   webcoreBinding: none
 
 ShadowDOMEnabled:
@@ -1369,3 +1369,6 @@ ResizeObserverEnabled:
   category: experimental
   condition: ENABLE(RESIZE_OBSERVER)
 
+AccessibilityEnabled:
+  type: bool
+  defaultValue: false

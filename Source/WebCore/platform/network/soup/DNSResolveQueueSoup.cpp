@@ -132,9 +132,21 @@ static void resolvedWithObserverCallback(SoupAddress* address, guint status, voi
     Vector<WebCore::IPAddress> addresses;
     addresses.reserveInitialCapacity(1);
     int len;
-    auto* ipAddress = reinterpret_cast<const struct sockaddr_in*>(soup_address_get_sockaddr(address, &len));
-    for (unsigned i = 0; i < sizeof(*ipAddress) / len; i++)
-        addresses.uncheckedAppend(WebCore::IPAddress(ipAddress[i]));
+    auto* ipAddress = soup_address_get_sockaddr(address, &len);
+    if(ipAddress->sa_family == AF_INET)
+    {
+        auto* ipAddress4 = reinterpret_cast<const struct sockaddr_in*>(ipAddress);
+        for (unsigned i = 0; i < sizeof(*ipAddress4) / len; i++){
+            addresses.uncheckedAppend(WebCore::IPAddress(ipAddress4[i]));
+        }
+    }
+    else
+    {
+        auto* ipAddress6 = reinterpret_cast<const struct sockaddr_in6*>(ipAddress);
+        for (unsigned i = 0; i < sizeof(*ipAddress6) / len; i++){
+            addresses.uncheckedAppend(WebCore::IPAddress(ipAddress6[i]));
+        }
+    }
 
     completionHandler(addresses);
 }

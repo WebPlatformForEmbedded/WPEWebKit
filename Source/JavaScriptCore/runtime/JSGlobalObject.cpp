@@ -1266,6 +1266,8 @@ void JSGlobalObject::haveABadTime(VM& vm)
 
     vm.structureCache.clear(); // We may be caching array structures in here.
 
+    DeferGC deferGC(vm.heap);
+
     // Make sure that all allocations or indexed storage transitions that are inlining
     // the assumption that it's safe to transition to a non-SlowPut array storage don't
     // do so anymore.

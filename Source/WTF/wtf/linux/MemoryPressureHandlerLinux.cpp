@@ -383,6 +383,20 @@ std::optional<MemoryPressureHandler::ReliefLogger::MemoryUsage> MemoryPressureHa
     return MemoryUsage {processMemoryUsage(), memoryFootprint()};
 }
 
+size_t memoryFootprint()
+{
+    static const Seconds s_memoryFootprintUpdateInterval = 1_s;
+    static size_t footprint = 0;
+    static MonotonicTime previousUpdateTime = { };
+    Seconds elapsed = MonotonicTime::now() - previousUpdateTime;
+    if (elapsed >= s_memoryFootprintUpdateInterval) {
+        size_t vmRSS;
+        if (readToken(s_processStatus, "VmRSS:", KB, vmRSS))
+           footprint = vmRSS;
+        previousUpdateTime = MonotonicTime::now();
+    }
+    return footprint;
+}
 
 } // namespace WTF
 

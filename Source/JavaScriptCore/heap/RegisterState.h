@@ -139,6 +139,7 @@ struct RegisterState {
     uint32_t r21;
     uint32_t r22;
     uint32_t r23;
+    uint32_t r30;
 };
 
 #define SAVE_REG(regname, where) \
@@ -153,7 +154,8 @@ struct RegisterState {
     SAVE_REG(20, registers.r20); \
     SAVE_REG(21, registers.r21); \
     SAVE_REG(22, registers.r22); \
-    SAVE_REG(23, registers.r23)
+    SAVE_REG(23, registers.r23); \
+    SAVE_REG(30, registers.r30)
 
 #endif
 #endif // !OS(WINDOWS)

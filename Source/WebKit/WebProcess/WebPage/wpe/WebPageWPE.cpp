@@ -30,6 +30,7 @@
 #include "WebPreferencesKeys.h"
 #include "WebPreferencesStore.h"
 #include "WindowsKeyboardCodes.h"
+#include "AXObjectCache.h"
 #include <WebCore/NotImplemented.h>
 #include <WebCore/Settings.h>
 #include <WebCore/SharedBuffer.h>
@@ -39,7 +40,28 @@ using namespace WebCore;
 
 void WebPage::platformInitialize()
 {
+#if HAVE(ACCESSIBILITY)
+    // Create the accessible object (the plug) that will serve as the
+    // entry point to the Web process, and send a message to the UI
+    // process to connect the two worlds through the accessibility
+    // object there specifically placed for that purpose (the socket).
+    if(m_accessibilityEnabled) {
+        m_accessibilityObject = adoptGRef(webPageAccessibilityObjectNew(this));
+        GUniquePtr<gchar> plugID(atk_plug_get_id(ATK_PLUG(m_accessibilityObject.get())));
+        // send(Messages::WebPageProxy::BindAccessibilityTree(String(plugID.get())));
+     }
+#endif
 }
+
+#if HAVE(ACCESSIBILITY)
+void WebPage::updateAccessibilityTree()
+{
+    if (!m_accessibilityObject || !AXObjectCache::accessibilityEnabled())
+        return;
+
+    webPageAccessibilityObjectRefresh(m_accessibilityObject.get());
+}
+#endif
 
 void WebPage::platformDetach()
 {

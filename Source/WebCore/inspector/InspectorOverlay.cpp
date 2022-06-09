@@ -621,7 +621,7 @@ static RefPtr<Inspector::Protocol::OverlayTypes::ElementData> buildObjectForElem
 
     // Need to enable AX to get the computed role.
     if (!WebCore::AXObjectCache::accessibilityEnabled())
-        WebCore::AXObjectCache::enableAccessibility();
+        WebCore::AXObjectCache::enableAccessibilityFromInspector();
 
     if (AXObjectCache* axObjectCache = node->document().axObjectCache()) {
         if (AccessibilityObject* axObject = axObjectCache->getOrCreate(node))

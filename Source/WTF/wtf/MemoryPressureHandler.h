@@ -66,6 +66,7 @@ public:
     WTF_EXPORT_PRIVATE static MemoryPressureHandler& singleton();
 
     WTF_EXPORT_PRIVATE void install();
+    WTF_EXPORT_PRIVATE void uninstall();
 
     WTF_EXPORT_PRIVATE void setShouldUsePeriodicMemoryMonitor(bool);
 
@@ -154,8 +155,6 @@ private:
     size_t thresholdForMemoryKill();
     void memoryPressureStatusChanged();
 
-    void uninstall();
-
     void holdOff(Seconds);
 
     MemoryPressureHandler();
@@ -175,7 +174,7 @@ private:
 
     unsigned m_pageCount { 0 };
 
-    bool m_installed { false };
+    std::atomic<bool> m_installed;
     LowMemoryHandler m_lowMemoryHandler;
 
     std::atomic<bool> m_underMemoryPressure;

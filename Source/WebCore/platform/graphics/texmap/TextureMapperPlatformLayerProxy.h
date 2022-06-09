@@ -66,7 +66,7 @@ public:
     bool isActive();
 
     WEBCORE_EXPORT void activateOnCompositingThread(Compositor*, TextureMapperLayer*);
-    WEBCORE_EXPORT void invalidate();
+    WEBCORE_EXPORT void invalidate(bool layerOnly = false);
 
     WEBCORE_EXPORT void swapBuffer();
     void dropCurrentBufferWhilePreservingTexture();

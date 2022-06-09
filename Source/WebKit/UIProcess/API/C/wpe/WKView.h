@@ -48,6 +48,8 @@ enum {
 typedef uint32_t WKViewState;
 
 WK_EXPORT void WKViewSetViewState(WKViewRef, WKViewState);
+WK_EXPORT void WKViewSetIgnoreResize(WKViewRef, bool);
+WK_EXPORT bool WKViewGetIgnoreResize(WKViewRef);
 
 typedef void (*WKViewFrameDisplayed)(WKViewRef view, const void* clientInfo);
 

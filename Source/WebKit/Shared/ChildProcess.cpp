@@ -217,6 +217,11 @@ void ChildProcess::shutDown()
     terminate();
 }
 
+void ChildProcess::releaseMemory()
+{
+    MemoryPressureHandler::singleton().releaseMemory(Critical::Yes, Synchronous::Yes);
+}
+
 void ChildProcess::registerURLSchemeServiceWorkersCanHandle(const String& urlScheme) const
 {
     WebCore::SchemeRegistry::registerURLSchemeServiceWorkersCanHandle(urlScheme);

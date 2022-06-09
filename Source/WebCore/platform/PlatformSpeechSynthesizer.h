@@ -43,6 +43,22 @@ enum SpeechBoundary {
     SpeechSentenceBoundary
 };
 
+enum SpeechError {
+    SpeechErrorNone,
+    SpeechErrorCanceled,
+    SpeechErrorInterrupted,
+    SpeechErrorAudioBusy,
+    SpeechErrorAudioHardware,
+    SpeechErrorNetwork,
+    SpeechErrorSynthesisUnavailable,
+    SpeechErrorSynthesisFailed,
+    SpeechErrorLanguageUnavailable,
+    SpeechErrorVoiceUnavailable,
+    SpeechErrorTextTooLong,
+    SpeechErrorInvalidArgument,
+    SpeechErrorNotAllowed
+};
+
 class PlatformSpeechSynthesisUtterance;
 
 class PlatformSpeechSynthesizerClient {
@@ -51,22 +67,25 @@ public:
     virtual void didFinishSpeaking(PlatformSpeechSynthesisUtterance&) = 0;
     virtual void didPauseSpeaking(PlatformSpeechSynthesisUtterance&) = 0;
     virtual void didResumeSpeaking(PlatformSpeechSynthesisUtterance&) = 0;
-    virtual void speakingErrorOccurred(PlatformSpeechSynthesisUtterance&) = 0;
+    virtual void speakingErrorOccurred(PlatformSpeechSynthesisUtterance&, SpeechError) = 0;
     virtual void boundaryEventOccurred(PlatformSpeechSynthesisUtterance&, SpeechBoundary, unsigned charIndex) = 0;
     virtual void voicesDidChange() = 0;
+    virtual double getPageMediaVolume() = 0;
+    virtual void setPageMediaVolume(double volume) = 0;
 protected:
     virtual ~PlatformSpeechSynthesizerClient() = default;
 };
 
 class WEBCORE_EXPORT PlatformSpeechSynthesizer {
 public:
+    WEBCORE_EXPORT static std::unique_ptr<PlatformSpeechSynthesizer> create(PlatformSpeechSynthesizerClient*);
     WEBCORE_EXPORT explicit PlatformSpeechSynthesizer(PlatformSpeechSynthesizerClient*);
 
     // FIXME: We have multiple virtual functions just so we can support a mock for testing.
     // Seems wasteful. Would be nice to find a better way.
     WEBCORE_EXPORT virtual ~PlatformSpeechSynthesizer();
 
-    const Vector<RefPtr<PlatformSpeechSynthesisVoice>>& voiceList() const;
+    virtual const Vector<RefPtr<PlatformSpeechSynthesisVoice>>& voiceList() const;
     virtual void speak(RefPtr<PlatformSpeechSynthesisUtterance>&&);
     virtual void pause();
     virtual void resume();
@@ -75,11 +94,9 @@ public:
     PlatformSpeechSynthesizerClient* client() const { return m_speechSynthesizerClient; }
 
 protected:
-    Vector<RefPtr<PlatformSpeechSynthesisVoice>> m_voiceList;
-
-private:
     virtual void initializeVoiceList();
 
+    Vector<RefPtr<PlatformSpeechSynthesisVoice>> m_voiceList;
     bool m_voiceListIsInitialized { false };
     PlatformSpeechSynthesizerClient* m_speechSynthesizerClient;
 

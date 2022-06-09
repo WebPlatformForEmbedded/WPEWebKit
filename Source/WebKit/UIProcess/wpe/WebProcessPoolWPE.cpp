@@ -83,11 +83,11 @@ static void initializeLegacyInspectorServer()
         String bindAddress = "127.0.0.1";
         unsigned short port = 2999;
 
-        Vector<String> result = serverAddress.split(':');
-        if (result.size() == 2) {
-            bindAddress = result[0];
+        size_t ColonIndex = serverAddress.reverseFind(':');
+        if (ColonIndex != notFound) {
+            bindAddress = serverAddress.substring(0,ColonIndex);
             bool ok = false;
-            port = result[1].toInt(&ok);
+            port = (serverAddress.substring(ColonIndex+1)).toInt(&ok);
             if (!ok) {
                 port = 2999;
                 WTFLogAlways("Couldn't parse the port. Use 2999 instead.");
@@ -105,9 +105,8 @@ void WebProcessPool::platformInitialize()
 {
 #if ENABLE(REMOTE_INSPECTOR)
     if (const char* address = g_getenv("WEBKIT_INSPECTOR_SERVER")) {
-        if (initializeRemoteInspectorServer(address))
-            return;
-        g_unsetenv("WEBKIT_INSPECTOR_SERVER");
+        if (!initializeRemoteInspectorServer(address))
+            g_unsetenv("WEBKIT_INSPECTOR_SERVER");
     }
 #endif
 #if ENABLE(INSPECTOR_SERVER)

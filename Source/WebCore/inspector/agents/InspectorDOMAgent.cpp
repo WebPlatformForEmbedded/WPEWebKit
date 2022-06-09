@@ -1559,7 +1559,7 @@ Ref<Inspector::Protocol::DOM::Node> InspectorDOMAgent::buildObjectForNode(Node* 
 
     // Need to enable AX to get the computed role.
     if (!WebCore::AXObjectCache::accessibilityEnabled())
-        WebCore::AXObjectCache::enableAccessibility();
+        WebCore::AXObjectCache::enableAccessibilityFromInspector();
 
     if (AXObjectCache* axObjectCache = node->document().axObjectCache()) {
         if (AccessibilityObject* axObject = axObjectCache->getOrCreate(node))
@@ -1711,7 +1711,7 @@ RefPtr<Inspector::Protocol::DOM::AccessibilityProperties> InspectorDOMAgent::bui
         return nullptr;
 
     if (!WebCore::AXObjectCache::accessibilityEnabled())
-        WebCore::AXObjectCache::enableAccessibility();
+        WebCore::AXObjectCache::enableAccessibilityFromInspector();
 
     Node* activeDescendantNode = nullptr;
     bool busy = false;

@@ -486,7 +486,7 @@ void ArgumentCoder<StepsTimingFunction>::encode(Encoder& encoder, const StepsTim
     encoder.encodeEnum(timingFunction.type());
     
     encoder << timingFunction.numberOfSteps();
-    encoder << timingFunction.stepAtStart();
+    encoder << timingFunction.stepPosition();
 }
 
 bool ArgumentCoder<StepsTimingFunction>::decode(Decoder& decoder, StepsTimingFunction& timingFunction)
@@ -496,12 +496,12 @@ bool ArgumentCoder<StepsTimingFunction>::decode(Decoder& decoder, StepsTimingFun
     if (!decoder.decode(numSteps))
         return false;
 
-    bool stepAtStart;
-    if (!decoder.decode(stepAtStart))
+    std::optional<StepsTimingFunction::StepPosition> stepPosition;
+    if (!decoder.decode(stepPosition))
         return false;
 
     timingFunction.setNumberOfSteps(numSteps);
-    timingFunction.setStepAtStart(stepAtStart);
+    timingFunction.setStepPosition(stepPosition);
 
     return true;
 }

@@ -952,6 +952,7 @@ void SamplingProfiler::reportTopFunctions()
 void SamplingProfiler::reportTopFunctions(PrintStream& out)
 {
     LockHolder locker(m_lock);
+    DeferGCForAWhile deferGC(m_vm.heap);
 
     {
         HeapIterationScope heapIterationScope(m_vm.heap);
@@ -1004,6 +1005,8 @@ void SamplingProfiler::reportTopBytecodes()
 void SamplingProfiler::reportTopBytecodes(PrintStream& out)
 {
     LockHolder locker(m_lock);
+
+    DeferGCForAWhile deferGC(m_vm.heap);
 
     {
         HeapIterationScope heapIterationScope(m_vm.heap);

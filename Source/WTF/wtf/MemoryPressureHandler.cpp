@@ -55,6 +55,7 @@ MemoryPressureHandler::MemoryPressureHandler()
     : m_windowsMeasurementTimer(RunLoop::main(), this, &MemoryPressureHandler::windowsMeasurementTimerFired)
 #endif
 {
+    m_installed = false;
 }
 
 void MemoryPressureHandler::setShouldUsePeriodicMemoryMonitor(bool use)

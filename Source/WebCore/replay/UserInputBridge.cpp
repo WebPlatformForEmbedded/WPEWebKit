@@ -37,6 +37,7 @@
 #include "PlatformKeyboardEvent.h"
 #include "PlatformMouseEvent.h"
 #include "PlatformWheelEvent.h"
+#include "SchemeRegistry.h"
 
 namespace WebCore {
 
@@ -77,8 +78,12 @@ bool UserInputBridge::handleMouseForceEvent(const PlatformMouseEvent& mouseEvent
     return m_page.mainFrame().eventHandler().handleMouseForceEvent(mouseEvent);
 }
 
+// Implemented in MediaPlayerPrivateGStreamer.cpp
+void noticeEnterKeyDownEvent();
 bool UserInputBridge::handleKeyEvent(const PlatformKeyboardEvent& keyEvent, InputSource)
 {
+    if (keyEvent.type() == PlatformEvent::KeyDown && keyEvent.keyIdentifier() == "Enter")
+        noticeEnterKeyDownEvent();
     return m_page.focusController().focusedOrMainFrame().eventHandler().keyEvent(keyEvent);
 }
 
@@ -112,8 +117,13 @@ bool UserInputBridge::logicalScrollRecursively(ScrollLogicalDirection direction,
     return m_page.focusController().focusedOrMainFrame().eventHandler().logicalScrollRecursively(direction, granularity, nullptr);
 }
 
+void ForceStopMediaElements();  // defined in HTMLMediaElement
 void UserInputBridge::loadRequest(FrameLoadRequest&& request, InputSource)
 {
+    if (request.resourceRequest().url().isEmpty() ||
+        SchemeRegistry::shouldLoadURLSchemeAsEmptyDocument(request.resourceRequest().url().protocol().toStringWithoutCopying())) {
+        ForceStopMediaElements();
+    }
     m_page.mainFrame().loader().load(WTFMove(request));
 }
 

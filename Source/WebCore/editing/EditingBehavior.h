@@ -71,7 +71,7 @@ public:
     // On Mac and Windows, pressing backspace (when it isn't handled otherwise) should navigate back.
     bool shouldNavigateBackOnBackspace() const
     {
-        return m_type != EditingUnixBehavior;
+        return true;
     }
 
     // On Mac, selecting backwards by word/line from the middle of a word/line, and then going

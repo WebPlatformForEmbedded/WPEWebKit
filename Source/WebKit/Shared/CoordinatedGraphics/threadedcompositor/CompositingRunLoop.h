@@ -73,11 +73,14 @@ private:
     };
 
     void updateTimerFired();
+    void startUpdateTimer();
 
+    uint32_t m_contextId { 0 };
     RunLoop::Timer<CompositingRunLoop> m_updateTimer;
     Function<void ()> m_updateFunction;
     Lock m_dispatchSyncConditionMutex;
     Condition m_dispatchSyncCondition;
+    MonotonicTime m_updateTime { MonotonicTime::nan() };
 
 
     struct {

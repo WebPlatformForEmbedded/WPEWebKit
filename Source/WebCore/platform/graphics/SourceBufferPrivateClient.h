@@ -84,6 +84,7 @@ public:
     virtual void sourceBufferPrivateDidReceiveRenderingError(int errorCode) = 0;
 
     virtual double timestampOffset() const = 0;
+    virtual void useEncryptedContentSizeLimits() = 0;
 };
 
 }

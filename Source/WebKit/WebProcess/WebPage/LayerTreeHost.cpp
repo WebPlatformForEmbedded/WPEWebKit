@@ -73,7 +73,8 @@ void LayerTreeHost::setLayerFlushSchedulingEnabled(bool layerFlushingEnabled)
 
 void LayerTreeHost::pauseRendering()
 {
-    m_isSuspended = true;
+   //FIXME commented out to support rdkbrowser2.reset() [setting visible=false after setting about:blank url]
+   // m_isSuspended = true;
 }
 
 void LayerTreeHost::resumeRendering()

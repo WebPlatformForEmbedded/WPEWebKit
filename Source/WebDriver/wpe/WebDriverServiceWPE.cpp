@@ -80,8 +80,8 @@ bool WebDriverService::platformMatchCapability(const String&, const RefPtr<JSON:
 
 void WebDriverService::platformParseCapabilities(const JSON::Object& matchedCapabilities, Capabilities& capabilities) const
 {
-    capabilities.browserBinary = String("MiniBrowser");
-    capabilities.browserArguments = Vector<String> { "--automation"_s };
+    capabilities.browserBinary = String("/usr/bin/rdkbrowser2.sh");
+    capabilities.browserArguments = Vector<String> { "http://www.example.com"_s };
 
     RefPtr<JSON::Object> browserOptions;
     if (!matchedCapabilities.getObject("wpe:browserOptions"_s, browserOptions))

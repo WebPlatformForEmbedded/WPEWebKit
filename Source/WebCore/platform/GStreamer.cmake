@@ -22,6 +22,7 @@ if (ENABLE_VIDEO OR ENABLE_WEB_AUDIO)
         platform/graphics/gstreamer/WebKitWebSourceGStreamer.cpp
 
         platform/graphics/gstreamer/eme/GStreamerEMEUtilities.cpp
+        platform/graphics/gstreamer/eme/MediaPlayerGStreamerEncryptedPlayTracker.cpp
         platform/graphics/gstreamer/eme/WebKitCommonEncryptionDecryptorGStreamer.cpp
 
         platform/graphics/gstreamer/mse/AppendPipeline.cpp

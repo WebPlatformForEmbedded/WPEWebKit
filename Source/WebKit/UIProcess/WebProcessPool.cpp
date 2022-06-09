@@ -961,7 +961,8 @@ void WebProcessPool::initializeNewWebProcess(WebProcessProxy& process, WebsiteDa
 #endif
 
 #if OS(LINUX)
-    parameters.shouldEnableMemoryPressureReliefLogging = true;
+    static bool enableReliefLogging = !!getenv("WPE_ENABLE_RELIEF_LOGGING");
+    parameters.shouldEnableMemoryPressureReliefLogging = enableReliefLogging;
 #endif
 
 #if PLATFORM(WAYLAND) && USE(EGL)
@@ -1874,6 +1875,17 @@ void WebProcessPool::setInitialConnectedGamepads(const Vector<std::unique_ptr<UI
 void WebProcessPool::setJavaScriptConfigurationFileEnabled(bool flag)
 {
     m_javaScriptConfigurationFileEnabled = flag;
+}
+
+void WebProcessPool::releaseMemory()
+{
+    size_t processCount = m_processes.size();
+    for (size_t i = 0; i < processCount; ++i) {
+        WebProcessProxy* process = m_processes[i].get();
+        process->releaseMemory();
+    }
+    if (m_networkProcess)
+        m_networkProcess->releaseMemory();
 }
 
 void WebProcessPool::garbageCollectJavaScriptObjects()

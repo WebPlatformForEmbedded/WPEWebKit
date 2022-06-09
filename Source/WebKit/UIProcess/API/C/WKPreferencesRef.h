@@ -383,6 +383,10 @@ WK_EXPORT bool WKPreferencesGetWebGLEnabled(WKPreferencesRef);
 WK_EXPORT void WKPreferencesSetMediaContentTypesRequiringHardwareSupport(WKPreferencesRef, WKStringRef);
 WK_EXPORT WKStringRef WKPreferencesCopyMediaContentTypesRequiringHardwareSupport(WKPreferencesRef);
 
+// Defaults to false.
+WK_EXPORT void WKPreferencesSetAccessibilityEnabled(WKPreferencesRef preferences, bool accessibilityEnabled);
+WK_EXPORT bool WKPreferencesGetAccessibilityEnabled(WKPreferencesRef preferences);
+
 #ifdef __cplusplus
 }
 #endif

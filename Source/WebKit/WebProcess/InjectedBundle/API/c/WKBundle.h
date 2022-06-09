@@ -82,6 +82,9 @@ WK_EXPORT WKConnectionRef WKBundleGetApplicationConnection(WKBundleRef bundle);
 
 WK_EXPORT void WKBundleReportException(JSContextRef, JSValueRef exception);
 
+WK_EXPORT void WKBundleMemoryPressureHandlerStop();
+WK_EXPORT void WKBundleMemoryPressureHandlerStart();
+
 #ifdef __cplusplus
 }
 #endif

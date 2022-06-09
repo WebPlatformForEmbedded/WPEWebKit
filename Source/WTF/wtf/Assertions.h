@@ -450,7 +450,11 @@ WTF_EXPORT_PRIVATE NO_RETURN_DUE_TO_CRASH void WTFCrashWithSecurityImplication(v
 #if LOG_DISABLED
 #define LOG(channel, ...) ((void)0)
 #else
-#define LOG(channel, ...) WTFLog(&LOG_CHANNEL(channel), __VA_ARGS__)
+#define LOG(channel, ...)                                       \
+    do {                                                        \
+        if (LOG_CHANNEL(channel).state == WTFLogChannelOn)      \
+            WTFLog(&LOG_CHANNEL(channel), __VA_ARGS__);         \
+    } while (0)
 #endif
 
 /* LOG_VERBOSE */

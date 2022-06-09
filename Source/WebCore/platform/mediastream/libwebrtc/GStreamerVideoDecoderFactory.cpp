@@ -79,6 +79,11 @@ public:
         return gst_element_factory_make(factoryName, name.get());
     }
 
+    bool PrefersLateDecoding() const override
+    {
+        return false;
+    }
+
     int32_t InitDecode(const webrtc::VideoCodec*, int32_t) override
     {
         m_src = makeElement("appsrc");
@@ -176,7 +181,7 @@ public:
             m_dtsPtsMap[GST_BUFFER_PTS(buffer.get())] = timestamps;
         }
 
-        GST_LOG_OBJECT(pipeline(), "%ld Decoding: %" GST_PTR_FORMAT, renderTimeMs, buffer.get());
+        GST_LOG_OBJECT(pipeline(), "%" G_GINT64_FORMAT " Decoding: %" GST_PTR_FORMAT, renderTimeMs, buffer.get());
         auto sample = adoptGRef(gst_sample_new(buffer.get(), GetCapsForFrame(inputImage), nullptr, nullptr));
         switch (gst_app_src_push_sample(GST_APP_SRC(m_src), sample.get())) {
         case GST_FLOW_OK:

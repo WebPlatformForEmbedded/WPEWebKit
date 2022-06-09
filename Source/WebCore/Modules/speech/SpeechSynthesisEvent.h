@@ -41,9 +41,10 @@ public:
 
     virtual EventInterface eventInterface() const { return SpeechSynthesisEventInterfaceType; }
 
-private:
+protected:
     SpeechSynthesisEvent(const AtomicString& type, unsigned charIndex, float elapsedTime, const String& name);
 
+private:
     unsigned long m_charIndex;
     float m_elapsedTime;
     String m_name;

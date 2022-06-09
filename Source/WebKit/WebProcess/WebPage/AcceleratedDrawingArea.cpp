@@ -42,6 +42,10 @@
 #include <wtf/glib/RunLoopSourcePriority.h>
 #endif
 
+namespace WebCore {
+void looseGLContext();
+}
+
 namespace WebKit {
 using namespace WebCore;
 
@@ -160,7 +164,18 @@ void AcceleratedDrawingArea::updatePreferences(const WebPreferencesStore& store)
     bool forceCompositiongMode = store.getBoolValueForKey(WebPreferencesKey::forceCompositingModeKey());
     settings.setForceCompositingMode(forceCompositiongMode);
     settings.setAcceleratedCompositingForFixedPositionEnabled(forceCompositiongMode);
-    settings.setNonCompositedWebGLEnabled(store.getBoolValueForKey(WebPreferencesKey::nonCompositedWebGLEnabledKey()));
+    
+    bool nonCompositedWebGLEnabled = store.getBoolValueForKey(WebPreferencesKey::nonCompositedWebGLEnabledKey());
+    if (nonCompositedWebGLEnabled != m_nonCompositedWebGLEnabled) {
+        if (m_layerTreeHost) {
+            looseGLContext();
+            exitAcceleratedCompositingModeNow();
+            discardPreviousLayerTreeHost();
+        }
+        m_nonCompositedWebGLEnabled = nonCompositedWebGLEnabled;
+        settings.setNonCompositedWebGLEnabled(nonCompositedWebGLEnabled);
+    }
+
     if (!m_layerTreeHost)
         enterAcceleratedCompositingMode(nullptr);
 }
@@ -203,7 +218,10 @@ GraphicsLayerFactory* AcceleratedDrawingArea::graphicsLayerFactory()
 
 void AcceleratedDrawingArea::setRootCompositingLayer(GraphicsLayer* graphicsLayer)
 {
-    ASSERT(m_layerTreeHost);
+    if (m_layerTreeHost == nullptr && graphicsLayer == nullptr)
+        return;
+
+    RELEASE_ASSERT(m_layerTreeHost);
 
     // FIXME: Instead of using nested if statements, we should keep a compositing state
     // enum in the AcceleratedDrawingArea object and have a changeAcceleratedCompositingState function

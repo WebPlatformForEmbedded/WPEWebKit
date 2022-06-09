@@ -179,7 +179,7 @@ TextureMapperAnimation::TextureMapperAnimation(const String& name, const Keyfram
 }
 
 TextureMapperAnimation::TextureMapperAnimation(const TextureMapperAnimation& other)
-    : m_name(other.m_name.isSafeToSendToAnotherThread() ? other.m_name : other.m_name.isolatedCopy())
+    : m_name(other.m_name.isolatedCopy())
     , m_keyframes(other.m_keyframes)
     , m_boxSize(other.m_boxSize)
     , m_animation(Animation::create(*other.m_animation))

@@ -64,10 +64,12 @@ CDM::CDM(Document& document, const String& keySystem)
     : ContextDestructionObserver(&document)
     , m_keySystem(keySystem)
 {
-    ASSERT(supportsKeySystem(keySystem));
+    // append the origin domain to the keysystem string
+    String keysystemDomain = makeString(keySystem, ";origin="_s, document.securityOrigin().domain());
+
     for (auto* factory : CDMFactory::registeredFactories()) {
         if (factory->supportsKeySystem(keySystem)) {
-            m_private = factory->createCDM(keySystem);
+            m_private = factory->createCDM(keysystemDomain);
             break;
         }
     }

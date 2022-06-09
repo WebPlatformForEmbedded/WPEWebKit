@@ -28,6 +28,7 @@
 
 #include "GStreamerCommon.h"
 #include "MediaPlayerPrivateGStreamerBase.h"
+#include "MediaPlayerGStreamerEncryptedPlayTracker.h"
 
 #include <glib.h>
 #include <gst/gst.h>
@@ -133,6 +134,14 @@ public:
     void enableTrack(TrackPrivateBaseGStreamer::TrackType, unsigned index);
 
     bool handleSyncMessage(GstMessage*) override;
+#if ENABLE(ENCRYPTED_MEDIA)
+    void handleDecryptionError(const GstStructure*);
+    void cdmInstanceAttached(CDMInstance&) override;
+    void cdmInstanceDetached(CDMInstance&) override;
+#endif
+    bool m_reportedPlaybackStarted;
+    bool m_reportedPlaybackFailed;
+    bool m_reportedPlaybackEOS;
 
     String errorMessage() const override { return m_errorMessage; }
 
@@ -160,7 +169,7 @@ private:
 #if USE(GSTREAMER_MPEGTS)
     void processMpegTsSection(GstMpegtsSection*);
 #endif
-
+    WeakPtrFactory<MediaPlayerPrivateGStreamer> m_weakPtrFactory;
     void processTableOfContents(GstMessage*);
     void processTableOfContentsEntry(GstTocEntry*);
 
@@ -195,6 +204,7 @@ protected:
     int m_bufferingPercentage;
     mutable MediaTime m_cachedPosition;
     mutable MediaTime m_playbackProgress;
+    mutable std::optional<Seconds> m_lastQueryTime;
     bool m_canFallBackToLastFinishedSeekPosition;
     bool m_changingRate;
     bool m_downloadFinished;
@@ -229,6 +239,7 @@ protected:
 
     void ensureAudioSourceProvider();
     void setAudioStreamProperties(GObject*);
+    void checkPlayingConsitency();
 
     static void setAudioStreamPropertiesCallback(MediaPlayerPrivateGStreamer*, GObject*);
 
@@ -266,8 +277,10 @@ private:
     RunLoop::Timer<MediaPlayerPrivateGStreamer> m_readyTimerHandler;
     mutable long long m_totalBytes;
     URL m_url;
+#if ENABLE(ENCRYPTED_MEDIA)
+    RefPtr<MediaPlayerGStreamerEncryptedPlayTracker> m_tracker;
+#endif
     bool m_preservesPitch;
-    mutable std::optional<Seconds> m_lastQueryTime;
     bool m_isLegacyPlaybin;
 #if GST_CHECK_VERSION(1, 10, 0)
     GRefPtr<GstStreamCollection> m_streamCollection;
@@ -301,6 +314,7 @@ private:
     virtual bool isMediaSource() const { return false; }
 
     String m_errorMessage;
+    bool m_didTryToRecoverPlayingState { false };
 };
 }
 

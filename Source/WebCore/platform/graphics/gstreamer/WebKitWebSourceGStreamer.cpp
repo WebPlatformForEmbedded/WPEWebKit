@@ -335,11 +335,17 @@ static void webkit_web_src_init(WebKitWebSrc* src)
     gst_app_src_set_emit_signals(priv->appsrc, FALSE);
     gst_app_src_set_stream_type(priv->appsrc, GST_APP_STREAM_TYPE_SEEKABLE);
 
+    String env(getenv("WPE_WEBSRC_MAX_BYTES"));
+    bool envConversionSucceeded = false;
+    uint64_t envValue = env.toUInt64(&envConversionSucceeded);
     // 512k is a abitrary number but we should choose a value
     // here to not pause/unpause the SoupMessage too often and
     // to make sure there's always some data available for
     // GStreamer to handle.
-    gst_app_src_set_max_bytes(priv->appsrc, 512 * 1024);
+    constexpr guint64 maxBytesDefault = 512 * 1024;
+    guint64 maxBytes = envConversionSucceeded ? envValue : maxBytesDefault;
+    GST_DEBUG_OBJECT(src, "Setting max_bytes to %" G_GUINT64_FORMAT, maxBytes);
+    gst_app_src_set_max_bytes(priv->appsrc, maxBytes);
 
     // Emit the need-data signal if the queue contains less
     // than 20% of data. Without this the need-data signal
@@ -352,7 +358,7 @@ static void webkit_web_src_init(WebKitWebSrc* src)
     // likely that libsoup already provides new data before
     // the queue is really empty.
     // This might need tweaking for ports not using libsoup.
-    g_object_set(priv->appsrc, "min-percent", 20, nullptr);
+    g_object_set(priv->appsrc, "min-percent", 100, nullptr);
 
     gst_base_src_set_automatic_eos(GST_BASE_SRC(priv->appsrc), FALSE);
 
@@ -598,7 +604,7 @@ static void webKitWebSrcStart(WebKitWebSrc* src)
             priv->loader = priv->player->createResourceLoader();
 
         {
-            String cookies = WebCore::cookies(*priv->player->cachedResourceLoader()->document(), request.url());
+            String cookies; // = WebCore::cookies(*priv->player->cachedResourceLoader()->document(), request.url());
             priv->cookies = GUniquePtr<gchar>(g_strdup(cookies.utf8().data()));
         }
 

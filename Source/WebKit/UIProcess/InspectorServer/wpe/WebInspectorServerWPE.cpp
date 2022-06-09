@@ -42,16 +42,32 @@ namespace WebKit {
 
 static void loadResourcesIfNeeded()
 {
-    static std::once_flag flag;
-    std::call_once(flag, [] {
-        GModule* resourcesModule = g_module_open(PKGLIBDIR G_DIR_SEPARATOR_S "libWPEWebInspectorResources.so", G_MODULE_BIND_LAZY);
-        if (!resourcesModule) {
-            WTFLogAlways("Error loading libWPEWebInspectorResources.so: %s", g_module_error());
-            return;
-	}
-
+    static bool didLoad = false;
+    if(didLoad)
+        return;
+    auto tryLoadResources = [](const gchar* path) -> gboolean {
+        GModule* resourcesModule = g_module_open(path, G_MODULE_BIND_LAZY);
+        if (!resourcesModule)
+            return false;
         g_module_make_resident(resourcesModule);
-    });
+        return true;
+    };
+    // try env
+    const gchar* envPath = g_getenv("WEBKIT_INSPECTOR_RESOURCES_PATH");
+    GUniquePtr<gchar*> searchPaths ( envPath ? g_strsplit(envPath, ":", -1) : nullptr );
+    for (gchar** path = searchPaths.get(); !didLoad && path && *path; ++path) {
+        GUniquePtr<gchar> modulePath (g_module_build_path(*path, "libWPEWebInspectorResources.so"));
+        didLoad = tryLoadResources(modulePath.get());
+    }
+    // try pkg lib dir
+    if (!didLoad)
+       didLoad = tryLoadResources(PKGLIBDIR G_DIR_SEPARATOR_S "libWPEWebInspectorResources.so");
+    // try system
+    if (!didLoad)
+        didLoad = tryLoadResources("libWPEWebInspectorResources.so");
+    // log last error
+    if (!didLoad)
+        WTFLogAlways("Error loading libWPEWebInspectorResources.so: %s", g_module_error());
 }
 
 bool WebInspectorServer::platformResourceForPath(const String& path, Vector<char>& data, String& contentType)
@@ -110,6 +126,8 @@ void WebInspectorServer::buildPageList(Vector<char>& data, String& contentType)
     builder.appendLiteral("[ ");
     ClientMap::iterator end = m_clientMap.end();
     for (ClientMap::iterator it = m_clientMap.begin(); it != end; ++it) {
+        if(shouldInhibitLocalHostInspection(it->key))
+            continue;
         WebPageProxy* webPage = it->value->inspectedPage();
         if (it != m_clientMap.begin())
             builder.appendLiteral(", ");

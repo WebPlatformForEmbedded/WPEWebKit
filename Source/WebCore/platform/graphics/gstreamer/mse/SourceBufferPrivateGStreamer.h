@@ -77,9 +77,9 @@ public:
     void didReceiveSample(MediaSample&);
     void didReceiveAllPendingSamples();
     void didFailParsing();
+    void useEncryptedContentSizeLimits();
 
     ContentType type() const { return m_type; }
-
 private:
     SourceBufferPrivateGStreamer(MediaSourceGStreamer*, Ref<MediaSourceClientGStreamerMSE>, const ContentType&);
     friend class MediaSourceClientGStreamerMSE;

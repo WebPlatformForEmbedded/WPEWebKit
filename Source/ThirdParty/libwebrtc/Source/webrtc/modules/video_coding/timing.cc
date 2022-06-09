@@ -175,7 +175,7 @@ int64_t VCMTiming::RenderTimeMsInternal(uint32_t frame_timestamp,
                                         int64_t now_ms) const {
   if (min_playout_delay_ms_ == 0 && max_playout_delay_ms_ == 0) {
     // Render as soon as possible.
-    return 0;
+//    return 0;
   }
   int64_t estimated_complete_time_ms =
       ts_extrapolator_->ExtrapolateLocalTime(frame_timestamp);

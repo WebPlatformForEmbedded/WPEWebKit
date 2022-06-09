@@ -41,12 +41,23 @@ public:
     {
         memset(&m_address, 0, sizeof(struct sockaddr_in));
         m_address = address;
+        m_family = AF_INET;
+    }
+    explicit IPAddress(const struct sockaddr_in6& address)
+    {
+        memset(&p_address, 0, sizeof(struct sockaddr_in6));
+        p_address = address;
+        m_family = AF_INET6;
     }
 
     const struct in_addr& getSinAddr() { return m_address.sin_addr; };
+    const struct in6_addr& getSin6Addr() {return p_address.sin6_addr;};
+    const int family() {return m_family;};
 
 private:
+    int m_family;
     struct sockaddr_in m_address;
+    struct sockaddr_in6 p_address;
 };
 
 enum class DNSError { Unknown, CannotResolve, Cancelled };

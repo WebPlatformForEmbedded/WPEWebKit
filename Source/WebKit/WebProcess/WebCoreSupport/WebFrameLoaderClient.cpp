@@ -1687,7 +1687,7 @@ void WebFrameLoaderClient::dispatchDidClearWindowObjectInWorld(DOMWrapperWorld& 
     if (automationSessionProxy && world.isNormal())
         automationSessionProxy->didClearWindowObjectForFrame(*m_frame);
 
-#if HAVE(ACCESSIBILITY) && PLATFORM(GTK)
+#if HAVE(ACCESSIBILITY) && (PLATFORM(GTK) || PLATFORM(WPE))
     // Ensure the accessibility hierarchy is updated.
     webPage->updateAccessibilityTree();
 #endif

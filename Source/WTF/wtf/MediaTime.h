@@ -73,7 +73,15 @@ public:
     MediaTime operator-(const MediaTime& rhs) const;
     MediaTime operator-() const;
     MediaTime operator*(int32_t) const;
+#if 0
     bool operator<(const MediaTime& rhs) const { return compare(rhs) == LessThan; }
+#else
+    bool operator<(const MediaTime& rhs) const {
+         if (m_timeFlags == Valid && m_timeFlags == rhs.m_timeFlags && m_timeScale == rhs.m_timeScale)
+             return m_timeValue < rhs.m_timeValue;
+         return compare(rhs) == LessThan;
+   }
+#endif
     bool operator>(const MediaTime& rhs) const { return compare(rhs) == GreaterThan; }
     bool operator!=(const MediaTime& rhs) const { return compare(rhs) != EqualTo; }
     bool operator==(const MediaTime& rhs) const { return compare(rhs) == EqualTo; }

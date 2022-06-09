@@ -674,7 +674,7 @@ void CoordinatedGraphicsLayer::syncFilters()
 
 void CoordinatedGraphicsLayer::syncImageBacking()
 {
-    if (m_coordinator->nonCompositedWebGLEnabled())
+    if (m_coordinator && m_coordinator->nonCompositedWebGLEnabled())
         return;
 
     if (!m_shouldSyncImageBacking)
@@ -777,6 +777,8 @@ void CoordinatedGraphicsLayer::syncPlatformLayer()
     m_layerState.platformLayerChanged = true;
     if (m_platformLayer)
         m_layerState.platformLayerProxy = m_platformLayer->proxy();
+    else
+        m_layerState.platformLayerProxy = nullptr;
 #endif
 #endif
 }
@@ -896,6 +898,11 @@ void CoordinatedGraphicsLayer::flushCompositingStateForThisLayerOnly()
 
 void CoordinatedGraphicsLayer::syncPendingStateChangesIncludingSubLayers()
 {
+    if (!m_coordinator) {
+        LOG_ERROR("No coordinator");
+        return;
+    }
+
     if (m_layerState.hasPendingChanges()) {
         m_coordinator->syncLayerState(m_id, m_layerState);
         resetLayerState();
@@ -1032,6 +1039,11 @@ void CoordinatedGraphicsLayer::removeTile(uint32_t tileID)
 
 void CoordinatedGraphicsLayer::updateContentBuffersIncludingSubLayers()
 {
+    if (!m_coordinator) {
+        LOG_ERROR("No coordinator");
+        return;
+    }
+
     if (CoordinatedGraphicsLayer* mask = downcast<CoordinatedGraphicsLayer>(maskLayer()))
         mask->updateContentBuffers();
 
@@ -1046,7 +1058,7 @@ void CoordinatedGraphicsLayer::updateContentBuffersIncludingSubLayers()
 
 void CoordinatedGraphicsLayer::updateContentBuffers()
 {
-    if (m_coordinator->nonCompositedWebGLEnabled())
+    if (m_coordinator && m_coordinator->nonCompositedWebGLEnabled())
         return;
 
     if (!shouldHaveBackingStore()) {
@@ -1165,7 +1177,8 @@ void CoordinatedGraphicsLayer::setCoordinatorIncludingSubLayersIfNeeded(Coordina
     // We need to update here the layer changeMask so the scene gets all the current values.
     m_layerState.changeMask = UINT_MAX;
 
-    coordinator->attachLayer(this);
+    if (coordinator)
+        coordinator->attachLayer(this);
     for (auto& child : children())
         downcast<CoordinatedGraphicsLayer>(*child).setCoordinatorIncludingSubLayersIfNeeded(coordinator);
 }

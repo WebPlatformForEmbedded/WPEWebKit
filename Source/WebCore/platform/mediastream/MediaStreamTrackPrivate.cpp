@@ -179,7 +179,10 @@ AudioSourceProvider* MediaStreamTrackPrivate::audioSourceProvider()
     if (!m_audioSourceProvider)
         m_audioSourceProvider = WebAudioSourceProviderAVFObjC::create(*this);
 #endif
+#if ENABLE(WEB_AUDIO)
     return m_audioSourceProvider.get();
+#endif
+    return nullptr;
 }
 
 void MediaStreamTrackPrivate::sourceStarted()

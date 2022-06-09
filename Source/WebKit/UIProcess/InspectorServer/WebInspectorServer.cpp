@@ -33,7 +33,13 @@
 #include "HTTPHeaderNames.h"
 #include "HTTPRequest.h"
 #include "WebInspectorProxy.h"
+#include "WebPageProxy.h"
 #include "WebSocketServerConnection.h"
+#include <wtf/text/StringBuilder.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <netdb.h>
+#include <ifaddrs.h>
 
 using namespace WebCore;
 
@@ -41,7 +47,15 @@ namespace WebKit {
 
 static unsigned pageIdFromRequestPath(const String& path)
 {
-    size_t start = path.reverseFind('/');
+    size_t start;
+
+    if(path.startsWith("/devtools/page/"))
+        start = path.reverseFind('/');
+    else if (path.startsWith("/Main.html?page="))
+        start = path.reverseFind('=');
+    else
+        return 0;
+
     String numberString = path.substring(start + 1, path.length() - start - 1);
 
     bool ok = false;
@@ -100,8 +114,100 @@ String WebInspectorServer::inspectorUrlForPageID(int)
     return String();
 }
 
+bool WebInspectorServer::shouldInhibitLocalHostInspection(int pageId)
+{
+    static auto is_prod_build = []() -> bool
+    {
+        FILE* properties = fopen("/etc/device.properties", "r");
+        if (properties) {
+            bool is_prod = false;
+            char* buffer = nullptr;
+            size_t size = 0;
+            while (getline(&buffer, &size, properties) != -1) {
+                const char* prefix = "build_type=";
+                size_t prefix_len = strlen(prefix);
+                if (g_ascii_strncasecmp(prefix, buffer, prefix_len) == 0) {
+                    char* remainder = buffer + prefix_len;
+                    is_prod = g_ascii_strncasecmp("prod", remainder, 4) == 0;
+                    break;
+                }
+            }
+            free(buffer);
+            fclose(properties);
+            return is_prod;
+        }
+        return false;
+    };
+
+    // allow inspection of localhost pages on dev builds
+    static bool is_prod = is_prod_build();
+    if (!is_prod)
+        return false;
+
+    struct ifaddrs *ifaddr, *tmp;
+    int  s,family = 0;
+    char host[NI_MAXHOST];
+
+    // find the localhost page
+    WebInspectorProxy* client = m_clientMap.get(pageId);
+    if(client && client->inspectedPage())
+    {
+        if(client->inspectedPage()->pageLoadState().activeURL().find("localhost:") != notFound) {
+            m_clientMap.remove(pageId);
+            return true;
+        }
+
+        if(client->inspectedPage()->pageLoadState().activeURL().find("file://") != notFound) {
+            m_clientMap.remove(pageId);
+            return true;
+        }
+    }
+    else
+        return true;
+
+    //getting device's ip addresses
+    if (getifaddrs(&ifaddr) == -1)
+    {
+        perror("getifaddrs");
+        return true;
+    }
+
+    for (tmp = ifaddr; tmp != NULL; tmp = tmp->ifa_next)
+    {
+        if(tmp->ifa_addr == NULL)
+            continue;
+
+        family = tmp->ifa_addr->sa_family;
+        if (family == AF_INET || family == AF_INET6)
+        {
+            s = getnameinfo(tmp->ifa_addr,
+                    (family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6),
+                    host, NI_MAXHOST,
+                    NULL, 0, NI_NUMERICHOST);
+            if (s != 0)
+            {
+                freeifaddrs(ifaddr);
+                return true;
+            }
+            if(client->inspectedPage()->pageLoadState().activeURL().find(host) != notFound)
+            {
+                freeifaddrs(ifaddr);
+                return true;
+            }
+        }
+    }
+
+    freeifaddrs(ifaddr);
+    return false;
+}
+
+
 void WebInspectorServer::sendMessageOverConnection(unsigned pageIdForConnection, const String& message)
 {
+    // Ignore the localhost page
+    if(shouldInhibitLocalHostInspection(pageIdForConnection))
+        return;
+
     WebSocketServerConnection* connection = m_connectionMap.get(pageIdForConnection);
     if (connection)
         connection->sendWebSocketMessage(message);
@@ -112,6 +218,16 @@ void WebInspectorServer::didReceiveUnrecognizedHTTPRequest(WebSocketServerConnec
     // request->url() contains only the path extracted from the HTTP request line
     // and URL is poor at parsing incomplete URLs, so extract the interesting parts manually.
     String path = request->url();
+    bool blockRequest = false;
+    unsigned pageId = pageIdFromRequestPath(path);
+
+    if (pageId)
+    {
+        // Ignore the localhost page
+        if(shouldInhibitLocalHostInspection(pageId))
+            blockRequest = true;
+    }
+
     size_t pathEnd = path.find('?');
     if (pathEnd == notFound)
         pathEnd = path.find('#');
@@ -122,12 +238,25 @@ void WebInspectorServer::didReceiveUnrecognizedHTTPRequest(WebSocketServerConnec
     // to ask for header data and then let the platform abstraction write the payload straight on the connection.
     Vector<char> body;
     String contentType;
-    bool found = platformResourceForPath(path, body, contentType);
+    bool found = false;
+    if(!blockRequest)
+    {
+        found = platformResourceForPath(path, body, contentType);
+    }
+    else
+    {
+        //404 Page Not Found response for localhost page
+        StringBuilder builder;
+        builder.appendLiteral("<!DOCTYPE html><html><head></head><body>404 Page Not Found.</body></html>");
+        CString errorHTML = builder.toString().utf8();
+        body.append(errorHTML.data(), errorHTML.length());
+        contentType = "text/html; charset=utf-8";
+    }
 
     HTTPHeaderMap headerFields;
     headerFields.set(HTTPHeaderName::Connection, "close");
     headerFields.set(HTTPHeaderName::ContentLength, String::number(body.size()));
-    if (found)
+    if (found || blockRequest)
         headerFields.set(HTTPHeaderName::ContentType, contentType);
     if (path.startsWith("/pagelist.json"))
         headerFields.set(HTTPHeaderName::AccessControlAllowOrigin, "*");
@@ -168,9 +297,15 @@ void WebInspectorServer::didEstablishWebSocketConnection(WebSocketServerConnecti
     unsigned pageId = pageIdFromRequestPath(path);
     ASSERT(pageId);
 
-    // Ignore connections to a page that already have a remote inspector connected.
+    // Shuntdowning old connections and continue to add new remote inspector connected.
     if (m_connectionMap.contains(pageId)) {
-        LOG_ERROR("A remote inspector connection already exist for page ID %d. Ignoring.", pageId);
+        LOG_ERROR("Shutdowning old remote inspector connection and continue to add new connection for page ID %d.", pageId);
+        m_connectionMap.get(pageId)->shutdownNow();
+    }
+
+    // Ignore connections to the localhost page
+    if(shouldInhibitLocalHostInspection(pageId))
+    {
         connection->shutdownNow();
         return;
     }
@@ -189,6 +324,11 @@ void WebInspectorServer::didReceiveWebSocketMessage(WebSocketServerConnection* c
     unsigned pageId = connection->identifier();
     ASSERT(pageId);
     WebInspectorProxy* client = m_clientMap.get(pageId);
+
+    // Ignore the localhost page
+    if(shouldInhibitLocalHostInspection(pageId))
+        return;
+
     client->dispatchMessageFromRemoteFrontend(message);
 }
 

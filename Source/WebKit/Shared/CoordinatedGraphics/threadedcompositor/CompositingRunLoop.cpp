@@ -50,19 +50,20 @@ public:
         return workQueuePool;
     }
 
-    void dispatch(void* context, Function<void ()>&& function)
+    void dispatch(uint32_t context, Function<void ()>&& function)
     {
         ASSERT(RunLoop::isMain());
         getOrCreateWorkQueueForContext(context).dispatch(WTFMove(function));
     }
 
-    RunLoop& runLoop(void* context)
+    RunLoop& runLoop(uint32_t context)
     {
         return getOrCreateWorkQueueForContext(context).runLoop();
     }
 
-    void invalidate(void* context)
+    void invalidate(uint32_t context)
     {
+        LockHolder locker(m_lock);
         auto workQueue = m_workQueueMap.take(context);
         ASSERT(workQueue);
         if (m_workQueueMap.isEmpty()) {
@@ -79,8 +80,9 @@ private:
         m_threadCountLimit = 1;
     }
 
-    WorkQueue& getOrCreateWorkQueueForContext(void* context)
+    WorkQueue& getOrCreateWorkQueueForContext(uint32_t context)
     {
+        LockHolder locker(m_lock);
         auto addResult = m_workQueueMap.add(context, nullptr);
         if (addResult.isNewEntry) {
             // FIXME: This is OK for now, and it works for a single-thread limit. But for configurations where more (but not unlimited)
@@ -99,14 +101,27 @@ private:
         return *addResult.iterator->value;
     }
 
-    HashMap<void*, RefPtr<WorkQueue>> m_workQueueMap;
+    HashMap<uint32_t, RefPtr<WorkQueue>> m_workQueueMap;
     RefPtr<WorkQueue> m_sharedWorkQueue;
     unsigned m_threadCount { 0 };
     unsigned m_threadCountLimit;
+    Lock m_lock;
 };
 
+static uint32_t generateNextId()
+{
+    static Atomic<uint32_t> s_id;
+    for (;;) {
+        unsigned currentId = s_id.load();
+        unsigned newId = currentId + 1;
+        if (s_id.compareExchangeWeak(currentId, newId))
+            return newId;
+    }
+}
+
 CompositingRunLoop::CompositingRunLoop(Function<void ()>&& updateFunction)
-    : m_updateTimer(WorkQueuePool::singleton().runLoop(this), this, &CompositingRunLoop::updateTimerFired)
+    : m_contextId(generateNextId())
+    , m_updateTimer(WorkQueuePool::singleton().runLoop(m_contextId), this, &CompositingRunLoop::updateTimerFired)
     , m_updateFunction(WTFMove(updateFunction))
 {
 #if USE(GLIB_EVENT_LOOP)
@@ -121,20 +136,20 @@ CompositingRunLoop::~CompositingRunLoop()
     // Make sure the WorkQueue is deleted after the CompositingRunLoop, because m_updateTimer has a reference
     // of the WorkQueue run loop. Passing this is not a problem because the pointer will only be used as a
     // HashMap key by WorkQueuePool.
-    RunLoop::main().dispatch([context = this] { WorkQueuePool::singleton().invalidate(context); });
+    RunLoop::main().dispatch([contextId = m_contextId] { WorkQueuePool::singleton().invalidate(contextId); });
 }
 
 void CompositingRunLoop::performTask(Function<void ()>&& function)
 {
     ASSERT(RunLoop::isMain());
-    WorkQueuePool::singleton().dispatch(this, WTFMove(function));
+    WorkQueuePool::singleton().dispatch(m_contextId, WTFMove(function));
 }
 
 void CompositingRunLoop::performTaskSync(Function<void ()>&& function)
 {
     ASSERT(RunLoop::isMain());
     LockHolder locker(m_dispatchSyncConditionMutex);
-    WorkQueuePool::singleton().dispatch(this, [this, function = WTFMove(function)] {
+    WorkQueuePool::singleton().dispatch(m_contextId, [this, function = WTFMove(function)] {
         function();
         LockHolder locker(m_dispatchSyncConditionMutex);
         m_dispatchSyncCondition.notifyOne();
@@ -221,7 +236,7 @@ void CompositingRunLoop::compositionCompleted(LockHolder& stateLocker)
             m_state.pendingUpdate = false;
             m_state.update = UpdateState::Scheduled;
             if (!m_state.isSuspended)
-                m_updateTimer.startOneShot(0_s);
+               startUpdateTimer();
             return;
         }
 
@@ -254,7 +269,7 @@ void CompositingRunLoop::updateCompleted(LockHolder& stateLocker)
             m_state.pendingUpdate = false;
             m_state.update = UpdateState::Scheduled;
             if (!m_state.isSuspended)
-                m_updateTimer.startOneShot(0_s);
+                 startUpdateTimer();
             return;
         }
 
@@ -276,6 +291,31 @@ void CompositingRunLoop::updateTimerFired()
         m_state.update = UpdateState::InProgress;
     }
     m_updateFunction();
+    m_updateTime = MonotonicTime::now();
+}
+
+static MonotonicTime g_throttleEndTime = MonotonicTime::nan();
+
+void throttleUpdatesForNextThreeSeconds()
+{
+    g_throttleEndTime = MonotonicTime::now() + Seconds(3.0);
+}
+
+void CompositingRunLoop::startUpdateTimer()
+{
+    if (m_updateTimer.isActive())
+        return;
+
+    static const bool disableUpdateThrottling = !!getenv("WPE_DISABLE_COMPOSITOR_THROTTLING");
+    if ( !disableUpdateThrottling && !std::isnan(g_throttleEndTime) ) {
+        if (MonotonicTime::now() < g_throttleEndTime)  {
+           m_updateTimer.startOneShot(0.25_s);
+           return;
+         }
+         g_throttleEndTime = MonotonicTime::nan();
+    }
+
+    m_updateTimer.startOneShot(0_s);
 }
 
 } // namespace WebKit

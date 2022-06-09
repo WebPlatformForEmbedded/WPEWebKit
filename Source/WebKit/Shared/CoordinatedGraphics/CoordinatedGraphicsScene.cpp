@@ -262,8 +262,10 @@ void CoordinatedGraphicsScene::deleteLayer(CoordinatedLayerID layerID)
 
     m_backingStores.remove(layer.get());
 #if USE(COORDINATED_GRAPHICS_THREADED)
-    if (auto platformLayerProxy = m_platformLayerProxies.take(layer.get()))
+    if (auto platformLayerProxy = m_platformLayerProxies.take(layer.get())) {
+        platformLayerProxy->invalidate(true);
         m_platformLayerProxiesToDelete.append(platformLayerProxy);
+    }
 #endif
 }
 
@@ -527,6 +529,10 @@ void CoordinatedGraphicsScene::applyStateChangesAndNotifyVideoPosition(const Vec
 
         for (auto& layer : state.layersToUpdate)
             setLayerState(layer.first, layer.second, commitScope);
+
+        for (size_t i = 0; i < m_platformLayerProxiesToDelete.size(); i++)
+            m_platformLayerProxiesToDelete.at(i)->invalidate();
+        m_platformLayerProxiesToDelete.clear();
     }
 
     TextureMapperLayer* currentRootLayer = rootLayer();

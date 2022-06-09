@@ -60,6 +60,16 @@ void WKViewSetViewState(WKViewRef view, WKViewState viewState)
     toImpl(view)->setViewState(toViewStateFlags(viewState));
 }
 
+void WKViewSetIgnoreResize(WKViewRef view, bool ignoreResize)
+{
+    toImpl(view)->setIgnoreResize(ignoreResize);
+}
+
+bool WKViewGetIgnoreResize(WKViewRef view)
+{
+    return toImpl(view)->ignoreResize();
+}
+
 void WKViewSetViewClient(WKViewRef view, const WKViewClientBase* client)
 {
     class ViewClient final : public API::Client<WKViewClientBase>, public API::ViewClient {

@@ -284,6 +284,10 @@ void AXObjectCache::postPlatformNotification(AccessibilityObject* coreObject, AX
         if (AccessibilityObject* descendant = coreObject->activeDescendant())
             platformHandleFocusedUIElementChanged(nullptr, descendant->node());
         break;
+    case AXTextChanged:
+        if (coreObject->isFocused())
+            atk_object_notify_state_change(axObject, ATK_STATE_FOCUSED, true);
+        break;
 
     default:
         break;

@@ -171,6 +171,8 @@ WK_EXPORT void WKContextSetCustomWebContentServiceBundleIdentifier(WKContextRef 
 WK_EXPORT void WKContextSetAutomationClient(WKContextRef contextRef, const WKContextAutomationClientBase* wkClient);
 WK_EXPORT void WKContextSetAutomationSession(WKContextRef contextRef, WKWebAutomationSessionRef sessionRef);
 
+WK_EXPORT void WKContextReleaseMemory(WKContextRef contextRef);
+
 #ifdef __cplusplus
 }
 #endif

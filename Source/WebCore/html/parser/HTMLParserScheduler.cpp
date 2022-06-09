@@ -35,7 +35,7 @@
 // defaultParserTimeLimit is the seconds the parser will run in one write() call
 // before yielding. Inline <script> execution can cause it to exceed the limit.
 // FIXME: We would like this value to be 0.2.
-static const double defaultParserTimeLimit = 0.500;
+static const double defaultParserTimeLimit = 5.0;
 
 namespace WebCore {
 

@@ -26,6 +26,7 @@
 
 #include "CSSValue.h"
 #include "ExceptionOr.h"
+#include <wtf/EnumTraits.h>
 #include <wtf/Ref.h>
 #include <wtf/RefCounted.h>
 
@@ -193,13 +194,22 @@ private:
 
 class StepsTimingFunction final : public TimingFunction {
 public:
-    static Ref<StepsTimingFunction> create(int steps, bool stepAtStart)
+    enum class StepPosition {
+        JumpStart,
+        JumpEnd,
+        JumpNone,
+        JumpBoth,
+        Start,
+        End,
+    };
+
+    static Ref<StepsTimingFunction> create(int steps, std::optional<StepPosition> stepPosition)
     {
-        return adoptRef(*new StepsTimingFunction(steps, stepAtStart));
+        return adoptRef(*new StepsTimingFunction(steps, stepPosition));
     }
     static Ref<StepsTimingFunction> create()
     {
-        return adoptRef(*new StepsTimingFunction(1, true));
+        return adoptRef(*new StepsTimingFunction(1, StepPosition::End));
     }
     
     bool operator==(const TimingFunction& other) const final
@@ -207,30 +217,30 @@ public:
         if (!is<StepsTimingFunction>(other))
             return false;
         auto& otherSteps = downcast<StepsTimingFunction>(other);
-        return m_steps == otherSteps.m_steps && m_stepAtStart == otherSteps.m_stepAtStart;
+        return m_steps == otherSteps.m_steps && m_stepPosition == otherSteps.m_stepPosition;
     }
     
     int numberOfSteps() const { return m_steps; }
     void setNumberOfSteps(int steps) { m_steps = steps; }
 
-    bool stepAtStart() const { return m_stepAtStart; }
-    void setStepAtStart(bool stepAtStart) { m_stepAtStart = stepAtStart; }
+    std::optional<StepPosition> stepPosition() const { return m_stepPosition; }
+    void setStepPosition(std::optional<StepPosition> stepPosition) { m_stepPosition = stepPosition; }
 
 private:
-    StepsTimingFunction(int steps, bool stepAtStart)
+    StepsTimingFunction(int steps, std::optional<StepPosition> stepPosition)
         : TimingFunction(StepsFunction)
         , m_steps(steps)
-        , m_stepAtStart(stepAtStart)
+        , m_stepPosition(stepPosition)
     {
     }
 
     Ref<TimingFunction> clone() const final
     {
-        return adoptRef(*new StepsTimingFunction(m_steps, m_stepAtStart));
+        return adoptRef(*new StepsTimingFunction(m_steps, m_stepPosition));
     }
     
     int m_steps;
-    bool m_stepAtStart;
+    std::optional<StepPosition> m_stepPosition;
 };
 
 class FramesTimingFunction final : public TimingFunction {
@@ -340,3 +350,19 @@ SPECIALIZE_TYPE_TRAITS_TIMINGFUNCTION(WebCore::CubicBezierTimingFunction, isCubi
 SPECIALIZE_TYPE_TRAITS_TIMINGFUNCTION(WebCore::StepsTimingFunction, isStepsTimingFunction())
 SPECIALIZE_TYPE_TRAITS_TIMINGFUNCTION(WebCore::FramesTimingFunction, isFramesTimingFunction())
 SPECIALIZE_TYPE_TRAITS_TIMINGFUNCTION(WebCore::SpringTimingFunction, isSpringTimingFunction())
+
+namespace WTF {
+
+template<> struct EnumTraits<WebCore::StepsTimingFunction::StepPosition> {
+    using values = EnumValues<
+        WebCore::StepsTimingFunction::StepPosition,
+        WebCore::StepsTimingFunction::StepPosition::JumpStart,
+        WebCore::StepsTimingFunction::StepPosition::JumpEnd,
+        WebCore::StepsTimingFunction::StepPosition::JumpNone,
+        WebCore::StepsTimingFunction::StepPosition::JumpBoth,
+        WebCore::StepsTimingFunction::StepPosition::Start,
+        WebCore::StepsTimingFunction::StepPosition::End
+    >;
+};
+
+} // namespace WTF

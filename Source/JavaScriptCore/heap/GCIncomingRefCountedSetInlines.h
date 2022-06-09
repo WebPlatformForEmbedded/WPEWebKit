@@ -61,17 +61,20 @@ bool GCIncomingRefCountedSet<T>::addReference(JSCell* cell, T* object)
 template<typename T>
 void GCIncomingRefCountedSet<T>::sweep()
 {
+    size_t bytes = 0;
     for (size_t i = 0; i < m_vector.size(); ++i) {
         T* object = m_vector[i];
         size_t size = object->gcSizeEstimateInBytes();
         ASSERT(object->isDeferred());
         ASSERT(object->numberOfIncomingReferences());
-        if (!object->filterIncomingReferences(removeDead))
+        if (!object->filterIncomingReferences(removeDead)) {
+            bytes += size;
             continue;
-        m_bytes -= size;
+        }
         m_vector[i--] = m_vector.last();
         m_vector.removeLast();
     }
+    m_bytes = bytes;
 }
 
 template<typename T>

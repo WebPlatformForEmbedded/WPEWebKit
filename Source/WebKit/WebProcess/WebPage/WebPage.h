@@ -77,7 +77,7 @@
 #include <wtf/WallTime.h>
 #include <wtf/text/WTFString.h>
 
-#if HAVE(ACCESSIBILITY) && PLATFORM(GTK)
+#if HAVE(ACCESSIBILITY) && (PLATFORM(GTK) || PLATFORM(WPE))
 #include "WebPageAccessibilityObject.h"
 #include <wtf/glib/GRefPtr.h>
 #endif
@@ -770,7 +770,7 @@ public:
     void replaceSelectionWithPasteboardData(const Vector<String>& types, const IPC::DataReference&);
 #endif
 
-#if HAVE(ACCESSIBILITY) && PLATFORM(GTK)
+#if HAVE(ACCESSIBILITY) && (PLATFORM(GTK) || PLATFORM(WPE))
     void updateAccessibilityTree();
 #endif
 
@@ -1504,7 +1504,7 @@ private:
     RetainPtr<NSDictionary> m_dataDetectionContext;
 #endif
 
-#if HAVE(ACCESSIBILITY) && PLATFORM(GTK)
+#if HAVE(ACCESSIBILITY) && (PLATFORM(GTK) || PLATFORM(WPE))
     GRefPtr<WebPageAccessibilityObject> m_accessibilityObject;
 #endif
 
@@ -1705,6 +1705,7 @@ private:
     bool m_shouldDispatchFakeMouseMoveEvents { true };
     bool m_isEditorStateMissingPostLayoutData { false };
     bool m_isSelectingTextWhileInsertingAsynchronously { false };
+    bool m_accessibilityEnabled { false };
 
     enum class EditorStateIsContentEditable { No, Yes, Unset };
     mutable EditorStateIsContentEditable m_lastEditorStateWasContentEditable { EditorStateIsContentEditable::Unset };

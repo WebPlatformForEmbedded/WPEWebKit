@@ -45,8 +45,8 @@ WI.Platform = {
     }
 
     let osVersionMatch = / Mac OS X (\d+)_(\d+)/.exec(navigator.appVersion);
-    if (osVersionMatch && osVersionMatch[1] === "10") {
-        WI.Platform.version.base = 10;
+    if (osVersionMatch) {
+        WI.Platform.version.base = parseInt(osVersionMatch[1]);
         WI.Platform.version.release = parseInt(osVersionMatch[2]);
         switch (osVersionMatch[2]) {
         case "12":

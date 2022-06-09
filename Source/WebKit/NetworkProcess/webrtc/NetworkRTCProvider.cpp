@@ -205,7 +205,10 @@ void NetworkRTCProvider::createResolver(uint64_t identifier, const String& addre
         }
 
         auto addresses = WTF::map(result.value(), [] (auto& address) {
-            return RTCNetwork::IPAddress { rtc::IPAddress { address.getSinAddr() } };
+            if (address.family() == AF_INET)
+                return RTCNetwork::IPAddress { rtc::IPAddress { address.getSinAddr() } };
+            else
+                return RTCNetwork::IPAddress { rtc::IPAddress { address.getSin6Addr() } };
         });
 
         m_connection->connection().send(Messages::WebRTCResolver::SetResolvedAddress(addresses), identifier);

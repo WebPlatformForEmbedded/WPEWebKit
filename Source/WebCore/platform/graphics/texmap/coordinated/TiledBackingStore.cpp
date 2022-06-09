@@ -280,8 +280,12 @@ void TiledBackingStore::computeCoverAndKeepRect(const IntRect& visibleRect, IntR
     // If we cover more that the actual viewport we can be smart about which tiles we choose to render.
     if (m_coverAreaMultiplier > 1) {
         // The initial cover area covers equally in each direction, according to the coverAreaMultiplier.
+#if 0
         coverRect.inflateX(visibleRect.width() * (m_coverAreaMultiplier - 1) / 2);
         coverRect.inflateY(visibleRect.height() * (m_coverAreaMultiplier - 1) / 2);
+#else
+        coverRect.inflate(visibleRect.height() * (m_coverAreaMultiplier - 1) / 2);
+#endif
         keepRect = coverRect;
 
         if (m_trajectoryVector != FloatPoint::zero()) {

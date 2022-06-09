@@ -295,8 +295,17 @@ void StorageManager::StorageArea::openDatabaseAndImportItemsIfNeeded() const
         return;
 
     // We open the database here even if we've already imported our items to ensure that the database is open if we need to write to it.
-    if (!m_localStorageDatabase)
+    if (!m_localStorageDatabase) {
         m_localStorageDatabase = LocalStorageDatabase::create(m_localStorageNamespace->storageManager()->m_queue.copyRef(), m_localStorageNamespace->storageManager()->m_localStorageDatabaseTracker.copyRef(), m_securityOrigin);
+
+        m_localStorageDatabase->setRestoreHandler([this] () {
+            if (m_storageMap && m_localStorageDatabase) {
+                for (const auto& entry : m_storageMap->items()) {
+                    m_localStorageDatabase->setItem(entry.key, entry.value);
+                }
+            }
+        });
+    }
 
     if (m_didImportItemsFromDatabase)
         return;

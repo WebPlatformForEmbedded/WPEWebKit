@@ -88,7 +88,7 @@ class CDMInstanceOpenCDM::Session : public ThreadSafeRefCounted<CDMInstanceOpenC
 public:
     using Notification = void (Session::*)(RefPtr<WebCore::SharedBuffer>&&);
     using ChallengeGeneratedCallback = Function<void(Session*)>;
-    using SessionChangedCallback = CompletionHandler<void(Session*, bool, RefPtr<SharedBuffer>&&, KeyStatusVector&)>;
+    using SessionChangedCallback = Function<void(Session*, bool, RefPtr<SharedBuffer>&&, KeyStatusVector&)>;
 
     static Ref<Session> create(CDMInstanceOpenCDM*, OpenCDMSystem&, const String&, const AtomicString&, Ref<WebCore::SharedBuffer>&&, LicenseType, Ref<WebCore::SharedBuffer>&&);
     ~Session();
@@ -409,8 +409,6 @@ void CDMInstanceOpenCDM::Session::errorCallback(RefPtr<SharedBuffer>&& message)
     for (auto& sessionChangedCallback : m_sessionChangedCallbacks)
         sessionChangedCallback(this, false, WTFMove(message), m_keyStatuses);
     m_sessionChangedCallbacks.clear();
-
-    m_parent->m_sessionMapCondition.notifyAll();
 }
 
 void CDMInstanceOpenCDM::Session::generateChallenge(ChallengeGeneratedCallback&& callback)
@@ -513,21 +511,15 @@ void CDMInstanceOpenCDM::requestLicense(LicenseType licenseType, const AtomicStr
 void CDMInstanceOpenCDM::updateLicense(const String& sessionId, LicenseType, const SharedBuffer& response, LicenseUpdateCallback callback)
 {
     GST_TRACE("Updating session %s", sessionId.utf8().data());
-    // We take the session map mutex here and we do not release it
-    // until the the update lambda is executed by moving the lock into
-    // it.
-    LockHolder locker(m_sessionMapMutex);
-    auto session = lookupSessionUnlocked(sessionId);
+    auto session = lookupSession(sessionId);
     if (!session) {
         GST_WARNING("cannot update the session %s cause we can't find it", sessionId.utf8().data());
         callback(false, std::nullopt, std::nullopt, std::nullopt, SuccessValue::Failed);
         return;
     }
 
-    m_numberOfCurrentUpdates++;
-    session->update(reinterpret_cast<const uint8_t*>(response.data()), response.size(), [this, callback = WTFMove(callback)](Session*, bool success, RefPtr<SharedBuffer>&& buffer, KeyStatusVector& keyStatuses) {
-        LockHolder locker(m_sessionMapMutex);
-        ASSERT(m_numberOfCurrentUpdates);
+    session->update(reinterpret_cast<const uint8_t*>(response.data()), response.size(), [callback = WTFMove(callback)](Session* session, bool success, RefPtr<SharedBuffer>&& buffer, KeyStatusVector& keyStatuses) {
+        UNUSED_PARAM(session);
         if (success) {
             if (!buffer) {
                 ASSERT(!keyStatuses.isEmpty());
@@ -550,8 +542,6 @@ void CDMInstanceOpenCDM::updateLicense(const String& sessionId, LicenseType, con
             GST_ERROR("update license reported error state");
             callback(false, std::nullopt, std::nullopt, std::nullopt, SuccessValue::Failed);
         }
-        m_numberOfCurrentUpdates--;
-        m_sessionMapCondition.notifyAll();
     });
 }
 
@@ -649,13 +639,6 @@ void CDMInstanceOpenCDM::closeSession(const String& sessionId, CloseSessionCallb
 String CDMInstanceOpenCDM::sessionIdByKeyId(const SharedBuffer& keyId) const
 {
     LockHolder locker(m_sessionMapMutex);
-    if (!m_sessionMapCondition.waitFor(m_sessionMapMutex, WEBCORE_GSTREAMER_EME_LICENSE_KEY_RESPONSE_TIMEOUT, [this] {
-        return !m_numberOfCurrentUpdates;
-    })) {
-        GST_ERROR("session not found because timeout is gone");
-        ASSERT_NOT_REACHED();
-        return { };
-    }
 
     GST_MEMDUMP("kid", reinterpret_cast<const uint8_t*>(keyId.data()), keyId.size());
     if (!m_sessionsMap.size() || !keyId.data()) {
@@ -669,7 +652,7 @@ String CDMInstanceOpenCDM::sessionIdByKeyId(const SharedBuffer& keyId) const
         const String& sessionId = pair.key;
         const RefPtr<Session>& session = pair.value;
         if (session->containsKeyId(keyId)) {
-            result = sessionId;
+            result = sessionId.isolatedCopy();
             break;
         }
     }
@@ -701,17 +684,25 @@ bool CDMInstanceOpenCDM::removeSession(const String& sessionId)
     return m_sessionsMap.remove(sessionId);
 }
 
-RefPtr<CDMInstanceOpenCDM::Session> CDMInstanceOpenCDM::lookupSessionUnlocked(const String& sessionId) const
+RefPtr<CDMInstanceOpenCDM::Session> CDMInstanceOpenCDM::lookupSession(const String& sessionId) const
 {
-    ASSERT(m_sessionMapMutex.isLocked());
+    LockHolder locker(m_sessionMapMutex);
     auto session = m_sessionsMap.find(sessionId);
     return session == m_sessionsMap.end() ? nullptr : session->value;
 }
 
-RefPtr<CDMInstanceOpenCDM::Session> CDMInstanceOpenCDM::lookupSession(const String& sessionId) const
+bool CDMInstanceOpenCDM::hasValidSessions() const
 {
     LockHolder locker(m_sessionMapMutex);
-    return lookupSessionUnlocked(sessionId);
+    if (m_sessionsMap.size() > 0)
+    {
+        for (const auto& pair : m_sessionsMap)
+        {
+            if (pair.value->isValid())
+                return true;
+        }
+    }
+    return false;
 }
 
 } // namespace WebCore

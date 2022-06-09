@@ -712,3 +712,8 @@ void WKContextSetAutomationSession(WKContextRef contextRef, WKWebAutomationSessi
 {
     toImpl(contextRef)->setAutomationSession(toImpl(session));
 }
+
+void WKContextReleaseMemory(WKContextRef contextRef)
+{
+    toImpl(contextRef)->releaseMemory();
+}

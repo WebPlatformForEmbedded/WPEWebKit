@@ -337,16 +337,16 @@ gst_webrtc_video_encoder_class_init (GstWebrtcVideoEncoderClass * klass)
           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
               G_PARAM_CONSTRUCT)));
 
-  register_known_encoder (ENCODER_X264, "x264enc", "h264parse", "video/x-h264",
+  register_known_encoder (ENCODER_X264, "fakesink", "h264parse", "video/x-h264",
       "video/x-h264,alignment=au,stream-format=byte-stream,profile=baseline",
       setup_x264enc, "bitrate", set_bitrate_kbit_per_sec, "key-int-max");
-  register_known_encoder (ENCODER_OPENH264, "openh264enc", "h264parse",
+/*  register_known_encoder (ENCODER_OPENH264, "openh264enc", "h264parse",
       "video/x-h264",
       "video/x-h264,alignment=au,stream-format=byte-stream,profile=baseline",
       setup_openh264enc, "bitrate", set_bitrate_kbit_per_sec, "gop-size");
   register_known_encoder (ENCODER_VP8, "vp8enc", NULL, "video/x-vp8", NULL,
       setup_vp8enc, "target-bitrate", set_bitrate_bit_per_sec,
-      "keyframe-max-dist");
+      "keyframe-max-dist");*/
 }
 
 static void

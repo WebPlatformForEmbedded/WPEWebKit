@@ -129,6 +129,7 @@
 #include <wtf/SystemTracing.h>
 #include <wtf/text/CString.h>
 #include <wtf/text/WTFString.h>
+#include "SchemeRegistry.h"
 
 #if ENABLE(WEB_ARCHIVE) || ENABLE(MHTML)
 #include "Archive.h"
@@ -1952,7 +1953,8 @@ void FrameLoader::commitProvisionalLoad()
         // We are doing this here because we know for sure that a new page is about to be loaded.
         PageCache::singleton().addIfCacheable(*history().currentItem(), m_frame.page());
         
-        WebCore::jettisonExpensiveObjectsOnTopLevelNavigation();
+        if (pdl && SchemeRegistry::shouldLoadURLSchemeAsEmptyDocument(pdl->request().url().protocol().toStringWithoutCopying()))
+            WebCore::jettisonExpensiveObjectsOnTopLevelNavigation();
     }
 
     if (m_loadType != FrameLoadType::Replace)

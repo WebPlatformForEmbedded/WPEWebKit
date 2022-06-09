@@ -330,6 +330,7 @@ public:
     void setJavaScriptConfigurationFileEnabledFromDefaults();
 #endif
 
+    void releaseMemory();
     void garbageCollectJavaScriptObjects();
     void setJavaScriptGarbageCollectorTimerEnabled(bool flag);
 

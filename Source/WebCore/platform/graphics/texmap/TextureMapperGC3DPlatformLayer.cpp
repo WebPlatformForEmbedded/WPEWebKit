@@ -32,6 +32,7 @@
 namespace WebCore {
 
 static std::unique_ptr<GLContext> s_windowContext;
+static int s_windowContextRefCount = 0;
 
 static void terminateWindowContext()
 {
@@ -49,8 +50,8 @@ TextureMapperGC3DPlatformLayer::TextureMapperGC3DPlatformLayer(GraphicsContext3D
     case GraphicsContext3D::RenderDirectlyToHostWindow:
         if (!s_windowContext) {
             s_windowContext = GLContext::createContextForWindow(reinterpret_cast<GLNativeWindowType>(hostWindow->nativeWindowID()), &PlatformDisplay::sharedDisplayForCompositing());
-            std::atexit(terminateWindowContext);
         }
+        s_windowContextRefCount++;
         break;
     }
 
@@ -61,10 +62,19 @@ TextureMapperGC3DPlatformLayer::TextureMapperGC3DPlatformLayer(GraphicsContext3D
 
 TextureMapperGC3DPlatformLayer::~TextureMapperGC3DPlatformLayer()
 {
-#if !USE(COORDINATED_GRAPHICS_THREADED)
+//#if !USE(COORDINATED_GRAPHICS_THREADED)
     if (client())
         client()->platformLayerWillBeDestroyed();
-#endif
+//#endif
+
+    if (m_renderStyle == GraphicsContext3D::RenderDirectlyToHostWindow) {
+        if ((s_windowContextRefCount - 1) == 0) {
+            s_windowContextRefCount = 0;
+            s_windowContext.reset();
+        } else {
+            s_windowContextRefCount--;
+        }
+    }
 }
 
 GLContext* TextureMapperGC3DPlatformLayer::glContext()
@@ -75,7 +85,7 @@ GLContext* TextureMapperGC3DPlatformLayer::glContext()
 
 bool TextureMapperGC3DPlatformLayer::makeContextCurrent()
 {
-    return glContext()->makeContextCurrent();
+    return glContext() && glContext()->makeContextCurrent();
 }
 
 PlatformGraphicsContext3D TextureMapperGC3DPlatformLayer::platformContext()

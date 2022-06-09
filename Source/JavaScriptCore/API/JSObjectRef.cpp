@@ -324,7 +324,7 @@ JSValueRef JSObjectGetProperty(JSContextRef ctx, JSObjectRef object, JSStringRef
 {
     if (!ctx) {
         ASSERT_NOT_REACHED();
-        return 0;
+        return nullptr;
     }
     ExecState* exec = toJS(ctx);
     VM& vm = exec->vm();
@@ -334,7 +334,9 @@ JSValueRef JSObjectGetProperty(JSContextRef ctx, JSObjectRef object, JSStringRef
     JSObject* jsObject = toJS(object);
 
     JSValue jsValue = jsObject->get(exec, propertyName->identifier(&vm));
-    handleExceptionIfNeeded(scope, exec, exception);
+    if (handleExceptionIfNeeded(scope, exec, exception) == ExceptionStatus::DidThrow)
+        return nullptr;
+
     return toRef(exec, jsValue);
 }
 
@@ -383,7 +385,8 @@ bool JSObjectHasPropertyForKey(JSContextRef ctx, JSObjectRef object, JSValueRef 
         return false;
 
     bool result = jsObject->hasProperty(exec, ident);
-    handleExceptionIfNeeded(scope, exec, exception);
+    if (handleExceptionIfNeeded(scope, exec, exception) == ExceptionStatus::DidThrow)
+        return false;
     return result;
 }
 
@@ -404,7 +407,8 @@ JSValueRef JSObjectGetPropertyForKey(JSContextRef ctx, JSObjectRef object, JSVal
         return nullptr;
 
     JSValue jsValue = jsObject->get(exec, ident);
-    handleExceptionIfNeeded(scope, exec, exception);
+    if (handleExceptionIfNeeded(scope, exec, exception) == ExceptionStatus::DidThrow)
+        return nullptr;
     return toRef(exec, jsValue);
 }
 
@@ -456,7 +460,8 @@ bool JSObjectDeletePropertyForKey(JSContextRef ctx, JSObjectRef object, JSValueR
         return false;
 
     bool result = jsObject->methodTable(vm)->deleteProperty(jsObject, exec, ident);
-    handleExceptionIfNeeded(scope, exec, exception);
+    if (handleExceptionIfNeeded(scope, exec, exception) == ExceptionStatus::DidThrow)
+        return false;
     return result;
 }
 
@@ -464,7 +469,7 @@ JSValueRef JSObjectGetPropertyAtIndex(JSContextRef ctx, JSObjectRef object, unsi
 {
     if (!ctx) {
         ASSERT_NOT_REACHED();
-        return 0;
+        return nullptr;
     }
     ExecState* exec = toJS(ctx);
     VM& vm = exec->vm();
@@ -474,7 +479,8 @@ JSValueRef JSObjectGetPropertyAtIndex(JSContextRef ctx, JSObjectRef object, unsi
     JSObject* jsObject = toJS(object);
 
     JSValue jsValue = jsObject->get(exec, propertyIndex);
-    handleExceptionIfNeeded(scope, exec, exception);
+    if (handleExceptionIfNeeded(scope, exec, exception) == ExceptionStatus::DidThrow)
+        return nullptr;
     return toRef(exec, jsValue);
 }
 
@@ -511,7 +517,8 @@ bool JSObjectDeleteProperty(JSContextRef ctx, JSObjectRef object, JSStringRef pr
     JSObject* jsObject = toJS(object);
 
     bool result = jsObject->methodTable(vm)->deleteProperty(jsObject, exec, propertyName->identifier(&vm));
-    handleExceptionIfNeeded(scope, exec, exception);
+    if (handleExceptionIfNeeded(scope, exec, exception) == ExceptionStatus::DidThrow)
+        return false;
     return result;
 }
 

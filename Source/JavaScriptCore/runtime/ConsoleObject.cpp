@@ -31,6 +31,7 @@
 #include "JSCInlines.h"
 #include "ScriptArguments.h"
 #include "ScriptCallStackFactory.h"
+#include "Options.h"
 
 namespace JSC {
 
@@ -112,6 +113,9 @@ static EncodedJSValue consoleLogWithLevel(ExecState* exec, MessageLevel level)
 {
     ConsoleClient* client = exec->lexicalGlobalObject()->consoleClient();
     if (!client)
+        return JSValue::encode(jsUndefined());
+
+    if (Options::disableConsoleLog())
         return JSValue::encode(jsUndefined());
 
     client->logWithLevel(exec, Inspector::createScriptArguments(exec, 0), level);

@@ -981,7 +981,7 @@ int PlatformKeyboardEvent::windowsKeyCodeForWPEKeyCode(unsigned keycode)
 
     case WPE_KEY_Pause:
     case WPE_KEY_AudioPause:
-        return VK_PAUSE; // (13) PAUSE key
+        return VK_MEDIA_PLAY_PAUSE; // (B3) Windows 2000/XP: Play/Pause Media key
     case WPE_KEY_Caps_Lock:
         return VK_CAPITAL; // (14) CAPS LOCK key
     case WPE_KEY_Kana_Lock:
@@ -1262,7 +1262,7 @@ int PlatformKeyboardEvent::windowsKeyCodeForWPEKeyCode(unsigned keycode)
         // VK_EXSEL (F8) ExSel key
         // VK_EREOF (F9) Erase EOF key
     case WPE_KEY_AudioPlay:
-        return VK_PLAY; // VK_PLAY (FA) Play key
+        return VK_MEDIA_PLAY_PAUSE; // (B3) Windows 2000/XP: Play/Pause Media key
         // VK_ZOOM (FB) Zoom key
         // VK_NONAME (FC) Reserved for future use
         // VK_PA1 (FD) PA1 key

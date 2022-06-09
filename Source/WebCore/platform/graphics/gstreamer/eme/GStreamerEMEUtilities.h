@@ -37,7 +37,8 @@
 #endif
 
 // NOTE: YouTube 2018 EME conformance tests expect this to be >=5s.
-const WTF::Seconds WEBCORE_GSTREAMER_EME_LICENSE_KEY_RESPONSE_TIMEOUT = WTF::Seconds(6);
+// WPE Hang detector  kills the process after 30 seconds, so license timeout needs to be < 30s
+const WTF::Seconds WEBCORE_GSTREAMER_EME_LICENSE_KEY_RESPONSE_TIMEOUT = WTF::Seconds(25);
 
 namespace WebCore {
 
@@ -63,24 +64,24 @@ public:
 
     static bool isClearKeyKeySystem(const String& keySystem)
     {
-        return equalIgnoringASCIICase(keySystem, s_ClearKeyKeySystem);
+        return keySystem.startsWithIgnoringASCIICase(ASCIILiteral::fromLiteralUnsafe(s_ClearKeyKeySystem));
     }
 
     static bool isUnspecifiedKeySystem(const String& keySystem)
     {
-        return equalIgnoringASCIICase(keySystem, s_UnspecifiedKeySystem);
+        return keySystem.startsWithIgnoringASCIICase(ASCIILiteral::fromLiteralUnsafe(s_UnspecifiedKeySystem));
     }
 
 #if USE(OPENCDM)
     static bool isPlayReadyKeySystem(const String& keySystem)
     {
-        return equalIgnoringASCIICase(keySystem, s_PlayReadyKeySystems[0])
-            || equalIgnoringASCIICase(keySystem, s_PlayReadyKeySystems[1]);
+        return keySystem.startsWithIgnoringASCIICase(ASCIILiteral::fromLiteralUnsafe(s_PlayReadyKeySystems[0]))
+            || keySystem.startsWithIgnoringASCIICase(ASCIILiteral::fromLiteralUnsafe(s_PlayReadyKeySystems[1]));
     }
 
     static bool isWidevineKeySystem(const String& keySystem)
     {
-        return equalIgnoringASCIICase(keySystem, s_WidevineKeySystem);
+        return keySystem.startsWithIgnoringASCIICase(ASCIILiteral::fromLiteralUnsafe(s_WidevineKeySystem));
     }
 #endif
 

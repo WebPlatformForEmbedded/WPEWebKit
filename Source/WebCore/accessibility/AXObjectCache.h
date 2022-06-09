@@ -184,10 +184,12 @@ public:
     WEBCORE_EXPORT static void enableAccessibility();
     WEBCORE_EXPORT static void disableAccessibility();
 
+    WEBCORE_EXPORT static void enableAccessibilityFromInspector();
+    WEBCORE_EXPORT static void restoreAccessibilityFromInspector();
     // Enhanced user interface accessibility can be toggled by the assistive technology.
     WEBCORE_EXPORT static void setEnhancedUserInterfaceAccessibility(bool flag);
     
-    static bool accessibilityEnabled() { return gAccessibilityEnabled; }
+    static bool accessibilityEnabled() { return gAccessibilityEnabled || gAccessibilityEnabledByInspector; }
     static bool accessibilityEnhancedUserInterfaceEnabled() { return gAccessibilityEnhancedUserInterfaceEnabled; }
 #else
     static void enableAccessibility() { }
@@ -429,6 +431,7 @@ private:
     std::unique_ptr<AXComputedObjectAttributeCache> m_computedObjectAttributeCache;
     WEBCORE_EXPORT static bool gAccessibilityEnabled;
     WEBCORE_EXPORT static bool gAccessibilityEnhancedUserInterfaceEnabled;
+    WEBCORE_EXPORT static bool gAccessibilityEnabledByInspector;
 
     HashSet<AXID> m_idsInUse;
 

@@ -37,6 +37,8 @@
 #include <wtf/TypeCasts.h>
 #include <wtf/Vector.h>
 
+#include "MediaPlayerGStreamerEncryptedPlayTracker.h"
+
 namespace WebCore {
 
 class SharedBuffer;
@@ -123,6 +125,20 @@ public:
     virtual void storeRecordOfKeyUsage(const String& sessionId) = 0;
 
     virtual const String& keySystem() const = 0;
+
+    void setTracker(RefPtr<MediaPlayerGStreamerEncryptedPlayTracker> tracker) {
+        if(m_tracker != tracker) {
+            m_tracker = tracker;
+
+            if(tracker)
+                tracker->setKeySystem(keySystem());
+        }
+    }
+
+    RefPtr<MediaPlayerGStreamerEncryptedPlayTracker> getTracker() { return m_tracker; }
+
+private:
+    RefPtr<MediaPlayerGStreamerEncryptedPlayTracker> m_tracker;
 };
 
 } // namespace WebCore
