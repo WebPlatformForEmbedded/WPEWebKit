@@ -123,6 +123,8 @@ RefPtr<AudioContext> AudioContext::create(Document& document)
 
     RefPtr<AudioContext> audioContext(adoptRef(new AudioContext(document)));
     audioContext->suspendIfNeeded();
+    printf("WebAudioContext::create\n");
+    fflush(stdout);
     return audioContext;
 }
 
@@ -132,6 +134,8 @@ AudioContext::AudioContext(Document& document)
     , m_mediaSession(PlatformMediaSession::create(*this))
     , m_eventQueue(std::make_unique<GenericEventQueue>(*this))
 {
+    printf("WebAudioContext::constructor 1\n");
+    fflush(stdout);
     constructCommon();
 
     m_destinationNode = DefaultAudioDestinationNode::create(*this);
@@ -147,6 +151,8 @@ AudioContext::AudioContext(Document& document, unsigned numberOfChannels, size_t
     , m_mediaSession(PlatformMediaSession::create(*this))
     , m_eventQueue(std::make_unique<GenericEventQueue>(*this))
 {
+    printf("WebAudioContext::constructor 2\n");
+    fflush(stdout);
     constructCommon();
 
     // Create a new destination for offline rendering.
