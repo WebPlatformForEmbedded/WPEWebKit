@@ -40,10 +40,11 @@ typedef void *EGLConfig;
 typedef void *EGLContext;
 typedef void *EGLDisplay;
 typedef void *EGLSurface;
+#include "odhott/odhott_wl.h"
 
 namespace WebCore {
 
-class GLContextEGL final : public GLContext {
+class GLContextEGL final : public GLContext,public WaylandContextInfoGetter {
     WTF_MAKE_NONCOPYABLE(GLContextEGL);
 public:
     static std::unique_ptr<GLContextEGL> createContext(GLNativeWindowType, PlatformDisplay&);
@@ -121,6 +122,12 @@ private:
 #if USE(CAIRO)
     cairo_device_t* m_cairoDevice { nullptr };
 #endif
+    EGLDisplay getEGLDisplay() const override;
+    EGLConfig getEGLConfig() const override;
+    EGLSurface getEGLSurface() const override;
+    EGLContext getEGLContext() const override;
+    unsigned int getWindowWidth() const override;
+    unsigned int getWindowHeight() const override;
 };
 
 } // namespace WebCore

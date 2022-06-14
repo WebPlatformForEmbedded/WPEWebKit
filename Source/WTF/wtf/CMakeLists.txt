@@ -486,6 +486,7 @@ list(APPEND WTF_LIBRARIES
     ${ICU_LIBRARIES}
     rdkloggers
     odherr
+    odhott
 )
 
 if (WIN32)
