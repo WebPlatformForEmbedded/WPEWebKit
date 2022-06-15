@@ -256,8 +256,6 @@ static bool checkShouldDelaySeek(GstStateChangeReturn getStateResult, GstState c
         return false;
     if (GST_STATE_TRANSITION(currentState, newState) == GST_STATE_CHANGE_PLAYING_TO_PAUSED)
         return false;
-    if (currentState == GST_STATE_READY && newState >= GST_STATE_PAUSED)
-        return false;
     if (GST_STATE_TRANSITION(currentState, newState) == GST_STATE_CHANGE_PAUSED_TO_PAUSED)
         return false;
     return true;
@@ -298,6 +296,7 @@ bool MediaPlayerPrivateGStreamerMSE::doSeek(const MediaTime& position, float rat
 
         GST_DEBUG_OBJECT(pipeline(), "[Seek] Delaying the seek: %s", reason.data());
 
+        bool prevSeekPending = m_isSeekPending;
         m_isSeekPending = true;
 
         if (m_isEndReached) {
@@ -308,6 +307,9 @@ bool MediaPlayerPrivateGStreamerMSE::doSeek(const MediaTime& position, float rat
                 loadingFailed(MediaPlayer::NetworkState::Empty);
             else
                 m_isSeeking = true;
+        } else if(state < GST_STATE_PAUSED && !prevSeekPending) {
+            m_mediaSource->seekToTime(seekTime);
+            m_mseSeekCompleted = true;
         }
 
         return m_isSeeking;
