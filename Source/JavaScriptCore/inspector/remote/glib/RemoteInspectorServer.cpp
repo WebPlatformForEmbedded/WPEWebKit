@@ -241,7 +241,7 @@ GVariant* RemoteInspectorServer::setupInspectorClient(SocketConnection& clientCo
     m_clientConnection = &clientConnection;
 
     GVariant* backendCommands;
-    if (strcmp(clientBackendCommandsHash, backendCommandsHash().data())) {
+    if (!backendCommandsHash().isNull() && strcmp(clientBackendCommandsHash, backendCommandsHash().data())) {
         auto bytes = Inspector::backendCommands();
         backendCommands = g_variant_new_bytestring(static_cast<const char*>(g_bytes_get_data(bytes.get(), nullptr)));
     } else

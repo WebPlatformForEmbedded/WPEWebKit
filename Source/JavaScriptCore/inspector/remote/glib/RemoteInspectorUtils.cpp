@@ -40,25 +40,18 @@ namespace Inspector {
 GRefPtr<GBytes> backendCommands()
 {
 #if PLATFORM(WPE)
-    static std::once_flag flag;
-    std::call_once(flag, [] {
-        const char* libDir = PKGLIBDIR;
-#if ENABLE(DEVELOPER_MODE)
-        // Probably no need for a specific env var here. Assume the inspector resources.so file is
-        // in the same directory as the injected bundle lib, for developer builds.
-        const char* path = g_getenv("WEBKIT_INJECTED_BUNDLE_PATH");
-        if (path && g_file_test(path, G_FILE_TEST_IS_DIR))
-            libDir = path;
-#endif
-        GUniquePtr<char> bundleFilename(g_build_filename(libDir, "libWPEWebInspectorResources.so", nullptr));
-        GModule* resourcesModule = g_module_open(bundleFilename.get(), G_MODULE_BIND_LAZY);
+    static bool moduleLoaded = false;
+
+    if (!moduleLoaded) {
+        GModule* resourcesModule = g_module_open(PKGLIBDIR G_DIR_SEPARATOR_S "libWPEWebInspectorResources.so", G_MODULE_BIND_LAZY);
         if (!resourcesModule) {
             WTFLogAlways("Error loading libWPEWebInspectorResources.so: %s", g_module_error());
-            return;
+            return nullptr;
         }
 
         g_module_make_resident(resourcesModule);
-    });
+        moduleLoaded = true;
+    }
 #endif
     GRefPtr<GBytes> bytes = adoptGRef(g_resources_lookup_data(INSPECTOR_BACKEND_COMMANDS_PATH, G_RESOURCE_LOOKUP_FLAGS_NONE, nullptr));
     ASSERT(bytes);
@@ -70,6 +63,9 @@ const CString& backendCommandsHash()
     static CString hexDigest;
     if (hexDigest.isNull()) {
         auto bytes = backendCommands();
+        if (!bytes)
+            return hexDigest;
+
         size_t dataSize;
         gconstpointer data = g_bytes_get_data(bytes.get(), &dataSize);
         ASSERT(dataSize);

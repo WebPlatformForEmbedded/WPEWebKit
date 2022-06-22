@@ -27,6 +27,7 @@
 
 #if ENABLE(REMOTE_INSPECTOR)
 
+#include <WebCore/Timer.h>
 #include <wtf/HashMap.h>
 #include <wtf/Vector.h>
 #include <wtf/glib/GRefPtr.h>
@@ -80,6 +81,7 @@ private:
     void setBackendCommands(const char*);
     void setTargetList(uint64_t connectionID, Vector<Target>&&);
     void sendMessageToFrontend(uint64_t connectionID, uint64_t targetID, const char*);
+    void setupInspectorClientTimerFired();
 
     String m_hostAndPort;
     String m_backendCommandsURL;
@@ -88,6 +90,7 @@ private:
     GRefPtr<GCancellable> m_cancellable;
     HashMap<uint64_t, Vector<Target>> m_targets;
     HashMap<std::pair<uint64_t, uint64_t>, std::unique_ptr<RemoteInspectorProxy>> m_inspectorProxyMap;
+    WebCore::Timer m_setupInspectorClientTimer;
 };
 
 } // namespace WebKit

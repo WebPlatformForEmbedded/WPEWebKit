@@ -172,6 +172,7 @@ RemoteInspectorClient::RemoteInspectorClient(String&& hostAndPort, RemoteInspect
     : m_hostAndPort(WTFMove(hostAndPort))
     , m_observer(observer)
     , m_cancellable(adoptGRef(g_cancellable_new()))
+    , m_setupInspectorClientTimer(*this, &RemoteInspectorClient::setupInspectorClientTimerFired)
 {
     GRefPtr<GSocketClient> socketClient = adoptGRef(g_socket_client_new());
     g_socket_client_connect_to_host_async(socketClient.get(), m_hostAndPort.utf8().data(), 0, m_cancellable.get(),
@@ -200,7 +201,34 @@ RemoteInspectorClient::~RemoteInspectorClient()
 void RemoteInspectorClient::setupConnection(Ref<SocketConnection>&& connection)
 {
     m_socketConnection = WTFMove(connection);
-    m_socketConnection->sendMessage("SetupInspectorClient", g_variant_new("(@ay)", g_variant_new_bytestring(Inspector::backendCommandsHash().data())));
+    setupInspectorClientTimerFired();
+}
+
+void RemoteInspectorClient::setupInspectorClientTimerFired()
+{
+    // There's an scenario where libWPEWebInspectorResources.so will not be available when the browser is
+    // launched, but will be downloaded once the network connection is up. To handle this situation we check
+    // whether the library is present bebore sending the SetupInspectorClient message. We will check for
+    // the library every 10 seconds to configure the proper commands. After 60 seconds we give up and
+    // send an empty string of commands, which causes the inspector not to work.
+    static int numTries = 0;
+
+    if (numTries <= 6 && Inspector::backendCommandsHash().isNull()) {
+        // Retry every 10 seconds for 60 seconds.
+        m_setupInspectorClientTimer.startOneShot(10_s);
+        numTries++;
+        return;
+    }
+
+    GVariant* backendCommandsHashString;
+    if (!Inspector::backendCommandsHash().isNull())
+        backendCommandsHashString = g_variant_new_bytestring(Inspector::backendCommandsHash().data());
+    else {
+        WTFLogAlways("Unable to load libWPEWebInspectorResources.so after 60 seconds: WebInspector won't work properly");
+        backendCommandsHashString = g_variant_new_bytestring("");
+    }
+
+    m_socketConnection->sendMessage("SetupInspectorClient", g_variant_new("(@ay)", backendCommandsHashString));
 }
 
 void RemoteInspectorClient::setBackendCommands(const char* backendCommands)
