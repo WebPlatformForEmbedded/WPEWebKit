@@ -1157,6 +1157,7 @@ void HTMLMediaElement::prepareForLoad()
     m_havePreparedToPlay = false;
     m_displayMode = Unknown;
     m_currentSrc = URL();
+    m_playbackBlockedWaitingForKey = false;
 
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
     m_failedToPlayToWirelessTarget = false;

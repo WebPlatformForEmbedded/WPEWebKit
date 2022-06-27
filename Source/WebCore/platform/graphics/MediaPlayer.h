@@ -47,6 +47,7 @@
 #include <wtf/Logger.h>
 #include <wtf/MediaTime.h>
 #include <wtf/WallTime.h>
+#include <wtf/WeakPtr.h>
 #include <wtf/text/StringHash.h>
 
 #if ENABLE(AVF_CAPTIONS)
@@ -278,7 +279,7 @@ public:
 #endif
 };
 
-class WEBCORE_EXPORT MediaPlayer : public MediaPlayerEnums, public RefCounted<MediaPlayer> {
+class WEBCORE_EXPORT MediaPlayer : public MediaPlayerEnums, public RefCounted<MediaPlayer>, public CanMakeWeakPtr<MediaPlayer> {
     WTF_MAKE_NONCOPYABLE(MediaPlayer); WTF_MAKE_FAST_ALLOCATED;
 public:
     static Ref<MediaPlayer> create(MediaPlayerClient&);
