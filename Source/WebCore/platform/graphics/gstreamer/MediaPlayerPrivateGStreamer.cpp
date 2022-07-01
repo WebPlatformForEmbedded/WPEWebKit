@@ -220,6 +220,9 @@ MediaPlayerPrivateGStreamer::MediaPlayerPrivateGStreamer(MediaPlayer* player)
     , m_readyTimerHandler(RunLoop::main(), this, &MediaPlayerPrivateGStreamer::readyTimerFired)
     , m_totalBytes(-1)
     , m_preservesPitch(false)
+#if ENABLE(MEDIA_STREAM)
+    , m_audioOnly(false)
+#endif
 {
 #if USE(GLIB)
     m_readyTimerHandler.setPriority(G_PRIORITY_DEFAULT_IDLE);
@@ -403,6 +406,14 @@ void MediaPlayerPrivateGStreamer::load(MediaStreamPrivate& stream)
     m_streamPrivate = &stream;
     auto pipelineName = String::format("mediastream_%s_%p",
         (stream.hasCaptureVideoSource() || stream.hasCaptureAudioSource()) ? "Local" : "Remote", this);
+
+    if(stream.hasAudio() && !stream.hasVideo()){
+        m_audioOnly = true;
+        GST_DEBUG("Stream has only audio");
+    }
+    else{
+        m_audioOnly = false;
+    }
 
     loadFull(String("mediastream://") + stream.id(), "playbin3", pipelineName);
 #if USE(GSTREAMER_GL)
@@ -3070,7 +3081,11 @@ void MediaPlayerPrivateGStreamer::createGSTPlayBin(const gchar* playbinName, con
 #endif
 
     bool shouldSetVideoSink = (m_player->contentMIMEType() != "video/x-dvb" && m_player->url().protocol() != "rec");
+#if ENABLE(MEDIA_STREAM)
+    shouldSetVideoSink &= !m_audioOnly;
+#endif
     if (shouldSetVideoSink) {
+        GST_DEBUG("Adding video sink to the pipeline");
         g_object_set(m_pipeline.get(), "video-sink", createVideoSink(), nullptr);
     } else {
 #if USE(GSTREAMER_HOLEPUNCH)

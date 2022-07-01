@@ -287,6 +287,7 @@ private:
     FloatSize naturalSize() const override;
 #if ENABLE(MEDIA_STREAM)
     RefPtr<MediaStreamPrivate> m_streamPrivate;
+    bool m_audioOnly;
 #endif // ENABLE(MEDIA_STREAM)
 #endif // GST_CHECK_VERSION(1, 10, 0)
     String m_currentAudioStreamId;
