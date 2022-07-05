@@ -6629,7 +6629,7 @@ void WebGLRenderingContextBase::activityStateDidChange(OptionSet<ActivityState::
 
     if (m_nonCompositedWebGLMode) {
         if (((changed & ActivityState::IsInWindow) && !(newActivityState & ActivityState::IsInWindow)) ||
-            ((changed & ActivityState::IsVisible) && !(newActivityState & ActivityState::IsVisible))) {
+            (!(newActivityState & ActivityState::IsVisible) && (changed & ActivityState::IsLoading) && (newActivityState & ActivityState::IsLoading))) {
             if (m_scissorEnabled)
                 m_context->disable(GraphicsContextGL::SCISSOR_TEST);
             m_context->clearColor(0, 0, 0, 0);
