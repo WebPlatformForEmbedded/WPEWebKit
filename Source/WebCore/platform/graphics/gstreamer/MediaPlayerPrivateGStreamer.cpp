@@ -295,6 +295,10 @@ MediaPlayerPrivateGStreamer::~MediaPlayerPrivateGStreamer()
         gst_bus_set_sync_handler(bus.get(), nullptr, nullptr, nullptr);
         g_signal_handlers_disconnect_matched(m_pipeline.get(), G_SIGNAL_MATCH_DATA, 0, 0, nullptr, nullptr, this);
     }
+
+    m_odhReporter.report(ODH_REPORT_AVPIPELINE_STATE_DESTROY, "", OdhMediaType::NONE, m_avContextGetter);
+    m_odhReporter.report_all_and_stop();
+    m_avContextGetter.setPipeline(nullptr);
 }
 
 static void convertToInternalProtocol(URL& url)
@@ -565,6 +569,8 @@ void MediaPlayerPrivateGStreamer::play()
             totalBytes();
         setDownloadBuffering();
         GST_INFO("Play");
+        m_odhReporter.report(ODH_REPORT_AVPIPELINE_STATE_PLAY, "", OdhMediaType::VIDEO, m_avContextGetter);
+        m_odhReporter.report(ODH_REPORT_AVPIPELINE_STATE_PLAY, "", OdhMediaType::AUDIO, m_avContextGetter);
     } else
         loadingFailed(MediaPlayer::Empty);
 }
@@ -580,6 +586,8 @@ void MediaPlayerPrivateGStreamer::pause()
     if (changePipelineState(GST_STATE_PAUSED)) {
         m_paused = true;
         GST_INFO("Pause");
+        m_odhReporter.report(ODH_REPORT_AVPIPELINE_STATE_PAUSE, "", OdhMediaType::VIDEO, m_avContextGetter);
+        m_odhReporter.report(ODH_REPORT_AVPIPELINE_STATE_PAUSE, "", OdhMediaType::AUDIO, m_avContextGetter);
     } else
         loadingFailed(MediaPlayer::Empty);
 }
@@ -1333,6 +1341,8 @@ void MediaPlayerPrivateGStreamer::handleMessage(GstMessage* message)
 
         m_errorMessage = err->message;
         error = MediaPlayer::Empty;
+        m_odhReporter.report(ODH_REPORT_AVPIPELINE_STATE_PLAYBACK_ERROR, m_errorMessage.utf8().data(), OdhMediaType::VIDEO, m_avContextGetter);
+        m_odhReporter.report(ODH_REPORT_AVPIPELINE_STATE_PLAYBACK_ERROR, m_errorMessage.utf8().data(), OdhMediaType::AUDIO, m_avContextGetter);
         if (g_error_matches(err.get(), GST_STREAM_ERROR, GST_STREAM_ERROR_CODEC_NOT_FOUND)
             || g_error_matches(err.get(), GST_STREAM_ERROR, GST_STREAM_ERROR_DECRYPT)
             || g_error_matches(err.get(), GST_STREAM_ERROR, GST_STREAM_ERROR_DECRYPT_NOKEY)
@@ -2448,6 +2458,9 @@ void MediaPlayerPrivateGStreamer::handleDecryptionError(const GstStructure* stru
     fprintf(stderr, "HTML5 video: Playback failed: Decryption error [%s]\n", m_url.string().utf8().data());
     loadingFailed(MediaPlayer::FormatError);
     m_player->decryptErrorEncountered(); // override the error code
+
+    m_odhReporter.report(ODH_REPORT_AVPIPELINE_STATE_DECRYPT_ERROR, m_errorMessage.utf8().data(), OdhMediaType::VIDEO, m_avContextGetter);
+    m_odhReporter.report(ODH_REPORT_AVPIPELINE_STATE_DECRYPT_ERROR, m_errorMessage.utf8().data(), OdhMediaType::AUDIO, m_avContextGetter);
 }
 
 void MediaPlayerPrivateGStreamer::cdmInstanceAttached(CDMInstance& instance)
@@ -2659,6 +2672,9 @@ void MediaPlayerPrivateGStreamer::didEnd()
         // Skip updateStates() as that would eventually result in play(), clearing m_isEndReached
         m_player->timeChanged();
     }
+
+    m_odhReporter.report(ODH_REPORT_AVPIPELINE_STATE_END_OF_STREAM, "", OdhMediaType::VIDEO, m_avContextGetter);
+    m_odhReporter.report(ODH_REPORT_AVPIPELINE_STATE_END_OF_STREAM, "", OdhMediaType::AUDIO, m_avContextGetter);
 }
 
 void MediaPlayerPrivateGStreamer::durationChanged()
@@ -3022,6 +3038,9 @@ void MediaPlayerPrivateGStreamer::createGSTPlayBin(const gchar* playbinName, con
             playbinName);
         changePipelineState(GST_STATE_NULL);
         m_pipeline = nullptr;
+        m_avContextGetter.setPipeline(nullptr);
+
+        m_odhReporter.report(ODH_REPORT_AVPIPELINE_STATE_DESTROY, "", OdhMediaType::NONE, m_avContextGetter);
     }
 
     ASSERT(!m_pipeline);
@@ -3174,6 +3193,9 @@ void MediaPlayerPrivateGStreamer::createGSTPlayBin(const gchar* playbinName, con
         } else
             GST_WARNING("The videoflip element is missing, video rotation support is now disabled. Please check your gst-plugins-good installation.");
     }
+
+    m_avContextGetter.setPipeline(m_pipeline);
+    m_odhReporter.report(ODH_REPORT_AVPIPELINE_STATE_CREATE, "", OdhMediaType::NONE, m_avContextGetter);
 }
 
 void MediaPlayerPrivateGStreamer::simulateAudioInterruption()
@@ -3258,6 +3280,50 @@ void MediaPlayerPrivateGStreamer::elementSetupCallback(MediaPlayerPrivateGStream
     UNUSED_PARAM(player);
 #endif // USE(WESTEROS_SINK)
 }
+
+OdhDrm MediaPlayerPrivateGStreamer::AvContextGetterImpl::getDrm()
+{
+    if (m_pipeline.get()) {
+        GstContext* drmCdmInstanceContext = gst_element_get_context(GST_ELEMENT(m_pipeline.get()), "drm-cdm-instance");
+        if (!drmCdmInstanceContext) {
+            return {OdhDrm::NONE};
+        }
+
+        const GstStructure* drmCdmInstanceStructure = gst_context_get_structure(drmCdmInstanceContext);
+        if (!drmCdmInstanceStructure) {
+            return {OdhDrm::NONE};
+        }
+
+        const GValue* drmCdmInstanceVal = gst_structure_get_value(drmCdmInstanceStructure, "cdm-instance");
+        if (!drmCdmInstanceVal) {
+            return {OdhDrm::NONE};
+        }
+
+        const CDMInstance* drmCdmInstance = (const CDMInstance*)g_value_get_pointer(drmCdmInstanceVal);
+        if (!drmCdmInstance) {
+            return {OdhDrm::NONE};
+        }
+
+        const std::string keySystem = drmCdmInstance->keySystem().utf8().data();
+        if (keySystem.find("playready") != string::npos) {
+            return {OdhDrm::PLAYREADY_DRM};
+        } else if (keySystem.find("widevine") != string::npos) {
+            return {OdhDrm::WIDEVINE_DRM};
+        }
+    }
+    return {OdhDrm::NONE};
+}
+
+OdhOwner MediaPlayerPrivateGStreamer::AvContextGetterImpl::getOwner()
+{
+    return OdhOwner::WPE;
+}
+
+GstElement* MediaPlayerPrivateGStreamer::AvContextGetterImpl::getPipeline()
+{
+    return m_pipeline.get();
+}
+
 
 }
 
