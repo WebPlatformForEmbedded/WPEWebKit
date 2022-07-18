@@ -207,7 +207,7 @@ void MediaPlayerPrivateGStreamerMSE::seek(const MediaTime& time)
 
     m_isEndReached = false;
     if (m_isSeeking && oldReadyState > MediaPlayer::ReadyState::HaveMetadata) {
-        updateReadyStateForSeekTarget();
+        m_readyState = MediaPlayer::ReadyState::HaveMetadata;
         if (m_readyState != oldReadyState)
             m_player->readyStateChanged();
     }
