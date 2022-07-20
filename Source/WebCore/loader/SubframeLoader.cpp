@@ -274,11 +274,6 @@ RefPtr<Widget> SubframeLoader::createJavaAppletWidget(const IntSize& size, HTMLA
     logPluginRequest(m_frame.page(), element.serviceType(), String(), widget);
 
     if (!widget) {
-        RenderEmbeddedObject* renderer = element.renderEmbeddedObject();
-
-        if (!renderer->isPluginUnavailable()) {
-            LOG_ERROR("Missing plug-in; Notification suppressed");
-        }
         return nullptr;
     }
 
@@ -426,8 +421,6 @@ bool SubframeLoader::loadPlugin(HTMLPlugInImageElement& pluginElement, const URL
         return false;
 
     if (!widget) {
-        if (!renderer->isPluginUnavailable())
-            LOG_ERROR("Missing plug-in; Notification suppressed");
         return false;
     }
 
