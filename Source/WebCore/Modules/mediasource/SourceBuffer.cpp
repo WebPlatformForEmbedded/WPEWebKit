@@ -1000,12 +1000,10 @@ void SourceBuffer::evictCodedFrames(size_t newDataSize)
         minimumRangeStart = m_groupEndTimestamp;
     }
 
-    if (m_source->duration().isPositiveInfinite()) {
-        if (!buffered.length())
-            return;
-        rangeEnd = buffered.end(buffered.length() - 1);
-    } else
-        rangeEnd = m_source->duration();
+    if (!buffered.length())
+        return;
+
+    rangeEnd = buffered.end(buffered.length() - 1);
 #else
     if (currentTimeRange == buffered.length() - 1) {
         LOG(MediaSource, "SourceBuffer::evictCodedFrames(%p) - evicted %zu bytes but FAILED to free enough", this, initialBufferedSize - extraMemoryCost());
