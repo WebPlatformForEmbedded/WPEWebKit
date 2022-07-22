@@ -977,6 +977,20 @@ void SourceBuffer::evictCodedFrames(size_t newDataSize)
     size_t initialBufferedSize = extraMemoryCost();
 #endif
 
+    for (auto& trackBuffer : m_trackBufferMap.values()) {
+        auto t = std::max(MediaTime::zeroTime(), currentTime - MediaTime(2, 1));
+        auto prevSync =
+            trackBuffer.samples.decodeOrder().findSyncSamplePriorToPresentationTime(t);
+        if (prevSync != trackBuffer.samples.decodeOrder().rend()) {
+            // Don't include the sync frame in the range, just finish right before it.
+            prevSync++;
+        }
+        if (prevSync != trackBuffer.samples.decodeOrder().rend()) {
+            maximumRangeEnd = prevSync->second->presentationTime();
+            break;
+        }
+    }
+
     MediaTime rangeStart = MediaTime::zeroTime();
     MediaTime rangeEnd = std::max(m_buffered->ranges().start(0), rangeStart + thirtySeconds);
     while (rangeStart < maximumRangeEnd) {
