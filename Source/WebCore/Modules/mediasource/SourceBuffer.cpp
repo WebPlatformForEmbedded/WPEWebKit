@@ -982,14 +982,15 @@ void SourceBuffer::evictCodedFrames(size_t newDataSize)
     while (rangeStart < maximumRangeEnd) {
         // 4. For each range in removal ranges, run the coded frame removal algorithm with start and
         // end equal to the removal range start and end timestamp respectively.
-        removeCodedFrames(rangeStart, std::min(rangeEnd, maximumRangeEnd));
+        rangeEnd = std::min(rangeEnd, maximumRangeEnd);
+        removeCodedFrames(rangeStart, rangeEnd);
         if (extraMemoryCost() + newDataSize < maximumBufferSize) {
             m_bufferFull = false;
             break;
         }
 
-        rangeStart += thirtySeconds;
-        rangeEnd += thirtySeconds;
+        rangeStart = rangeEnd;
+        rangeEnd = rangeStart + thirtySeconds;
     }
 
 #if !RELEASE_LOG_DISABLED
@@ -1020,7 +1021,7 @@ void SourceBuffer::evictCodedFrames(size_t newDataSize)
     }
 
     rangeStart = rangeEnd - thirtySeconds;
-    while (rangeStart > minimumRangeStart) {
+    while (rangeEnd > minimumRangeStart) {
 
         // Do not evict data from the time range that contains currentTime.
         size_t startTimeRange = buffered.find(rangeStart);
@@ -1034,14 +1035,15 @@ void SourceBuffer::evictCodedFrames(size_t newDataSize)
 
         // 4. For each range in removal ranges, run the coded frame removal algorithm with start and
         // end equal to the removal range start and end timestamp respectively.
-        removeCodedFrames(std::max(minimumRangeStart, rangeStart), rangeEnd);
+        rangeStart = std::max(minimumRangeStart, rangeStart);
+        removeCodedFrames(rangeStart, rangeEnd);
         if (extraMemoryCost() + newDataSize < maximumBufferSize) {
             m_bufferFull = false;
             break;
         }
 
-        rangeStart -= thirtySeconds;
-        rangeEnd -= thirtySeconds;
+        rangeEnd = rangeStart;
+        rangeStart = rangeEnd - thirtySeconds;
     }
 
 #if !RELEASE_LOG_DISABLED
