@@ -2853,7 +2853,7 @@ bool RenderLayerCompositor::requiresCompositingForVideo(RenderLayerModelObject& 
         return false;
 
     auto& video = downcast<RenderVideo>(renderer);
-    if ((video.requiresImmediateCompositing() || video.shouldDisplayVideo()) && canAccelerateVideoRendering(video))
+    if (canAccelerateVideoRendering(video))
         return true;
 #else
     UNUSED_PARAM(renderer);
