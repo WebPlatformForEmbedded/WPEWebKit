@@ -665,6 +665,13 @@ void MediaPlayerPrivateGStreamer::seek(const MediaTime& mediaTime)
 
     GST_INFO("[Seek] seeking to %s", toString(time).utf8().data());
 
+    char json_str[100];
+    int len = snprintf(json_str, 100, "{\"seek_from\":%f, \"seek_to\":%f}", playbackPosition().toDouble(), time.toDouble());
+    if (len > 0 && len < 100) {
+        m_odhReporter.report(ODH_REPORT_AVPIPELINE_STATE_SEEK_START, json_str, OdhMediaType::VIDEO, m_avContextGetter);
+        m_odhReporter.report(ODH_REPORT_AVPIPELINE_STATE_SEEK_START, json_str, OdhMediaType::AUDIO, m_avContextGetter);
+    }
+
     if (m_seeking) {
         m_timeOfOverlappingSeek = time;
         if (m_seekIsPending) {
@@ -2229,6 +2236,13 @@ void MediaPlayerPrivateGStreamer::asyncStateChangeDone()
             updateStates();
         else {
             GST_DEBUG("[Seek] seeked to %s", toString(m_seekTime).utf8().data());
+            char json_str[100];
+            int len = snprintf(json_str, 100, "{\"seek_to\":%f}", m_seekTime.toDouble());
+            if (len > 0 && len < 100) {
+                m_odhReporter.report(ODH_REPORT_AVPIPELINE_STATE_SEEK_DONE, json_str, OdhMediaType::VIDEO, m_avContextGetter);
+                m_odhReporter.report(ODH_REPORT_AVPIPELINE_STATE_SEEK_DONE, json_str, OdhMediaType::AUDIO, m_avContextGetter);
+            }
+
             m_seeking = false;
             m_cachedPosition = MediaTime::invalidTime();
             if (m_timeOfOverlappingSeek != m_seekTime && m_timeOfOverlappingSeek.isValid()) {

@@ -237,6 +237,22 @@ protected:
     bool m_volumeAndMuteInitialized;
     MediaTime m_previousDuration;
 
+    // ODH AV telemetry reports
+    class AvContextGetterImpl: public AvContextGetter {
+    public:
+        void setPipeline(GRefPtr<GstElement> pipeline) { m_pipeline = pipeline; }
+
+        //AvContextGetter
+        OdhDrm getDrm() override;
+        OdhOwner getOwner() override;
+        GstElement* getPipeline() override;
+
+    private:
+        GRefPtr<GstElement> m_pipeline;
+    };
+    AvContextGetterImpl m_avContextGetter;
+    AvOdhReporter m_odhReporter;
+
     static GstSeekFlags hardwareDependantSeekFlags();
     void readyTimerFired();
 
@@ -329,22 +345,6 @@ private:
 
     mutable guint m_decoded_frames = 0;
     mutable guint m_dropped_frames = 0;
-
-    // ODH AV telemetry reports
-    class AvContextGetterImpl: public AvContextGetter {
-    public:
-        void setPipeline(GRefPtr<GstElement> pipeline) { m_pipeline = pipeline; }
-
-        //AvContextGetter
-        OdhDrm getDrm() override;
-        OdhOwner getOwner() override;
-        GstElement* getPipeline() override;
-
-    private:
-        GRefPtr<GstElement> m_pipeline;
-    };
-    AvContextGetterImpl m_avContextGetter;
-    AvOdhReporter m_odhReporter;
 };
 }
 
