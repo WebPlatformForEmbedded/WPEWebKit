@@ -79,7 +79,7 @@ inline void infoLog(Logger& logger, const Arguments&... arguments)
 #endif
 }
 
-static void tryNextSupportedConfiguration(RefPtr<CDM>&& implementation, Vector<MediaKeySystemConfiguration>&& supportedConfigurations, RefPtr<DeferredPromise>&&, Ref<Logger>&&, WTF::Logger::LogSiteIdentifier&&);
+static void tryNextSupportedConfiguration(Document& docuemnt, RefPtr<CDM>&& implementation, Vector<MediaKeySystemConfiguration>&& supportedConfigurations, RefPtr<DeferredPromise>&&, Ref<Logger>&&, WTF::Logger::LogSiteIdentifier&&);
 
 void NavigatorEME::requestMediaKeySystemAccess(Navigator& navigator, Document& document, const String& keySystem, Vector<MediaKeySystemConfiguration>&& supportedConfigurations, Ref<DeferredPromise>&& promise)
 {
@@ -114,11 +114,11 @@ void NavigatorEME::requestMediaKeySystemAccess(Navigator& navigator, Document& d
 
         // 6.2. Let implementation be the implementation of keySystem.
         auto implementation = CDM::create(document, keySystem);
-        tryNextSupportedConfiguration(WTFMove(implementation), WTFMove(supportedConfigurations), WTFMove(promise), WTFMove(logger), WTFMove(identifier));
+        tryNextSupportedConfiguration(document, WTFMove(implementation), WTFMove(supportedConfigurations), WTFMove(promise), WTFMove(logger), WTFMove(identifier));
     });
 }
 
-static void tryNextSupportedConfiguration(RefPtr<CDM>&& implementation, Vector<MediaKeySystemConfiguration>&& supportedConfigurations, RefPtr<DeferredPromise>&& promise, Ref<Logger>&& logger, WTF::Logger::LogSiteIdentifier&& identifier)
+static void tryNextSupportedConfiguration(Document& document, RefPtr<CDM>&& implementation, Vector<MediaKeySystemConfiguration>&& supportedConfigurations, RefPtr<DeferredPromise>&& promise, Ref<Logger>&& logger, WTF::Logger::LogSiteIdentifier&& identifier)
 {
     // 6.3. For each value in supportedConfigurations:
     if (!supportedConfigurations.isEmpty()) {
@@ -128,7 +128,7 @@ static void tryNextSupportedConfiguration(RefPtr<CDM>&& implementation, Vector<M
         MediaKeySystemConfiguration candidateConfiguration = WTFMove(supportedConfigurations.first());
         supportedConfigurations.remove(0);
 
-        CDM::SupportedConfigurationCallback callback = [implementation = implementation, supportedConfigurations = WTFMove(supportedConfigurations), promise, logger = WTFMove(logger), identifier = WTFMove(identifier)] (Optional<MediaKeySystemConfiguration> supportedConfiguration) mutable {
+        CDM::SupportedConfigurationCallback callback = [&document, implementation = implementation, supportedConfigurations = WTFMove(supportedConfigurations), promise, logger = WTFMove(logger), identifier = WTFMove(identifier)] (Optional<MediaKeySystemConfiguration> supportedConfiguration) mutable {
             // 6.3.3. If supported configuration is not NotSupported, run the following steps:
             if (supportedConfiguration) {
                 // 6.3.3.1. Let access be a new MediaKeySystemAccess object, and initialize it as follows:
@@ -138,7 +138,7 @@ static void tryNextSupportedConfiguration(RefPtr<CDM>&& implementation, Vector<M
 
                 // Obtain reference to the key system string before the `implementation` RefPtr<> is cleared out.
                 const String& keySystem = implementation->keySystem();
-                auto access = MediaKeySystemAccess::create(keySystem, WTFMove(supportedConfiguration.value()), implementation.releaseNonNull());
+                auto access = MediaKeySystemAccess::create(document, keySystem, WTFMove(supportedConfiguration.value()), implementation.releaseNonNull());
 
                 // 6.3.3.2. Resolve promise with access and abort the parallel steps of this algorithm.
                 infoLog(logger, identifier, "Resolved: keySystem(", keySystem, "), supportedConfiguration(", supportedConfiguration, ")");
@@ -146,7 +146,7 @@ static void tryNextSupportedConfiguration(RefPtr<CDM>&& implementation, Vector<M
                 return;
             }
 
-            tryNextSupportedConfiguration(WTFMove(implementation), WTFMove(supportedConfigurations), WTFMove(promise), WTFMove(logger), WTFMove(identifier));
+            tryNextSupportedConfiguration(document, WTFMove(implementation), WTFMove(supportedConfigurations), WTFMove(promise), WTFMove(logger), WTFMove(identifier));
         };
         implementation->getSupportedConfiguration(WTFMove(candidateConfiguration), WTFMove(callback));
         return;

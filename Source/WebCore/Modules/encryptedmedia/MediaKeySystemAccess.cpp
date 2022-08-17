@@ -40,13 +40,14 @@
 
 namespace WebCore {
 
-Ref<MediaKeySystemAccess> MediaKeySystemAccess::create(const String& keySystem, MediaKeySystemConfiguration&& configuration, Ref<CDM>&& implementation)
+Ref<MediaKeySystemAccess> MediaKeySystemAccess::create(Document& document, const String& keySystem, MediaKeySystemConfiguration&& configuration, Ref<CDM>&& implementation)
 {
-    return adoptRef(*new MediaKeySystemAccess(keySystem, WTFMove(configuration), WTFMove(implementation)));
+    return adoptRef(*new MediaKeySystemAccess(document, keySystem, WTFMove(configuration), WTFMove(implementation)));
 }
 
-MediaKeySystemAccess::MediaKeySystemAccess(const String& keySystem, MediaKeySystemConfiguration&& configuration, Ref<CDM>&& implementation)
-    : m_keySystem(keySystem)
+MediaKeySystemAccess::MediaKeySystemAccess(Document& document, const String& keySystem, MediaKeySystemConfiguration&& configuration, Ref<CDM>&& implementation)
+    : ActiveDOMObject(document)
+    , m_keySystem(keySystem)
     , m_configuration(new MediaKeySystemConfiguration(WTFMove(configuration)))
     , m_implementation(WTFMove(implementation))
 {
@@ -107,6 +108,17 @@ void MediaKeySystemAccess::createMediaKeys(Ref<DeferredPromise>&& promise)
     });
 
     // 3. Return promise.
+}
+
+bool MediaKeySystemAccess::virtualHasPendingActivity() const
+{
+    // Don't destroy this object if it has unresolved createMediaKeys() promisses
+    return m_taskQueue.hasPendingTasks();
+}
+
+const char* MediaKeySystemAccess::activeDOMObjectName() const
+{
+    return "MediaKeySystemAccess";
 }
 
 } // namespace WebCore

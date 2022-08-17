@@ -30,6 +30,7 @@
 
 #if ENABLE(ENCRYPTED_MEDIA)
 
+#include "ActiveDOMObject.h"
 #include "GenericTaskQueue.h"
 #include "MediaKeySystemConfiguration.h"
 #include <wtf/RefCounted.h>
@@ -41,9 +42,9 @@ class CDM;
 class DeferredPromise;
 class MediaKeys;
 
-class MediaKeySystemAccess : public RefCounted<MediaKeySystemAccess> {
+class MediaKeySystemAccess : public RefCounted<MediaKeySystemAccess>, public ActiveDOMObject {
 public:
-    static Ref<MediaKeySystemAccess> create(const String& keySystem, MediaKeySystemConfiguration&&, Ref<CDM>&&);
+    static Ref<MediaKeySystemAccess> create(Document& document, const String& keySystem, MediaKeySystemConfiguration&&, Ref<CDM>&&);
     ~MediaKeySystemAccess();
 
     const String& keySystem() const { return m_keySystem; }
@@ -51,7 +52,11 @@ public:
     void createMediaKeys(Ref<DeferredPromise>&&);
 
 private:
-    MediaKeySystemAccess(const String& keySystem, MediaKeySystemConfiguration&&, Ref<CDM>&&);
+    MediaKeySystemAccess(Document& document, const String& keySystem, MediaKeySystemConfiguration&&, Ref<CDM>&&);
+
+    // ActiveDOMObject
+    const char* activeDOMObjectName() const final;
+    bool virtualHasPendingActivity() const final;
 
     String m_keySystem;
     std::unique_ptr<MediaKeySystemConfiguration> m_configuration;
