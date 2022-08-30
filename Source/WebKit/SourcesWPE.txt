@@ -105,6 +105,7 @@ UIProcess/LegacySessionStateCodingNone.cpp
 UIProcess/WebGrammarDetail.cpp
 UIProcess/WebMemoryPressureHandler.cpp @no-unify
 UIProcess/WebViewportAttributes.cpp
+UIProcess/Gamepad/wpe/UIGamepadProviderWPE.cpp
 
 UIProcess/API/C/WKGrammarDetail.cpp
 UIProcess/API/C/WKViewportAttributes.cpp

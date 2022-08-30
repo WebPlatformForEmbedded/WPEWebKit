@@ -223,7 +223,7 @@ Vector<GamepadData> UIGamepadProvider::snapshotGamepads()
     return gamepadDatas;
 }
 
-#if !PLATFORM(COCOA)
+#if !PLATFORM(COCOA) && !PLATFORM(WPE)
 
 void UIGamepadProvider::platformSetDefaultGamepadProvider()
 {

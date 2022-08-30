@@ -103,6 +103,10 @@ public:
     void setFullScreen(bool fullScreenState) { m_fullScreenModeActive = fullScreenState; };
 #endif
 
+#if ENABLE(GAMEPAD)
+    static WebKit::WebPageProxy* platformWebPageProxyForGamepadInput();
+#endif
+
 #if ENABLE(ACCESSIBILITY)
     WebKitWebViewAccessible* accessible() const;
 #endif
