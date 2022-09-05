@@ -1010,6 +1010,9 @@ void WebProcess::garbageCollectJavaScriptObjects()
 
 void WebProcess::mainThreadPing()
 {
+#if defined(USE_DEBUG_LOGGER)
+    WTFLogAlways("received MainThreadPing\n");
+#endif
     parentProcessConnection()->send(Messages::WebProcessProxy::DidReceiveMainThreadPing(), 0);
 }
 

@@ -77,6 +77,9 @@
 #define MESSAGE_CHECK(assertion) MESSAGE_CHECK_BASE(assertion, connection())
 #define MESSAGE_CHECK_URL(url) MESSAGE_CHECK_BASE(checkURLReceivedFromWebProcess(url), connection())
 
+#define WEBPROCESSPROXY_RELEASE_LOG(channel, fmt, ...) RELEASE_LOG(channel, "%p - [PID=%i] WebProcessProxy::" fmt, this, processIdentifier(), ##__VA_ARGS__)
+#define WEBPROCESSPROXY_RELEASE_LOG_ERROR(channel, fmt, ...) RELEASE_LOG_ERROR(channel, "%p - [PID=%i] WebProcessProxy::" fmt, this, processIdentifier(), ##__VA_ARGS__)
+
 namespace WebKit {
 using namespace WebCore;
 
@@ -744,6 +747,8 @@ void WebProcessProxy::didReceiveInvalidMessage(IPC::Connection& connection, IPC:
 
 void WebProcessProxy::didBecomeUnresponsive()
 {
+    WEBPROCESSPROXY_RELEASE_LOG_ERROR(Process, "didBecomeUnresponsive");
+
     m_isResponsive = NoOrMaybe::No;
 
     auto isResponsiveCallbacks = WTFMove(m_isResponsiveCallbacks);
@@ -758,6 +763,8 @@ void WebProcessProxy::didBecomeUnresponsive()
 
 void WebProcessProxy::didBecomeResponsive()
 {
+    WEBPROCESSPROXY_RELEASE_LOG(Process, "didBecomeResponsive");
+
     m_isResponsive = NoOrMaybe::Maybe;
 
     for (auto& page : copyToVectorOf<RefPtr<WebPageProxy>>(m_pageMap.values()))
@@ -1237,12 +1244,18 @@ void WebProcessProxy::isResponsive(WTF::Function<void(bool isWebProcessResponsiv
     if (callback)
         m_isResponsiveCallbacks.append(WTFMove(callback));
 
+#if defined(USE_DEBUG_LOGGER)
+    WTFLogAlways("sending MainThreadPing\n");
+#endif
     responsivenessTimer().start();
     send(Messages::WebProcess::MainThreadPing(), 0);
 }
 
 void WebProcessProxy::didReceiveMainThreadPing()
 {
+#if defined(USE_DEBUG_LOGGER)
+    WTFLogAlways("received DidReceiveMainThreadPing\n");
+#endif
     responsivenessTimer().stop();
 
     auto isResponsiveCallbacks = WTFMove(m_isResponsiveCallbacks);
