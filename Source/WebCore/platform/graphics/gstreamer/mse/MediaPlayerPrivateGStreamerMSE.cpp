@@ -401,15 +401,8 @@ void MediaPlayerPrivateGStreamerMSE::maybeFinishSeek()
         return;
     }
 
-    GST_DEBUG("[Seek] Seeked to %s", toString(m_seekTime).utf8().data());
-
     webKitMediaSrcSetReadyForSamples(WEBKIT_MEDIA_SRC(m_source.get()), true);
-    m_isSeeking = false;
-    m_cachedPosition = MediaTime::invalidTime();
-    // The pipeline can still have a pending state. In this case a position query will fail.
-    // Right now we can use m_seekTime as a fallback.
-    m_canFallBackToLastFinishedSeekPosition = true;
-    timeChanged();
+    finishSeek();
 }
 
 bool MediaPlayerPrivateGStreamerMSE::seeking() const

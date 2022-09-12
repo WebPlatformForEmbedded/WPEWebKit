@@ -269,6 +269,8 @@ protected:
     virtual bool changePipelineState(GstState);
     virtual void updatePlaybackRate();
 
+    void finishSeek();
+
 #if USE(GSTREAMER_HOLEPUNCH)
     GstElement* createHolePunchVideoSink();
     void pushNextHolePunchBuffer();
@@ -432,7 +434,6 @@ private:
     MediaTime playbackPosition() const;
 
     virtual void updateStates();
-    void finishSeek();
     virtual void asyncStateChangeDone();
 
     void createGSTPlayBin(const URL&, const String& pipelineName);

@@ -2413,7 +2413,9 @@ void MediaPlayerPrivateGStreamer::finishSeek()
 {
     GST_DEBUG_OBJECT(pipeline(), "[Seek] seeked to %s", toString(m_seekTime).utf8().data());
     m_isSeeking = false;
-    m_cachedPosition = MediaTime::invalidTime();
+    Seconds now = WTF::WallTime::now().secondsSinceEpoch();
+    m_lastQueryTime = now;
+    m_cachedPosition = m_seekTime;
     if (m_timeOfOverlappingSeek != m_seekTime && m_timeOfOverlappingSeek.isValid()) {
         seek(m_timeOfOverlappingSeek);
         m_timeOfOverlappingSeek = MediaTime::invalidTime();
