@@ -177,7 +177,7 @@ private:
     StringReference m_messageReceiverName;
     StringReference m_messageName;
 
-    uint64_t m_destinationID;
+    uint64_t m_destinationID { };
 
 #if PLATFORM(MAC)
     std::unique_ptr<ImportanceAssertion> m_importanceAssertion;

@@ -233,8 +233,8 @@ private:
     WebCore::IntPoint m_globalPosition;
     WebCore::FloatSize m_delta;
     WebCore::FloatSize m_wheelTicks;
-    uint32_t m_granularity; // Granularity
-    bool m_directionInvertedFromDevice;
+    uint32_t m_granularity { }; // Granularity
+    bool m_directionInvertedFromDevice { };
 #if PLATFORM(COCOA) || PLATFORM(GTK)
     uint32_t m_phase { Phase::PhaseNone };
     uint32_t m_momentumPhase { Phase::PhaseNone };
@@ -303,9 +303,9 @@ private:
     String m_code;
 #endif
     String m_keyIdentifier;
-    int32_t m_windowsVirtualKeyCode;
-    int32_t m_nativeVirtualKeyCode;
-    int32_t m_macCharCode;
+    int32_t m_windowsVirtualKeyCode { };
+    int32_t m_nativeVirtualKeyCode { };
+    int32_t m_macCharCode { };
 #if USE(APPKIT) || PLATFORM(GTK)
     bool m_handledByInputMethod;
 #endif
@@ -314,9 +314,9 @@ private:
 #elif PLATFORM(GTK)
     Vector<String> m_commands;
 #endif
-    bool m_isAutoRepeat;
-    bool m_isKeypad;
-    bool m_isSystemKey;
+    bool m_isAutoRepeat { };
+    bool m_isKeypad { };
+    bool m_isSystemKey  { };
 };
 
 #if ENABLE(TOUCH_EVENTS)

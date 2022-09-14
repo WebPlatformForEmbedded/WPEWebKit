@@ -93,7 +93,7 @@ private:
 
 #if USE(UNIX_DOMAIN_SOCKETS)
     int m_fileDescriptor { -1 };
-    size_t m_size;
+    size_t m_size { };
 #elif OS(DARWIN)
     mach_port_name_t m_port;
     mach_msg_type_name_t m_disposition;

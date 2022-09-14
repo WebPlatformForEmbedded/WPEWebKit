@@ -77,7 +77,7 @@ private:
     CFBundleRefNum m_bundleResourceMap;
 #endif
 #elif USE(GLIB)
-    GModule* m_handle;
+    GModule* m_handle = nullptr;
 #endif
 };
 

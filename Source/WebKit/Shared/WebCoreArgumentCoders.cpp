@@ -755,8 +755,6 @@ static void pathEncodeApplierFunction(Encoder& encoder, const PathElement& eleme
 
     switch (element.type) {
     case PathElementMoveToPoint: // The points member will contain 1 value.
-        encoder << element.points[0];
-        break;
     case PathElementAddLineToPoint: // The points member will contain 1 value.
         encoder << element.points[0];
         break;

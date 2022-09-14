@@ -46,7 +46,7 @@ struct LoadParameters {
     void platformEncode(IPC::Encoder&) const;
     static bool platformDecode(IPC::Decoder&, LoadParameters&);
 
-    uint64_t navigationID;
+    uint64_t navigationID { };
 
     WebCore::ResourceRequest request;
     SandboxExtension::Handle sandboxExtensionHandle;
@@ -59,7 +59,7 @@ struct LoadParameters {
     String unreachableURLString;
     String provisionalLoadErrorURLString;
 
-    uint64_t shouldOpenExternalURLsPolicy;
+    uint64_t shouldOpenExternalURLsPolicy { };
     bool shouldTreatAsContinuingLoad { false };
     UserData userData;
     bool forSafeBrowsing { false };

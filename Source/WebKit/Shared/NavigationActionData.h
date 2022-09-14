@@ -45,7 +45,7 @@ struct NavigationActionData {
     WebEvent::Modifiers modifiers { };
     WebMouseEvent::Button mouseButton { WebMouseEvent::NoButton };
     WebMouseEvent::SyntheticClickType syntheticClickType { WebMouseEvent::NoTap };
-    uint64_t userGestureTokenIdentifier;
+    uint64_t userGestureTokenIdentifier { };
     bool canHandleRequest { false };
     WebCore::ShouldOpenExternalURLsPolicy shouldOpenExternalURLsPolicy { WebCore::ShouldOpenExternalURLsPolicy::ShouldNotAllow };
     WTF::String downloadAttribute;

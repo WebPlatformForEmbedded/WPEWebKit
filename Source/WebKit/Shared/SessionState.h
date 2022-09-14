@@ -66,7 +66,7 @@ struct HTTPBody {
 
         // File.
         String filePath;
-        int64_t fileStart;
+        int64_t fileStart { };
         std::optional<int64_t> fileLength;
         std::optional<double> expectedFileModificationTime;
 
