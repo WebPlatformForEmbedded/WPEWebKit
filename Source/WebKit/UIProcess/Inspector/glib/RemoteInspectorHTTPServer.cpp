@@ -31,6 +31,7 @@
 #include "RemoteInspectorClient.h"
 #include <WebCore/SoupVersioning.h>
 #include <wtf/FileSystem.h>
+#include <wtf/NeverDestroyed.h>
 #include <wtf/URL.h>
 #include <wtf/glib/GUniquePtr.h>
 
@@ -38,7 +39,7 @@ namespace WebKit {
 
 RemoteInspectorHTTPServer& RemoteInspectorHTTPServer::singleton()
 {
-    static RemoteInspectorHTTPServer server;
+    static NeverDestroyed<RemoteInspectorHTTPServer> server;
     return server;
 }
 
