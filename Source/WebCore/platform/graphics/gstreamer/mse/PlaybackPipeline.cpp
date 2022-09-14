@@ -388,9 +388,8 @@ void PlaybackPipeline::enqueueSample(Ref<MediaSample>&& mediaSample)
     AtomString trackId = mediaSample->trackID();
 
     GST_TRACE("enqueing sample trackId=%s %s at %" GST_TIME_FORMAT,
-        trackId.string().utf8().data(), mediaSample->toJSONString().utf8().data(), 
-        GST_TIME_ARGS(WebCore::toGstClockTime(mediaSample->presentationTime())),
-        GST_TIME_ARGS(WebCore::toGstClockTime(mediaSample->duration())));
+        trackId.string().utf8().data(), mediaSample->toJSONString().utf8().data(),
+        GST_TIME_ARGS(WebCore::toGstClockTime(mediaSample->presentationTime())));
 
     // No need to lock to access the Stream here because the only chance of conflict with this read and with the usage
     // of the sample fields done in this method would be the deletion of the stream. However, that operation can only
