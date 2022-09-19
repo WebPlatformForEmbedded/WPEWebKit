@@ -2248,9 +2248,6 @@ void NetworkProcess::prepareToSuspend(bool isSuspensionImminent, MonotonicTime e
 #endif
         session.storageManager().suspend([callbackAggregator] { });
     });
-
-    for (auto& connection : m_webProcessConnections.values())
-        connection->cleanupForSuspension([callbackAggregator] { });
 }
 
 void NetworkProcess::applicationDidEnterBackground()

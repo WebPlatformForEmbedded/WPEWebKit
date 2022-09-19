@@ -17,6 +17,7 @@
 
 #include "absl/algorithm/container.h"
 #include "absl/strings/match.h"
+#include "absl/strings/string_view.h"
 #include "absl/types/optional.h"
 #include "api/transport/stun.h"
 #include "p2p/base/connection.h"
@@ -28,10 +29,10 @@
 #include "rtc_base/net_helpers.h"
 #include "rtc_base/socket_address.h"
 #include "rtc_base/strings/string_builder.h"
-#include "rtc_base/task_utils/to_queued_task.h"
-#include "system_wrappers/include/field_trial.h"
 
 namespace cricket {
+using ::webrtc::SafeTask;
+using ::webrtc::TimeDelta;
 
 // TODO(juberti): Move to stun.h when relay messages have been renamed.
 static const int TURN_ALLOCATE_REQUEST = STUN_ALLOCATE_REQUEST;
@@ -45,7 +46,8 @@ const int STUN_ATTR_TURN_LOGGING_ID = 0xff05;
 // TODO(juberti): Extract to turnmessage.h
 static const int TURN_DEFAULT_PORT = 3478;
 static const int TURN_CHANNEL_NUMBER_START = 0x4000;
-static const int TURN_PERMISSION_TIMEOUT = 5 * 60 * 1000;  // 5 minutes
+
+static constexpr TimeDelta kTurnPermissionTimeout = TimeDelta::Minutes(5);
 
 static const size_t TURN_CHANNEL_HEADER_SIZE = 4U;
 
@@ -74,12 +76,10 @@ static int GetRelayPreference(cricket::ProtocolType proto) {
 class TurnAllocateRequest : public StunRequest {
  public:
   explicit TurnAllocateRequest(TurnPort* port);
-  void Prepare(StunMessage* request) override;
   void OnSent() override;
   void OnResponse(StunMessage* response) override;
   void OnErrorResponse(StunMessage* response) override;
   void OnTimeout() override;
-  void SetRequestPreference(bool ipv6);
 
  private:
   // Handles authentication challenge from the server.
@@ -93,17 +93,14 @@ class TurnAllocateRequest : public StunRequest {
 
 class TurnRefreshRequest : public StunRequest {
  public:
-  explicit TurnRefreshRequest(TurnPort* port);
-  void Prepare(StunMessage* request) override;
+  explicit TurnRefreshRequest(TurnPort* port, int lifetime = -1);
   void OnSent() override;
   void OnResponse(StunMessage* response) override;
   void OnErrorResponse(StunMessage* response) override;
   void OnTimeout() override;
-  void set_lifetime(int lifetime) { lifetime_ = lifetime; }
 
  private:
   TurnPort* port_;
-  int lifetime_;
 };
 
 class TurnCreatePermissionRequest : public StunRequest,
@@ -112,8 +109,7 @@ class TurnCreatePermissionRequest : public StunRequest,
   TurnCreatePermissionRequest(TurnPort* port,
                               TurnEntry* entry,
                               const rtc::SocketAddress& ext_addr,
-                              const std::string& remote_ufrag);
-  void Prepare(StunMessage* request) override;
+                              absl::string_view remote_ufrag);
   void OnSent() override;
   void OnResponse(StunMessage* response) override;
   void OnErrorResponse(StunMessage* response) override;
@@ -134,7 +130,6 @@ class TurnChannelBindRequest : public StunRequest, public sigslot::has_slots<> {
                          TurnEntry* entry,
                          int channel_id,
                          const rtc::SocketAddress& ext_addr);
-  void Prepare(StunMessage* request) override;
   void OnSent() override;
   void OnResponse(StunMessage* response) override;
   void OnErrorResponse(StunMessage* response) override;
@@ -157,7 +152,7 @@ class TurnEntry : public sigslot::has_slots<> {
   TurnEntry(TurnPort* port,
             int channel_id,
             const rtc::SocketAddress& ext_addr,
-            const std::string remote_ufrag);
+            absl::string_view remote_ufrag);
 
   TurnPort* port() { return port_; }
 
@@ -169,7 +164,7 @@ class TurnEntry : public sigslot::has_slots<> {
   BindState state() const { return state_; }
 
   // If the destruction timestamp is set, that means destruction has been
-  // scheduled (will occur TURN_PERMISSION_TIMEOUT after it's scheduled).
+  // scheduled (will occur kTurnPermissionTimeout after it's scheduled).
   absl::optional<int64_t> destruction_timestamp() {
     return destruction_timestamp_;
   }
@@ -198,8 +193,8 @@ class TurnEntry : public sigslot::has_slots<> {
   sigslot::signal1<TurnEntry*> SignalDestroyed;
 
   const std::string& get_remote_ufrag() const { return remote_ufrag_; }
-  void set_remote_ufrag(const std::string& remote_ufrag) {
-    remote_ufrag_ = remote_ufrag;
+  void set_remote_ufrag(absl::string_view remote_ufrag) {
+    remote_ufrag_ = std::string(remote_ufrag);
   }
 
  private:
@@ -218,48 +213,59 @@ class TurnEntry : public sigslot::has_slots<> {
 
 TurnPort::TurnPort(rtc::Thread* thread,
                    rtc::PacketSocketFactory* factory,
-                   rtc::Network* network,
+                   const rtc::Network* network,
                    rtc::AsyncPacketSocket* socket,
-                   const std::string& username,
-                   const std::string& password,
+                   absl::string_view username,
+                   absl::string_view password,
                    const ProtocolAddress& server_address,
                    const RelayCredentials& credentials,
                    int server_priority,
-                   const std::string& origin,
-                   webrtc::TurnCustomizer* customizer)
-    : Port(thread, RELAY_PORT_TYPE, factory, network, username, password),
+                   const std::vector<std::string>& tls_alpn_protocols,
+                   const std::vector<std::string>& tls_elliptic_curves,
+                   webrtc::TurnCustomizer* customizer,
+                   rtc::SSLCertificateVerifier* tls_cert_verifier,
+                   const webrtc::FieldTrialsView* field_trials)
+    : Port(thread,
+           RELAY_PORT_TYPE,
+           factory,
+           network,
+           username,
+           password,
+           field_trials),
       server_address_(server_address),
-      tls_cert_verifier_(nullptr),
+      tls_alpn_protocols_(tls_alpn_protocols),
+      tls_elliptic_curves_(tls_elliptic_curves),
+      tls_cert_verifier_(tls_cert_verifier),
       credentials_(credentials),
       socket_(socket),
       error_(0),
       stun_dscp_value_(rtc::DSCP_NO_CHANGE),
-      request_manager_(thread),
+      request_manager_(
+          thread,
+          [this](const void* data, size_t size, StunRequest* request) {
+            OnSendStunPacket(data, size, request);
+          }),
       next_channel_number_(TURN_CHANNEL_NUMBER_START),
       state_(STATE_CONNECTING),
       server_priority_(server_priority),
       allocate_mismatch_retries_(0),
-      turn_customizer_(customizer) {
-  request_manager_.SignalSendPacket.connect(this, &TurnPort::OnSendStunPacket);
-  request_manager_.set_origin(origin);
-  send_ipv6_request = false;
-}
+      turn_customizer_(customizer) {}
 
 TurnPort::TurnPort(rtc::Thread* thread,
                    rtc::PacketSocketFactory* factory,
-                   rtc::Network* network,
+                   const rtc::Network* network,
                    uint16_t min_port,
                    uint16_t max_port,
-                   const std::string& username,
-                   const std::string& password,
+                   absl::string_view username,
+                   absl::string_view password,
                    const ProtocolAddress& server_address,
                    const RelayCredentials& credentials,
                    int server_priority,
-                   const std::string& origin,
                    const std::vector<std::string>& tls_alpn_protocols,
                    const std::vector<std::string>& tls_elliptic_curves,
                    webrtc::TurnCustomizer* customizer,
-                   rtc::SSLCertificateVerifier* tls_cert_verifier)
+                   rtc::SSLCertificateVerifier* tls_cert_verifier,
+                   const webrtc::FieldTrialsView* field_trials)
     : Port(thread,
            RELAY_PORT_TYPE,
            factory,
@@ -267,7 +273,8 @@ TurnPort::TurnPort(rtc::Thread* thread,
            min_port,
            max_port,
            username,
-           password),
+           password,
+           field_trials),
       server_address_(server_address),
       tls_alpn_protocols_(tls_alpn_protocols),
       tls_elliptic_curves_(tls_elliptic_curves),
@@ -276,16 +283,16 @@ TurnPort::TurnPort(rtc::Thread* thread,
       socket_(NULL),
       error_(0),
       stun_dscp_value_(rtc::DSCP_NO_CHANGE),
-      request_manager_(thread),
+      request_manager_(
+          thread,
+          [this](const void* data, size_t size, StunRequest* request) {
+            OnSendStunPacket(data, size, request);
+          }),
       next_channel_number_(TURN_CHANNEL_NUMBER_START),
       state_(STATE_CONNECTING),
       server_priority_(server_priority),
       allocate_mismatch_retries_(0),
-      turn_customizer_(customizer) {
-  request_manager_.SignalSendPacket.connect(this, &TurnPort::OnSendStunPacket);
-  request_manager_.set_origin(origin);
-  send_ipv6_request = false;
-}
+      turn_customizer_(customizer) {}
 
 TurnPort::~TurnPort() {
   // TODO(juberti): Should this even be necessary?
@@ -299,6 +306,10 @@ TurnPort::~TurnPort() {
   while (!entries_.empty()) {
     DestroyEntry(entries_.front());
   }
+
+  if (socket_)
+    socket_->UnsubscribeClose(this);
+
   if (!SharedSocket()) {
     delete socket_;
   }
@@ -320,8 +331,8 @@ void TurnPort::SetTlsCertPolicy(TlsCertPolicy tls_cert_policy) {
   tls_cert_policy_ = tls_cert_policy;
 }
 
-void TurnPort::SetTurnLoggingId(const std::string& turn_logging_id) {
-  turn_logging_id_ = turn_logging_id;
+void TurnPort::SetTurnLoggingId(absl::string_view turn_logging_id) {
+  turn_logging_id_ = std::string(turn_logging_id);
 }
 
 std::vector<std::string> TurnPort::GetTlsAlpnProtocols() const {
@@ -346,7 +357,7 @@ void TurnPort::PrepareAddress() {
     server_address_.address.SetPort(TURN_DEFAULT_PORT);
   }
 
-  if (!AllowedTurnPort(server_address_.address.port())) {
+  if (!AllowedTurnPort(server_address_.address.port(), &field_trials())) {
     // This can only happen after a 300 ALTERNATE SERVER, since the port can't
     // be created with a disallowed port number.
     RTC_LOG(LS_ERROR) << "Attempt to start allocation with disallowed port# "
@@ -384,7 +395,6 @@ void TurnPort::PrepareAddress() {
       // If its UDP, send AllocateRequest now.
       // For TCP and TLS AllcateRequest will be sent by OnSocketConnect.
       TurnAllocateRequest * newRequest = new TurnAllocateRequest(this);
-      newRequest->SetRequestPreference(this->send_ipv6_request);
       SendRequest(newRequest, 0);
     }
   }
@@ -446,7 +456,9 @@ bool TurnPort::CreateTurnClientSocket() {
   if (server_address_.proto == PROTO_TCP ||
       server_address_.proto == PROTO_TLS) {
     socket_->SignalConnect.connect(this, &TurnPort::OnSocketConnect);
-    socket_->SignalClose.connect(this, &TurnPort::OnSocketClose);
+    socket_->SubscribeClose(this, [this](rtc::AsyncPacketSocket* s, int err) {
+      OnSocketClose(s, err);
+    });
   } else {
     state_ = STATE_CONNECTED;
   }
@@ -513,7 +525,6 @@ void TurnPort::OnSocketConnect(rtc::AsyncPacketSocket* socket) {
                    << socket->GetRemoteAddress().ToSensitiveString()
                    << " using tcp.";
   TurnAllocateRequest * newRequest = new TurnAllocateRequest(this);
-  newRequest->SetRequestPreference(this->send_ipv6_request);
   SendRequest(newRequest, 0);
 }
 
@@ -539,6 +550,9 @@ void TurnPort::OnAllocateMismatch() {
                    << ": Allocating a new socket after "
                       "STUN_ERROR_ALLOCATION_MISMATCH, retry: "
                    << allocate_mismatch_retries_ + 1;
+
+  socket_->UnsubscribeClose(this);
+
   if (SharedSocket()) {
     ResetSharedSocket();
   } else {
@@ -569,7 +583,7 @@ Connection* TurnPort::CreateConnection(const Candidate& remote_candidate,
     return nullptr;
   }
 
-  // A TURN port will have two candiates, STUN and TURN. STUN may not
+  // A TURN port will have two candidates, STUN and TURN. STUN may not
   // present in all cases. If present stun candidate will be added first
   // and TURN candidate later.
   for (size_t index = 0; index < Candidates().size(); ++index) {
@@ -585,7 +599,7 @@ Connection* TurnPort::CreateConnection(const Candidate& remote_candidate,
         next_channel_number_++;
       }
       ProxyConnection* conn =
-          new ProxyConnection(this, index, remote_candidate);
+          new ProxyConnection(NewWeakPtr(), index, remote_candidate);
       AddOrReplaceConnection(conn);
       return conn;
     }
@@ -752,7 +766,7 @@ void TurnPort::OnReadyToSend(rtc::AsyncPacketSocket* socket) {
   }
 }
 
-bool TurnPort::SupportsProtocol(const std::string& protocol) const {
+bool TurnPort::SupportsProtocol(absl::string_view protocol) const {
   // Turn port only connects to UDP candidates.
   return protocol == UDP_PROTOCOL_NAME;
 }
@@ -874,22 +888,12 @@ void TurnPort::OnAllocateSuccess(const rtc::SocketAddress& address,
              related_address,  // Related address.
              UDP_PROTOCOL_NAME,
              ProtoToString(server_address_.proto),  // The first hop protocol.
-             "",  // TCP canddiate type, empty for turn candidates.
+             "",  // TCP candidate type, empty for turn candidates.
              RELAY_PORT_TYPE, GetRelayPreference(server_address_.proto),
-             server_priority_, ReconstructedServerUrl(false /* use_hostname */), send_ipv6_request);
-
-  // If we have received a allocate success, try to do the same to do a V6 allocation
-  if (send_ipv6_request == false) {
-    RTC_LOG(LS_INFO) << "Allocating a new V6 socket after "
-      << "OnAllocateSuccess, retry = ";
-    send_ipv6_request = true;
-    this->set_realm(""); // Clear the realm so that hash can be computed
-    this->hash_.clear();
-    PrepareAddress();
-  }
+             server_priority_, ReconstructedServerUrl(), true);
 }
 
-void TurnPort::OnAllocateError(int error_code, const std::string& reason) {
+void TurnPort::OnAllocateError(int error_code, absl::string_view reason) {
   // We will send SignalPortError asynchronously as this can be sent during
   // port initialization. This way it will not be blocking other port
   // creation.
@@ -902,9 +906,8 @@ void TurnPort::OnAllocateError(int error_code, const std::string& reason) {
     port = 0;
   }
   SignalCandidateError(
-      this, IceCandidateErrorEvent(
-                address, port, ReconstructedServerUrl(true /* use_hostname */),
-                error_code, reason));
+      this, IceCandidateErrorEvent(address, port, ReconstructedServerUrl(),
+                                   error_code, reason));
 }
 
 void TurnPort::OnRefreshError() {
@@ -928,8 +931,7 @@ void TurnPort::Release() {
   request_manager_.Clear();
 
   // Send refresh with lifetime 0.
-  TurnRefreshRequest* req = new TurnRefreshRequest(this);
-  req->set_lifetime(0);
+  TurnRefreshRequest* req = new TurnRefreshRequest(this, 0);
   SendRequest(req, 0);
 
   state_ = STATE_RECEIVEONLY;
@@ -943,9 +945,7 @@ void TurnPort::Close() {
   // Stop the port from creating new connections.
   state_ = STATE_DISCONNECTED;
   // Delete all existing connections; stop sending data.
-  for (auto kv : connections()) {
-    kv.second->Destroy();
-  }
+  DestroyAllConnections();
 
   SignalTurnPortClosed(this);
 }
@@ -955,7 +955,8 @@ rtc::DiffServCodePoint TurnPort::StunDscpValue() const {
 }
 
 // static
-bool TurnPort::AllowedTurnPort(int port) {
+bool TurnPort::AllowedTurnPort(int port,
+                               const webrtc::FieldTrialsView* field_trials) {
   // Port 53, 80 and 443 are used for existing deployments.
   // Ports above 1024 are assumed to be OK to use.
   if (port == 53 || port == 80 || port == 443 || port >= 1024) {
@@ -963,7 +964,7 @@ bool TurnPort::AllowedTurnPort(int port) {
   }
   // Allow any port if relevant field trial is set. This allows disabling the
   // check.
-  if (webrtc::field_trial::IsEnabled("WebRTC-Turn-AllowSystemPorts")) {
+  if (field_trials && field_trials->IsEnabled("WebRTC-Turn-AllowSystemPorts")) {
     return true;
   }
   return false;
@@ -985,7 +986,6 @@ void TurnPort::OnMessage(rtc::Message* message) {
         // Send another allocate request to alternate server, with the received
         // realm and nonce values.
         TurnAllocateRequest * newRequest = new TurnAllocateRequest(this);
-        newRequest->SetRequestPreference(this->send_ipv6_request);
         SendRequest(newRequest, 0);
       } else {
         // Since it's TCP, we have to delete the connected socket and reconnect
@@ -1183,7 +1183,7 @@ bool TurnPort::UpdateNonce(StunMessage* response) {
                          "stale nonce error response.";
     return false;
   }
-  set_realm(realm_attr->GetString());
+  set_realm(realm_attr->string_view());
 
   const StunByteStringAttribute* nonce_attr =
       response->GetByteString(STUN_ATTR_NONCE);
@@ -1192,7 +1192,7 @@ bool TurnPort::UpdateNonce(StunMessage* response) {
                          "stale nonce error response.";
     return false;
   }
-  set_nonce(nonce_attr->GetString());
+  set_nonce(nonce_attr->string_view());
   return true;
 }
 
@@ -1232,7 +1232,7 @@ bool TurnPort::CreateOrRefreshEntry(const rtc::SocketAddress& addr,
 
 bool TurnPort::CreateOrRefreshEntry(const rtc::SocketAddress& addr,
                                     int channel_number,
-                                    const std::string& remote_ufrag) {
+                                    absl::string_view remote_ufrag) {
   TurnEntry* entry = FindEntry(addr);
   if (entry == nullptr) {
     entry = new TurnEntry(this, channel_number, addr, remote_ufrag);
@@ -1255,7 +1255,7 @@ bool TurnPort::CreateOrRefreshEntry(const rtc::SocketAddress& addr,
       RTC_DCHECK(GetConnection(addr));
     }
 
-    if (webrtc::field_trial::IsEnabled("WebRTC-TurnAddMultiMapping")) {
+    if (field_trials().IsEnabled("WebRTC-TurnAddMultiMapping")) {
       if (entry->get_remote_ufrag() != remote_ufrag) {
         RTC_LOG(LS_INFO) << ToString()
                          << ": remote ufrag updated."
@@ -1295,19 +1295,15 @@ void TurnPort::HandleConnectionDestroyed(Connection* conn) {
   const rtc::SocketAddress& remote_address = conn->remote_candidate().address();
   TurnEntry* entry = FindEntry(remote_address);
   RTC_DCHECK(entry != NULL);
-  ScheduleEntryDestruction(entry);
-}
-
-void TurnPort::ScheduleEntryDestruction(TurnEntry* entry) {
   RTC_DCHECK(!entry->destruction_timestamp().has_value());
   int64_t timestamp = rtc::TimeMillis();
   entry->set_destruction_timestamp(timestamp);
-  thread()->PostDelayedTask(ToQueuedTask(task_safety_.flag(),
-                                         [this, entry, timestamp] {
-                                           DestroyEntryIfNotCancelled(
-                                               entry, timestamp);
-                                         }),
-                            TURN_PERMISSION_TIMEOUT);
+  thread()->PostDelayedTask(SafeTask(task_safety_.flag(),
+                                     [this, entry, timestamp] {
+                                       DestroyEntryIfNotCancelled(entry,
+                                                                  timestamp);
+                                     }),
+                            kTurnPermissionTimeout);
 }
 
 bool TurnPort::SetEntryChannelId(const rtc::SocketAddress& address,
@@ -1320,7 +1316,7 @@ bool TurnPort::SetEntryChannelId(const rtc::SocketAddress& address,
   return true;
 }
 
-std::string TurnPort::ReconstructedServerUrl(bool use_hostname) {
+std::string TurnPort::ReconstructedServerUrl() {
   // draft-petithuguenin-behave-turn-uris-01
   // turnURI       = scheme ":" turn-host [ ":" turn-port ]
   //                 [ "?transport=" transport ]
@@ -1343,10 +1339,8 @@ std::string TurnPort::ReconstructedServerUrl(bool use_hostname) {
       break;
   }
   rtc::StringBuilder url;
-  url << scheme << ":"
-      << (use_hostname ? server_address_.address.hostname()
-                       : server_address_.address.ipaddr().ToString())
-      << ":" << server_address_.address.port() << "?transport=" << transport;
+  url << scheme << ":" << server_address_.address.hostname() << ":"
+      << server_address_.address.port() << "?transport=" << transport;
   return url.Release();
 }
 
@@ -1377,42 +1371,21 @@ void TurnPort::MaybeAddTurnLoggingId(StunMessage* msg) {
 }
 
 TurnAllocateRequest::TurnAllocateRequest(TurnPort* port)
-    : StunRequest(new TurnMessage()), port_(port), ipv6_preference(false) {}
-
-void TurnAllocateRequest::SetRequestPreference(bool ipv6)
-{
-   ipv6_preference = ipv6;
-}
-
-void TurnAllocateRequest::Prepare(StunMessage* request) {
+    : StunRequest(port->request_manager(),
+                  std::make_unique<TurnMessage>(TURN_ALLOCATE_REQUEST)),
+      port_(port) {
+  StunMessage* message = mutable_msg();
   // Create the request as indicated in RFC 5766, Section 6.1.
-  request->SetType(TURN_ALLOCATE_REQUEST);
+  RTC_DCHECK_EQ(message->type(), TURN_ALLOCATE_REQUEST);
   auto transport_attr =
       StunAttribute::CreateUInt32(STUN_ATTR_REQUESTED_TRANSPORT);
   transport_attr->SetValue(IPPROTO_UDP << 24);
-  request->AddAttribute(std::move(transport_attr));
-
-  // Below patch is to add the support for ipv6 relay candidate
-  // The REQUESTED-ADDRESS-FAMILY attribute is used by clients to request
-  // the allocation of a specific address type from a server.
-  // There are two values defined for this field and
-  // specified in [RFC5389], Section 15.1: 0x01 for IPv4 addresses and 0x02 for IPv6 addresses.
-  auto family_attr = StunAttribute::CreateUInt32(STUN_ATTR_REQUESTED_ADDRESS_FAMILY);
-
-  // Check if the server address is IPv6
-  if (ipv6_preference) {
-    family_attr->SetValue((STUN_ATTR_IPV6_FAMILY) << 24);
-  }
-  else {
-    family_attr->SetValue((STUN_ATTR_IPV4_FAMILY) << 24);
-  }
-  request->AddAttribute(std::move(family_attr));
-
+  message->AddAttribute(std::move(transport_attr));
   if (!port_->hash().empty()) {
-    port_->AddRequestAuthInfo(request);
+    port_->AddRequestAuthInfo(message);
   }
-  port_->MaybeAddTurnLoggingId(request);
-  port_->TurnCustomizerMaybeModifyOutgoingStunMessage(request);
+  port_->MaybeAddTurnLoggingId(message);
+  port_->TurnCustomizerMaybeModifyOutgoingStunMessage(message);
 }
 
 void TurnAllocateRequest::OnSent() {
@@ -1522,7 +1495,7 @@ void TurnAllocateRequest::OnAuthChallenge(StunMessage* response, int code) {
                            "allocate unauthorized response.";
     return;
   }
-  port_->set_realm(realm_attr->GetString());
+  port_->set_realm(realm_attr->string_view());
 
   const StunByteStringAttribute* nonce_attr =
       response->GetByteString(STUN_ATTR_NONCE);
@@ -1532,11 +1505,10 @@ void TurnAllocateRequest::OnAuthChallenge(StunMessage* response, int code) {
                            "allocate unauthorized response.";
     return;
   }
-  port_->set_nonce(nonce_attr->GetString());
+  port_->set_nonce(nonce_attr->string_view());
 
   // Send another allocate request, with the received realm and nonce values.
   TurnAllocateRequest * newRequest = new TurnAllocateRequest(port_);
-  newRequest->SetRequestPreference(port_->send_ipv6_request);
   port_->SendRequest(newRequest, 0);
 }
 
@@ -1569,7 +1541,7 @@ void TurnAllocateRequest::OnTryAlternate(StunMessage* response, int code) {
     RTC_LOG(LS_INFO) << port_->ToString()
                      << ": Applying STUN_ATTR_REALM attribute in "
                         "try alternate error response.";
-    port_->set_realm(realm_attr->GetString());
+    port_->set_realm(realm_attr->string_view());
   }
 
   const StunByteStringAttribute* nonce_attr =
@@ -1578,7 +1550,7 @@ void TurnAllocateRequest::OnTryAlternate(StunMessage* response, int code) {
     RTC_LOG(LS_INFO) << port_->ToString()
                      << ": Applying STUN_ATTR_NONCE attribute in "
                         "try alternate error response.";
-    port_->set_nonce(nonce_attr->GetString());
+    port_->set_nonce(nonce_attr->string_view());
   }
 
   // For TCP, we can't close the original Tcp socket during handling a 300 as
@@ -1588,20 +1560,21 @@ void TurnAllocateRequest::OnTryAlternate(StunMessage* response, int code) {
                         TurnPort::MSG_TRY_ALTERNATE_SERVER);
 }
 
-TurnRefreshRequest::TurnRefreshRequest(TurnPort* port)
-    : StunRequest(new TurnMessage()), port_(port), lifetime_(-1) {}
-
-void TurnRefreshRequest::Prepare(StunMessage* request) {
+TurnRefreshRequest::TurnRefreshRequest(TurnPort* port, int lifetime /*= -1*/)
+    : StunRequest(port->request_manager(),
+                  std::make_unique<TurnMessage>(TURN_REFRESH_REQUEST)),
+      port_(port) {
+  StunMessage* message = mutable_msg();
   // Create the request as indicated in RFC 5766, Section 7.1.
   // No attributes need to be included.
-  request->SetType(TURN_REFRESH_REQUEST);
-  if (lifetime_ > -1) {
-    request->AddAttribute(
-        std::make_unique<StunUInt32Attribute>(STUN_ATTR_LIFETIME, lifetime_));
+  RTC_DCHECK_EQ(message->type(), TURN_REFRESH_REQUEST);
+  if (lifetime > -1) {
+    message->AddAttribute(
+        std::make_unique<StunUInt32Attribute>(STUN_ATTR_LIFETIME, lifetime));
   }
 
-  port_->AddRequestAuthInfo(request);
-  port_->TurnCustomizerMaybeModifyOutgoingStunMessage(request);
+  port_->AddRequestAuthInfo(message);
+  port_->TurnCustomizerMaybeModifyOutgoingStunMessage(message);
 }
 
 void TurnRefreshRequest::OnSent() {
@@ -1669,27 +1642,27 @@ TurnCreatePermissionRequest::TurnCreatePermissionRequest(
     TurnPort* port,
     TurnEntry* entry,
     const rtc::SocketAddress& ext_addr,
-    const std::string& remote_ufrag)
-    : StunRequest(new TurnMessage()),
+    absl::string_view remote_ufrag)
+    : StunRequest(
+          port->request_manager(),
+          std::make_unique<TurnMessage>(TURN_CREATE_PERMISSION_REQUEST)),
       port_(port),
       entry_(entry),
       ext_addr_(ext_addr),
       remote_ufrag_(remote_ufrag) {
   entry_->SignalDestroyed.connect(
       this, &TurnCreatePermissionRequest::OnEntryDestroyed);
-}
-
-void TurnCreatePermissionRequest::Prepare(StunMessage* request) {
+  StunMessage* message = mutable_msg();
   // Create the request as indicated in RFC5766, Section 9.1.
-  request->SetType(TURN_CREATE_PERMISSION_REQUEST);
-  request->AddAttribute(std::make_unique<StunXorAddressAttribute>(
+  RTC_DCHECK_EQ(message->type(), TURN_CREATE_PERMISSION_REQUEST);
+  message->AddAttribute(std::make_unique<StunXorAddressAttribute>(
       STUN_ATTR_XOR_PEER_ADDRESS, ext_addr_));
-  if (webrtc::field_trial::IsEnabled("WebRTC-TurnAddMultiMapping")) {
-    request->AddAttribute(std::make_unique<cricket::StunByteStringAttribute>(
+  if (port_->field_trials().IsEnabled("WebRTC-TurnAddMultiMapping")) {
+    message->AddAttribute(std::make_unique<cricket::StunByteStringAttribute>(
         STUN_ATTR_MULTI_MAPPING, remote_ufrag_));
   }
-  port_->AddRequestAuthInfo(request);
-  port_->TurnCustomizerMaybeModifyOutgoingStunMessage(request);
+  port_->AddRequestAuthInfo(message);
+  port_->TurnCustomizerMaybeModifyOutgoingStunMessage(message);
 }
 
 void TurnCreatePermissionRequest::OnSent() {
@@ -1742,24 +1715,23 @@ TurnChannelBindRequest::TurnChannelBindRequest(
     TurnEntry* entry,
     int channel_id,
     const rtc::SocketAddress& ext_addr)
-    : StunRequest(new TurnMessage()),
+    : StunRequest(port->request_manager(),
+                  std::make_unique<TurnMessage>(TURN_CHANNEL_BIND_REQUEST)),
       port_(port),
       entry_(entry),
       channel_id_(channel_id),
       ext_addr_(ext_addr) {
   entry_->SignalDestroyed.connect(this,
                                   &TurnChannelBindRequest::OnEntryDestroyed);
-}
-
-void TurnChannelBindRequest::Prepare(StunMessage* request) {
+  StunMessage* message = mutable_msg();
   // Create the request as indicated in RFC5766, Section 11.1.
-  request->SetType(TURN_CHANNEL_BIND_REQUEST);
-  request->AddAttribute(std::make_unique<StunUInt32Attribute>(
+  RTC_DCHECK_EQ(message->type(), TURN_CHANNEL_BIND_REQUEST);
+  message->AddAttribute(std::make_unique<StunUInt32Attribute>(
       STUN_ATTR_CHANNEL_NUMBER, channel_id_ << 16));
-  request->AddAttribute(std::make_unique<StunXorAddressAttribute>(
+  message->AddAttribute(std::make_unique<StunXorAddressAttribute>(
       STUN_ATTR_XOR_PEER_ADDRESS, ext_addr_));
-  port_->AddRequestAuthInfo(request);
-  port_->TurnCustomizerMaybeModifyOutgoingStunMessage(request);
+  port_->AddRequestAuthInfo(message);
+  port_->TurnCustomizerMaybeModifyOutgoingStunMessage(message);
 }
 
 void TurnChannelBindRequest::OnSent() {
@@ -1783,10 +1755,10 @@ void TurnChannelBindRequest::OnResponse(StunMessage* response) {
     // threshold. The channel binding has a longer lifetime, but
     // this is the easiest way to keep both the channel and the
     // permission from expiring.
-    int delay = TURN_PERMISSION_TIMEOUT - 60000;
-    entry_->SendChannelBindRequest(delay);
+    TimeDelta delay = kTurnPermissionTimeout - TimeDelta::Minutes(1);
+    entry_->SendChannelBindRequest(delay.ms());
     RTC_LOG(LS_INFO) << port_->ToString() << ": Scheduled channel bind in "
-                     << delay << "ms.";
+                     << delay.ms() << "ms.";
   }
 }
 
@@ -1817,7 +1789,7 @@ void TurnChannelBindRequest::OnEntryDestroyed(TurnEntry* entry) {
 TurnEntry::TurnEntry(TurnPort* port,
                      int channel_id,
                      const rtc::SocketAddress& ext_addr,
-                     const std::string remote_ufrag)
+                     absl::string_view remote_ufrag)
     : port_(port),
       channel_id_(channel_id),
       ext_addr_(ext_addr),
@@ -1847,9 +1819,7 @@ int TurnEntry::Send(const void* data,
       !port_->TurnCustomizerAllowChannelData(data, size, payload)) {
     // If we haven't bound the channel yet, we have to use a Send Indication.
     // The turn_customizer_ can also make us use Send Indication.
-    TurnMessage msg;
-    msg.SetType(TURN_SEND_INDICATION);
-    msg.SetTransactionID(rtc::CreateRandomString(kStunTransactionIdLength));
+    TurnMessage msg(TURN_SEND_INDICATION);
     msg.AddAttribute(std::make_unique<StunXorAddressAttribute>(
         STUN_ATTR_XOR_PEER_ADDRESS, ext_addr_));
     msg.AddAttribute(
@@ -1888,11 +1858,11 @@ void TurnEntry::OnCreatePermissionSuccess() {
   if (state_ != STATE_BOUND) {
     // Refresh the permission request about 1 minute before the permission
     // times out.
-    int delay = TURN_PERMISSION_TIMEOUT - 60000;
-    SendCreatePermissionRequest(delay);
+    TimeDelta delay = kTurnPermissionTimeout - TimeDelta::Minutes(1);
+    SendCreatePermissionRequest(delay.ms());
     RTC_LOG(LS_INFO) << port_->ToString()
-                     << ": Scheduled create-permission-request in " << delay
-                     << "ms.";
+                     << ": Scheduled create-permission-request in "
+                     << delay.ms() << "ms.";
   }
 }
 

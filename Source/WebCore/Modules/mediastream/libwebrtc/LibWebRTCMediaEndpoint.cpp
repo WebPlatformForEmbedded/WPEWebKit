@@ -150,7 +150,7 @@ void LibWebRTCMediaEndpoint::doSetLocalDescription(const RTCSessionDescription* 
     ASSERT(m_backend);
 
     if (!description) {
-        m_backend->SetLocalDescription(&m_setLocalSessionDescriptionObserver);
+        m_backend->SetLocalDescription(rtc::scoped_refptr<webrtc::SetLocalDescriptionObserverInterface> { &m_setLocalSessionDescriptionObserver });
         return;
     }
 
@@ -168,7 +168,7 @@ void LibWebRTCMediaEndpoint::doSetLocalDescription(const RTCSessionDescription* 
         return;
     }
 
-    m_backend->SetLocalDescription(WTFMove(sessionDescription), &m_setLocalSessionDescriptionObserver);
+    m_backend->SetLocalDescription(WTFMove(sessionDescription), rtc::scoped_refptr<webrtc::SetLocalDescriptionObserverInterface> { &m_setLocalSessionDescriptionObserver });
 }
 
 void LibWebRTCMediaEndpoint::doSetRemoteDescription(const RTCSessionDescription& description)
@@ -182,7 +182,7 @@ void LibWebRTCMediaEndpoint::doSetRemoteDescription(const RTCSessionDescription&
         return;
     }
 
-    m_backend->SetRemoteDescription(WTFMove(sessionDescription), &m_setRemoteSessionDescriptionObserver);
+    m_backend->SetRemoteDescription(WTFMove(sessionDescription), rtc::scoped_refptr<webrtc::SetRemoteDescriptionObserverInterface> { &m_setRemoteSessionDescriptionObserver });
 
     startLoggingStats();
 }
@@ -218,7 +218,7 @@ bool LibWebRTCMediaEndpoint::addTrack(LibWebRTCRtpSenderBackend& sender, MediaSt
     for (auto& id : mediaStreamIds)
         ids.push_back(id.utf8().data());
 
-    auto newRTPSender = m_backend->AddTrack(rtcTrack.get(), WTFMove(ids));
+    auto newRTPSender = m_backend->AddTrack(WTFMove(rtcTrack), WTFMove(ids));
     if (!newRTPSender.ok())
         return false;
     sender.setRTCSender(newRTPSender.MoveValue());
@@ -228,7 +228,7 @@ bool LibWebRTCMediaEndpoint::addTrack(LibWebRTCRtpSenderBackend& sender, MediaSt
 void LibWebRTCMediaEndpoint::removeTrack(LibWebRTCRtpSenderBackend& sender)
 {
     ASSERT(m_backend);
-    m_backend->RemoveTrack(sender.rtcSender());
+    m_backend->RemoveTrackOrError(rtc::scoped_refptr<webrtc::RtpSenderInterface> { sender.rtcSender() });
     sender.clearSource();
 }
 
@@ -284,13 +284,13 @@ void LibWebRTCMediaEndpoint::gatherDecoderImplementationName(Function<void(Strin
         }
         callback({ });
     });
-    m_backend->GetStats(WTFMove(collector));
+    m_backend->GetStats(collector.get());
 }
 
 void LibWebRTCMediaEndpoint::getStats(Ref<DeferredPromise>&& promise)
 {
     if (m_backend)
-        m_backend->GetStats(createStatsCollector(WTFMove(promise)));
+        m_backend->GetStats(createStatsCollector(WTFMove(promise)).get());
 }
 
 void LibWebRTCMediaEndpoint::getStats(webrtc::RtpReceiverInterface& receiver, Ref<DeferredPromise>&& promise)
@@ -354,9 +354,9 @@ void LibWebRTCMediaEndpoint::collectTransceivers()
 
 std::optional<bool> LibWebRTCMediaEndpoint::canTrickleIceCandidates() const
 {
-    if (!m_backend)
+    if (!m_backend || !m_backend->can_trickle_ice_candidates())
         return { };
-    return m_backend->can_trickle_ice_candidates();
+    return *m_backend->can_trickle_ice_candidates();
 }
 
 void LibWebRTCMediaEndpoint::newTransceiver(rtc::scoped_refptr<webrtc::RtpTransceiverInterface>&& rtcTransceiver)
@@ -439,7 +439,7 @@ void LibWebRTCMediaEndpoint::setSenderSourceFromTrack(LibWebRTCRtpSenderBackend&
 {
     auto sourceAndTrack = createSourceAndRTCTrack(track);
     sender.setSource(WTFMove(sourceAndTrack.first));
-    sender.rtcSender()->SetTrack(WTFMove(sourceAndTrack.second));
+    sender.rtcSender()->SetTrack(sourceAndTrack.second.get());
 }
 
 std::unique_ptr<LibWebRTCRtpTransceiverBackend> LibWebRTCMediaEndpoint::transceiverBackendFromSender(LibWebRTCRtpSenderBackend& backend)
