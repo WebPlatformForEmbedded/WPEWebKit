@@ -110,7 +110,7 @@ static GstFlowReturn appendPipelineAppsinkNewSample(GstElement*, AppendPipeline*
 static void appendPipelineAppsinkEOS(GstElement*, AppendPipeline*);
 static void appendPipelineDemuxerNoMorePads(GstElement*, AppendPipeline*);
 
-static GstPadProbeReturn matroskademuxForceSegmentStartToEqualZero(GstPad*, GstPadProbeInfo*, void*);
+static GstPadProbeReturn demuxerForceSegmentStartToEqualZero(GstPad*, GstPadProbeInfo*, void*);
 
 static void appendPipelineNeedContextMessageCallback(GstBus*, GstMessage* message, AppendPipeline* appendPipeline)
 {
@@ -1196,9 +1196,7 @@ void AppendPipeline::connectDemuxerSrcPadToAppsink(GstPad* demuxerSrcPad)
     ASSERT(WTF::isMainThread());
     GST_DEBUG("Connecting to appsink");
 
-    const String& type = m_sourceBufferPrivate->type().containerType();
-    if (type.endsWith("webm"))
-        gst_pad_add_probe(demuxerSrcPad, GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM, matroskademuxForceSegmentStartToEqualZero, nullptr, nullptr);
+    gst_pad_add_probe(demuxerSrcPad, GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM, demuxerForceSegmentStartToEqualZero, nullptr, nullptr);
 
     LockHolder locker(m_padAddRemoveLock);
     GRefPtr<GstPad> sinkSinkPad = adoptGRef(gst_element_get_static_pad(m_appsink.get(), "sink"));
@@ -1482,7 +1480,7 @@ static void appendPipelineAppsinkEOS(GstElement*, AppendPipeline* appendPipeline
     GST_DEBUG("%s main thread", (WTF::isMainThread()) ? "Is" : "Not");
 }
 
-static GstPadProbeReturn matroskademuxForceSegmentStartToEqualZero(GstPad*, GstPadProbeInfo* info, void*)
+static GstPadProbeReturn demuxerForceSegmentStartToEqualZero(GstPad*, GstPadProbeInfo* info, void*)
 {
     // matroskademux sets GstSegment.start to the PTS of the first frame.
     //
