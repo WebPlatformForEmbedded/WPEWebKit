@@ -45,7 +45,7 @@ public:
     explicit operator bool() const { return !!m_ptr; }
     bool operator!() const { return !m_ptr; }
     bool operator==(NativeFunction other) const { return m_ptr == other.m_ptr; }
-    bool operator!=(NativeFunction other) const { return m_ptr == other.m_ptr; }
+    bool operator!=(NativeFunction other) const { return m_ptr != other.m_ptr; }
 
     EncodedJSValue operator()(ExecState* exec) { return m_ptr(exec); }
 

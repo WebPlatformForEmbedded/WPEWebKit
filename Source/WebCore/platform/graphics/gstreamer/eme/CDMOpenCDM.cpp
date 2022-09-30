@@ -349,7 +349,6 @@ void CDMInstanceOpenCDM::Session::challengeGeneratedCallback(RefPtr<SharedBuffer
     // This can be called as a result of e.g. requestLicense() but update() or remove() as well.
     // This called not as a response to API call is also possible.
     if (!m_challengeCallbacks.isEmpty()) {
-        std::optional<WebCore::MediaKeyMessageType> requestType;
         m_message = WTFMove(message);
         m_needsIndividualization = requestType == CDMInstance::MessageType::IndividualizationRequest;
 

@@ -391,8 +391,7 @@ RefPtr<JSON::Value> buildValue(const UChar* start, const UChar* end, const UChar
                 return nullptr;
             }
         }
-        if (token != Token::ArrayEnd)
-            return nullptr;
+
         result = WTFMove(array);
         break;
     }
@@ -432,8 +431,7 @@ RefPtr<JSON::Value> buildValue(const UChar* start, const UChar* end, const UChar
                 return nullptr;
             }
         }
-        if (token != Token::ObjectEnd)
-            return nullptr;
+
         result = WTFMove(object);
         break;
     }
@@ -690,7 +688,7 @@ void Value::writeJSON(StringBuilder& output) const
 
 size_t Value::memoryCost() const
 {
-    size_t memoryCost = sizeof(this);
+    size_t memoryCost = sizeof(*this);
     if (m_type == Type::String && m_value.string)
         memoryCost += m_value.string->sizeInBytes();
     return memoryCost;

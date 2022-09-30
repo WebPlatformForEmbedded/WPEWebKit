@@ -370,8 +370,12 @@ void PlaybackPipeline::flush(AtomicString trackId)
     gint64 stop = GST_CLOCK_TIME_NONE;
 
     query = adoptGRef(gst_query_new_segment(GST_FORMAT_TIME));
-    if (gst_element_query(pipeline(), query.get()))
+    if (gst_element_query(pipeline(), query.get())) {
         gst_query_parse_segment(query.get(), &rate, &format, &start, &stop);
+    } else {
+        GST_WARNING("Failed new_segment query for trackId=%s!", trackId.string().utf8().data());
+        return;
+    }
 
     GST_TRACE("segment: [%" GST_TIME_FORMAT ", %" GST_TIME_FORMAT "], rate: %f",
         GST_TIME_ARGS(start), GST_TIME_ARGS(stop), rate);
