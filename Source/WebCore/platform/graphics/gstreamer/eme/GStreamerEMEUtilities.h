@@ -37,7 +37,7 @@
 #endif
 
 // NOTE: YouTube 2018 EME conformance tests expect this to be >=5s.
-const WTF::Seconds WEBCORE_GSTREAMER_EME_LICENSE_KEY_RESPONSE_TIMEOUT = WTF::Seconds(60);
+extern const WTF::Seconds WEBCORE_GSTREAMER_EME_LICENSE_KEY_RESPONSE_TIMEOUT;
 
 namespace WebCore {
 

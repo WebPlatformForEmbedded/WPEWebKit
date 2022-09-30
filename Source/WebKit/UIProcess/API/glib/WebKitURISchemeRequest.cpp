@@ -197,7 +197,7 @@ static void webkitURISchemeRequestReadCallback(GInputStream* inputStream, GAsync
             priv->streamLength, emptyString());
         priv->manager->didReceiveResponse(priv->requestID, response, 0);
         priv->manager->didLoadData(priv->requestID, webData);
-    } else if (bytesRead || (!bytesRead && !priv->streamLength)) {
+    } else if (bytesRead || !priv->streamLength) {
         // Subsequent chunk read. We only send an empty API::Data to the networking process when stream length is unknown.
         priv->manager->didLoadData(priv->requestID, webData);
     }

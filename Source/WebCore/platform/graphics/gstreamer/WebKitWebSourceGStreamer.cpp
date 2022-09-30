@@ -956,14 +956,13 @@ void CachedResourceStreamingClient::dataReceived(PlatformMediaResource&, const c
             return;
         }
 
-        if (priv->offset + length > priv->requestedOffset) {
-            guint64 offset = priv->requestedOffset - priv->offset;
-            data += offset;
-            length -= offset;
-            if (priv->buffer)
-                gst_buffer_resize(priv->buffer.get(), offset, -1);
-            priv->offset = priv->requestedOffset;
+        guint64 offset = priv->requestedOffset - priv->offset;
+        data += offset;
+        length -= offset;
+        if (priv->buffer) {
+            gst_buffer_resize(priv->buffer.get(), offset, -1);
         }
+        priv->offset = priv->requestedOffset;
 
         priv->requestedOffset = 0;
     }

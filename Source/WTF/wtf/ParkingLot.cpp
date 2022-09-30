@@ -263,10 +263,9 @@ Hashtable* ensureHashtable()
     for (;;) {
         Hashtable* currentHashtable = hashtable.load();
 
-        if (currentHashtable)
+        if (currentHashtable) {
             return currentHashtable;
-
-        if (!currentHashtable) {
+        } else {
             currentHashtable = Hashtable::create(maxLoadFactor);
             if (hashtable.compareExchangeWeak(nullptr, currentHashtable)) {
                 if (verbose)

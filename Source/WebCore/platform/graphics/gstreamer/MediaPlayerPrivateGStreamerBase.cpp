@@ -614,7 +614,7 @@ FloatSize MediaPlayerPrivateGStreamerBase::naturalSize() const
         return { };
 
     // Sanity check for the unlikely, but reproducible case when getVideoSizeAndFormatFromCaps returns incorrect values.
-    if (!originalSize.width() || !originalSize.height() || !pixelAspectRatioNumerator || !pixelAspectRatioNumerator) {
+    if (!originalSize.width() || !originalSize.height() || !pixelAspectRatioNumerator || !pixelAspectRatioDenominator) {
         GST_DEBUG("getVideoSizeAndFormatFromCaps returned an invalid info, returning an empty size");
         return { };
     }

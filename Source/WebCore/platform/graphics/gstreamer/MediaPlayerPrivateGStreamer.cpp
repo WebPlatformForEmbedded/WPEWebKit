@@ -951,6 +951,7 @@ void MediaPlayerPrivateGStreamer::enableTrack(TrackPrivateBaseGStreamer::TrackTy
             selectedStreams.append(m_currentTextStreamId);
         break;
     case TrackPrivateBaseGStreamer::TrackType::Text:
+        trackTypeAsString = "text";
         if (!selectedStreamId.isEmpty() && selectedStreamId == m_currentTextStreamId) {
             GST_INFO_OBJECT(pipeline(), "%s stream: %s already selected, not doing anything.", trackTypeAsString, selectedStreamId.utf8().data());
             return;
