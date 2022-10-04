@@ -2487,6 +2487,8 @@ void MediaPlayerPrivateGStreamer::updateStates()
                     gboolean isBuffering = m_isBuffering;
                     gst_query_parse_buffering_percent(query.get(), &isBuffering, nullptr);
                     m_isBuffering = isBuffering;
+                } else if (m_bufferingPercentage == 100) {
+                    m_isBuffering = false;
                 }
 
                 if (!m_isBuffering) {
