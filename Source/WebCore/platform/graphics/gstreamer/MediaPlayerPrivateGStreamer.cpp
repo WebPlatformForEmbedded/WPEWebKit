@@ -3871,6 +3871,9 @@ void MediaPlayerPrivateGStreamer::elementSetupCallback(MediaPlayerPrivateGStream
     }
 #endif
 
+    if (g_strcmp0(G_OBJECT_TYPE_NAME(G_OBJECT(element)), "GstQueue2") == 0)
+        g_object_set(G_OBJECT(element), "high-watermark", 0.10, nullptr);
+
 #if USE(WESTEROS_SINK)
     static GstCaps *westerosSinkCaps = nullptr;
     static GType westerosSinkType = G_TYPE_INVALID;
