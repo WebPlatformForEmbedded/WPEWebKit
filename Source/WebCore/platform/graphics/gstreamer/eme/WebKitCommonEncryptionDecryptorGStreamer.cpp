@@ -180,9 +180,9 @@ static GstCaps* webkitMediaCommonEncryptionDecryptTransformCaps(GstBaseTransform
         }
 
         bool duplicate = false;
-        unsigned size = gst_caps_get_size(transformedCaps);
+        unsigned capsSize = gst_caps_get_size(transformedCaps);
 
-        for (unsigned index = 0; !duplicate && index < size; ++index) {
+        for (unsigned index = 0; !duplicate && index < capsSize; ++index) {
             GstStructure* structure = gst_caps_get_structure(transformedCaps, index);
             if (gst_structure_is_equal(structure, outgoingStructure.get()))
                 duplicate = true;

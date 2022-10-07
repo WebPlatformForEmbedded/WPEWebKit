@@ -81,6 +81,7 @@ public:
         while (it != end) {
             if (it->value)
                 return true;
+            it++;
         }
         return false;
     }
