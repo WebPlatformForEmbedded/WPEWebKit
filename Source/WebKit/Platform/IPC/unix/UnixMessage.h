@@ -82,7 +82,6 @@ public:
             memcpy(m_body, other.m_body, m_messageInfo.bodySize());
             m_bodyOwned = true;
             other.m_body = nullptr;
-            other.m_bodyOwned = false;
         }
     }
 

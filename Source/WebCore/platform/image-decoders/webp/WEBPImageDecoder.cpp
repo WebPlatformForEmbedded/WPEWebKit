@@ -144,7 +144,7 @@ void WEBPImageDecoder::decode(size_t frameIndex, bool allDataReceived)
     m_frameBufferCache.resize(m_frameCount);
 
     // It is a fatal error if all data is received and we have decoded all frames available but the file is truncated.
-    if (frameIndex >= m_frameBufferCache.size() - 1 && allDataReceived && demuxer && demuxerState != WEBP_DEMUX_DONE) {
+    if (frameIndex >= m_frameBufferCache.size() - 1 && allDataReceived && demuxerState != WEBP_DEMUX_DONE) {
         WebPDemuxDelete(demuxer);
         setFailed();
         return;

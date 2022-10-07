@@ -27,6 +27,9 @@
 
 #if ENABLE(ENCRYPTED_MEDIA) && USE(GSTREAMER)
 
+// NOTE: YouTube 2018 EME conformance tests expect this to be >=5s.
+const WTF::Seconds WEBCORE_GSTREAMER_EME_LICENSE_KEY_RESPONSE_TIMEOUT = WTF::Seconds(6);
+
 namespace WebCore {
 
 const char* GStreamerEMEUtilities::s_ClearKeyUUID = WEBCORE_GSTREAMER_EME_UTILITIES_CLEARKEY_UUID;

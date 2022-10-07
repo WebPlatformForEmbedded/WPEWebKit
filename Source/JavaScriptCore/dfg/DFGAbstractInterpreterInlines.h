@@ -2073,8 +2073,6 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
                 setNonCellTypeForNode(node, SpecAnyIntAsDouble);
             break;
         case Array::Float32Array:
-            setNonCellTypeForNode(node, SpecFullDouble);
-            break;
         case Array::Float64Array:
             setNonCellTypeForNode(node, SpecFullDouble);
             break;
@@ -2096,13 +2094,7 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
             clobberWorld();
             break;
         case Array::Int32:
-            if (node->arrayMode().isOutOfBounds())
-                clobberWorld();
-            break;
         case Array::Double:
-            if (node->arrayMode().isOutOfBounds())
-                clobberWorld();
-            break;
         case Array::Contiguous:
         case Array::ArrayStorage:
             if (node->arrayMode().isOutOfBounds())
@@ -3481,11 +3473,7 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
         setNonCellTypeForNode(node, SpecInt32Only);
         break;
     }
-    case HasGenericProperty: {
-        setNonCellTypeForNode(node, SpecBoolean);
-        clobberWorld();
-        break;
-    }
+    case HasGenericProperty:
     case HasStructureProperty: {
         setNonCellTypeForNode(node, SpecBoolean);
         clobberWorld();
@@ -3518,10 +3506,7 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
         clobberWorld();
         break;
     }
-    case GetEnumeratorStructurePname: {
-        setTypeForNode(node, SpecString | SpecOther);
-        break;
-    }
+    case GetEnumeratorStructurePname:
     case GetEnumeratorGenericPname: {
         setTypeForNode(node, SpecString | SpecOther);
         break;
@@ -3565,12 +3550,8 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
     case OverridesHasInstance:
         setNonCellTypeForNode(node, SpecBoolean);
         break;
-            
-    case InstanceOf:
-        clobberWorld();
-        setNonCellTypeForNode(node, SpecBoolean);
-        break;
 
+    case InstanceOf:
     case InstanceOfCustom:
         clobberWorld();
         setNonCellTypeForNode(node, SpecBoolean);
