@@ -29,15 +29,23 @@
 
 #include "ChildProcessMain.h"
 #include "NetworkProcessMainUnix.h"
+#include <rdk/libodherr/odherr.h>
 #include <WebCore/NetworkStorageSession.h>
 
 namespace WebKit {
 
 class NetworkProcessMain final: public ChildProcessMainBase {
 public:
+    bool platformInitialize() override
+    {
+        odh_error_report_init("WebKitBrowser");
+        return true;
+    }
+
     void platformFinalize() override
     {
         WebCore::NetworkStorageSession::defaultStorageSession().clearSoupNetworkSessionAndCookieStorage();
+        odh_error_report_deinit(ODH_ERROR_REPORT_DEINIT_MODE_DEFERRED);
     }
 };
 

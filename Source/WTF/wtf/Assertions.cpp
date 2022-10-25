@@ -50,6 +50,7 @@
 #include <wtf/text/WTFString.h>
 
 #include <rdk/libodherr/odherr.h>
+#include <rdk/libodherr/odherr_ctx.h>
 
 #if HAVE(SIGNAL_H)
 #include <signal.h>
@@ -323,21 +324,21 @@ void WTFReportError(const char* file, int line, const char* function, const char
     va_start(args, format);
     vprintf_stderr_with_prefix("ERROR: ", format, args);
     // report error to ODH
-    WTFReportOdhErrorV(format, args);
+    WTFReportOdhErrorV(file, line, function, format, args);
     va_end(args);
     printf_stderr_common("\n");
     printCallSite(file, line, function);
 }
 
-void WTFReportOdhError(const char* format, ...)
+void WTFReportOdhError(const char* file, int line, const char* function, const char* format, ...)
 {
     va_list args;
     va_start(args, format);
-    WTFReportOdhErrorV(format, args);
+    WTFReportOdhErrorV(file, line, function, format, args);
     va_end(args);
 }
 
-void WTFReportOdhErrorV(const char* format, va_list args)
+void WTFReportOdhErrorV(const char* file, int line, const char* function, const char* format, va_list args)
 {
     int length = vsnprintf(NULL, 0, format, args);
     if (length < 0) return;
@@ -346,7 +347,21 @@ void WTFReportOdhErrorV(const char* format, va_list args)
     if (!msg) return;
 
     vsnprintf(msg, length + 1, format, args);
-    ODH_ERROR_REPORT_SRC_ERROR_V3("0", NULL, msg, NULL,   NULL);
+
+    char* backtrace = odh_error_report_sprintf("%s:%d %s", file, line, function);
+    char* ctx = odh_ctx_create_json("wpe", "ss",
+                                    "function", function,
+                                     "file", file);
+    odh_error_report_send_v3(ODH_ERROR_REPORT_SENSITIVITY_NONSENSITIVE,
+                             ODH_ERROR_REPORT_LEVEL_ERROR,
+                             "WPE0050",
+                             nullptr,
+                             msg,
+                             ctx,
+                             backtrace,
+                             "browser");
+    free(ctx);
+    free(backtrace);
     free(msg);
 }
 

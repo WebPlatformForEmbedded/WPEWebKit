@@ -33,6 +33,7 @@
 #include <glib.h>
 #include <iostream>
 #include <libsoup/soup.h>
+#include <rdk/libodherr/odherr.h>
 #include <wpe/wpe.h>
 
 namespace WebKit {
@@ -50,6 +51,8 @@ public:
         // Required for GStreamer initialization.
         // FIXME: This should be probably called in other processes as well.
         g_set_prgname("WPEWebProcess");
+
+        odh_error_report_init("WebKitBrowser");
 
         return true;
     }
@@ -74,6 +77,11 @@ public:
                 downcast<PlatformDisplayWPE>(PlatformDisplay::sharedDisplay()).initialize(wpeFd);
             });
         return true;
+    }
+
+    void platformFinalize() override
+    {
+        odh_error_report_deinit(ODH_ERROR_REPORT_DEINIT_MODE_DEFERRED);
     }
 };
 
