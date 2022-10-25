@@ -49,6 +49,13 @@ static void autoAudioSinkChildAddedCallback(GstChildProxy*, GObject* object, gch
 {
     if (GST_IS_AUDIO_BASE_SINK(object))
         g_object_set(GST_AUDIO_BASE_SINK(object), "buffer-time", static_cast<gint64>(100000), nullptr);
+
+#if PLATFORM(REALTEK)
+    if (!g_strcmp0(G_OBJECT_TYPE_NAME(object), "GstRTKAudioSink")) {
+        g_object_set(object, "media-tunnel", FALSE, nullptr);
+        g_object_set(object, "audio-service", TRUE, nullptr);
+    }
+#endif
 }
 #endif
 

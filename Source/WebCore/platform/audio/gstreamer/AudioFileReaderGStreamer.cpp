@@ -35,14 +35,13 @@
 #include <wtf/WeakPtr.h>
 #include <wtf/glib/GRefPtr.h>
 #include <wtf/glib/GUniquePtr.h>
+#include <vector>
 
-#if PLATFORM(BCM_NEXUS) || PLATFORM(BROADCOM)
 typedef enum {
   GST_AUTOPLUG_SELECT_TRY,
   GST_AUTOPLUG_SELECT_EXPOSE,
   GST_AUTOPLUG_SELECT_SKIP
 } GstAutoplugSelectResult;
-#endif
 
 namespace WebCore {
 
@@ -85,12 +84,29 @@ private:
     bool m_errorOccurred { false };
 };
 
-#if PLATFORM(BCM_NEXUS) || PLATFORM(BROADCOM)
 GstAutoplugSelectResult decodebinAutoplugSelectCallback(GstElement*, GstPad*, GstCaps*, GstElementFactory* factory)
 {
-    return !g_strcmp0(gst_plugin_feature_get_name(GST_PLUGIN_FEATURE(factory)), "brcmaudfilter") ? GST_AUTOPLUG_SELECT_SKIP : GST_AUTOPLUG_SELECT_TRY;
-}
+    const std::vector<std::string> pluginsToSkip = {
+#if PLATFORM(BCM_NEXUS) || PLATFORM(BROADCOM)
+        "brcmaudfilter",
 #endif
+#if PLATFORM(REALTEK)
+        "omxaacdec",
+        "omxac3dec",
+        "omxac4dec",
+        "omxeac3dec",
+        "omxflacdec",
+        "omxlpcmdec",
+        "omxmp3dec",
+        "omxopusdec",
+        "omxvorbisdec",
+#endif
+    };
+    for (const auto& pluginToSkip : pluginsToSkip)
+        if (!g_strcmp0(gst_plugin_feature_get_name(GST_PLUGIN_FEATURE(factory)), pluginToSkip.c_str()))
+            return GST_AUTOPLUG_SELECT_SKIP;
+    return GST_AUTOPLUG_SELECT_TRY;
+}
 
 static void copyGstreamerBuffersToAudioChannel(GstBufferList* buffers, AudioChannel* audioChannel)
 {
@@ -146,9 +162,7 @@ AudioFileReader::~AudioFileReader()
 
     if (m_decodebin) {
         g_signal_handlers_disconnect_matched(m_decodebin.get(), G_SIGNAL_MATCH_DATA, 0, 0, nullptr, nullptr, this);
-#if PLATFORM(BCM_NEXUS) || PLATFORM(BROADCOM)
         g_signal_handlers_disconnect_matched(m_decodebin.get(), G_SIGNAL_MATCH_FUNC, 0, 0, nullptr, gpointer(decodebinAutoplugSelectCallback), nullptr);
-#endif
         m_decodebin = nullptr;
     }
 
@@ -339,9 +353,7 @@ void AudioFileReader::decodeAudioForBusCreation()
     }
 
     m_decodebin = gst_element_factory_make("decodebin", "decodebin");
-#if PLATFORM(BCM_NEXUS) || PLATFORM(BROADCOM)
     g_signal_connect_swapped(m_decodebin.get(), "autoplug-select", G_CALLBACK(decodebinAutoplugSelectCallback), nullptr);
-#endif
     g_signal_connect_swapped(m_decodebin.get(), "pad-added", G_CALLBACK(decodebinPadAddedCallback), this);
 
     gst_bin_add_many(GST_BIN(m_pipeline.get()), source, m_decodebin.get(), nullptr);
