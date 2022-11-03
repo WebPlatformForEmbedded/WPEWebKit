@@ -377,6 +377,8 @@ void MediaPlayerPrivateGStreamer::loadFull(const String& urlString, const gchar*
     m_volumeAndMuteInitialized = false;
     m_durationAtEOS = MediaTime::invalidTime();
 
+    m_isShoutcastStreaming = false;
+
     if (!m_delayingLoad)
         commitLoad();
 }
@@ -1422,6 +1424,9 @@ void MediaPlayerPrivateGStreamer::handleMessage(GstMessage* message)
 #endif
 
 #if PLATFORM(BCM_NEXUS) || PLATFORM(BROADCOM)
+        if (currentState == GST_STATE_NULL && newState == GST_STATE_READY && g_strstr_len(GST_MESSAGE_SRC_NAME(message), 8, "icydemux")) {
+            m_isShoutcastStreaming = true;
+        }
         if (currentState == GST_STATE_NULL && newState == GST_STATE_READY && g_strstr_len(GST_MESSAGE_SRC_NAME(message), 13, "brcmvidfilter")) {
             m_vidfilter = GST_ELEMENT(GST_MESSAGE_SRC(message));
 
@@ -1688,6 +1693,8 @@ void MediaPlayerPrivateGStreamer::processBufferingStats(GstMessage* message)
 
     m_buffering = true;
     gst_message_parse_buffering(message, &m_bufferingPercentage);
+    GST_LOG("Buffering percentage: %d", m_bufferingPercentage);
+    GstObject* queue2 = GST_MESSAGE_SRC(message);
 
 #if PLATFORM(BCM_NEXUS) || PLATFORM(BROADCOM)
     // The Nexus playpump buffers a lot of data. Let's add it as if it had been buffered by the GstQueue2
@@ -1699,8 +1706,6 @@ void MediaPlayerPrivateGStreamer::processBufferingStats(GstMessage* message)
 
         int updatedBufferingPercentage = m_bufferingPercentage;
         int correctedBufferingPercentage = m_bufferingPercentage;
-
-        GstObject *queue2 = GST_MESSAGE_SRC(message);
         guint maxSizeBytes = 0;
 
         // Current-level-bytes seems to be inacurate, so we compute its value from the buffering percentage.
@@ -1749,14 +1754,30 @@ void MediaPlayerPrivateGStreamer::processBufferingStats(GstMessage* message)
         }
     } else
 #endif
-
-    GST_TRACE("[Buffering] max loaded time: %s, current playback position: %s",
-              toString(m_maxTimeLoaded).utf8().data(),
-              toString(playbackPosition()).utf8().data());
+        GST_TRACE("[Buffering] max loaded time: %s, current playback position: %s",
+                  toString(m_maxTimeLoaded).utf8().data(),
+                  toString(playbackPosition()).utf8().data());
+    if (m_isShoutcastStreaming) {
+        tryReduceQueueSize(queue2);
+    }
 
     if (m_bufferingPercentage == 100 ||
             (m_bufferingPercentage == 0 && (m_maxTimeLoaded - playbackPosition() < MediaTime::createWithDouble(2, GST_SECOND)))) {
         updateStates();
+    }
+}
+
+void MediaPlayerPrivateGStreamer::tryReduceQueueSize(GstObject* queue)
+{
+    guint max_size_bytes = 0;
+    g_object_get(queue, "max-size-bytes", &max_size_bytes, NULL);
+
+    // ARRISEOS-43118 : for some specific aac shoutcast streams mpegaudioparse plugin is not attached to pipeline and in consequence bitstream
+    // value cannot be correctly calculated. UriDecodeBin is setting queue size based on that bitstream value.
+    // Let's reduce for those specific audio streams queue size to reasonable size
+    if (max_size_bytes >= 2097152) {
+         GST_DEBUG("Hardcode queue max size\n");
+         g_object_set(queue, "max-size-bytes", 16000, NULL);
     }
 }
 

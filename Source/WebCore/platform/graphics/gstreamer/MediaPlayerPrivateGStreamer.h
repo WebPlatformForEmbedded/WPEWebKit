@@ -210,6 +210,7 @@ private:
     long long determineTotalBytes() const;
 
     void updateFrameStats() const;
+    void tryReduceQueueSize(GstObject* queue);
 
 protected:
     bool m_buffering;
@@ -336,6 +337,7 @@ private:
 #if PLATFORM(BCM_NEXUS) || PLATFORM(BROADCOM)
     GRefPtr<GstElement> m_vidfilter;
     GRefPtr<GstElement> m_multiqueue;
+    bool m_isShoutcastStreaming = false;
 #endif
 
     DemuxMonitor _demuxMonitor;
