@@ -252,8 +252,7 @@ void MediaPlayerPrivateGStreamerMSE::seek(const MediaTime& time)
     char json_str[100];
     int len = snprintf(json_str, 100, "{\"seek_from\":%f, \"seek_to\":%f}", current.toDouble(), time.toDouble());
     if (len > 0 && len < 100) {
-        m_odhReporter.report(ODH_REPORT_AVPIPELINE_STATE_SEEK_START, json_str, OdhMediaType::VIDEO, m_avContextGetter);
-        m_odhReporter.report(ODH_REPORT_AVPIPELINE_STATE_SEEK_START, json_str, OdhMediaType::AUDIO, m_avContextGetter);
+        m_odhReporter.report(ODH_REPORT_AVPIPELINE_STATE_SEEK_START, json_str, {OdhMediaType::VIDEO, OdhMediaType::AUDIO}, m_avContextGetter);
     }
 
     MediaPlayer::ReadyState oldReadyState = m_readyState;
@@ -501,8 +500,7 @@ void MediaPlayerPrivateGStreamerMSE::maybeFinishSeek()
     char json_str[100];
     int len = snprintf(json_str, 100, "{\"seek_to\":%f}", m_seekTime.toDouble());
     if (len > 0 && len < 100) {
-        m_odhReporter.report(ODH_REPORT_AVPIPELINE_STATE_SEEK_DONE, json_str, OdhMediaType::VIDEO, m_avContextGetter);
-        m_odhReporter.report(ODH_REPORT_AVPIPELINE_STATE_SEEK_DONE, json_str, OdhMediaType::AUDIO, m_avContextGetter);
+        m_odhReporter.report(ODH_REPORT_AVPIPELINE_STATE_SEEK_DONE, json_str, {OdhMediaType::VIDEO, OdhMediaType::AUDIO}, m_avContextGetter);
     }
 
     webKitMediaSrcSetReadyForSamples(WEBKIT_MEDIA_SRC(m_source.get()), true);
