@@ -39,6 +39,10 @@
 #include <wtf/linux/CurrentProcessMemoryStatus.h>
 #include <wtf/text/WTFString.h>
 
+#if PLATFORM(BCM_NEXUS)
+#include <fstream>
+#endif
+
 #define LOG_CHANNEL_PREFIX Log
 
 namespace WTF {
@@ -65,6 +69,10 @@ static size_t s_pollMaximumProcessGPUMemoryNonCriticalLimit = 0;
 static const char* s_processStatus = "/proc/self/status";
 static const char* s_cmdline = "/proc/self/cmdline";
 static char* s_GPUMemoryUsedFile = nullptr;
+
+#if PLATFORM(BCM_NEXUS)
+bool gfxMemoryFootprint(size_t& usedMemory);
+#endif
 
 static inline String nextToken(FILE* file)
 {
@@ -262,7 +270,11 @@ MemoryPressureHandler::MemoryUsagePoller::MemoryUsagePoller()
             }
 
             if (s_pollMaximumProcessGPUMemoryCriticalLimit) {
+#if PLATFORM(BCM_NEXUS)
+                if (gfxMemoryFootprint(value)) {
+#else
                 if (readToken(s_GPUMemoryUsedFile, nullptr, 1, value)) {
+#endif
                     if (value > s_pollMaximumProcessGPUMemoryNonCriticalLimit) {
                         underMemoryPressure = true;
                         critical = value > s_pollMaximumProcessGPUMemoryCriticalLimit;
@@ -382,6 +394,32 @@ std::optional<MemoryPressureHandler::ReliefLogger::MemoryUsage> MemoryPressureHa
 {
     return MemoryUsage {processMemoryUsage(), memoryFootprint()};
 }
+
+#if PLATFORM(BCM_NEXUS)
+bool gfxMemoryFootprint(size_t& usedMemory)
+{
+    /* demonstrative structure of /proc/brcm/core file
+     * each row presents one broadcom heap: GFX heap is related to graphics memory
+     * heap     offset    memc    size    MB    vaddr    used    peak    name
+     * 4        0x0abc    0       0x180   350   0x0def   32%     50%     GFX
+     */
+
+    auto fileStream = std::ifstream(s_GPUMemoryUsedFile);
+    for (std::string line; std::getline(fileStream, line); ) {
+        if (strstr(line.c_str(), "GFX") != nullptr) {
+            size_t totalMemory;
+            size_t usedPercent;
+            unsigned tmp;
+            if (std::sscanf(line.c_str(), "%x %x %x %x %zu %x %zu%%",
+              &tmp, &tmp, &tmp, &tmp, &totalMemory, &tmp, &usedPercent)) {
+                usedMemory = totalMemory * usedPercent / 100;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+#endif
 
 
 } // namespace WTF
