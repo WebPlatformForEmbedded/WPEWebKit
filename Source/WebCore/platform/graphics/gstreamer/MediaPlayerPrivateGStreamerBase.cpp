@@ -247,7 +247,6 @@ public:
         GstVideoInfo videoInfo;
         if (UNLIKELY(!getSampleVideoInfo(sample, videoInfo)))
             return;
-
         m_size = IntSize(GST_VIDEO_INFO_WIDTH(&videoInfo), GST_VIDEO_INFO_HEIGHT(&videoInfo));
         m_hasAlphaChannel = GST_VIDEO_INFO_HAS_ALPHA(&videoInfo);
         m_buffer = gst_sample_get_buffer(sample);
@@ -1243,6 +1242,7 @@ static void setRectangleToVideoSink(GstElement* videoSink, const IntRect& rect, 
     // and position of the video rendering window. Mark them unused as default.
     static Lock mutex;
     static bool isSuspended = false;
+    static IntRect previousRect;
 
     LockHolder holeder(mutex);
     isSuspended = changeSuspensionState ? !isSuspended : isSuspended;
@@ -1250,6 +1250,10 @@ static void setRectangleToVideoSink(GstElement* videoSink, const IntRect& rect, 
     if (!videoSink || (isSuspended && !changeSuspensionState))
         return;
 
+    if (previousRect != rect) {
+        GST_INFO("video rect changed: %d, %d %dx%d", rect.x(), rect.y(), rect.width(), rect.height());
+        previousRect = rect;
+    }
     GUniquePtr<gchar> rectString(g_strdup_printf("%d,%d,%d,%d", rect.x(), rect.y(), rect.width(), rect.height()));
     g_object_set(videoSink, "rectangle", rectString.get(), nullptr);
 }
