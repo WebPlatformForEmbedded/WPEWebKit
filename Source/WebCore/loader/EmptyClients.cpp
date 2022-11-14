@@ -59,7 +59,6 @@
 #include "HistoryItem.h"
 #include "IDBConnectionToServer.h"
 #include "InspectorClient.h"
-#include "LibWebRTCAudioModule.h"
 #include "MediaRecorderPrivate.h"
 #include "MediaRecorderProvider.h"
 #include "ModalContainerTypes.h"

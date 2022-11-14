@@ -24,7 +24,7 @@
 
 #pragma once
 
-#if USE(LIBWEBRTC)
+#if ENABLE(WEB_RTC) && USE(LIBWEBRTC)
 
 #include "LibWebRTCObservers.h"
 #include "LibWebRTCProvider.h"
@@ -211,4 +211,4 @@ private:
 
 } // namespace WebCore
 
-#endif // USE(LIBWEBRTC)
+#endif // ENABLE(WEB_RTC) && USE(LIBWEBRTC)
