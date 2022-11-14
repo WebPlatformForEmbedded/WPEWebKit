@@ -64,6 +64,7 @@ public:
     std::unique_ptr<TextureMapperPlatformLayerBuffer> getAvailableBuffer(const IntSize&, GLint internalFormat);
     void pushNextBuffer(std::unique_ptr<TextureMapperPlatformLayerBuffer>&&);
     bool isActive();
+    bool isEmpty() { return !m_currentBuffer; }
 
     WEBCORE_EXPORT void activateOnCompositingThread(Compositor*, TextureMapperLayer*);
     WEBCORE_EXPORT void invalidate();

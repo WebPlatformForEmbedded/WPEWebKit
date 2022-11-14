@@ -160,21 +160,8 @@ void ImageBufferData::swapBuffersIfNeeded()
 {
     GLContext* previousActiveContext = GLContext::current();
 
-    if (!m_compositorTexture) {
+    if (!m_compositorTexture)
         createCompositorBuffer();
-
-        auto proxyOperation =
-            [this](TextureMapperPlatformLayerProxy& proxy)
-            {
-                LockHolder holder(proxy.lock());
-                proxy.pushNextBuffer(makeUnique<TextureMapperPlatformLayerBuffer>(m_compositorTexture, m_size, TextureMapperGL::ShouldBlend, GL_RGBA));
-            };
-#if USE(NICOSIA)
-        proxyOperation(downcast<Nicosia::ContentLayerTextureMapperImpl>(m_nicosiaLayer->impl()).proxy());
-#else
-        proxyOperation(*m_platformLayerProxy);
-#endif
-    }
 
     // It would be great if we could just swap the buffers here as we do with webgl, but that breaks the cases
     // where one frame uses the content already rendered in the previous frame. So we just copy the content
@@ -185,6 +172,21 @@ void ImageBufferData::swapBuffersIfNeeded()
 
     // Flush all pending drawing operations as compositor uses GL texture directly, outside of Cairo
     cairo_surface_flush(m_compositorSurface.get());
+    glFlush();
+
+    auto proxyOperation =
+        [this](TextureMapperPlatformLayerProxy& proxy)
+        {
+            if (proxy.isEmpty()) {
+                LockHolder holder(proxy.lock());
+                proxy.pushNextBuffer(makeUnique<TextureMapperPlatformLayerBuffer>(m_compositorTexture, m_size, TextureMapperGL::ShouldBlend, GL_RGBA));
+            }
+        };
+#if USE(NICOSIA)
+    proxyOperation(downcast<Nicosia::ContentLayerTextureMapperImpl>(m_nicosiaLayer->impl()).proxy());
+#else
+    proxyOperation(*m_platformLayerProxy);
+#endif
 
     if (previousActiveContext)
         previousActiveContext->makeContextCurrent();
