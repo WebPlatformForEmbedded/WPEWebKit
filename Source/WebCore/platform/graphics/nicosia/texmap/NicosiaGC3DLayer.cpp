@@ -47,6 +47,42 @@ namespace Nicosia {
 
 using namespace WebCore;
 
+#if USE(COORDINATED_GRAPHICS)
+#if PLATFORM(AMLOGIC) || PLATFORM(REALTEK)
+#define FORCE_BUFFER_SYNC
+#endif
+#endif
+
+#ifdef FORCE_BUFFER_SYNC
+class BufferGLSync : public TextureMapperPlatformLayerBuffer::UnmanagedBufferDataHolder
+{
+public:
+    BufferGLSync() {
+        m_sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+        glFlush();
+    }
+
+    virtual ~BufferGLSync() {
+        if (m_sync) {
+            glDeleteSync(m_sync);
+        }
+    }
+
+    void waitForCPUSync() {
+        if (!m_sync)
+            return;
+
+        static constexpr GLuint64 kDefaultSyncTimeoutNs = 25000000; // 25ms
+        auto res = glClientWaitSync(m_sync, GL_SYNC_FLUSH_COMMANDS_BIT, kDefaultSyncTimeoutNs);
+        glDeleteSync(m_sync);
+        m_sync = nullptr;
+    }
+
+private:
+    GLsync m_sync;
+};
+#endif
+
 GC3DLayer::GC3DLayer(GraphicsContextGLOpenGL& context)
     : m_context(context)
     , m_contentLayer(Nicosia::ContentLayer::create(Nicosia::ContentLayerTextureMapperImpl::createFactory(*this)))
@@ -121,8 +157,12 @@ void GC3DLayer::swapBuffersIfNeeded()
         LockHolder holder(proxy.lock());
         proxy.pushNextBuffer(WTFMove(layerBuffer));
 #else
+        auto buffer = makeUnique<TextureMapperPlatformLayerBuffer>(m_context.m_compositorTexture, textureSize, flags, m_context.m_internalColorFormat);
+#ifdef FORCE_BUFFER_SYNC
+        buffer->setUnmanagedBufferDataHolder(makeUnique<BufferGLSync>());
+#endif
         LockHolder holder(proxy.lock());
-        proxy.pushNextBuffer(makeUnique<TextureMapperPlatformLayerBuffer>(m_context.m_compositorTexture, textureSize, flags, m_context.m_internalColorFormat));
+        proxy.pushNextBuffer(WTFMove(buffer));
 #endif
     }
 

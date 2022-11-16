@@ -125,9 +125,9 @@ void GstVideoFrameHolder::handoffVideoDmaBuf(struct wpe_video_plane_display_dmab
 }
 #endif
 
-#if USE(GSTREAMER_GL)
 void GstVideoFrameHolder::waitForCPUSync()
 {
+#if USE(GSTREAMER_GL)
     // No need for OpenGL synchronization when using the OpenMAX decoder.
     if (m_videoDecoderPlatform == GstVideoDecoderPlatform::OpenMAX)
         return;
@@ -138,8 +138,8 @@ void GstVideoFrameHolder::waitForCPUSync()
         GstGLContext* context = ((GstGLBaseMemory*)mem)->context;
         gst_gl_sync_meta_wait_cpu(meta, context);
     }
-}
 #endif // USE(GSTREAMER_GL)
+}
 
 void GstVideoFrameHolder::updateTexture(BitmapTextureGL& texture)
 {

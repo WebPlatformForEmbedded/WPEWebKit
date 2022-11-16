@@ -77,9 +77,7 @@ public:
         UnmanagedBufferDataHolder() = default;
         virtual ~UnmanagedBufferDataHolder() = default;
 
-#if USE(GSTREAMER_GL)
         virtual void waitForCPUSync() = 0;
-#endif // USE(GSTREAMER_GL)
     };
 
     bool hasManagedTexture() const { return m_hasManagedTexture; }

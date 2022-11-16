@@ -36,9 +36,7 @@ public:
 #if USE(WPE_VIDEO_PLANE_DISPLAY_DMABUF)
     void handoffVideoDmaBuf(struct wpe_video_plane_display_dmabuf_source*, const IntRect&);
 #endif
-#if USE(GSTREAMER_GL)
     virtual void waitForCPUSync();
-#endif
 
     const IntSize& size() const { return m_size; }
     bool hasAlphaChannel() const { return m_hasAlphaChannel; }

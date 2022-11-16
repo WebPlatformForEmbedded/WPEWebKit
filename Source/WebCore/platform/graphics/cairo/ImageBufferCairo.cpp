@@ -172,7 +172,14 @@ void ImageBufferData::swapBuffersIfNeeded()
 
     // Flush all pending drawing operations as compositor uses GL texture directly, outside of Cairo
     cairo_surface_flush(m_compositorSurface.get());
+#if PLATFORM(AMLOGIC) || PLATFORM(REALTEK)
+    // Some platforms have issue with syncing GL commands among threads. As a result compositor thread
+    // is getting old data/trashes as filling compositor texture is not completed yet.
+    // Use glFinish() to make sure compositor can safely use the texture.
+    glFinish();
+#else
     glFlush();
+#endif
 
     auto proxyOperation =
         [this](TextureMapperPlatformLayerProxy& proxy)
