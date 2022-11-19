@@ -229,6 +229,7 @@ MediaPlayerPrivateGStreamer::MediaPlayerPrivateGStreamer(MediaPlayer* player)
 #if ENABLE(ENCRYPTED_MEDIA)
     m_tracker = MediaPlayerGStreamerEncryptedPlayTracker::create();
 #endif
+    m_odhReporter.start_report_thread();
 }
 
 MediaPlayerPrivateGStreamer::~MediaPlayerPrivateGStreamer()
@@ -297,6 +298,7 @@ MediaPlayerPrivateGStreamer::~MediaPlayerPrivateGStreamer()
     }
 
     m_odhReporter.report(ODH_REPORT_AVPIPELINE_STATE_DESTROY, "", OdhMediaType::NONE, m_avContextGetter);
+    m_odhReporter.unset_reporting_callbacks();
     m_odhReporter.report_all_and_stop();
     m_avContextGetter.setPipeline(nullptr);
 }
@@ -571,6 +573,7 @@ void MediaPlayerPrivateGStreamer::play()
             totalBytes();
         setDownloadBuffering();
         GST_INFO("Play");
+        m_odhReporter.setup_reporting_callbacks(&m_avContextGetter);
         m_odhReporter.report(ODH_REPORT_AVPIPELINE_STATE_PLAY, "", {OdhMediaType::VIDEO, OdhMediaType::AUDIO}, m_avContextGetter);
     } else
         loadingFailed(MediaPlayer::Empty);
