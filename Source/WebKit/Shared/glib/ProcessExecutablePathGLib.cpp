@@ -32,7 +32,6 @@
 
 namespace WebKit {
 
-#if ENABLE(DEVELOPER_MODE)
 static String getExecutablePath()
 {
     CString executablePath = FileSystem::currentExecutablePath();
@@ -40,11 +39,9 @@ static String getExecutablePath()
         return FileSystem::parentPath(FileSystem::stringFromFileSystemRepresentation(executablePath.data()));
     return { };
 }
-#endif
 
 static String findWebKitProcess(const char* processName)
 {
-#if ENABLE(DEVELOPER_MODE)
     static const char* execDirectory = g_getenv("WEBKIT_EXEC_PATH");
     if (execDirectory) {
         String processPath = FileSystem::pathByAppendingComponent(FileSystem::stringFromFileSystemRepresentation(execDirectory), StringView::fromLatin1(processName));
@@ -58,7 +55,6 @@ static String findWebKitProcess(const char* processName)
         if (FileSystem::fileExists(processPath))
             return processPath;
     }
-#endif
 
     return FileSystem::pathByAppendingComponent(FileSystem::stringFromFileSystemRepresentation(PKGLIBEXECDIR), StringView::fromLatin1(processName));
 }
