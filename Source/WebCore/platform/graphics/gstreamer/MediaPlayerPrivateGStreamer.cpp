@@ -231,7 +231,6 @@ MediaPlayerPrivateGStreamer::MediaPlayerPrivateGStreamer(MediaPlayer* player)
     static unsigned times = 0;
     ++times;
     GST_INFO("created media player private (%u times) <----------------------------------------------", times);
-    fprintf(stderr, "calvaris created media player private (%u times)\n", times);
 }
 
 MediaPlayerPrivateGStreamer::~MediaPlayerPrivateGStreamer()
