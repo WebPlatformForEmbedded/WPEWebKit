@@ -2005,6 +2005,21 @@ const gchar* webkit_web_context_get_time_zone_override(WebKitWebContext* context
     return context->priv->timeZoneOverride.data();
 }
 
+/**
+ * webkit_web_context_garbage_collect_javascript_objects:
+ * @context: the #WebKitWebContext
+ *
+ * Requests a garbage collection of the javascript objects to all processes.
+ *
+ * Since: 2.28
+ */
+void webkit_web_context_garbage_collect_javascript_objects(WebKitWebContext* context)
+{
+    g_return_if_fail(WEBKIT_IS_WEB_CONTEXT(context));
+
+    context->priv->processPool->garbageCollectJavaScriptObjects();
+}
+
 void webkitWebContextInitializeNotificationPermissions(WebKitWebContext* context)
 {
     g_signal_emit(context, signals[INITIALIZE_NOTIFICATION_PERMISSIONS], 0);
