@@ -3932,8 +3932,10 @@ void MediaPlayerPrivateGStreamer::configureElement(GstElement* element)
     }
 #endif
 
+#if PLATFORM(REALTEK)
     if (!g_strcmp0(G_OBJECT_TYPE_NAME(G_OBJECT(element)), "GstQueue2"))
         g_object_set(G_OBJECT(element), "high-watermark", 0.10, nullptr);
+#endif
 }
 
 void MediaPlayerPrivateGStreamer::checkPlayingConsitency()
