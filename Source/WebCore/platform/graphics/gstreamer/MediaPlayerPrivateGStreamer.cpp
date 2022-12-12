@@ -3890,6 +3890,11 @@ void MediaPlayerPrivateGStreamer::configureElement(GstElement* element)
 #if PLATFORM(BROADCOM)
     if (g_str_has_prefix(GST_ELEMENT_NAME(element), "brcmaudiosink")) {
         g_object_set(G_OBJECT(element), "async", TRUE, nullptr);
+    } else if (g_str_has_prefix(GST_ELEMENT_NAME(element), "brcmaudiodecoder")) {
+        if (m_isLiveStream.value_or(false)) {
+            // Limit BCM audio decoder buffering to 1sec so live progressive playback can start faster
+            g_object_set(G_OBJECT(element), "limit_buffering_ms", 1000, nullptr);
+        }
     }
 #endif
 
