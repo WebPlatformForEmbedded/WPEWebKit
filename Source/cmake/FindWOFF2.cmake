@@ -66,17 +66,6 @@ find_library(WOFF2_LIBRARY
     HINTS ${PC_WOFF2_LIBDIR} ${PC_WOFF2_LIBRARY_DIRS}
 )
 
-# There's nothing in the WOFF2 headers that could be used to detect the exact
-# WOFF2 version being used so don't attempt to do so. A version can only be found
-# through pkg-config
-if ("${WOFF2_FIND_VERSION}" VERSION_GREATER "${WOFF2_VERSION}")
-    if (WOFF2_VERSION)
-        message(FATAL_ERROR "Required version (" ${WOFF2_FIND_VERSION} ") is higher than found version (" ${WOFF2_VERSION} ")")
-    else ()
-        message(WARNING "Cannot determine WOFF2 version without pkg-config")
-    endif ()
-endif ()
-
 # Find components
 if (WOFF2_LIBRARY)
     set(_WOFF2_REQUIRED_LIBS_FOUND ON)
