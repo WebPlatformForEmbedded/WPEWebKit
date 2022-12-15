@@ -223,7 +223,6 @@ void NetworkDataTaskSoup::createRequest(ResourceRequest&& request, WasBlockingCo
     g_signal_connect(m_soupMessage.get(), "wrote-body-data", G_CALLBACK(wroteBodyDataCallback), this);
 #if USE(SOUP2)
     g_signal_connect(static_cast<NetworkSessionSoup&>(*m_session).soupSession(), "authenticate",  G_CALLBACK(authenticateCallback), this);
-    g_signal_connect(m_soupMessage.get(), "network-event", G_CALLBACK(networkEventCallback), this);
 #else
     g_signal_connect(m_soupMessage.get(), "authenticate", G_CALLBACK(authenticateCallback), this);
     g_signal_connect(m_soupMessage.get(), "accept-certificate", G_CALLBACK(acceptCertificateCallback), this);
@@ -235,6 +234,7 @@ void NetworkDataTaskSoup::createRequest(ResourceRequest&& request, WasBlockingCo
     g_signal_connect(m_soupMessage.get(), "request-certificate", G_CALLBACK(requestCertificateCallback), this);
     g_signal_connect(m_soupMessage.get(), "request-certificate-password", G_CALLBACK(requestCertificatePasswordCallback), this);
 #endif
+    g_signal_connect(m_soupMessage.get(), "network-event", G_CALLBACK(networkEventCallback), this);
     g_signal_connect(m_soupMessage.get(), "restarted", G_CALLBACK(restartedCallback), this);
     g_signal_connect(m_soupMessage.get(), "starting", G_CALLBACK(startingCallback), this);
     if (m_shouldContentSniff == ContentSniffingPolicy::SniffContent)
@@ -1502,7 +1502,6 @@ void NetworkDataTaskSoup::didFail(const ResourceError& error)
     dispatchDidCompleteWithError(error);
 }
 
-#if USE(SOUP2)
 void NetworkDataTaskSoup::networkEventCallback(SoupMessage* soupMessage, GSocketClientEvent event, GIOStream* stream, NetworkDataTaskSoup* task)
 {
     if (task->state() == State::Canceling || task->state() == State::Completed || !task->m_client)
@@ -1514,6 +1513,16 @@ void NetworkDataTaskSoup::networkEventCallback(SoupMessage* soupMessage, GSocket
 
 void NetworkDataTaskSoup::networkEvent(GSocketClientEvent event, GIOStream* stream)
 {
+#if !USE(SOUP2)
+    if (event == G_SOCKET_CLIENT_CONNECTED) {
+        const char* enableTCPkeepalive = getenv("WEBKIT_TCP_KEEPALIVE");
+        if (enableTCPkeepalive && enableTCPkeepalive[0] != '0') {
+            RELEASE_ASSERT(G_IS_SOCKET_CONNECTION(stream));
+            if (GSocket* socket = g_socket_connection_get_socket(G_SOCKET_CONNECTION(stream)))
+                g_socket_set_keepalive(socket, TRUE);
+        }
+    }
+#else
     auto time = MonotonicTime::now();
     switch (event) {
     case G_SOCKET_CLIENT_RESOLVING:
@@ -1555,8 +1564,8 @@ void NetworkDataTaskSoup::networkEvent(GSocketClientEvent event, GIOStream* stre
         ASSERT_NOT_REACHED();
         break;
     }
-}
 #endif
+}
 
 void NetworkDataTaskSoup::startingCallback(SoupMessage* soupMessage, NetworkDataTaskSoup* task)
 {

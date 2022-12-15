@@ -149,10 +149,8 @@ private:
 
     void didFail(const WebCore::ResourceError&);
 
-#if USE(SOUP2)
     static void networkEventCallback(SoupMessage*, GSocketClientEvent, GIOStream*, NetworkDataTaskSoup*);
     void networkEvent(GSocketClientEvent, GIOStream*);
-#endif
 
 #if SOUP_CHECK_VERSION(2, 49, 91)
     static void startingCallback(SoupMessage*, NetworkDataTaskSoup*);
