@@ -282,7 +282,7 @@ if (ENABLED_COMPILER_SANITIZERS)
 endif ()
 
 # GUri is available in GLib since version 2.66, but we only want to use it if version is >= 2.67.1.
-if (PC_GLIB_VERSION VERSION_GREATER_EQUAL "2.67.1")
+if (GLIB_VERSION VERSION_GREATER_EQUAL "2.67.1")
     SET_AND_EXPOSE_TO_BUILD(HAVE_GURI 1)
 endif ()
 
