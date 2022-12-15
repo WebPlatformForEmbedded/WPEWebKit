@@ -5,7 +5,7 @@ SET_PROJECT_VERSION(2 38 3)
 
 # This is required because we use the DEPFILE argument to add_custom_command().
 # Remove after upgrading cmake_minimum_required() to 3.20.
-if (${CMAKE_VERSION} VERSION_LESS "3.20" AND NOT ${CMAKE_GENERATOR} STREQUAL "Ninja")
+if (CMAKE_VERSION VERSION_LESS "3.20" AND NOT CMAKE_GENERATOR STREQUAL "Ninja")
     message(FATAL_ERROR "Building with Makefiles requires CMake 3.20 or newer. Either enable Ninja by passing -GNinja, or upgrade CMake.")
 endif ()
 
