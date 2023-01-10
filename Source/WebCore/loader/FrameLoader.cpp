@@ -3564,8 +3564,16 @@ void FrameLoader::continueFragmentScrollAfterNavigationPolicy(const ResourceRequ
     // frame to be deallocated.
     Ref frame = m_frame.get();
 
+    static bool keepNavigationOnFragmentLoad = false;
+    static bool keepNavigationOnFragmentLoadInitialized = false;
+
+    if (!keepNavigationOnFragmentLoadInitialized) {
+        keepNavigationOnFragmentLoad = !!getenv("WPE_KEEP_NAVIGATION_ON_FRAGMENT_LOAD");
+        keepNavigationOnFragmentLoadInitialized = true;
+    }
+
     // If we have a provisional request for a different document, a fragment scroll should cancel it.
-    if (m_provisionalDocumentLoader && !equalIgnoringFragmentIdentifier(m_provisionalDocumentLoader->request().url(), request.url())) {
+    if (m_provisionalDocumentLoader && !equalIgnoringFragmentIdentifier(m_provisionalDocumentLoader->request().url(), request.url()) && !keepNavigationOnFragmentLoad) {
         protectedProvisionalDocumentLoader()->stopLoading();
         FRAMELOADER_RELEASE_LOG(ResourceLoading, "continueFragmentScrollAfterNavigationPolicy: Clearing provisional document loader (m_provisionalDocumentLoader=%p)", m_provisionalDocumentLoader.get());
         setProvisionalDocumentLoader(nullptr);
