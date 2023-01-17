@@ -28,11 +28,14 @@
 
 #include <algorithm>
 #include <atomic>
+#include <fnmatch.h>
 #include <functional>
+#include <unistd.h>
 #include <wtf/Logging.h>
 #include <wtf/MemoryFootprint.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/RAMSize.h>
+#include <wtf/text/StringToIntegerConversion.h>
 
 namespace WTF {
 
@@ -42,13 +45,63 @@ WTF_EXPORT_PRIVATE bool MemoryPressureHandler::ReliefLogger::s_loggingEnabled = 
 static const double s_conservativeThresholdFraction = 0.5;
 static const double s_strictThresholdFraction = 0.65;
 #else
-static const double s_conservativeThresholdFraction = 0.33;
-static const double s_strictThresholdFraction = 0.5;
+static const double s_conservativeThresholdFraction = 0.8;
+static const double s_strictThresholdFraction = 0.9;
 #endif
 static const std::optional<double> s_killThresholdFraction;
 static const Seconds s_pollInterval = 30_s;
 
 static std::atomic<bool> s_hasCreatedMemoryPressureHandler;
+
+// This file contains the amount of video memory used, and will be filled by some other
+// platform component. It's a text file containing an unsigned integer value.
+static String s_GPUMemoryFile;
+static ssize_t s_envBaseThresholdVideo = 0;
+
+static bool isWebProcess()
+{
+    static bool result = false;
+    static bool initialized = false;
+
+    if (!initialized) {
+        initialized = true;
+
+        FILE* file = fopen("/proc/self/cmdline", "r");
+        if (!file)
+            return result;
+
+        char* buffer = nullptr;
+        size_t size = 0;
+        if (getline(&buffer, &size, file) != -1)
+            result = !fnmatch("*WPEWebProcess*", buffer, 0);
+
+        free(buffer);
+        fclose(file);
+    }
+
+    return result;
+}
+
+static size_t memoryFootprintVideo()
+{
+    if (!isWebProcess() || s_GPUMemoryFile.isEmpty())
+        return 0;
+
+    FILE* file = fopen(s_GPUMemoryFile.utf8().data(), "r");
+    if (!file)
+        return 0;
+
+    char* buffer = nullptr;
+    size_t size = 0;
+    size_t footprint = 0;
+    if (getline(&buffer, &size, file) != -1)
+        sscanf(buffer, "%zu", &footprint);
+
+    free(buffer);
+    fclose(file);
+
+    return footprint;
+}
 
 MemoryPressureHandler& MemoryPressureHandler::singleton()
 {
@@ -76,6 +129,27 @@ MemoryPressureHandler::MemoryPressureHandler()
 #if PLATFORM(COCOA)
     setDispatchQueue(dispatch_get_main_queue());
 #endif
+
+    // If this is the WebProcess, Check whether the env var WPE_POLL_MAX_MEMORY_GPU_FILE exists, containing the file
+    // that we need to poll to get the video memory used, and whether WPE_POLL_MAX_MEMORY_GPU exists, overriding the
+    // limit for video memory set by the API.
+    if (isWebProcess()) {
+        s_GPUMemoryFile = String::fromLatin1(getenv("WPE_POLL_MAX_MEMORY_GPU_FILE"));
+        String s = String::fromLatin1(getenv("WPE_POLL_MAX_MEMORY_GPU"));
+        if (!s.isEmpty()) {
+            String value = s.convertToLowercaseWithoutLocale();
+            size_t units = 1;
+            if (value.endsWith('k'))
+                units = KB;
+            else if (value.endsWith('m'))
+                units = MB;
+            if (units != 1)
+                value = value.substring(0, value.length() - 1);
+            s_envBaseThresholdVideo = parseInteger<size_t>(value).value_or(0) * units;
+            if (s_envBaseThresholdVideo)
+                m_configuration.baseThresholdVideo = s_envBaseThresholdVideo;
+        }
+    }
 }
 
 void MemoryPressureHandler::setMemoryFootprintPollIntervalForTesting(Seconds pollInterval)
@@ -139,10 +213,14 @@ void MemoryPressureHandler::setPageCount(unsigned pageCount)
     singleton().m_pageCount = pageCount;
 }
 
-std::optional<size_t> MemoryPressureHandler::thresholdForMemoryKill()
+std::optional<size_t> MemoryPressureHandler::thresholdForMemoryKill(MemoryType type)
 {
     if (m_configuration.killThresholdFraction)
-        return m_configuration.baseThreshold * (*m_configuration.killThresholdFraction);
+        return (*m_configuration.killThresholdFraction) * (type == MemoryType::Normal ? m_configuration.baseThreshold : m_configuration.baseThresholdVideo);
+    else {
+        // Don't kill the process if no killThreshold was set.
+        return std::nullopt;
+    }
 
     switch (m_processState) {
     case WebsamProcessState::Inactive:
@@ -153,26 +231,26 @@ std::optional<size_t> MemoryPressureHandler::thresholdForMemoryKill()
     return std::nullopt;
 }
 
-size_t MemoryPressureHandler::thresholdForPolicy(MemoryUsagePolicy policy)
+size_t MemoryPressureHandler::thresholdForPolicy(MemoryUsagePolicy policy, MemoryType type)
 {
     switch (policy) {
     case MemoryUsagePolicy::Unrestricted:
         return 0;
     case MemoryUsagePolicy::Conservative:
-        return m_configuration.baseThreshold * m_configuration.conservativeThresholdFraction;
+        return m_configuration.conservativeThresholdFraction * (type == MemoryType::Normal ? m_configuration.baseThreshold : m_configuration.baseThresholdVideo);
     case MemoryUsagePolicy::Strict:
-        return m_configuration.baseThreshold * m_configuration.strictThresholdFraction;
+        return m_configuration.strictThresholdFraction * (type == MemoryType::Normal ? m_configuration.baseThreshold : m_configuration.baseThresholdVideo);
     default:
         ASSERT_NOT_REACHED();
         return 0;
     }
 }
 
-MemoryUsagePolicy MemoryPressureHandler::policyForFootprint(size_t footprint)
+MemoryUsagePolicy MemoryPressureHandler::policyForFootprints(size_t footprint, size_t footprintVideo)
 {
-    if (footprint >= thresholdForPolicy(MemoryUsagePolicy::Strict))
+    if (footprint >= thresholdForPolicy(MemoryUsagePolicy::Strict, MemoryType::Normal) || footprintVideo >= thresholdForPolicy(MemoryUsagePolicy::Strict, MemoryType::Video))
         return MemoryUsagePolicy::Strict;
-    if (footprint >= thresholdForPolicy(MemoryUsagePolicy::Conservative))
+    if (footprint >= thresholdForPolicy(MemoryUsagePolicy::Conservative, MemoryType::Normal) || footprintVideo >= thresholdForPolicy(MemoryUsagePolicy::Conservative, MemoryType::Video))
         return MemoryUsagePolicy::Conservative;
     return MemoryUsagePolicy::Unrestricted;
 }
@@ -183,31 +261,35 @@ MemoryUsagePolicy MemoryPressureHandler::currentMemoryUsagePolicy()
         return MemoryUsagePolicy::Conservative;
     if (m_isSimulatingMemoryPressure)
         return MemoryUsagePolicy::Strict;
-    return policyForFootprint(memoryFootprint());
+    return policyForFootprints(memoryFootprint(), memoryFootprintVideo());
 }
 
-void MemoryPressureHandler::shrinkOrDie(size_t killThreshold)
+void MemoryPressureHandler::shrinkOrDie(size_t killThreshold, size_t killThresholdVideo)
 {
     RELEASE_LOG(MemoryPressure, "Process is above the memory kill threshold. Trying to shrink down.");
     releaseMemory(Critical::Yes, Synchronous::Yes);
 
     size_t footprint = memoryFootprint();
+    size_t footprintVideo = memoryFootprintVideo();
     RELEASE_LOG(MemoryPressure, "New memory footprint: %zu MB", footprint / MB);
 
-    if (footprint < killThreshold) {
+    if ((footprint < killThreshold) && (footprintVideo < killThresholdVideo)) {
         RELEASE_LOG(MemoryPressure, "Shrank below memory kill threshold. Process gets to live.");
-        setMemoryUsagePolicyBasedOnFootprint(footprint);
+        setMemoryUsagePolicyBasedOnFootprints(footprint, footprintVideo);
         return;
     }
 
-    WTFLogAlways("Unable to shrink memory footprint of process (%zu MB) below the kill thresold (%zu MB). Killed\n", footprint / MB, killThreshold / MB);
+    if (footprint >= killThreshold)
+        WTFLogAlways("Unable to shrink memory footprint of process (%zu MB) below the kill thresold (%zu MB). Killed\n", footprint / MB, killThreshold / MB);
+    else
+        WTFLogAlways("Unable to shrink video memory footprint of process (%zu MB) below the kill thresold (%zu MB). Killed\n", footprintVideo / MB, killThresholdVideo / MB);
     RELEASE_ASSERT(m_memoryKillCallback);
     m_memoryKillCallback();
 }
 
-void MemoryPressureHandler::setMemoryUsagePolicyBasedOnFootprint(size_t footprint)
+void MemoryPressureHandler::setMemoryUsagePolicyBasedOnFootprints(size_t footprint, size_t footprintVideo)
 {
-    auto newPolicy = policyForFootprint(footprint);
+    auto newPolicy = policyForFootprints(footprint, footprintVideo);
     if (newPolicy == m_memoryUsagePolicy)
         return;
 
@@ -230,6 +312,7 @@ void MemoryPressureHandler::setMemoryFootprintNotificationThresholds(Vector<size
 void MemoryPressureHandler::measurementTimerFired()
 {
     size_t footprint = memoryFootprint();
+    size_t footprintVideo = memoryFootprintVideo();
 #if PLATFORM(COCOA)
     RELEASE_LOG(MemoryPressure, "Current memory footprint: %zu MB", footprint / MB);
 #endif
@@ -239,13 +322,14 @@ void MemoryPressureHandler::measurementTimerFired()
         m_memoryFootprintNotificationHandler(notificationThreshold);
     }
 
-    auto killThreshold = thresholdForMemoryKill();
-    if (killThreshold && footprint >= *killThreshold) {
-        shrinkOrDie(*killThreshold);
+    auto killThreshold = thresholdForMemoryKill(MemoryType::Normal);
+    auto killThresholdVideo = thresholdForMemoryKill(MemoryType::Video);
+    if ((killThreshold && footprint >= *killThreshold) || (killThresholdVideo && footprintVideo >= *killThresholdVideo)) {
+        shrinkOrDie(*killThreshold, *killThresholdVideo);
         return;
     }
 
-    setMemoryUsagePolicyBasedOnFootprint(footprint);
+    setMemoryUsagePolicyBasedOnFootprints(footprint, footprintVideo);
 
     switch (m_memoryUsagePolicy) {
     case MemoryUsagePolicy::Unrestricted:
@@ -254,6 +338,13 @@ void MemoryPressureHandler::measurementTimerFired()
         releaseMemory(Critical::No, Synchronous::No);
         break;
     case MemoryUsagePolicy::Strict:
+        if (footprint > m_configuration.baseThreshold || footprintVideo > m_configuration.baseThresholdVideo) {
+            WTFLogAlways("MemoryPressure: Critical memory usage (PID=%d) [MB]: %zu (of %zu), video: %zu (of %zu)\n",
+                          getpid(), footprint / MB, m_configuration.baseThreshold / MB,
+                          footprintVideo / MB, m_configuration.baseThresholdVideo / MB);
+            releaseMemory(Critical::Yes, Synchronous::Yes);
+            break;
+        }
         releaseMemory(Critical::Yes, Synchronous::No);
         break;
     }
@@ -313,6 +404,20 @@ void MemoryPressureHandler::endSimulatedMemoryPressure()
     memoryPressureStatusChanged();
 }
 
+void MemoryPressureHandler::setConfiguration(Configuration&& configuration)
+{
+    m_configuration = WTFMove(configuration);
+    if (s_envBaseThresholdVideo)
+        m_configuration.baseThresholdVideo = s_envBaseThresholdVideo;
+}
+
+void MemoryPressureHandler::setConfiguration(const Configuration& configuration)
+{
+    m_configuration = configuration;
+    if (s_envBaseThresholdVideo)
+        m_configuration.baseThresholdVideo = s_envBaseThresholdVideo;
+}
+
 void MemoryPressureHandler::releaseMemory(Critical critical, Synchronous synchronous)
 {
     if (!m_lowMemoryHandler)
@@ -354,14 +459,15 @@ void MemoryPressureHandler::ReliefLogger::logMemoryUsageChange()
 
     auto currentMemory = platformMemoryUsage();
     if (!currentMemory || !m_initialMemory) {
-        MEMORYPRESSURE_LOG("Memory pressure relief: %" PUBLIC_LOG_STRING ": (Unable to get dirty memory information for process)", m_logString);
+        MEMORYPRESSURE_LOG("Memory pressure relief: pid = %d, %" PUBLIC_LOG_STRING ": (Unable to get dirty memory information for process)", getpid(), m_logString);
         return;
     }
 
     long residentDiff = currentMemory->resident - m_initialMemory->resident;
     long physicalDiff = currentMemory->physical - m_initialMemory->physical;
 
-    MEMORYPRESSURE_LOG("Memory pressure relief: %" PUBLIC_LOG_STRING ": res = %zu/%zu/%ld, res+swap = %zu/%zu/%ld",
+    MEMORYPRESSURE_LOG("Memory pressure relief: pid = %d, %" PUBLIC_LOG_STRING ": res = %zu/%zu/%ld, res+swap = %zu/%zu/%ld",
+        getpid(),
         m_logString,
         m_initialMemory->resident, currentMemory->resident, residentDiff,
         m_initialMemory->physical, currentMemory->physical, physicalDiff);
@@ -373,6 +479,7 @@ void MemoryPressureHandler::platformInitialize() { }
 
 MemoryPressureHandlerConfiguration::MemoryPressureHandlerConfiguration()
     : baseThreshold(std::min(3 * GB, ramSize()))
+    , baseThresholdVideo(1 * GB)
     , conservativeThresholdFraction(s_conservativeThresholdFraction)
     , strictThresholdFraction(s_strictThresholdFraction)
     , killThresholdFraction(s_killThresholdFraction)
@@ -380,8 +487,9 @@ MemoryPressureHandlerConfiguration::MemoryPressureHandlerConfiguration()
 {
 }
 
-MemoryPressureHandlerConfiguration::MemoryPressureHandlerConfiguration(size_t base, double conservative, double strict, std::optional<double> kill, Seconds interval)
+MemoryPressureHandlerConfiguration::MemoryPressureHandlerConfiguration(size_t base, size_t baseVideo, double conservative, double strict, std::optional<double> kill, Seconds interval)
     : baseThreshold(base)
+    , baseThresholdVideo(baseVideo)
     , conservativeThresholdFraction(conservative)
     , strictThresholdFraction(strict)
     , killThresholdFraction(kill)

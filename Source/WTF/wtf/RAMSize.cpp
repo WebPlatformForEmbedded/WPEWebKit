@@ -25,6 +25,8 @@
 
 #include "config.h"
 #include <wtf/RAMSize.h>
+#include <wtf/text/StringToIntegerConversion.h>
+#include <wtf/text/WTFString.h>
 
 #include <mutex>
 
@@ -50,8 +52,35 @@ namespace WTF {
 static constexpr size_t ramSizeGuess = 512 * MB;
 #endif
 
+static size_t customRAMSize()
+{
+    // Syntax: Case insensitive, unit multipliers (M=Mb, K=Kb, <empty>=bytes).
+    // Example: WPE_RAM_SIZE='500M'
+
+    size_t customSize = 0;
+
+    String s = String::fromLatin1(getenv("WPE_RAM_SIZE"));
+    if (!s.isEmpty()) {
+        String value = s.convertToLowercaseWithoutLocale();
+        size_t units = 1;
+        if (value.endsWith('k'))
+            units = KB;
+        else if (value.endsWith('m'))
+            units = MB;
+        if (units != 1)
+            value = value.substring(0, value.length() - 1);
+        customSize = parseInteger<uint64_t>(value).value_or(0) * units;
+    }
+
+    return customSize;
+}
+
 static size_t computeRAMSize()
 {
+    size_t custom = customRAMSize();
+    if (custom)
+        return custom;
+
 #if OS(WINDOWS)
     MEMORYSTATUSEX status;
     status.dwLength = sizeof(status);

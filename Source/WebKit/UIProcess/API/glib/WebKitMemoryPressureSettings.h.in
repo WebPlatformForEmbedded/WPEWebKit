@@ -51,6 +51,13 @@ WEBKIT_API guint
 webkit_memory_pressure_settings_get_memory_limit           (WebKitMemoryPressureSettings *settings);
 
 WEBKIT_API void
+webkit_memory_pressure_settings_set_video_memory_limit     (WebKitMemoryPressureSettings *settings,
+                                                            guint                         memory_limit);
+
+WEBKIT_API guint
+webkit_memory_pressure_settings_get_video_memory_limit     (WebKitMemoryPressureSettings *settings);
+
+WEBKIT_API void
 webkit_memory_pressure_settings_set_conservative_threshold (WebKitMemoryPressureSettings *settings,
                                                             gdouble                       value);
 

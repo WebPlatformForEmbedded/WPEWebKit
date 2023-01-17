@@ -137,17 +137,13 @@ static void releaseCriticalMemory(Synchronous synchronous, MaintainBackForwardCa
             pluginDocument->releaseMemory();
     }
 
-    if (synchronous == Synchronous::Yes)
-        GCController::singleton().deleteAllCode(JSC::PreventCollectionAndDeleteAllCode);
-    else
-        GCController::singleton().deleteAllCode(JSC::DeleteAllCodeIfNotCollecting);
-
 #if ENABLE(VIDEO)
     for (auto& mediaElement : HTMLMediaElement::allMediaElements())
         Ref { mediaElement.get() }->purgeBufferedDataIfPossible();
 #endif
 
     if (synchronous == Synchronous::Yes) {
+        GCController::singleton().deleteAllCode(JSC::PreventCollectionAndDeleteAllCode);
         GCController::singleton().garbageCollectNow();
     } else {
 #if PLATFORM(IOS_FAMILY)

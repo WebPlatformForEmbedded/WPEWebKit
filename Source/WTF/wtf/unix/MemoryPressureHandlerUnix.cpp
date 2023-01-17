@@ -56,8 +56,13 @@ namespace WTF {
 // we wait longer to try again (s_maximumHoldOffTime).
 // These value seems reasonable and testing verifies that it throttles frequent
 // low memory events, greatly reducing CPU usage.
+#if PLATFORM(WPE)
+static const Seconds s_minimumHoldOffTime { 1_s };
+static const Seconds s_maximumHoldOffTime { 1_s };
+#else
 static const Seconds s_minimumHoldOffTime { 5_s };
 static const Seconds s_maximumHoldOffTime { 30_s };
+#endif
 static const size_t s_minimumBytesFreedToUseMinimumHoldOffTime = 1 * MB;
 static const unsigned s_holdOffMultiplier = 20;
 
@@ -72,7 +77,9 @@ void MemoryPressureHandler::triggerMemoryPressureEvent(bool isCritical)
     setMemoryPressureStatus(SystemMemoryPressureStatus::Critical);
 
     ensureOnMainThread([this, isCritical] {
-        respondToMemoryPressure(isCritical ? Critical::Yes : Critical::No);
+        // When memory usage reaches the critical state, we may not release enough memory in time if we use the
+        // async mode, so use synchrounous mode in such case
+        respondToMemoryPressure(isCritical ? Critical::Yes : Critical::No, isCritical ? Synchronous::Yes : Synchronous::No);
     });
 
     if (ReliefLogger::loggingEnabled() && isUnderMemoryPressure())

@@ -60,6 +60,11 @@ enum class MemoryUsagePolicy : uint8_t {
     Strict, // Time to start pinching pennies for real
 };
 
+enum class MemoryType : uint8_t {
+    Normal,
+    Video
+};
+
 enum class WebsamProcessState : uint8_t {
     Active,
     Inactive,
@@ -73,9 +78,10 @@ typedef WTF::Function<void(Critical, Synchronous)> LowMemoryHandler;
 struct MemoryPressureHandlerConfiguration {
     WTF_MAKE_STRUCT_FAST_ALLOCATED;
     WTF_EXPORT_PRIVATE MemoryPressureHandlerConfiguration();
-    WTF_EXPORT_PRIVATE MemoryPressureHandlerConfiguration(size_t, double, double, std::optional<double>, Seconds);
+    WTF_EXPORT_PRIVATE MemoryPressureHandlerConfiguration(size_t, size_t, double, double, std::optional<double>, Seconds);
 
     size_t baseThreshold;
+    size_t baseThresholdVideo;
     double conservativeThresholdFraction;
     double strictThresholdFraction;
     std::optional<double> killThresholdFraction;
@@ -187,9 +193,8 @@ public:
     };
 
     using Configuration = MemoryPressureHandlerConfiguration;
-
-    void setConfiguration(Configuration&& configuration) { m_configuration = WTFMove(configuration); }
-    void setConfiguration(const Configuration& configuration) { m_configuration = configuration; }
+    void setConfiguration(Configuration&&);
+    void setConfiguration(const Configuration&);
 
     WTF_EXPORT_PRIVATE void releaseMemory(Critical, Synchronous = Synchronous::No);
 
@@ -212,9 +217,9 @@ public:
     WTF_EXPORT_PRIVATE void setMemoryFootprintNotificationThresholds(Vector<size_t>&& thresholds, WTF::Function<void(size_t)>&&);
 
 private:
-    std::optional<size_t> thresholdForMemoryKill();
-    size_t thresholdForPolicy(MemoryUsagePolicy);
-    MemoryUsagePolicy policyForFootprint(size_t);
+    std::optional<size_t> thresholdForMemoryKill(MemoryType);
+    size_t thresholdForPolicy(MemoryUsagePolicy, MemoryType);
+    MemoryUsagePolicy policyForFootprints(size_t, size_t);
 
     void memoryPressureStatusChanged();
 
@@ -231,8 +236,8 @@ private:
     void platformInitialize();
 
     void measurementTimerFired();
-    void shrinkOrDie(size_t killThreshold);
-    void setMemoryUsagePolicyBasedOnFootprint(size_t);
+    void shrinkOrDie(size_t killThreshold, size_t killThresholdVideo);
+    void setMemoryUsagePolicyBasedOnFootprints(size_t, size_t);
 
     unsigned m_pageCount { 0 };
 

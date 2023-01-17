@@ -145,6 +145,42 @@ guint webkit_memory_pressure_settings_get_memory_limit(WebKitMemoryPressureSetti
 }
 
 /**
+ * webkit_memory_pressure_settings_set_video_memory_limit:
+ * @settings: a #WebKitMemoryPressureSettings
+ * @memory_limit: amount of video memory (in MB) that the process is allowed to use.
+ *
+ * Sets @memory_limit the video memory limit value to @settings.
+ *
+ * The default value is 1GB.
+ *
+ * Since: 2.34
+ */
+void webkit_memory_pressure_settings_set_video_memory_limit(WebKitMemoryPressureSettings* settings, guint memoryLimit)
+{
+    g_return_if_fail(settings);
+    g_return_if_fail(memoryLimit);
+
+    settings->configuration.baseThresholdVideo = memoryLimit * MB;
+}
+
+/**
+ * webkit_memory_pressure_settings_get_video_memory_limit:
+ * @settings: a #WebKitMemoryPressureSettings
+ *
+ * Gets the video memory usage limit.
+ *
+ * Returns: current value, in megabytes.
+ *
+ * Since: 2.34
+ */
+guint webkit_memory_pressure_settings_get_video_memory_limit(WebKitMemoryPressureSettings* settings)
+{
+    g_return_val_if_fail(settings, 0);
+
+    return settings->configuration.baseThresholdVideo / MB;
+}
+
+/**
  * webkit_memory_pressure_settings_set_conservative_threshold:
  * @settings: a #WebKitMemoryPressureSettings
  * @value: fraction of the memory limit where the conservative policy starts working.
