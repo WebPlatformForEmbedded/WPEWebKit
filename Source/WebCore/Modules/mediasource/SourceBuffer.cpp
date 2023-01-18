@@ -918,7 +918,9 @@ void SourceBuffer::removeCodedFrames(const MediaTime& start, const MediaTime& en
     updateBufferedFromTrackBuffers();
 
     // 4. If buffer full flag equals true and this object is ready to accept more bytes, then set the buffer full flag to false.
-    // No-op
+    if (m_bufferFull && extraMemoryCost() < maximumBufferSize()) {
+        m_bufferFull = false;
+    }
 
     LOG(Media, "SourceBuffer::removeCodedFrames(%p) - buffered = %s", this, toString(m_buffered->ranges()).utf8().data());
 
