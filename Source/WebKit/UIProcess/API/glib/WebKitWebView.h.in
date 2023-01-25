@@ -1047,6 +1047,17 @@ webkit_web_view_get_default_content_security_policy  (WebKitWebView             
  */
 #endif
 
+WEBKIT_API void
+webkit_web_view_is_web_process_responsive_async      (WebKitWebView             *web_view,
+                                                      GCancellable              *cancellable,
+                                                      GAsyncReadyCallback       callback,
+                                                      gpointer                  user_data);
+
+WEBKIT_API gboolean
+webkit_web_view_is_web_process_responsive_finish     (WebKitWebView             *web_view,
+                                                      GAsyncResult              *result,
+                                                      GError                    **error);
+
 G_END_DECLS
 
 #endif
