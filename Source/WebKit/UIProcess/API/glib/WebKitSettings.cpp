@@ -181,6 +181,7 @@ enum {
     PROP_MEDIA_CONTENT_TYPES_REQUIRING_HARDWARE_SUPPORT,
     PROP_ENABLE_WEBRTC,
     PROP_DISABLE_WEB_SECURITY,
+    PROP_ALLOW_SCRIPTS_TO_CLOSE_WINDOWS,
     N_PROPERTIES,
 };
 
@@ -412,6 +413,9 @@ ALLOW_DEPRECATED_DECLARATIONS_BEGIN
     case PROP_DISABLE_WEB_SECURITY:
         webkit_settings_set_disable_web_security(settings, g_value_get_boolean(value));
         break;
+    case PROP_ALLOW_SCRIPTS_TO_CLOSE_WINDOWS:
+        webkit_settings_set_allow_scripts_to_close_windows(settings, g_value_get_boolean(value));
+        break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, propId, paramSpec);
         break;
@@ -622,6 +626,9 @@ ALLOW_DEPRECATED_DECLARATIONS_BEGIN
         break;
     case PROP_DISABLE_WEB_SECURITY:
         g_value_set_boolean(value, webkit_settings_get_disable_web_security(settings));
+        break;
+    case PROP_ALLOW_SCRIPTS_TO_CLOSE_WINDOWS:
+        g_value_set_boolean(value, webkit_settings_get_allow_scripts_to_close_windows(settings));
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, propId, paramSpec);
@@ -1659,6 +1666,19 @@ static void webkit_settings_class_init(WebKitSettingsClass* klass)
         _("Disable web security"),
         _("Whether web security should be disabled."),
         !FEATURE_DEFAULT(WebSecurityEnabled),
+        readWriteConstructParamFlags);
+
+    /**
+     * WebKitSettings:allow-scripts-to-close-windows:
+     *
+     * Allow scripts to close windows they didn't open.
+     *
+     */
+    sObjProperties[PROP_ALLOW_SCRIPTS_TO_CLOSE_WINDOWS] = g_param_spec_boolean(
+        "allow-scripts-to-close-windows",
+        _("Allow scripts to close windows"),
+        _("Whether scripts can close windows they didn't open."),
+        FALSE,
         readWriteConstructParamFlags);
 
     g_object_class_install_properties(gObjectClass, N_PROPERTIES, sObjProperties);
@@ -4342,4 +4362,40 @@ gboolean webkit_settings_apply_from_key_file(WebKitSettings* settings, GKeyFile*
 
     g_object_setv(G_OBJECT(settings), propertyNames->len, const_cast<const char**>(reinterpret_cast<char**>(propertyNames->pdata)), reinterpret_cast<GValue*>(values->data));
     return TRUE;
+}
+
+/**
+ * webkit_settings_get_allow_scripts_to_close_windows:
+ * @settings: a #WebKitSettings
+ *
+ * Get the #WebKitSettings:allow-scripts-to-close-windows property.
+ *
+ * Returns: %TRUE If script can close windows not opened by them or %FALSE otherwise.
+ */
+gboolean webkit_settings_get_allow_scripts_to_close_windows (WebKitSettings *settings)
+{
+    g_return_val_if_fail(WEBKIT_IS_SETTINGS(settings), FALSE);
+
+    return settings->priv->preferences->allowScriptsToCloseWindows();
+}
+
+/**
+ * webkit_settings_set_allow_scripts_to_close_windows
+ * @settings: a #WebKitSettings
+ * @allowed: Value to be set
+ *
+ * Set the #WebKitSettings:allow-scripts-to-close-windows property.
+ */
+WEBKIT_API void
+webkit_settings_set_allow_scripts_to_close_windows(WebKitSettings *settings, gboolean allowed)
+{
+    g_return_if_fail(WEBKIT_IS_SETTINGS(settings));
+
+    WebKitSettingsPrivate* priv = settings->priv;
+    bool currentValue = priv->preferences->allowScriptsToCloseWindows();
+    if (currentValue == allowed)
+        return;
+
+    priv->preferences->setAllowScriptsToCloseWindows(allowed);
+    g_object_notify(G_OBJECT(settings), "allow-scripts-to-close-windows");
 }

@@ -575,6 +575,13 @@ webkit_settings_apply_from_key_file                            (WebKitSettings  
                                                                 const gchar     *group_name,
                                                                 GError         **error);
 
+WEBKIT_API gboolean
+webkit_settings_get_allow_scripts_to_close_windows              (WebKitSettings *settings);
+
+WEBKIT_API void
+webkit_settings_set_allow_scripts_to_close_windows              (WebKitSettings *settings,
+                                                                 gboolean        allowed);
+
 G_END_DECLS
 
 #endif /* WebKitSettings_h */
