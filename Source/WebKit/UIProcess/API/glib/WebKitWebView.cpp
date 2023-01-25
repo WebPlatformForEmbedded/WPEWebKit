@@ -5724,3 +5724,10 @@ gboolean webkit_web_view_is_web_process_responsive_finish(WebKitWebView* webView
 
     return g_task_propagate_boolean(G_TASK(result), error);
 }
+
+pid_t webkit_web_view_get_web_process_identifier(WebKitWebView *webView)
+{
+    g_return_val_if_fail(WEBKIT_IS_WEB_VIEW(webView), 0);
+
+    return getPage(webView).legacyMainFrameProcessID();
+}
