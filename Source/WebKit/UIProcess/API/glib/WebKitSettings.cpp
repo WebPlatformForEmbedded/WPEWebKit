@@ -182,6 +182,7 @@ enum {
     PROP_ENABLE_WEBRTC,
     PROP_DISABLE_WEB_SECURITY,
     PROP_ALLOW_SCRIPTS_TO_CLOSE_WINDOWS,
+    PROP_ENABLE_DIRECTORY_UPLOAD,
     N_PROPERTIES,
 };
 
@@ -416,6 +417,9 @@ ALLOW_DEPRECATED_DECLARATIONS_BEGIN
     case PROP_ALLOW_SCRIPTS_TO_CLOSE_WINDOWS:
         webkit_settings_set_allow_scripts_to_close_windows(settings, g_value_get_boolean(value));
         break;
+    case PROP_ENABLE_DIRECTORY_UPLOAD:
+        webkit_settings_set_enable_directory_upload(settings, g_value_get_boolean(value));
+        break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, propId, paramSpec);
         break;
@@ -629,6 +633,9 @@ ALLOW_DEPRECATED_DECLARATIONS_BEGIN
         break;
     case PROP_ALLOW_SCRIPTS_TO_CLOSE_WINDOWS:
         g_value_set_boolean(value, webkit_settings_get_allow_scripts_to_close_windows(settings));
+        break;
+    case PROP_ENABLE_DIRECTORY_UPLOAD:
+        g_value_set_boolean(value, webkit_settings_get_enable_directory_upload(settings));
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, propId, paramSpec);
@@ -1679,6 +1686,19 @@ static void webkit_settings_class_init(WebKitSettingsClass* klass)
         _("Allow scripts to close windows"),
         _("Whether scripts can close windows they didn't open."),
         FALSE,
+        readWriteConstructParamFlags);
+
+    /**
+     * WebKitSettings:enable-directory-upload:
+     *
+     * Enable or disable directory upload.
+     *
+     */
+    sObjProperties[PROP_ENABLE_DIRECTORY_UPLOAD] = g_param_spec_boolean(
+        "enable-directory-upload",
+        _("Enable directory upload"),
+        _("Whether directory upload should be enabled."),
+        TRUE,
         readWriteConstructParamFlags);
 
     g_object_class_install_properties(gObjectClass, N_PROPERTIES, sObjProperties);
@@ -4398,4 +4418,39 @@ webkit_settings_set_allow_scripts_to_close_windows(WebKitSettings *settings, gbo
 
     priv->preferences->setAllowScriptsToCloseWindows(allowed);
     g_object_notify(G_OBJECT(settings), "allow-scripts-to-close-windows");
+}
+
+/**
+ * webkit_settings_get_enable_directory_upload:
+ * @settings: a #WebKitSettings
+ *
+ * Get the #WebKitSettings:enable-directory-upload property.
+ *
+ * Returns: %TRUE If Directory Upload is enabled or %FALSE otherwise.
+ */
+gboolean webkit_settings_get_enable_directory_upload(WebKitSettings* settings)
+{
+    g_return_val_if_fail(WEBKIT_IS_SETTINGS(settings), FALSE);
+
+    return settings->priv->preferences->directoryUploadEnabled();
+}
+
+/**
+ * webkit_settings_set_enable_directory_upload:
+ * @settings: a #WebKitSettings
+ * @enabled: Value to be set
+ *
+ * Set the #WebKitSettings:enable-directory-upload property.
+ */
+void webkit_settings_set_enable_directory_upload(WebKitSettings* settings, gboolean enabled)
+{
+    g_return_if_fail(WEBKIT_IS_SETTINGS(settings));
+
+    WebKitSettingsPrivate* priv = settings->priv;
+    bool currentValue = priv->preferences->directoryUploadEnabled();
+    if (currentValue == enabled)
+        return;
+
+    priv->preferences->setDirectoryUploadEnabled(enabled);
+    g_object_notify(G_OBJECT(settings), "enable-directory-upload");
 }
