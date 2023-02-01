@@ -98,6 +98,29 @@ static void logConsoleError(ScriptExecutionContext* context, const String& messa
     context->addConsoleMessage(MessageSource::JS, MessageLevel::Error, message);
 }
 
+static bool shouldDisableCacheForRequest(const URL& url)
+{
+    static Vector<String> s_protocolsNotCached;
+    static std::once_flag s_onceFlag;
+    std::call_once(s_onceFlag,
+        [] {
+            // The env var contains a comma separated list of protocols that need to disable the cache,
+            // for example WPE_DISABLE_XHR_RESPONSE_CACHING_FOR_PROTOCOLS="dvb,echo,file"
+            String s(String::fromLatin1(std::getenv("WPE_DISABLE_XHR_RESPONSE_CACHING_FOR_PROTOCOLS")));
+            if (!s.isEmpty()) {
+                s_protocolsNotCached.appendVector(s.split(','));
+            }
+        });
+
+    if (getenv("WPE_DISABLE_XHR_RESPONSE_CACHING"))
+        return true;
+
+    if (s_protocolsNotCached.contains(url.protocol().toString()))
+        return true;
+
+    return false;
+}
+
 Ref<XMLHttpRequest> XMLHttpRequest::create(ScriptExecutionContext& context)
 {
     auto xmlHttpRequest = adoptRef(*new XMLHttpRequest(context));
@@ -626,6 +649,12 @@ ExceptionOr<void> XMLHttpRequest::createRequest()
     options.sameOriginDataURLFlag = SameOriginDataURLFlag::Set;
     options.filteringPolicy = ResponseFilteringPolicy::Enable;
     options.contentEncodingSniffingPolicy = ContentEncodingSniffingPolicy::Disable;
+
+    if (responseType() == ResponseType::Arraybuffer || shouldDisableCacheForRequest(m_url.url())) {
+        options.dataBufferingPolicy = DataBufferingPolicy::DoNotBufferData;
+        options.cachingPolicy = CachingPolicy::DisallowCaching;
+        request.setCachePolicy(ResourceRequestCachePolicy::DoNotUseAnyCache);
+    }
 
     if (m_timeoutMilliseconds) {
         if (!m_async)
