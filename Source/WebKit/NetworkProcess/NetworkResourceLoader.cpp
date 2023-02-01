@@ -826,6 +826,9 @@ void NetworkResourceLoader::processClearSiteDataHeader(const WebCore::ResourceRe
 
 static BrowsingContextGroupSwitchDecision toBrowsingContextGroupSwitchDecision(const std::optional<CrossOriginOpenerPolicyEnforcementResult>& currentCoopEnforcementResult)
 {
+    // PSON is disabled, so return a value that doesn't cause the navigation to be swapped to a new WebProcess.
+    return BrowsingContextGroupSwitchDecision::StayInGroup;
+
     if (!currentCoopEnforcementResult || !currentCoopEnforcementResult->needsBrowsingContextGroupSwitch)
         return BrowsingContextGroupSwitchDecision::StayInGroup;
     if (currentCoopEnforcementResult->crossOriginOpenerPolicy.value == CrossOriginOpenerPolicyValue::SameOriginPlusCOEP)
