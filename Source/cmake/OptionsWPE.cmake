@@ -96,7 +96,7 @@ endif ()
 # and the option is not relevant to other WebKit ports.
 WEBKIT_OPTION_DEFINE(ENABLE_DOCUMENTATION "Whether to generate documentation." PUBLIC ON)
 WEBKIT_OPTION_DEFINE(ENABLE_INTROSPECTION "Whether to enable GObject introspection." PUBLIC ON)
-WEBKIT_OPTION_DEFINE(ENABLE_JOURNALD_LOG "Whether to enable journald logging" PUBLIC ON)
+WEBKIT_OPTION_DEFINE(ENABLE_JOURNALD_LOG "Whether to enable journald logging" PUBLIC OFF)
 WEBKIT_OPTION_DEFINE(ENABLE_WPE_PLATFORM_DRM "Whether to enable support for DRM platform" PUBLIC ON)
 WEBKIT_OPTION_DEFINE(ENABLE_WPE_PLATFORM_HEADLESS "Whether to enable support for headless platform" PUBLIC ON)
 WEBKIT_OPTION_DEFINE(ENABLE_WPE_PLATFORM_WAYLAND "Whether to enable support for Wayland platform" PUBLIC ON)
