@@ -439,6 +439,7 @@ public:
     void setEmulatedConditions(std::optional<int64_t>&& bytesPerSecondLimit);
 #endif
 
+    unsigned localStorageQuota() const { return m_configuration->localStorageQuota(); }
     void addPage(WebPageProxy&);
     void removePage(WebPageProxy&);
 

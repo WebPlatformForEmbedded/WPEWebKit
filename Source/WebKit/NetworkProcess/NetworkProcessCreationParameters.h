@@ -66,6 +66,7 @@ struct NetworkProcessCreationParameters {
     WebCore::HTTPCookieAcceptPolicy cookieAcceptPolicy { WebCore::HTTPCookieAcceptPolicy::AlwaysAccept };
     Vector<String> languages;
     std::optional<MemoryPressureHandler::Configuration> memoryPressureHandlerConfiguration;
+    uint32_t localStorageQuota;
 #endif
 
     Vector<String> urlSchemesRegisteredAsSecure;

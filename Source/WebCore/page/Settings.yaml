@@ -263,6 +263,12 @@ LocalStorageDatabasePath:
     WebCore:
       default: '{ }'
 
+LocalStorageQuota:
+  type: uint32_t
+  defaultValue:
+    WebCore:
+      default: 5242880
+
 MaximumHTMLParserDOMTreeDepth:
   type: uint32_t
   defaultValue:

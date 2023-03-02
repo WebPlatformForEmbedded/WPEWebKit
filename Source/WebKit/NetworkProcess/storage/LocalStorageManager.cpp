@@ -27,6 +27,7 @@
 #include "LocalStorageManager.h"
 
 #include "MemoryStorageArea.h"
+#include "NetworkProcess.h"
 #include "SQLiteStorageArea.h"
 #include "StorageAreaRegistry.h"
 #include <WebCore/SecurityOriginData.h>
@@ -34,8 +35,6 @@
 
 namespace WebKit {
 
-// Suggested by https://www.w3.org/TR/webstorage/#disk-space
-constexpr unsigned localStorageQuotaInBytes = 5 * MB;
 constexpr auto s_fileSuffix = ".localstorage"_s;
 constexpr auto s_fileName = "localstorage.sqlite3"_s;
 
@@ -179,7 +178,7 @@ StorageAreaIdentifier LocalStorageManager::connectToLocalStorageArea(IPC::Connec
 {
     if (!m_localStorageArea) {
         if (!m_path.isEmpty())
-            m_localStorageArea = makeUnique<SQLiteStorageArea>(localStorageQuotaInBytes, origin, m_path, WTFMove(workQueue));
+            m_localStorageArea = makeUnique<SQLiteStorageArea>(NetworkProcess::localStorageQuota(), origin, m_path, WTFMove(workQueue));
         else
             m_localStorageArea = makeUnique<MemoryStorageArea>(origin, StorageAreaBase::StorageType::Local);
 

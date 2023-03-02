@@ -50,6 +50,8 @@
 namespace WebKit {
 using namespace WebCore;
 
+unsigned NetworkProcess::s_localStorageQuota = 5 * MB;
+
 static CString buildAcceptLanguages(const Vector<String>& languages)
 {
     size_t languagesCount = languages.size();
@@ -155,6 +157,8 @@ void NetworkProcess::platformInitializeNetworkProcess(const NetworkProcessCreati
         });
     }
 #endif
+
+    s_localStorageQuota = parameters.localStorageQuota;
 }
 
 void NetworkProcess::setIgnoreTLSErrors(PAL::SessionID sessionID, bool ignoreTLSErrors)

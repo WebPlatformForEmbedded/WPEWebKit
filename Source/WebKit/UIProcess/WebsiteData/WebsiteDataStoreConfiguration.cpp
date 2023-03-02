@@ -172,6 +172,7 @@ Ref<WebsiteDataStoreConfiguration> WebsiteDataStoreConfiguration::copy() const
 #if ENABLE(DECLARATIVE_WEB_PUSH)
     copy->m_isDeclarativeWebPushEnabled = this->m_isDeclarativeWebPushEnabled;
 #endif
+    copy-> m_localStorageQuota = this->m_localStorageQuota;
 
     return copy;
 }

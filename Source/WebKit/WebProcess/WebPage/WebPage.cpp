@@ -1042,6 +1042,8 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
 #endif
 #endif // HAVE(SANDBOX_STATE_FLAGS)
 
+    m_page->settings().setLocalStorageQuota(parameters.localStorageQuota);
+
     updateThrottleState();
 #if ENABLE(ACCESSIBILITY_ANIMATION_CONTROL)
     updateImageAnimationEnabled();

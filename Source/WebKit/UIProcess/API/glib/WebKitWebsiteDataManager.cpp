@@ -86,6 +86,7 @@ enum {
     PROP_DOM_CACHE_DIRECTORY,
 #endif
     PROP_IS_EPHEMERAL,
+    PROP_LOCAL_STORAGE_QUOTA,
     PROP_ORIGIN_STORAGE_RATIO,
     PROP_TOTAL_STORAGE_RATIO
 };
@@ -118,6 +119,7 @@ struct _WebKitWebsiteDataManagerPrivate {
 
     gdouble originStorageRatio;
     gdouble totalStorageRatio;
+    unsigned localStorageQuota { 0 };
 };
 
 WEBKIT_DEFINE_FINAL_TYPE(WebKitWebsiteDataManager, webkit_website_data_manager, G_TYPE_OBJECT, GObject)
@@ -225,6 +227,10 @@ static void webkitWebsiteDataManagerSetProperty(GObject* object, guint propID, c
         break;
     case PROP_TOTAL_STORAGE_RATIO:
         manager->priv->totalStorageRatio = g_value_get_double(value);
+        break;
+    case PROP_LOCAL_STORAGE_QUOTA:
+        manager->priv->localStorageQuota = g_value_get_uint(value);
+        WebProcessPool::setLocalStorageQuota(manager->priv->localStorageQuota);
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, propID, paramSpec);
@@ -493,6 +499,21 @@ static void webkit_website_data_manager_class_init(WebKitWebsiteDataManagerClass
             FALSE,
             static_cast<GParamFlags>(WEBKIT_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY)));
 
+     /**
+      * WebKitWebsiteDataManager:local-storage-quota:
+      *
+      * Quota for local storage (in bytes)
+      *
+      */
+     g_object_class_install_property(
+         gObjectClass,
+         PROP_LOCAL_STORAGE_QUOTA,
+         g_param_spec_uint("local-storage-quota",
+             _("Local storage quota"),
+             _("The maximum size of local storage in bytes"),
+             1, G_MAXUINT, 5 * 1024 * 1024,
+             static_cast<GParamFlags>(WEBKIT_PARAM_WRITABLE | G_PARAM_CONSTRUCT_ONLY)));
+
     /**
      * WebKitWebsiteDataManager:origin-storage-ratio:
      *
@@ -555,6 +576,7 @@ WebKit::WebsiteDataStore& webkitWebsiteDataManagerGetDataStore(WebKitWebsiteData
         if (priv->domCacheDirectory)
             configuration->setCacheStorageDirectory(FileSystem::stringFromFileSystemRepresentation(priv->domCacheDirectory.get()));
 #endif
+        configuration->setLocalStorageQuota(priv->localStorageQuota);
         if (priv->originStorageRatio >= 0.0)
             configuration->setOriginQuotaRatio(priv->originStorageRatio);
 

@@ -37,11 +37,13 @@
 namespace WebKit {
 
 std::optional<MemoryPressureHandler::Configuration> WebProcessPool::s_networkProcessMemoryPressureHandlerConfiguration;
+unsigned WebProcessPool::s_localStorageQuota = 0;
 
 void WebProcessPool::platformInitializeNetworkProcess(NetworkProcessCreationParameters& parameters)
 {
     parameters.languages = overrideLanguages().isEmpty() ? userPreferredLanguages() : overrideLanguages();
     parameters.memoryPressureHandlerConfiguration = s_networkProcessMemoryPressureHandlerConfiguration;
+    parameters.localStorageQuota = s_localStorageQuota;
 
 #if OS(LINUX)
     if (MemoryPressureMonitor::disabled())
