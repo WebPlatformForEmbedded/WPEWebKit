@@ -3646,14 +3646,29 @@ Optional<VideoPlaybackQualityMetrics> MediaPlayerPrivateGStreamer::videoPlayback
     uint64_t totalVideoFrames = 0;
     uint64_t droppedVideoFrames = 0;
     if (webkitGstCheckVersion(1, 17, 0)) {
-        GUniqueOutPtr<GstStructure> stats;
-        g_object_get(m_videoSink.get(), "stats", &stats.outPtr(), nullptr);
 
-        if (!gst_structure_get_uint64(stats.get(), "rendered", &totalVideoFrames))
-            return WTF::nullopt;
+        // When the pipeline is composed by a playsink, setting the pipeline to the READY state (e.g. when reaching EOS)
+        // may cause the videosink state to be set to NULL as part of the videochain deactivation process (videosink is
+        // a child element of playsink). Some sink implementations reset the stats when the element's state is set
+        // to NULL, but the application may still query them as from app's perspective they should be still retrievable.
+        // Keep a cache of latest stats and return cached values when sink state is NULL
 
-        if (!gst_structure_get_uint64(stats.get(), "dropped", &droppedVideoFrames))
-            return WTF::nullopt;
+        if ( m_videoSink && (GST_STATE(m_videoSink.get()) != GST_STATE_NULL) ) {
+            GUniqueOutPtr<GstStructure> stats;
+            g_object_get(m_videoSink.get(), "stats", &stats.outPtr(), nullptr);
+
+            if (!gst_structure_get_uint64(stats.get(), "rendered", &totalVideoFrames)) {
+                return WTF::nullopt;
+            }
+            if (!gst_structure_get_uint64(stats.get(), "dropped", &droppedVideoFrames)) {
+                return WTF::nullopt;
+            }
+            m_cachedTotalVideoFrames = totalVideoFrames;
+            m_cachedDroppedVideoFrames = droppedVideoFrames;
+        } else {
+            totalVideoFrames = m_cachedTotalVideoFrames;
+            droppedVideoFrames = m_cachedDroppedVideoFrames;
+        }
     } else if (m_fpsSink) {
         unsigned renderedFrames, droppedFrames;
         g_object_get(m_fpsSink.get(), "frames-rendered", &renderedFrames, "frames-dropped", &droppedFrames, nullptr);

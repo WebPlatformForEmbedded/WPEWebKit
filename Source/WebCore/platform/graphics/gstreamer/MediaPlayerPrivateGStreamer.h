@@ -573,6 +573,9 @@ private:
     String m_errorMessage;
     bool m_didTryToRecoverPlayingState { false };
     bool m_visible { false };
+
+    uint64_t m_cachedTotalVideoFrames = 0;
+    uint64_t m_cachedDroppedVideoFrames = 0;
 };
 
 }
