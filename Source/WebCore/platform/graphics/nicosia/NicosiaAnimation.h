@@ -103,6 +103,7 @@ public:
     Vector<Animation>& animations() { return m_animations; }
 
     bool hasActiveAnimationsOfType(WebCore::AnimatedProperty type) const;
+    float maximumScaleFactor() const;
 
     bool hasRunningAnimations() const;
     bool hasRunningTransformAnimations() const;

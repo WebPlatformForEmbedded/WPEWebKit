@@ -230,6 +230,9 @@ private:
     RefPtr<BitmapTexture> acquireTextureForAcceleratedBuffer(const IntSize&);
 #endif
 
+    void updateAnimationScaleFactor();
+    void updateAnimationOrTransformScaleFactor();
+
     Nicosia::PlatformLayer::LayerID m_id;
     GraphicsLayerTransform m_layerTransform;
     TransformationMatrix m_cachedInverseTransform;
@@ -279,6 +282,9 @@ private:
 
     RefPtr<AnimatedBackingStoreHost> m_animatedBackingStoreHost;
     RefPtr<CoordinatedGraphicsLayer> m_backdropLayer;
+
+    float m_animationScaleFactor { 1.0 };
+    float m_animationOrTransformScaleFactor { 1.0 };
 };
 
 } // namespace WebCore

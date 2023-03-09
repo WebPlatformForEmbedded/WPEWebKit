@@ -21,6 +21,7 @@
 #include "NicosiaAnimation.h"
 
 #include "LayoutSize.h"
+#include "ScaleTransformOperation.h"
 #include "TranslateTransformOperation.h"
 #include <wtf/Scope.h>
 
@@ -479,6 +480,30 @@ bool Animations::hasRunningTransformAnimations() const
 
             return true;
         });
+}
+
+float Animations::maximumScaleFactor() const
+{
+    // Traverse all the keyframes keeping the max values used for scaling.
+    double scale = 1;
+    for (auto& animation : m_animations) {
+        auto& keyframes = animation.keyframes();
+
+        if (keyframes.property() != AnimatedProperty::Transform)
+            continue;
+
+        for (size_t i = 0; i < keyframes.size(); i++) {
+            const auto& transformOperations = static_cast<const TransformAnimationValue&>(keyframes.at(i)).value();
+            for (size_t j = 0; j < transformOperations.size(); j++) {
+                auto* transformOperation = transformOperations.at(j);
+                if (TransformOperation::isScaleTransformOperationType(transformOperation->type())) {
+                    auto* scaleTransformOperation = static_cast<const ScaleTransformOperation*>(transformOperation);
+                    scale = std::max(scale, std::max(scaleTransformOperation->x(), scaleTransformOperation->y()));
+                }
+            }
+        }
+    }
+    return scale;
 }
 
 } // namespace Nicosia
