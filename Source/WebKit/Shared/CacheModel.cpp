@@ -30,6 +30,8 @@
 #include <wtf/RAMSize.h>
 #include <wtf/Seconds.h>
 #include <wtf/StdLibExtras.h>
+#include <wtf/text/WTFString.h>
+#include <wtf/text/StringToIntegerConversion.h>
 
 namespace WebKit {
 
@@ -169,6 +171,21 @@ uint64_t calculateURLCacheDiskCapacity(CacheModel cacheModel, uint64_t diskFreeS
     default:
         ASSERT_NOT_REACHED();
     };
+
+    auto s = String::fromLatin1(getenv("WPE_DISK_CACHE_SIZE"));
+    if (!s.isEmpty()) {
+        String value = s.trim(deprecatedIsSpaceOrNewline).convertToLowercaseWithoutLocale();
+        size_t units = 1;
+        if (value.endsWith('k'))
+            units = KB;
+        else if (value.endsWith('m'))
+            units = MB;
+        if (units != 1)
+            value = value.substring(0, value.length()-1);
+
+        size_t size = size_t(parseInteger<uint64_t>(s).value_or(1) * units);
+        urlCacheDiskCapacity = (unsigned long)(size);
+    }
 
     return urlCacheDiskCapacity;
 }
