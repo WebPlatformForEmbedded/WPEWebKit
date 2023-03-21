@@ -34,6 +34,7 @@ namespace WebCore {
 class PlatformSpeechSynthesisUtterance;
 class SpeechSynthesisClientObserver;
 class PlatformSpeechSynthesisVoice;
+enum class SpeechSynthesisErrorCode : uint8_t;
     
 class SpeechSynthesisClient : public CanMakeWeakPtr<SpeechSynthesisClient> {
 public:
@@ -59,7 +60,7 @@ public:
     virtual void didFinishSpeaking() = 0;
     virtual void didPauseSpeaking() = 0;
     virtual void didResumeSpeaking() = 0;
-    virtual void speakingErrorOccurred() = 0;
+    virtual void speakingErrorOccurred(std::optional<SpeechSynthesisErrorCode>) = 0;
     virtual void boundaryEventOccurred(bool wordBoundary, unsigned charIndex, unsigned charLength) = 0;
     virtual void voicesChanged() = 0;
 };
