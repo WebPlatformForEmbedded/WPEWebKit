@@ -81,7 +81,7 @@ void PlatformSpeechSynthesizerMock::cancel()
 
     m_speakingFinishedTimer.stop();
     auto utterance = std::exchange(m_utterance, nullptr);
-    client().speakingErrorOccurred(*utterance);
+    client().speakingErrorOccurred(*utterance, SpeechSynthesisErrorCode::Canceled);
 }
 
 void PlatformSpeechSynthesizerMock::pause()

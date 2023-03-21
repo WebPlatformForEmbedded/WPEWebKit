@@ -551,6 +551,16 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     Modules/reporting/TestReportBody.h
     Modules/reporting/ViolationReportType.h
 
+    Modules/speech/LocalDOMWindowSpeechSynthesis.h
+    Modules/speech/SpeechSynthesisErrorCode.h
+    Modules/speech/SpeechSynthesisErrorEvent.h
+    Modules/speech/SpeechSynthesisErrorEventInit.h
+    Modules/speech/SpeechSynthesisEvent.h
+    Modules/speech/SpeechSynthesisEventInit.h
+    Modules/speech/SpeechSynthesis.h
+    Modules/speech/SpeechSynthesisUtterance.h
+    Modules/speech/SpeechSynthesisVoice.h
+
     Modules/speech/SpeechRecognitionCaptureSource.h
     Modules/speech/SpeechRecognitionCaptureSourceImpl.h
     Modules/speech/SpeechRecognitionConnection.h

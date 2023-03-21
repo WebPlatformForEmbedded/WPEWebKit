@@ -378,7 +378,7 @@ struct WebPageProxy::Internals final : WebPopupMenuProxy::Client
     void didFinishSpeaking(WebCore::PlatformSpeechSynthesisUtterance&) final;
     void didPauseSpeaking(WebCore::PlatformSpeechSynthesisUtterance&) final;
     void didResumeSpeaking(WebCore::PlatformSpeechSynthesisUtterance&) final;
-    void speakingErrorOccurred(WebCore::PlatformSpeechSynthesisUtterance&) final;
+    void speakingErrorOccurred(WebCore::PlatformSpeechSynthesisUtterance&, std::optional<WebCore::SpeechSynthesisErrorCode>) final;
     void boundaryEventOccurred(WebCore::PlatformSpeechSynthesisUtterance&, WebCore::SpeechBoundary, unsigned characterIndex, unsigned characterLength) final;
 
     // PlatformSpeechSynthesizerClient

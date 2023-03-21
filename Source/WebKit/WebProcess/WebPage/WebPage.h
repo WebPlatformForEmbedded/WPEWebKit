@@ -2202,7 +2202,7 @@ private:
 #endif
 
 #if ENABLE(SPEECH_SYNTHESIS)
-    void speakingErrorOccurred();
+    void speakingErrorOccurred(std::optional<uint8_t> error);
     void boundaryEventOccurred(bool wordBoundary, unsigned charIndex, unsigned charLength);
     void voicesDidChange();
 #endif

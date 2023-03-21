@@ -670,7 +670,7 @@ GenerateSyntheticEditingCommand(enum:uint8_t WebKit::SyntheticEditingCommandType
     SimulateDeviceOrientationChange(double alpha, double beta, double gamma)
 
 #if ENABLE(SPEECH_SYNTHESIS)
-    SpeakingErrorOccurred()
+    SpeakingErrorOccurred(std::optional<uint8_t> error)
     BoundaryEventOccurred(bool wordBoundary, unsigned charIndex, unsigned charLength)
     VoicesDidChange()
 #endif

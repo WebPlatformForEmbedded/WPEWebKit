@@ -28,7 +28,7 @@
 
 namespace WebCore {
 
-enum class SpeechSynthesisErrorCode {
+enum class SpeechSynthesisErrorCode : uint8_t {
     Canceled,
     Interrupted,
     AudioBusy,

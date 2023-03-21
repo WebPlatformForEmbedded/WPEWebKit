@@ -249,6 +249,7 @@
 #include <WebCore/PlatformKeyboardEvent.h>
 #include <WebCore/PlatformMediaSessionManager.h>
 #include <WebCore/PlatformMouseEvent.h>
+#include <WebCore/PlatformSpeechSynthesizer.h>
 #include <WebCore/PlatformStrategies.h>
 #include <WebCore/PluginDocument.h>
 #include <WebCore/PointerCaptureController.h>
@@ -8372,10 +8373,12 @@ void WebPage::systemPreviewActionTriggered(WebCore::SystemPreviewInfo previewInf
 #endif
 
 #if ENABLE(SPEECH_SYNTHESIS)
-void WebPage::speakingErrorOccurred()
+void WebPage::speakingErrorOccurred(std::optional<uint8_t> error)
 {
     if (auto observer = corePage()->speechSynthesisClient()->observer())
-        observer->speakingErrorOccurred();
+        observer->speakingErrorOccurred(!error
+                                        ? std::nullopt
+                                        : std::make_optional(static_cast<WebCore::SpeechSynthesisErrorCode>(*error)));
 }
 
 void WebPage::boundaryEventOccurred(bool wordBoundary, unsigned charIndex, unsigned charLength)
