@@ -1943,7 +1943,8 @@ void MediaPlayerPrivateGStreamer::handleMessage(GstMessage* message)
             // Let the mediaPlayerClient handle the stream error, in this case the HTMLMediaElement will emit a stalled event.
             GST_ERROR("Decode error, let the Media element emit a stalled event.");
             m_loadingStalled = true;
-            break;
+            error = MediaPlayer::NetworkState::DecodeError;
+            attemptNextLocation = true;
         } else if (err->domain == GST_STREAM_ERROR) {
             error = MediaPlayer::NetworkState::DecodeError;
             attemptNextLocation = true;
