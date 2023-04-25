@@ -92,11 +92,14 @@ public:
         return adoptRef(*new ProcessLauncher(client, WTFMove(launchOptions)));
     }
 
+    virtual ~ProcessLauncher();
+
     bool isLaunching() const { return m_isLaunching; }
     ProcessID processIdentifier() const { return m_processIdentifier; }
 
     void terminateProcess();
     void invalidate();
+    int getExitCode();
 
 private:
     ProcessLauncher(Client*, LaunchOptions&&);
@@ -119,6 +122,7 @@ private:
     const LaunchOptions m_launchOptions;
     bool m_isLaunching { true };
     ProcessID m_processIdentifier { 0 };
+    int m_exitCode { -1 };
 };
 
 } // namespace WebKit

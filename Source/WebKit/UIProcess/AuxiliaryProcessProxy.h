@@ -100,6 +100,7 @@ public:
     State state() const;
     bool isLaunching() const { return state() == State::Launching; }
     bool wasTerminated() const;
+    int getExitCode() { return m_processLauncher ? m_processLauncher->getExitCode() : -1; }
 
     ProcessID processIdentifier() const { return m_processLauncher ? m_processLauncher->processIdentifier() : 0; }
 

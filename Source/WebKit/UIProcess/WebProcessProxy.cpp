@@ -798,7 +798,7 @@ void WebProcessProxy::processDidTerminateOrFailedToLaunch()
 #endif
 
     for (auto& page : pages)
-        page->processDidTerminate(ProcessTerminationReason::Crash);
+        page->processDidTerminate((getExitCode() != -1) ? ProcessTerminationReason::RequestedByClient : ProcessTerminationReason::Crash);
 
     for (auto& provisionalPage : provisionalPages) {
         if (provisionalPage)

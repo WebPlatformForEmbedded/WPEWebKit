@@ -41,6 +41,7 @@
 #include <wtf/glib/GUniquePtr.h>
 #include <wtf/text/CString.h>
 #include <wtf/text/WTFString.h>
+#include <wtf/HashMap.h>
 
 namespace WebKit {
 
@@ -104,6 +105,28 @@ static bool isInsideSnap()
     return *ret;
 }
 #endif
+
+struct GSubProcessMapper {
+    void addSubProcess(ProcessLauncher *launcher, GRefPtr<GSubprocess> subprocess) {
+        m_map.add(launcher, subprocess);
+    }
+
+    void removeSubProcess(ProcessLauncher *launcher) {
+        m_map.remove(launcher);
+    }
+
+    GRefPtr<GSubprocess> getSubProcess(ProcessLauncher *launcher) {
+        auto it = m_map.find(launcher);
+        return (it != m_map.end()) ? it->value : nullptr;
+    }
+
+    HashMap<ProcessLauncher*, GRefPtr<GSubprocess>> m_map;
+} gGSubProcessMapper;
+
+ProcessLauncher::~ProcessLauncher()
+{
+    gGSubProcessMapper.removeSubProcess(this);
+}
 
 void ProcessLauncher::launchProcess()
 {
@@ -209,6 +232,9 @@ void ProcessLauncher::launchProcess()
     m_processIdentifier = g_ascii_strtoll(processIdStr, nullptr, 0);
     RELEASE_ASSERT(m_processIdentifier);
 
+    if (m_launchOptions.processType == ProcessLauncher::ProcessType::Web)
+        gGSubProcessMapper.addSubProcess(this, process);
+
     // Don't expose the parent socket to potential future children.
     if (!setCloseOnExec(socketPair.client))
         RELEASE_ASSERT_NOT_REACHED();
@@ -235,6 +261,27 @@ void ProcessLauncher::terminateProcess()
 
 void ProcessLauncher::platformInvalidate()
 {
+}
+
+int ProcessLauncher::getExitCode()
+{
+    GRefPtr<GSubprocess> process = gGSubProcessMapper.getSubProcess(this);
+    if(m_exitCode == -1 && process) {
+        GError *error = nullptr;
+        auto waitSuccess = g_subprocess_wait(process.get(), nullptr, &error);
+        if(waitSuccess) {
+            fprintf(stderr, "ProcessLauncher::%s, exited=%d, status=%d\n", __FUNCTION__, g_subprocess_get_if_exited(process.get()), g_subprocess_get_exit_status(process.get()));
+            m_exitCode = g_subprocess_get_if_exited(process.get()) ? g_subprocess_get_exit_status(process.get()) : -1;
+        } else {
+            fprintf(stderr, "ProcessLauncher::%s, g_subprocess_wait failed, eror : %s\n", __FUNCTION__, error ? error->message : "");
+            if(error != nullptr)
+                g_error_free(error);
+        }
+
+        gGSubProcessMapper.removeSubProcess(this);
+    }
+
+    return m_exitCode;
 }
 
 } // namespace WebKit
