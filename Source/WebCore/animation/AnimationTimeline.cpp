@@ -455,6 +455,15 @@ void AnimationTimeline::updateCSSTransitionsForElementAndProperty(Element& eleme
         }
     }
 
+    // A CSS Transition might have completed since the last time animations were updated so we must
+    // update the running and completed transitions membership in that case.
+    auto* keyframeEffect = keyframeEffectForElementAndProperty(element, property);
+    auto* animation = keyframeEffect ? keyframeEffect->animation() : nullptr;
+    if (is<CSSTransition>(animation) && runningTransitionsByProperty.contains(property) && animation->playState() == WebAnimation::PlayState::Finished) {
+        completedTransitionsByProperty.set(property, runningTransitionsByProperty.take(property));
+        animation = nullptr;
+    }
+
     // https://drafts.csswg.org/css-transitions-1/#before-change-style
     // Define the before-change style as the computed values of all properties on the element as of the previous style change event, except with
     // any styles derived from declarative animations such as CSS Transitions, CSS Animations, and SMIL Animations updated to the current time.
