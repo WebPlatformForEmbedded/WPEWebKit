@@ -498,7 +498,7 @@ private:
 
     GstElement* createVideoSink();
     GstElement* createAudioSink();
-    GstElement* audioSink() const;
+    GstElement* audioSink() const { return m_audioSink.get(); }
 
     bool isMediaStreamPlayer() const;
 
