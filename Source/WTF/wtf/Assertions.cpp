@@ -126,6 +126,7 @@ WTF_ATTRIBUTE_PRINTF(1, 0) static String createWithFormatAndArguments(const char
     return StringImpl::create(reinterpret_cast<const LChar*>(buffer.data()), length);
 }
 
+    extern WTFLogChannel LogMemoryPressure;
 }
 
 extern "C" {
@@ -417,24 +418,6 @@ bool WTFWillLogWithLevel(WTFLogChannel* channel, WTFLogLevel level)
     return channel->level >= level && channel->state != WTFLogChannelState::Off;
 }
 
-void WTFLogWithLevel(WTFLogChannel* channel, WTFLogLevel level, const char* format, ...)
-{
-    if (level != WTFLogLevel::Always && level > channel->level)
-        return;
-
-    if (channel->level != WTFLogLevel::Always && channel->state == WTFLogChannelState::Off)
-        return;
-
-    va_list args;
-    va_start(args, format);
-
-    ALLOW_NONLITERAL_FORMAT_BEGIN
-    WTFLog(channel, format, args);
-    ALLOW_NONLITERAL_FORMAT_END
-
-    va_end(args);
-}
-
 static void WTFLogVaList(WTFLogChannel* channel, const char* format, va_list args)
 {
     if (channel->state == WTFLogChannelState::Off)
@@ -457,6 +440,24 @@ static void WTFLogVaList(WTFLogChannel* channel, const char* format, va_list arg
     loggingAccumulator().accumulate(loggingString);
 
     logToStderr(loggingString.utf8().data());
+}
+
+void WTFLogWithLevel(WTFLogChannel* channel, WTFLogLevel level, const char* format, ...)
+{
+    if (level != WTFLogLevel::Always && level > channel->level)
+        return;
+
+    if (channel->level != WTFLogLevel::Always && channel->state == WTFLogChannelState::Off)
+        return;
+
+    va_list args;
+    va_start(args, format);
+
+    ALLOW_NONLITERAL_FORMAT_BEGIN
+    WTFLogVaList(channel, format, args);
+    ALLOW_NONLITERAL_FORMAT_END
+
+    va_end(args);
 }
 
 void WTFLog(WTFLogChannel* channel, const char* format, ...)
@@ -567,6 +568,11 @@ void WTFInitializeLogChannelStatesFromString(WTFLogChannel* channels[], size_t c
         if (WTFLogChannel* channel = WTFLogChannelByName(channels, count, component.utf8().data())) {
             channel->state = logChannelState;
             channel->level = logChannelLevel;
+
+            if (component == "MemoryPressure") {
+                WTF::LogMemoryPressure.state = logChannelState;
+                WTF::LogMemoryPressure.level = logChannelLevel;
+            }
         } else
             WTFLogAlways("Unknown logging channel: %s", component.utf8().data());
     }

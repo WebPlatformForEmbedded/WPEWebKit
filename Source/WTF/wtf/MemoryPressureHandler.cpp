@@ -304,7 +304,7 @@ void MemoryPressureHandler::ReliefLogger::logMemoryUsageChange()
 #if !OS(LINUX)
     MEMORYPRESSURE_LOG("Memory pressure relief: %" PUBLIC_LOG_STRING ": res = %zu/%zu/%ld, res+swap = %zu/%zu/%ld",
 #else
-    MEMORYPRESSURE_LOG("Memory pressure relief: pid = %d, %" PUBLIC_LOG_STRING ": res = %zu/%zu/%ld, res+swap = %zu/%zu/%ld",
+    LOG_WITH_LEVEL(MemoryPressure, WTFLogLevel::Debug, "Memory pressure relief: pid = %d, %" PUBLIC_LOG_STRING ": res = %zu/%zu/%ld, res+swap = %zu/%zu/%ld",
         getpid(),
 #endif
         m_logString,

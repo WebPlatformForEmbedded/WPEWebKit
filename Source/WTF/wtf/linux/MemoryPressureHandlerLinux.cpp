@@ -297,7 +297,8 @@ void MemoryPressureHandler::triggerMemoryPressureEvent(bool isCritical, bool isS
         return;
 
     if (ReliefLogger::loggingEnabled())
-        LOG(MemoryPressure, "Got memory pressure notification (%s, %s) ", isCritical ? "critical" : "non-critical", isSynchronous ? "synchronous" : "non-synchronous");
+        LOG_WITH_LEVEL(MemoryPressure, ((isCritical || isSynchronous) ? WTFLogLevel::Always : WTFLogLevel::Debug),
+                "Got memory pressure notification (%s, %s) ", (isCritical ? "critical" : "non-critical"), (isSynchronous ? "synchronous" : "non-synchronous"));
 
     setUnderMemoryPressure(true);
 
@@ -309,7 +310,7 @@ void MemoryPressureHandler::triggerMemoryPressureEvent(bool isCritical, bool isS
         });
 
     if (ReliefLogger::loggingEnabled() && isUnderMemoryPressure())
-        LOG(MemoryPressure, "System is no longer under memory pressure.");
+        LOG_WITH_LEVEL(MemoryPressure, WTFLogLevel::Debug, "System is no longer under memory pressure.");
 
     setUnderMemoryPressure(false);
 }
