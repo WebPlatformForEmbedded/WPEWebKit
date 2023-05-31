@@ -98,6 +98,10 @@ void WebProcess::platformSetCacheModel(CacheModel cacheModel)
 
 void WebProcess::platformInitializeProcess(const AuxiliaryProcessInitializationParameters&)
 {
+#if ENABLE(RDK_LOGGER)
+    rdk_logger_init("/etc/debug.ini");
+#endif
+
 #if OS(LINUX)
     // Disable RealTimeThreads in WebProcess initially, since it depends on having a visible web page.
     RealTimeThreads::singleton().setEnabled(false);
@@ -106,6 +110,10 @@ void WebProcess::platformInitializeProcess(const AuxiliaryProcessInitializationP
 
 void WebProcess::platformInitializeWebProcess(WebProcessCreationParameters& parameters)
 {
+#if ENABLE(RDK_LOGGER)
+    rdk_logger_init("/etc/debug.ini");
+#endif
+
 #if ENABLE(MEDIA_STREAM)
     addSupplement<UserMediaCaptureManager>();
 #endif

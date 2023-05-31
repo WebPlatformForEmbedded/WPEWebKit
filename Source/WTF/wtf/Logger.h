@@ -316,6 +316,8 @@ private:
         os_log(channel.osLogChannel, "%{public}s", logMessage.utf8().data());
 #elif ENABLE(JOURNALD_LOG)
         sd_journal_send("WEBKIT_SUBSYSTEM=%s", channel.subsystem, "WEBKIT_CHANNEL=%s", channel.name, "MESSAGE=%s", logMessage.utf8().data(), nullptr);
+#elif ENABLE(RDK_LOGGER)
+        LOG_WITH_LEVEL_STRING(channel.rdkChannel, (int)level, "%s", logMessage.utf8().data());
 #else
         fprintf(stderr, "[%s:%s:-] %s\n", channel.subsystem, channel.name, logMessage.utf8().data());
 #endif
