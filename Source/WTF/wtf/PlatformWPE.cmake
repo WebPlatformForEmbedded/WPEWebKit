@@ -58,6 +58,10 @@ if (Journald_FOUND)
     list(APPEND WTF_LIBRARIES Journald::Journald)
 endif ()
 
+if (RdkLogger_FOUND)
+    list(APPEND WTF_LIBRARIES RdkLogger::RdkLogger)
+endif ()
+
 list(APPEND WTF_SYSTEM_INCLUDE_DIRECTORIES
     ${GIO_UNIX_INCLUDE_DIRS}
     ${GLIB_INCLUDE_DIRS}

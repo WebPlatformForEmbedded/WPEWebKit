@@ -56,6 +56,10 @@
 #include <systemd/sd-journal.h>
 #endif
 
+#if ENABLE(RDK_LOGGER)
+#include "rdk_debug.h"
+#endif
+
 #ifdef __cplusplus
 #include <cstdlib>
 #include <type_traits>
@@ -170,6 +174,8 @@ typedef struct {
     const char* subsystem;
 #if USE(OS_LOG)
     __unsafe_unretained os_log_t osLogChannel;
+#elif ENABLE(RDK_LOGGER)
+    const char* rdkChannel;
 #endif
 #endif
 } WTFLogChannel;
@@ -199,6 +205,9 @@ typedef struct {
 #elif USE(OS_LOG)
 #define DEFINE_LOG_CHANNEL_WITH_DETAILS(name, initialState, level, subsystem) \
     WTFLogChannel LOG_CHANNEL(name) = { initialState, #name, level, subsystem, OS_LOG_DEFAULT };
+#elif ENABLE(RDK_LOGGER)
+#define DEFINE_LOG_CHANNEL_WITH_DETAILS(name, initialState, level, subsystem) \
+    WTFLogChannel LOG_CHANNEL(name) = { initialState, #name, level, subsystem, RDK_LOG_CHANNEL(name) };
 #else
 #define DEFINE_LOG_CHANNEL_WITH_DETAILS(name, initialState, level, subsystem) \
     WTFLogChannel LOG_CHANNEL(name) = { initialState, #name, level, subsystem };
@@ -481,6 +490,13 @@ constexpr bool assertionFailureDueToUnreachableCode = false;
 #endif
 #endif
 
+#if ENABLE(RDK_LOGGER)
+#define RDK_LOG_CHANNEL_PREFIX              "LOG.RDK.WEBKIT."
+#define RDK_LOG_DEFAULT_CHANNEL             "LOG.RDK.WEBKIT"
+#define RDK_LOG_CHANNEL(channel)            RDK_LOG_CHANNEL_PREFIX #channel
+#define RDK_LOG_VERBOSE(level, channel)     RDK_LOG(level, channel, "%s(%d) : %s\n", __FILE__, __LINE__, WTF_PRETTY_FUNCTION)
+#endif
+
 /* FATAL */
 
 #if FATAL_DISABLED
@@ -496,6 +512,11 @@ constexpr bool assertionFailureDueToUnreachableCode = false;
 
 #if ERROR_DISABLED
 #define LOG_ERROR(...) ((void)0)
+#elif ENABLE(RDK_LOGGER)
+#define LOG_ERROR(...) do { \
+    RDK_LOG_VERBOSE(RDK_LOG_ERROR, RDK_LOG_DEFAULT_CHANNEL); \
+    RDK_LOG(RDK_LOG_ERROR, RDK_LOG_DEFAULT_CHANNEL, __VA_ARGS__); \
+} while (0)
 #else
 #define LOG_ERROR(...) WTFReportError(__FILE__, __LINE__, WTF_PRETTY_FUNCTION, __VA_ARGS__)
 #endif
@@ -504,6 +525,8 @@ constexpr bool assertionFailureDueToUnreachableCode = false;
 
 #if LOG_DISABLED
 #define LOG(channel, ...) ((void)0)
+#elif ENABLE(RDK_LOGGER)
+#define LOG(channel, ...) RDK_LOG(RDK_LOG_INFO, RDK_LOG_CHANNEL(channel), __VA_ARGS__)
 #else
 #define LOG(channel, ...) do { \
         if (LOG_CHANNEL(channel).state != logChannelStateOff) \
@@ -515,6 +538,11 @@ constexpr bool assertionFailureDueToUnreachableCode = false;
 
 #if LOG_DISABLED
 #define LOG_VERBOSE(channel, ...) ((void)0)
+#elif ENABLE(RDK_LOGGER)
+#define LOG_VERBOSE(channel, ...) do { \
+    RDK_LOG_VERBOSE(RDK_LOG_INFO, RDK_LOG_DEFAULT_CHANNEL); \
+    RDK_LOG(RDK_LOG_INFO, RDK_LOG_CHANNEL(channel), __VA_ARGS__); \
+} while (0)
 #else
 #define LOG_VERBOSE(channel, ...) do { \
         if (LOG_CHANNEL(channel).state != logChannelStateOff) \
@@ -526,6 +554,13 @@ constexpr bool assertionFailureDueToUnreachableCode = false;
 
 #if LOG_DISABLED
 #define LOG_WITH_LEVEL(channel, level, ...) ((void)0)
+#elif ENABLE(RDK_LOGGER)
+#define LOG_WITH_LEVEL_STRING(channel, level, ...) RDK_LOG( \
+        level == 0 ? RDK_LOG_NOTICE : level == 1 ? RDK_LOG_ERROR : level == 2 ? RDK_LOG_WARN : level == 3 ? RDK_LOG_INFO : RDK_LOG_DEBUG, \
+        channel, __VA_ARGS__)
+#define LOG_WITH_LEVEL(channel, level, ...) RDK_LOG( \
+        level == 0 ? RDK_LOG_NOTICE : level == 1 ? RDK_LOG_ERROR : level == 2 ? RDK_LOG_WARN : level == 3 ? RDK_LOG_INFO : RDK_LOG_DEBUG, \
+        RDK_LOG_CHANNEL(channel), __VA_ARGS__)
 #else
 #define LOG_WITH_LEVEL(channel, level, ...) do { \
         if  (LOG_CHANNEL(channel).state != logChannelStateOff && channel->level >= (level)) \
@@ -609,6 +644,28 @@ constexpr bool assertionFailureDueToUnreachableCode = false;
 #define RELEASE_LOG_WITH_LEVEL_IF(isAllowed, channel, logLevel, ...) do { \
     if ((isAllowed) && LOG_CHANNEL(channel).level >= (logLevel)) \
         SD_JOURNAL_SEND(channel, LOG_INFO, __FILE__, _STRINGIFY(__LINE__), __func__, __VA_ARGS__); \
+} while (0)
+
+#elif ENABLE(RDK_LOGGER)
+
+#define PUBLIC_LOG_STRING "s"
+#define PRIVATE_LOG_STRING "s"
+#define RELEASE_LOG(channel, ...) LOG(channel, __VA_ARGS__)
+#define RELEASE_LOG_ERROR(channel, ...) LOG_ERROR(__VA_ARGS__)
+#define RELEASE_LOG_FAULT(channel, ...) FATAL(__VA_ARGS__)
+#define RELEASE_LOG_INFO(channel, ...) LOG_WITH_LEVEL(channel, 3, __VA_ARGS__)
+
+#define RELEASE_LOG_WITH_LEVEL(channel, logLevel, ...) do { \
+    if (LOG_CHANNEL(channel).level >= (logLevel)) \
+        LOG(channel, __VA_ARGS__); \
+} while (0)
+
+#define RELEASE_LOG_WITH_LEVEL(channel, logLevel, ...)  LOG_WITH_LEVEL(channel, logLevel, ...)
+#define RELEASE_LOG_WITH_LEVEL_IF(isAllowed, channel, logLevel, ...) do { \
+    if ((isAllowed) && LOG_CHANNEL(channel).level >= (logLevel)) \
+        LOG(channel, __VA_ARGS__); \
+    if (isAllowed) \
+        LOG_WITH_LEVEL(channel, logLevel,__VA_ARGS__); \
 } while (0)
 
 #else
