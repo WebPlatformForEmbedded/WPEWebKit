@@ -37,6 +37,7 @@
 #include "FrameLoader.h"
 #include "FrameLoaderClient.h"
 #include "SecurityOrigin.h"
+#include "SecurityPolicy.h"
 #include "Settings.h"
 #include <wtf/text/CString.h>
 #include <wtf/text/WTFString.h>
@@ -75,6 +76,11 @@ bool MixedContentChecker::canDisplayInsecureContent(Frame& frame, SecurityOrigin
     if (!frame.document()->contentSecurityPolicy()->allowRunningOrDisplayingInsecureContent(url))
         return false;
 
+    if (SecurityPolicy::isAccessAllowed(securityOrigin, url)) {
+        logWarning(frame, true, "display"_s, url);
+        return true;
+    }
+
     bool isStrictMode = frame.document()->isStrictMixedContentMode();
     if (!isStrictMode && alwaysDisplayInNonStrictMode == AlwaysDisplayInNonStrictMode::Yes)
         return true;
@@ -102,6 +108,11 @@ bool MixedContentChecker::canRunInsecureContent(Frame& frame, SecurityOrigin& se
 
     if (!frame.document()->contentSecurityPolicy()->allowRunningOrDisplayingInsecureContent(url))
         return false;
+
+    if (SecurityPolicy::isAccessAllowed(securityOrigin, url)) {
+        logWarning(frame, true, "run"_s, url);
+        return true;
+    }
 
     bool allowed = !frame.document()->isStrictMixedContentMode() && frame.settings().allowRunningOfInsecureContent() && !frame.document()->geolocationAccessed() && !frame.document()->secureCookiesAccessed();
     logWarning(frame, allowed, "run"_s, url);
