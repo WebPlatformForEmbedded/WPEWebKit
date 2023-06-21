@@ -38,9 +38,9 @@ class MediaPlayerPrivateGStreamer;
 
 class AudioTrackPrivateGStreamer final : public AudioTrackPrivate, public TrackPrivateBaseGStreamer {
 public:
-    static RefPtr<AudioTrackPrivateGStreamer> create(WeakPtr<MediaPlayerPrivateGStreamer> player, gint index, GRefPtr<GstPad> pad)
+    static RefPtr<AudioTrackPrivateGStreamer> create(WeakPtr<MediaPlayerPrivateGStreamer> player, gint index, GRefPtr<GstPad> pad, AtomString streamID = nullAtom())
     {
-        return adoptRef(*new AudioTrackPrivateGStreamer(player, index, pad));
+        return adoptRef(*new AudioTrackPrivateGStreamer(player, index, pad, streamID));
     }
 
     static RefPtr<AudioTrackPrivateGStreamer> create(WeakPtr<MediaPlayerPrivateGStreamer> player, gint index, GRefPtr<GstStream> stream)
@@ -62,7 +62,7 @@ public:
     AtomString language() const override { return m_language; }
 
 private:
-    AudioTrackPrivateGStreamer(WeakPtr<MediaPlayerPrivateGStreamer>, gint index, GRefPtr<GstPad>);
+    AudioTrackPrivateGStreamer(WeakPtr<MediaPlayerPrivateGStreamer>, gint index, GRefPtr<GstPad>, AtomString streamID);
     AudioTrackPrivateGStreamer(WeakPtr<MediaPlayerPrivateGStreamer>, gint index, GRefPtr<GstStream>);
 
     AtomString m_id;

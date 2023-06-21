@@ -873,9 +873,20 @@ void AppendPipeline::connectDemuxerSrcPadToAppsink()
     parseDemuxerSrcPadCaps(gst_caps_ref(caps.get()));
 
     switch (m_streamType) {
-    case WebCore::MediaSourceStreamTypeGStreamer::Audio:
-        m_track = WebCore::AudioTrackPrivateGStreamer::create(makeWeakPtr(*m_playerPrivate), id(), sinkSinkPad.get());
+    case WebCore::MediaSourceStreamTypeGStreamer::Audio: {
+        GUniquePtr<gchar> streamIDAsCharacters(gst_pad_get_stream_id(m_demuxerSrcPad.get()));
+        String streamID(streamIDAsCharacters.get());
+        size_t index = streamID.find('/');
+
+        AtomString substring;
+        if (index == notFound)
+            substring = nullAtom();
+        else
+            substring = streamID.substring(index + 1);
+
+        m_track = WebCore::AudioTrackPrivateGStreamer::create(makeWeakPtr(*m_playerPrivate), id(), sinkSinkPad.get(), substring);
         break;
+    }
     case WebCore::MediaSourceStreamTypeGStreamer::Video:
         m_track = WebCore::VideoTrackPrivateGStreamer::create(makeWeakPtr(*m_playerPrivate), id(), sinkSinkPad.get());
         break;
