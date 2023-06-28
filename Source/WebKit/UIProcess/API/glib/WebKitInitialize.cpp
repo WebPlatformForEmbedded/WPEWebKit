@@ -77,8 +77,12 @@ static void initializeRemoteInspectorServer()
     auto inspectorHTTPAddress = parseAddress(httpAddress);
     GRefPtr<GSocketAddress> inspectorAddress;
     if (inspectorHTTPAddress) {
-        String envVar = String::fromLatin1(getenv("WEBKIT_INSPECTOR_PORT"));
-        auto port = parseInteger<uint16_t>(envVar).value_or(0);
+        const char* inspectorPortStr = g_getenv("WEBKIT_INSPECTOR_PORT");
+        auto port = inspectorPortStr ? g_ascii_strtoull(inspectorPortStr, nullptr, 10) : 0;
+        if (port > std::numeric_limits<uint16_t>::max()) {
+            g_warning("WEBKIT_INSPECTOR_PORT is out of range: %s. Falling back to dynamic port", inspectorPortStr);
+            port = 0;
+        }
         inspectorAddress = adoptGRef(G_SOCKET_ADDRESS(g_inet_socket_address_new(g_inet_socket_address_get_address(G_INET_SOCKET_ADDRESS(inspectorHTTPAddress.get())), port)));
     }
     else
