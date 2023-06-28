@@ -34,6 +34,7 @@
 #include <mutex>
 #include <wtf/glib/GRefPtr.h>
 #include <wtf/glib/GUniquePtr.h>
+#include <wtf/text/StringToIntegerConversion.h>
 
 #if USE(SKIA)
 #include <skia/core/SkGraphics.h>
@@ -79,8 +80,11 @@ static void initializeRemoteInspectorServer()
 
     auto inspectorHTTPAddress = parseAddress(httpAddress);
     GRefPtr<GSocketAddress> inspectorAddress;
-    if (inspectorHTTPAddress)
-        inspectorAddress = adoptGRef(G_SOCKET_ADDRESS(g_inet_socket_address_new(g_inet_socket_address_get_address(G_INET_SOCKET_ADDRESS(inspectorHTTPAddress.get())), 0)));
+    if (inspectorHTTPAddress) {
+        String envVar = String::fromLatin1(getenv("WEBKIT_INSPECTOR_PORT"));
+        auto port = parseInteger<uint16_t>(envVar).value_or(0);
+        inspectorAddress = adoptGRef(G_SOCKET_ADDRESS(g_inet_socket_address_new(g_inet_socket_address_get_address(G_INET_SOCKET_ADDRESS(inspectorHTTPAddress.get())), port)));
+    }
     else
         inspectorAddress = parseAddress(address);
     if (!inspectorHTTPAddress && !inspectorAddress) {
