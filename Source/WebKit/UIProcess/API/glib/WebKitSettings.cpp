@@ -184,6 +184,7 @@ enum {
     PROP_ALLOW_RUNNING_OF_INSECURE_CONTENT,
     PROP_ALLOW_DISPLAY_OF_INSECURE_CONTENT,
     PROP_ALLOW_SCRIPTS_TO_CLOSE_WINDOWS,
+    PROP_ALLOW_MOVE_TO_SUSPEND_ON_WINDOW_CLOSE,
     PROP_ENABLE_DIRECTORY_UPLOAD,
     N_PROPERTIES,
 };
@@ -425,6 +426,9 @@ ALLOW_DEPRECATED_DECLARATIONS_BEGIN
     case PROP_ALLOW_SCRIPTS_TO_CLOSE_WINDOWS:
         webkit_settings_set_allow_scripts_to_close_windows(settings, g_value_get_boolean(value));
         break;
+    case PROP_ALLOW_MOVE_TO_SUSPEND_ON_WINDOW_CLOSE:
+        webkit_settings_set_allow_move_to_suspend_on_window_close(settings, g_value_get_boolean(value));
+        break;
     case PROP_ENABLE_DIRECTORY_UPLOAD:
         webkit_settings_set_enable_directory_upload(settings, g_value_get_boolean(value));
         break;
@@ -647,6 +651,9 @@ ALLOW_DEPRECATED_DECLARATIONS_BEGIN
         break;
     case PROP_ALLOW_SCRIPTS_TO_CLOSE_WINDOWS:
         g_value_set_boolean(value, webkit_settings_get_allow_scripts_to_close_windows(settings));
+        break;
+    case PROP_ALLOW_MOVE_TO_SUSPEND_ON_WINDOW_CLOSE:
+        g_value_set_boolean(value, webkit_settings_get_allow_move_to_suspend_on_window_close(settings));
         break;
     case PROP_ENABLE_DIRECTORY_UPLOAD:
         g_value_set_boolean(value, webkit_settings_get_enable_directory_upload(settings));
@@ -1723,6 +1730,19 @@ static void webkit_settings_class_init(WebKitSettingsClass* klass)
         "allow-scripts-to-close-windows",
         _("Allow scripts to close windows"),
         _("Whether scripts can close windows they didn't open."),
+        FALSE,
+        readWriteConstructParamFlags);
+
+    /**
+     * WebKitSettings:allow-move-to-suspend-on-window-close:
+     *
+     * Allow browser to move to suspend on window close.
+     *
+     */
+    sObjProperties[PROP_ALLOW_MOVE_TO_SUSPEND_ON_WINDOW_CLOSE] = g_param_spec_boolean(
+        "allow-move-to-suspend-on-window-close",
+        _("Allow move to suspend on window.close()"),
+        _("Allow to suspend browser instead of closing window on window.close()"),
         FALSE,
         readWriteConstructParamFlags);
 
@@ -4526,6 +4546,42 @@ webkit_settings_set_allow_scripts_to_close_windows(WebKitSettings *settings, gbo
 
     priv->preferences->setAllowScriptsToCloseWindows(allowed);
     g_object_notify(G_OBJECT(settings), "allow-scripts-to-close-windows");
+}
+
+/**
+ * webkit_settings_get_allow_move_to_suspend_on_window_close:
+ * @settings: a #WebKitSettings
+ *
+ * Get the #WebKitSettings:allow-move-to-suspend-on-window-close property.
+ *
+ * Returns: %TRUE If browser can be suspended on window close.
+ */
+gboolean webkit_settings_get_allow_move_to_suspend_on_window_close (WebKitSettings *settings)
+{
+    g_return_val_if_fail(WEBKIT_IS_SETTINGS(settings), FALSE);
+
+    return settings->priv->preferences->allowMoveToSuspendOnWindowClose();
+}
+
+/**
+ * webkit_settings_set_allow_move_to_suspend_on_window_close
+ * @settings: a #WebKitSettings
+ * @allowed: Value to be set
+ *
+ * Set the #WebKitSettings:allow-move-to-suspend-on-window-close property.
+ */
+WEBKIT_API void
+webkit_settings_set_allow_move_to_suspend_on_window_close(WebKitSettings *settings, gboolean allowed)
+{
+    g_return_if_fail(WEBKIT_IS_SETTINGS(settings));
+
+    WebKitSettingsPrivate* priv = settings->priv;
+    bool currentValue = priv->preferences->allowMoveToSuspendOnWindowClose();
+    if (currentValue == allowed)
+        return;
+
+    priv->preferences->setAllowMoveToSuspendOnWindowClose(allowed);
+    g_object_notify(G_OBJECT(settings), "allow-move-to-suspend-on-window-close");
 }
 
 /**

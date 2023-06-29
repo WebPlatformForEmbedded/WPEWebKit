@@ -112,18 +112,20 @@ void DOMWindow::close()
     if (!frame->isMainFrame())
         return;
 
-    if (!(page->openedByDOM() || page->backForward().count() <= 1 || frame->settings().allowScriptsToCloseWindows())) {
-        checkedConsole()->addMessage(MessageSource::JS, MessageLevel::Warning, "Can't close the window since it was not opened by JavaScript"_s);
-        return;
+    if (!frame->settings().allowMoveToSuspendOnWindowClose()) {
+        if (!(page->openedByDOM() || page->backForward().count() <= 1 || frame->settings().allowScriptsToCloseWindows())) {
+            checkedConsole()->addMessage(MessageSource::JS, MessageLevel::Warning, "Can't close the window since it was not opened by JavaScript"_s);
+            return;
+        }
+
+        RefPtr localFrame = dynamicDowncast<LocalFrame>(frame);
+        if (localFrame && !localFrame->checkedLoader()->shouldClose())
+            return;
+
+        ResourceLoadObserver::shared().updateCentralStatisticsStore([] { });
+
+        page->setIsClosing();
     }
-
-    RefPtr localFrame = dynamicDowncast<LocalFrame>(frame);
-    if (localFrame && !localFrame->checkedLoader()->shouldClose())
-        return;
-
-    ResourceLoadObserver::shared().updateCentralStatisticsStore([] { });
-
-    page->setIsClosing();
     closePage();
 }
 

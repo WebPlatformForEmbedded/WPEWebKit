@@ -269,6 +269,20 @@ AllowMediaContentTypesRequiringHardwareSupportAsFallback:
     WebCore:
       default: false
 
+AllowMoveToSuspendOnWindowClose:
+  type: bool
+  status: embedder
+  humanReadableName: "Allow move to suspend on window.close()"
+  humanReadableDescription: "Allow to suspend browser instead of closing window on window.close()"
+  condition: PLATFORM(WPE)
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+
 AllowMultiElementImplicitSubmission:
   type: bool
   status: embedder

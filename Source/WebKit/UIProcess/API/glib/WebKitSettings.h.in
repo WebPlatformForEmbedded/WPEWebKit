@@ -595,6 +595,12 @@ webkit_settings_get_allow_scripts_to_close_windows              (WebKitSettings 
 WEBKIT_API void
 webkit_settings_set_allow_scripts_to_close_windows              (WebKitSettings *settings,
                                                                  gboolean        allowed);
+WEBKIT_API gboolean
+webkit_settings_get_allow_move_to_suspend_on_window_close       (WebKitSettings *settings);
+
+WEBKIT_API void
+webkit_settings_set_allow_move_to_suspend_on_window_close       (WebKitSettings *settings,
+                                                                 gboolean allowed);
 
 WEBKIT_API gboolean
 webkit_settings_get_enable_directory_upload                    (WebKitSettings *settings);
