@@ -1101,17 +1101,19 @@ void LocalDOMWindow::close()
     if (!frame->isMainFrame())
         return;
 
-    if (!(page->openedByDOM() || page->backForward().count() <= 1 || frame->settings().allowScriptsToCloseWindows())) {
-        console()->addMessage(MessageSource::JS, MessageLevel::Warning, "Can't close the window since it was not opened by JavaScript"_s);
-        return;
+    if (!frame->settings().allowMoveToSuspendOnWindowClose()) {
+        if (!(page->openedByDOM() || page->backForward().count() <= 1 || frame->settings().allowScriptsToCloseWindows())) {
+            console()->addMessage(MessageSource::JS, MessageLevel::Warning, "Can't close the window since it was not opened by JavaScript"_s);
+            return;
+        }
+
+        if (!frame->loader().shouldClose())
+            return;
+
+        ResourceLoadObserver::shared().updateCentralStatisticsStore([] { });
+
+        page->setIsClosing();
     }
-
-    if (!frame->loader().shouldClose())
-        return;
-
-    ResourceLoadObserver::shared().updateCentralStatisticsStore([] { });
-
-    page->setIsClosing();
 
     document()->eventLoop().queueTask(TaskSource::DOMManipulation, [this, protectedThis = Ref { *this }] {
         if (auto* page = this->page())
