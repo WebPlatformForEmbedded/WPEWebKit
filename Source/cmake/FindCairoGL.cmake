@@ -29,7 +29,15 @@
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 find_package(PkgConfig QUIET)
-pkg_check_modules(CAIROGL cairo-glesv2)
+if (NOT CAIROGL_FOUND)
+    pkg_check_modules(CAIROGL cairo-glesv2)
+endif()
+if (NOT CAIROGL_FOUND)
+    pkg_check_modules(CAIROGL cairo-glesv3)
+endif()
+if (NOT CAIROGL_FOUND)
+    pkg_check_modules(CAIROGL cairo-gl)
+endif()
 
 if (CAIROGL_FOUND)
 # At the moment CairoGL does not add any extra cflags and libraries, so we can
