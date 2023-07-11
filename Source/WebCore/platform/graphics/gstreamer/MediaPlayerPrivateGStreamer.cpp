@@ -2739,7 +2739,7 @@ void MediaPlayerPrivateGStreamer::didEnd()
     // position is not always reported as 0 for instance.
     m_lastQueryTime.reset();
     MediaTime now = currentMediaTime();
-    if (now > MediaTime::zeroTime() && !m_isSeeking) {
+    if (now > MediaTime::zeroTime() && !m_isSeeking && !durationMediaTime().isFinite()) {
         m_cachedDuration = now;
         m_player->durationChanged();
     }
