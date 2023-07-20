@@ -79,6 +79,8 @@
 #include <wtf/ProcessPrivilege.h>
 #include <wtf/SystemTracing.h>
 
+#include <WebCore/MixedContentChecker.h>
+
 #if ENABLE(NOTIFICATIONS)
 #include "WebNotificationManager.h"
 #endif
@@ -157,6 +159,20 @@ void InjectedBundle::resetOriginAccessAllowLists()
 {
     SecurityPolicy::resetOriginAccessAllowlists();
     WebProcess::singleton().ensureNetworkProcessConnection().connection().send(Messages::NetworkConnectionToWebProcess::ResetOriginAccessAllowLists { }, 0);
+}
+
+void InjectedBundle::addMixedContentWhitelistEntry(const String& origin, const String& domain)
+{
+    MixedContentChecker::addMixedContentWhitelistEntry(origin, domain);
+}
+
+void InjectedBundle::removeMixedContentWhitelistEntry(const String& origin, const String& domain)
+{
+    MixedContentChecker::removeMixedContentWhitelistEntry(origin, domain);
+}
+void InjectedBundle::resetMixedContentWhitelist()
+{
+    MixedContentChecker::resetMixedContentWhitelist();
 }
 
 void InjectedBundle::setAsynchronousSpellCheckingEnabled(bool enabled)

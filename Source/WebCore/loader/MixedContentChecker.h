@@ -31,6 +31,8 @@
 
 #include "FetchOptions.h"
 #include <wtf/Forward.h>
+#include <wtf/KeyValuePair.h>
+#include <wtf/Vector.h>
 
 namespace WebCore {
 
@@ -54,6 +56,10 @@ bool shouldUpgradeInsecureContent(LocalFrame&, IsUpgradable, const URL&, FetchOp
 bool shouldBlockRequestForDisplayableContent(LocalFrame&, const URL&, ContentType, IsUpgradable = IsUpgradable::No);
 bool shouldBlockRequestForRunnableContent(LocalFrame&, SecurityOrigin&, const URL&, ShouldLogWarning = ShouldLogWarning::Yes);
 void checkFormForMixedContent(LocalFrame&, const URL&);
+
+void addMixedContentWhitelistEntry(const String& origin, const String& domain);
+void removeMixedContentWhitelistEntry(const String& origin, const String& domain);
+void resetMixedContentWhitelist();
 
 } // namespace MixedContentChecker
 } // namespace WebCore

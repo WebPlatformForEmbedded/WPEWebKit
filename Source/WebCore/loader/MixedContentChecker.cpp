@@ -47,7 +47,60 @@
 
 namespace WebCore {
 
-static bool isMixedContent(const Document& document, const URL& url)
+static WTF::Vector<WTF::KeyValuePair<WTF::String, WTF::String>> m_whitelist = {};
+
+static bool wildcardMatch(const String& pattern, const String& url)
+{
+    int patternLen = pattern.length();
+    int patternPos = 0;
+    int urlLen = url.length();
+    int urlPos = 0;
+    int wildcardPos = -1;
+    int wildcardMatchEnd = 0;
+
+    while (urlPos < urlLen) {
+        if (patternPos < patternLen && pattern[patternPos] == url[urlPos]) {
+            // characters match
+            patternPos++;
+            urlPos++;
+        } else if (patternPos < patternLen && pattern[patternPos] == '*') {
+            // mark wildcard position, start matching the rest of the pattern
+            wildcardPos = patternPos;
+            wildcardMatchEnd = urlPos;
+            patternPos++;
+        } else if (wildcardPos != -1) {
+            // no match, but we have a wildcard - assume wildcard handles a match to this position,
+            // revert patternPos to after last *
+            patternPos = wildcardPos + 1;
+            wildcardMatchEnd++;
+            urlPos = wildcardMatchEnd;
+        } else {
+            // no match, no wildcard - pattern does not match
+            return false;
+        }
+    }
+
+    // url matches so far, and we're at the end of it
+    // skip any remaining wildcards
+    while (patternPos < patternLen && pattern[patternPos] == '*') {
+        patternPos++;
+    }
+    // if we're at the end of pattern, that's a match
+    // otherwise, the remaining part of the pattern can't be matched
+    return patternPos == patternLen;
+}
+
+static bool isWhitelisted(const String& origin, const String& domain)
+{
+    for (auto kvPair : m_whitelist) {
+        if (wildcardMatch(kvPair.key, origin) && wildcardMatch(kvPair.value, domain)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool isMixedContent(const Document& document, const WTF::URL& url)
 {
     // FIXME: Use document.isSecureContext(), instead of comparing against "https" scheme, when all ports stop using loopback in LayoutTests
     // sandboxed iframes have an opaque origin so we should perform the mixed content check considering the origin
@@ -124,6 +177,11 @@ static bool frameAndAncestorsCanDisplayInsecureContent(LocalFrame& frame, MixedC
         return true;
 
     RefPtr document = frame.document();
+    if (isWhitelisted(document->securityOrigin().toString(), url.protocolHostAndPort())) {
+        logConsoleWarning(frame, true, "display"_s, url);
+        return true;
+    }
+
     if (!document->checkedContentSecurityPolicy()->allowRunningOrDisplayingInsecureContent(url))
         return false;
 
@@ -145,6 +203,11 @@ bool MixedContentChecker::frameAndAncestorsCanRunInsecureContent(LocalFrame& fra
 
     if (!foundMixedContentInFrameTree(frame, url))
         return true;
+
+    if (isWhitelisted(securityOrigin.toString(), url.protocolHostAndPort())) {
+        logConsoleWarning(frame, true, "run"_s, url);
+        return true;
+    }
 
     RefPtr document = frame.document();
     if (!document->checkedContentSecurityPolicy()->allowRunningOrDisplayingInsecureContent(url))
@@ -242,5 +305,25 @@ void MixedContentChecker::checkFormForMixedContent(LocalFrame& frame, const URL&
 
     frame.checkedLoader()->client().didDisplayInsecureContent();
 }
+void MixedContentChecker::addMixedContentWhitelistEntry(const String& origin, const String& domain)
+{
+    m_whitelist.append(makeKeyValuePair(origin, domain));
+}
 
+void MixedContentChecker::removeMixedContentWhitelistEntry(const String& origin, const String& domain)
+{
+    for (size_t i = 0; i < m_whitelist.size(); i++) {
+        if (m_whitelist[i].key == origin && m_whitelist[i].value == domain) {
+            m_whitelist.remove(i);
+            break;
+        }
+    }
+}
+
+void MixedContentChecker::resetMixedContentWhitelist()
+{
+    m_whitelist.clear();
+
+}
 } // namespace WebCore
+

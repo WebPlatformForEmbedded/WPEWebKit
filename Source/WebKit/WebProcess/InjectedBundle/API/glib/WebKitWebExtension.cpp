@@ -274,6 +274,27 @@ void webkit_web_extension_reset_origin_access_whitelists(WebKitWebExtension* ext
     extension->priv->bundle->resetOriginAccessAllowLists();
 }
 
+void webkit_web_extension_add_mixed_content_whitelist_entry(WebKitWebExtension *extension, const gchar* origin, const gchar* domain)
+{
+    g_return_if_fail(WEBKIT_IS_WEB_EXTENSION(extension));
+
+    extension->priv->bundle->addMixedContentWhitelistEntry(String::fromUTF8(origin), String::fromUTF8(domain));
+}
+
+void webkit_web_extension_remove_mixed_content_whitelist_entry(WebKitWebExtension *extension, const gchar* origin, const gchar* domain)
+{
+    g_return_if_fail(WEBKIT_IS_WEB_EXTENSION(extension));
+
+    extension->priv->bundle->removeMixedContentWhitelistEntry(String::fromUTF8(origin), String::fromUTF8(domain));
+}
+
+void webkit_web_extension_reset_mixed_content_whitelist_entry(WebKitWebExtension *extension)
+{
+    g_return_if_fail(WEBKIT_IS_WEB_EXTENSION(extension));
+
+    extension->priv->bundle->resetMixedContentWhitelist();
+}
+
 /**
  * webkit_web_extension_send_message_to_context:
  * @extension: a #WebKitWebExtension

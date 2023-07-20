@@ -93,6 +93,19 @@ WEBKIT_API void
 webkit_web_extension_reset_origin_access_whitelists       (WebKitWebExtension   *extension);
 
 WEBKIT_API void
+webkit_web_extension_add_mixed_content_whitelist_entry    (WebKitWebExtension   *extension,
+                                                           const gchar          *origin,
+                                                           const gchar          *domain);
+
+WEBKIT_API void
+webkit_web_extension_remove_mixed_content_whitelist_entry (WebKitWebExtension   *extension,
+                                                           const gchar          *origin,
+                                                           const gchar          *domain);
+
+WEBKIT_API void
+webkit_web_extension_reset_mixed_content_whitelist_entry  (WebKitWebExtension   *extension);
+
+WEBKIT_API void
 webkit_web_extension_send_message_to_context        (WebKitWebExtension *extension,
                                                      WebKitUserMessage  *message,
                                                      GCancellable       *cancellable,
