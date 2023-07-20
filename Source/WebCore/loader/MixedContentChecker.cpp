@@ -76,7 +76,7 @@ bool MixedContentChecker::canDisplayInsecureContent(Frame& frame, SecurityOrigin
     if (!frame.document()->contentSecurityPolicy()->allowRunningOrDisplayingInsecureContent(url))
         return false;
 
-    if (SecurityPolicy::isAccessAllowed(securityOrigin, url)) {
+    if (isWhitelisted(securityOrigin.toString(), url.protocolHostAndPort())) {
         logWarning(frame, true, "display"_s, url);
         return true;
     }
@@ -109,7 +109,7 @@ bool MixedContentChecker::canRunInsecureContent(Frame& frame, SecurityOrigin& se
     if (!frame.document()->contentSecurityPolicy()->allowRunningOrDisplayingInsecureContent(url))
         return false;
 
-    if (SecurityPolicy::isAccessAllowed(securityOrigin, url)) {
+    if (isWhitelisted(securityOrigin.toString(), url.protocolHostAndPort())) {
         logWarning(frame, true, "run"_s, url);
         return true;
     }
