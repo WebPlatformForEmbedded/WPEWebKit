@@ -812,14 +812,7 @@ std::pair<AppendPipeline::CreateTrackResult, AppendPipeline::Track*> AppendPipel
     auto [parsedCaps, streamType, presentationSize] = parseDemuxerSrcPadCaps(adoptGRef(gst_pad_get_current_caps(demuxerSrcPad)).get());
     GST_DEBUG_OBJECT(pipeline(), "Demuxer src pad caps: %" GST_PTR_FORMAT, parsedCaps.get());
 
-    if (streamType == StreamType::Invalid) {
-        GST_WARNING_OBJECT(pipeline(), "Unsupported track codec: %" GST_PTR_FORMAT, parsedCaps.get());
-        // 3.5.7 Initialization Segment Received
-        // 5.1. If the initialization segment contains tracks with codecs the user agent does not support, then run the
-        // append error algorithm and abort these steps.
-        return { CreateTrackResult::AppendParsingFailed, nullptr };
-    }
-    if (streamType == StreamType::Unknown) {
+    if (streamType == StreamType::Invalid || streamType == StreamType::Unknown) {
         GST_WARNING_OBJECT(pipeline(), "Pad '%s' with parsed caps %" GST_PTR_FORMAT " has an unknown type, will be connected to a black hole probe.", GST_PAD_NAME(demuxerSrcPad), parsedCaps.get());
         gst_pad_add_probe(demuxerSrcPad, GST_PAD_PROBE_TYPE_BUFFER, reinterpret_cast<GstPadProbeCallback>(appendPipelineDemuxerBlackHolePadProbe), nullptr, nullptr);
         return { CreateTrackResult::TrackIgnored, nullptr };
@@ -844,6 +837,13 @@ bool AppendPipeline::recycleTrackForPad(GstPad* demuxerSrcPad)
     auto [parsedCaps, streamType, presentationSize] = parseDemuxerSrcPadCaps(adoptGRef(gst_pad_get_current_caps(demuxerSrcPad)).get());
 
     GST_DEBUG_OBJECT(demuxerSrcPad, "Caps: %" GST_PTR_FORMAT, parsedCaps.get());
+    if (streamType == StreamType::Invalid) {
+        // Invalid configuration.
+        GST_WARNING_OBJECT(pipeline(), "Couldn't find a matching pre-existing track for pad '%s' with parsed caps %" GST_PTR_FORMAT
+            " ignoring, connecting to a black hole probe.", GST_PAD_NAME(demuxerSrcPad), parsedCaps.get());
+        gst_pad_add_probe(demuxerSrcPad, GST_PAD_PROBE_TYPE_BUFFER, reinterpret_cast<GstPadProbeCallback>(appendPipelineDemuxerBlackHolePadProbe), nullptr, nullptr);
+        return true;
+    }
 
     // Try to find a matching pre-existing track. Ideally, tracks should be matched by track ID, but matching by type
     // is provided as a fallback -- which will be used, since we don't have a way to fetch those from GStreamer at the moment.
