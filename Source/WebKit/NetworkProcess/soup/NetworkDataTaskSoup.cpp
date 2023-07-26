@@ -183,6 +183,22 @@ void NetworkDataTaskSoup::createRequest(ResourceRequest&& request, WasBlockingCo
         soup_message_disable_feature(m_soupMessage.get(), SOUP_TYPE_AUTH_MANAGER);
 #endif
     }
+
+    static bool enablePostReuse = false;
+    static std::once_flag onceFlag;
+    std::call_once(onceFlag, [] {
+        char* envString = getenv("WPE_POST_CONNECTION_REUSE");
+        enablePostReuse = !!envString && envString[0] != '0';
+    });
+
+#if USE(SOUP2)
+    const char* method = m_soupMessage->method;
+#else
+    const char* method = soup_message_get_method(m_soupMessage.get());
+#endif
+    if (method == SOUP_METHOD_POST && enablePostReuse)
+        messageFlags |= SOUP_MESSAGE_IDEMPOTENT;
+
     soup_message_set_flags(m_soupMessage.get(), static_cast<SoupMessageFlags>(soup_message_get_flags(m_soupMessage.get()) | messageFlags));
 
     bool shouldBlockCookies = wasBlockingCookies == WasBlockingCookies::Yes ? true : m_storedCredentialsPolicy == StoredCredentialsPolicy::EphemeralStateless;
