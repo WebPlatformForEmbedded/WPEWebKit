@@ -496,7 +496,7 @@ private:
     bool shouldTerminate() override;
     void terminate() override;
 
-#if USE(APPKIT) || PLATFORM(GTK) || PLATFORM(WPE)
+#if USE(APPKIT)
     void stopRunLoop() override;
 #endif
 
