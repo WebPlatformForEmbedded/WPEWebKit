@@ -425,6 +425,26 @@ String PlatformKeyboardEvent::keyValueForWPEKeyCode(unsigned keyCode)
         return "F19"_s;
     case WPE_KEY_F20:
         return "F20"_s;
+    case WPE_KEY_Launch0:
+        return "OnDemand"_s;
+    case WPE_KEY_Launch1:
+        return "LaunchApp1"_s;
+    case WPE_KEY_Launch2:
+        return "DVR"_s;
+    case WPE_KEY_Launch3:
+        return "Teletext"_s;
+    case WPE_KEY_Launch4:
+        return "NextUserProfile"_s;
+    case WPE_KEY_Launch5:
+        return "Guide"_s;
+    case 0x01002139: // Unicode U+2139 Information Source
+        return "Info"_s;
+    case 0x010023ef: // Unicode U+23EF PlayPause
+        return "MediaPlayPause"_s;
+    case 0x0101F3A4: // Unicode U+1F3A4 Microphone
+        return "MicrophoneToggle"_s;
+    case 0x0101F4FA: // Unicode U+1F4FA Television
+        return "TV"_s;
     default:
         break;
     }
@@ -708,6 +728,12 @@ String PlatformKeyboardEvent::keyCodeForHardwareKeyCode(unsigned keyCode)
         return "WakeUp"_s;
     case 0x0098:
         return "LaunchApp1"_s;
+    case 0x009C:
+        return "NextUserProfile"_s;
+    case 0x009D:
+        return "LaunchApp1"_s;
+    case 0x00A0:
+        return "OnDemand"_s;
     case 0x00A3:
         return "LaunchMail"_s;
     case 0x00A4:
@@ -758,6 +784,18 @@ String PlatformKeyboardEvent::keyCodeForHardwareKeyCode(unsigned keyCode)
         return "F24"_s;
     case 0x00E1:
         return "BrowserSearch"_s;
+    case 0x016E:
+        return "Info"_s;
+    case 0x0175:
+        return "Guide"_s;
+    case 0x0176:
+        return "DVR"_s;
+    case 0x0181:
+        return "TV"_s;
+    case 0x024E:
+        return "MicrophoneToggle"_s;
+    case 0x027F:
+        return "Teletext"_s;
     default:
         break;
     }
@@ -868,6 +906,26 @@ String PlatformKeyboardEvent::keyIdentifierForWPEKeyCode(unsigned keyCode)
     case WPE_KEY_3270_BackTab:
     case WPE_KEY_Tab:
         return "U+0009"_s;
+    case WPE_KEY_Launch0:
+        return "OnDemand"_s;
+    case WPE_KEY_Launch1:
+        return "LaunchApp1"_s;
+    case WPE_KEY_Launch2:
+        return "DVR"_s;
+    case WPE_KEY_Launch3:
+        return "Teletext"_s;
+    case WPE_KEY_Launch4:
+        return "NextUserProfile"_s;
+    case WPE_KEY_Launch5:
+        return "Guide"_s;
+    case 0x01002139: // Unicode U+2139 Information Source
+        return "Info"_s;
+    case 0x010023ef: // Unicode U+23EF PlayPause
+        return "MediaPlayPause"_s;
+    case 0x0101F3A4: // Unicode U+1F3A4 Microphone
+        return "MicrophoneToggle"_s;
+    case 0x0101F4FA: // Unicode U+1F4FA Television
+        return "TV"_s;
     default:
         break;
     }
@@ -951,7 +1009,7 @@ int PlatformKeyboardEvent::windowsKeyCodeForWPEKeyCode(unsigned keycode)
 
     case WPE_KEY_Pause:
     case WPE_KEY_AudioPause:
-        return VK_PAUSE; // (13) PAUSE key
+        return VK_MEDIA_PLAY_PAUSE; // VK_MEDIA_PLAY_PAUSE (B3) Windows 2000/XP: Play/Pause Media key
     case WPE_KEY_Caps_Lock:
         return VK_CAPITAL; // (14) CAPS LOCK key
     case WPE_KEY_Kana_Lock:
@@ -1151,6 +1209,7 @@ int PlatformKeyboardEvent::windowsKeyCodeForWPEKeyCode(unsigned keycode)
     case WPE_KEY_Stop:
         return VK_BROWSER_STOP; // (A9) Windows 2000/XP: Browser Stop key
     case WPE_KEY_Search:
+    case 0x0101F4FA: // Unicode U+1F4FA Television
         return VK_BROWSER_SEARCH; // (AA) Windows 2000/XP: Browser Search key
     case WPE_KEY_Favorites:
         return VK_BROWSER_FAVORITES; // (AB) Windows 2000/XP: Browser Favorites key
@@ -1232,7 +1291,8 @@ int PlatformKeyboardEvent::windowsKeyCodeForWPEKeyCode(unsigned keycode)
         // VK_EXSEL (F8) ExSel key
         // VK_EREOF (F9) Erase EOF key
     case WPE_KEY_AudioPlay:
-        return VK_PLAY; // VK_PLAY (FA) Play key
+    case 0x010023ef: // Unicode U+23EF PlayPause
+        return VK_MEDIA_PLAY_PAUSE; // VK_MEDIA_PLAY_PAUSE (B3) Windows 2000/XP: Play/Pause Media key
         // VK_ZOOM (FB) Zoom key
         // VK_NONAME (FC) Reserved for future use
         // VK_PA1 (FD) PA1 key
@@ -1284,6 +1344,10 @@ int PlatformKeyboardEvent::windowsKeyCodeForWPEKeyCode(unsigned keycode)
         return 0x1CC; // Toggle display of subtitles, if available
     case WPE_KEY_Video:
         return 0x26F; // Access on-demand content or programs
+    case WPE_KEY_Launch2:
+        return 0xAD;
+    case WPE_KEY_Launch3:
+        return 0x1CB;
     default:
         break;
     }
