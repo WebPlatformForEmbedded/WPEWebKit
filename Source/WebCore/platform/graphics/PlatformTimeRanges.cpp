@@ -154,17 +154,15 @@ void PlatformTimeRanges::add(const MediaTime& start, const MediaTime& end)
 #endif
     ASSERT(start <= end);
 
-    unsigned overlappingArcIndex;
+    size_t overlappingArcIndex;
     Range addedRange(start, end);
 
     // For each present range check if we need to:
     // - merge with the added range, in case we are overlapping or contiguous
     // - Need to insert in place, we we are completely, not overlapping and not contiguous
     // in between two ranges.
-    //
-    // TODO: Given that we assume that ranges are correctly ordered, this could be optimized.
 
-    for (overlappingArcIndex = 0; overlappingArcIndex < m_ranges.size(); overlappingArcIndex++) {
+    for (overlappingArcIndex = findLastRangeIndexBefore(start, end); overlappingArcIndex < m_ranges.size(); overlappingArcIndex++) {
         if (addedRange.isOverlappingRange(m_ranges[overlappingArcIndex]) || addedRange.isContiguousWithRange(m_ranges[overlappingArcIndex])) {
             // We need to merge the addedRange and that range.
             addedRange = addedRange.unionWithOverlappingOrContiguousRange(m_ranges[overlappingArcIndex]);
@@ -298,4 +296,31 @@ String PlatformTimeRanges::toString() const
     return result.toString();
 }
 
+size_t PlatformTimeRanges::findLastRangeIndexBefore(const MediaTime& start, const MediaTime& end) const
+{
+    ASSERT(start <= end);
+
+    if (m_ranges.isEmpty())
+        return 0;
+
+    const Range range(start, end);
+    size_t first, last, middle;
+    size_t index = 0;
+
+    first = 0;
+    last = m_ranges.size() - 1;
+    middle = first + ((last - first) / 2);
+
+    while (first < last && middle > 0) {
+        if (m_ranges[middle].isBeforeRange(range)) {
+            index = middle;
+            first = middle + 1;
+        } else
+            last = middle - 1;
+
+        middle = first + ((last - first) / 2);
+    }
+    return index;
+
+}
 }
