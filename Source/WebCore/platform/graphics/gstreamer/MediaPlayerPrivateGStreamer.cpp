@@ -4308,6 +4308,11 @@ void MediaPlayerPrivateGStreamer::initializationDataEncountered(InitData&& initD
         if (!weakThis)
             return;
 
+        if (weakThis->m_cdmInstance && equalIgnoringASCIICase(initData.payloadContainerType(), "cenc"_s) && !GStreamerEMEUtilities::cencHasInitDataForKeySystem(initData, weakThis->m_cdmInstance->keySystem())) {
+            GST_TRACE_OBJECT(weakThis->pipeline(), "skipping initialization data for a different key system");
+            return;
+        }
+
         GST_DEBUG("scheduling initializationDataEncountered %s event of size %zu", initData.payloadContainerType().utf8().data(),
             initData.payload()->size());
         GST_MEMDUMP("init datas", reinterpret_cast<const uint8_t*>(initData.payload()->makeContiguous()->data()), initData.payload()->size());

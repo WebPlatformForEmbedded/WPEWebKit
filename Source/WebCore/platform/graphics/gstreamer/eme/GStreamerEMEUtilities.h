@@ -200,6 +200,8 @@ public:
         static NeverDestroyed<ASCIILiteral> empty(""_s);
         return empty;
     }
+
+    static bool cencHasInitDataForKeySystem(const InitData& initData, const String& keySystem);
 };
 
 }
