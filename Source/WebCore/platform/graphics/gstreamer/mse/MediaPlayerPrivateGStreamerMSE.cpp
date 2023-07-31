@@ -206,6 +206,11 @@ void MediaPlayerPrivateGStreamerMSE::play()
 {
     GST_DEBUG_OBJECT(pipeline(), "Play requested");
     m_isPaused = false;
+    if (!m_playbackRate) {
+        // If the playback rate is 0, we should nor resume playback
+        m_isPlaybackRatePaused = true;
+        return;
+    }
     updateStates();
 }
 
@@ -213,6 +218,7 @@ void MediaPlayerPrivateGStreamerMSE::pause()
 {
     GST_DEBUG_OBJECT(pipeline(), "Pause requested");
     m_isPaused = true;
+    m_isPlaybackRatePaused = false;
     updateStates();
 }
 
@@ -354,8 +360,19 @@ void MediaPlayerPrivateGStreamerMSE::sourceSetup(GstElement* sourceElement)
 
 void MediaPlayerPrivateGStreamerMSE::updateStates()
 {
-    bool shouldBePlaying = !m_isPaused && readyState() >= MediaPlayer::ReadyState::HaveFutureData;
+    bool shouldBePlaying = !m_isPaused && !m_isPlaybackRatePaused && readyState() >= MediaPlayer::ReadyState::HaveFutureData;
     GST_DEBUG_OBJECT(pipeline(), "shouldBePlaying = %s, m_isPipelinePlaying = %s", boolForPrinting(shouldBePlaying), boolForPrinting(m_isPipelinePlaying));
+
+    GstState state, pending;
+    GstStateChangeReturn getStateResult = gst_element_get_state(pipeline(), &state, &pending, 0);
+    if (getStateResult == GST_STATE_CHANGE_ASYNC) {
+        // Changeing pipeline state during async state change will be either rejected by changePipelineState()
+        // or ignored by playbin (overwritten by the async tartet state after transitions completes).
+        // Lets wait until it's done and then apply play/pause if needed
+        GST_DEBUG_OBJECT(pipeline(), "ASYNC state change in progress");
+        return;
+    }
+
     if (shouldBePlaying && !m_isPipelinePlaying) {
         if (!changePipelineState(GST_STATE_PLAYING))
             GST_ERROR_OBJECT(pipeline(), "Setting the pipeline to PLAYING failed");
@@ -364,6 +381,11 @@ void MediaPlayerPrivateGStreamerMSE::updateStates()
         if (!changePipelineState(GST_STATE_PAUSED))
             GST_ERROR_OBJECT(pipeline(), "Setting the pipeline to PAUSED failed");
         m_isPipelinePlaying = false;
+    }
+
+    if (getStateResult == GST_STATE_CHANGE_SUCCESS && state >= GST_STATE_PAUSED) {
+        // Update playback rate that was set before the pipeline was prerolled.
+        updatePlaybackRate();
     }
 }
 

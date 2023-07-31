@@ -377,6 +377,7 @@ protected:
     mutable std::optional<bool> m_isLiveStream;
     bool m_isPaused { true };
     float m_playbackRate { 1 };
+    bool m_isPlaybackRatePaused { false };
     GstState m_currentState { GST_STATE_NULL };
     GstState m_oldState { GST_STATE_NULL };
     GstState m_requestedState { GST_STATE_VOID_PENDING };
@@ -548,7 +549,6 @@ private:
     GRefPtr<GstElement> m_textSink;
     GUniquePtr<GstStructure> m_mediaLocations;
     int m_mediaLocationCurrentIndex { 0 };
-    bool m_isPlaybackRatePaused { false };
     MediaTime m_timeOfOverlappingSeek;
     // Last playback rate sent through a GStreamer seek.
     float m_lastPlaybackRate { 1 };
