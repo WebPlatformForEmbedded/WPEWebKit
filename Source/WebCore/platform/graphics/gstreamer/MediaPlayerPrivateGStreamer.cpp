@@ -2303,6 +2303,17 @@ void MediaPlayerPrivateGStreamer::configureElementPlatformQuirks(GstElement* ele
 #endif
 #endif
 
+#if USE(WESTEROS_SINK)
+    if (!g_strcmp0(G_OBJECT_TYPE_NAME(G_OBJECT(element)), "GstWesterosSink")) {
+#if ENABLE(MEDIA_STREAM)
+        if (m_streamPrivate && gstObjectHasProperty(element, "immediate-output")) {
+            GST_DEBUG_OBJECT(pipeline(), "Enable 'immediate-output' in WesterosSink");
+            g_object_set(G_OBJECT(element), "immediate-output", TRUE, nullptr);
+        }
+#endif
+    }
+#endif
+
 #if ENABLE(MEDIA_STREAM) && PLATFORM(REALTEK)
     if (m_streamPrivate) {
         if (gstObjectHasProperty(element, "media-tunnel")) {
