@@ -231,13 +231,17 @@ if (!window.InspectorFrontendHost) {
 
         canSave()
         {
-            return false;
+            return true;
         }
 
         save(url, content, base64encoded, forceSaveAs)
-        {
-            // FIXME: Create a Blob from the content, get an object URL, open it to trigger a download.
-            throw "unimplemented";
+        {           
+            var a = document.createElement("a");
+            var text = JSON.stringify(JSON.parse(content));
+            var file = new Blob([text], {type: "application/json" });
+            a.href = URL.createObjectURL(file);
+            a.download = url;
+            a.click();
         }
 
         append(url, content)
