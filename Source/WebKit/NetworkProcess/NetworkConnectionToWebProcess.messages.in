@@ -109,6 +109,7 @@ messages -> NetworkConnectionToWebProcess LegacyReceiver {
     PostMessageToRemote(struct WebCore::MessageWithMessagePorts message, struct WebCore::MessagePortIdentifier remote)
     DidDeliverMessagePortMessages(uint64_t messageBatchIdentifier)
     RegisterURLSchemesAsCORSEnabled(Vector<String> schemes);
+    RegisterURLSchemeAsHandledBySchemeHandler(String scheme)
     SetCORSDisablingPatterns(WebCore::PageIdentifier pageIdentifier, Vector<String> patterns)
 #if PLATFORM(MAC)
     GetProcessDisplayName(struct WebKit::CoreIPCAuditToken auditToken) -> (String displayName)

@@ -32,6 +32,7 @@
 #include "BlobURL.h"
 #include "LegacySchemeRegistry.h"
 #include "OriginAccessEntry.h"
+#include "OriginAccessPatterns.h"
 #include "PublicSuffixStore.h"
 #include "RuntimeApplicationChecks.h"
 #include "SecurityPolicy.h"
@@ -289,6 +290,8 @@ bool SecurityOrigin::isSameOriginDomain(const SecurityOrigin& other) const
 
     if (canAccess && isLocal())
         canAccess = hasLocalUnseparatedPath(other);
+
+    canAccess |= SecurityPolicy::isAccessAllowed(*this, other, other.toURL(), EmptyOriginAccessPatterns::singleton());
 
     return canAccess;
 }

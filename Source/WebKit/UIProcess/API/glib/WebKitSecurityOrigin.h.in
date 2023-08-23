@@ -17,7 +17,7 @@
  * Boston, MA 02110-1301, USA.
  */
 
-@API_SINGLE_HEADER_CHECK@
+@SHARED_API_SINGLE_HEADER_CHECK@
 
 #ifndef WebKitSecurityOrigin_h
 #define WebKitSecurityOrigin_h
