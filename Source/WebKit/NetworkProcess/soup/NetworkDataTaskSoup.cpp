@@ -26,10 +26,15 @@
 #include "config.h"
 #include "NetworkDataTaskSoup.h"
 
+#include <map>
+#include <string>
+#include <vector>
+
 #include "AuthenticationChallengeDisposition.h"
 #include "AuthenticationManager.h"
 #include "DataReference.h"
 #include "Download.h"
+#include "Logging.h"
 #include "NetworkLoad.h"
 #include "NetworkProcess.h"
 #include "NetworkSessionSoup.h"
@@ -49,9 +54,157 @@
 #include <pal/text/TextEncoding.h>
 #include <wtf/MainThread.h>
 #include <wtf/glib/RunLoopSourcePriority.h>
+#include <wtf/glib/GRefPtr.h>
+
 
 namespace WebKit {
 using namespace WebCore;
+
+#if PLATFORM(WPE)
+namespace {
+
+std::map<std::string, GRefPtr<GTlsCertificate>>& clientAuthCertificates()
+{
+    static NeverDestroyed<std::map<std::string, GRefPtr<GTlsCertificate>>>
+        certificates;
+    return certificates;
+}
+
+typedef struct _WebKitGTlsInteraction WebKitGTlsInteraction;
+typedef struct _WebKitGTlsInteractionClass WebKitGTlsInteractionClass;
+
+struct _WebKitGTlsInteraction {
+    GTlsInteraction parent;
+    GTlsCertificate *cert;
+};
+
+struct _WebKitGTlsInteractionClass {
+    GTlsInteractionClass parent_class;
+};
+
+G_DEFINE_TYPE(WebKitGTlsInteraction,
+              webkit_tls_interaction,
+              G_TYPE_TLS_INTERACTION);
+
+#define WEBKIT_TLS_INTERACTION_TYPE    (webkit_tls_interaction_get_type ())
+#define WEBKIT_TLS_INTERACTION(obj)    (G_TYPE_CHECK_INSTANCE_CAST((obj),      \
+                                        WEBKIT_TLS_INTERACTION_TYPE,           \
+                                        WebKitGTlsInteraction))
+
+GTlsInteractionResult _request_certificate(GTlsInteraction* interaction,
+                                           GTlsConnection* connection,
+                                           GTlsCertificateRequestFlags flags,
+                                           GCancellable* cancellable,
+                                           GError** error)
+{
+    WebKitGTlsInteraction *WKInteraction = WEBKIT_TLS_INTERACTION(interaction);
+    g_tls_connection_set_certificate(connection, WKInteraction->cert);
+    return G_TLS_INTERACTION_HANDLED;
+}
+
+void webkit_tls_interaction_init(WebKitGTlsInteraction* interaction)
+{
+}
+
+void webkit_tls_interaction_class_init(WebKitGTlsInteractionClass* klass)
+{
+    GTlsInteractionClass *interaction_class = G_TLS_INTERACTION_CLASS (klass);
+    interaction_class->request_certificate = _request_certificate;
+}
+
+WebKitGTlsInteraction *webkit_get_tls_cert_interaction_new(GTlsCertificate *cert)
+{
+    WebKitGTlsInteraction *WKInteraction = WEBKIT_TLS_INTERACTION(g_object_new(WEBKIT_TLS_INTERACTION_TYPE, NULL));
+    WKInteraction->cert = cert;
+    return WKInteraction;
+}
+
+bool isASCIISpace(char c) {
+    return c == ' ' || c == '\t';
+}
+
+void trimLeadingAndTrailingWs(std::string* s) {
+    while (!s->empty() && isASCIISpace(s->front())) {
+        s->erase(0, 1);
+    }
+
+    while(!s->empty() && isASCIISpace(s->back())) {
+        s->pop_back();
+    }
+}
+
+std::vector<std::string> tokenize(const std::string& s, const char* delimiters) {
+    auto lastPos = 0u;
+    std::vector<std::string> result;
+    auto pos = 0u;
+    do {
+        pos = s.find_first_of(delimiters, lastPos);
+        if (pos != std::string::npos) {
+           auto toAdd = s.substr(lastPos, pos - lastPos);
+           trimLeadingAndTrailingWs(&toAdd);
+           result.push_back(std::move(toAdd));
+           // Skip more delimiters.
+           lastPos = s.find_first_not_of(delimiters, pos + 1);
+        } else {
+            auto toAdd = s.substr(lastPos);
+            trimLeadingAndTrailingWs(&toAdd);
+            // No more delimiters in the front so push the last bit.
+            result.push_back(std::move(toAdd));
+        }
+    } while (pos != std::string::npos && lastPos != std::string::npos);
+
+    return result;
+}
+
+void maybeSetUpClientAuthCertificates() {
+    if (!clientAuthCertificates().empty())
+        return;
+
+    auto* certsUrls = getenv("WPE_CLIENT_CERTIFICATES_URLS");
+    if (certsUrls && *certsUrls) {
+        std::string urlsList(certsUrls);
+        auto urls = tokenize(urlsList, "|");
+        for (const auto& url : urls) {
+            auto* dataForUrl = getenv(url.c_str());
+            if (dataForUrl && *dataForUrl) {
+                GUniqueOutPtr<GError> error;
+                auto certificate = adoptGRef(
+                        g_tls_certificate_new_from_pem(dataForUrl,
+                                                       strlen(dataForUrl),
+                                                       &error.outPtr()));
+                if (certificate) {
+                    clientAuthCertificates().insert(
+                        std::make_pair(url.c_str(), certificate));
+                } else if (error) {
+                    WTFLogAlways("Error '%s' when trying to add client "
+                                 "certificate for %s\n",
+                            error->message, url.c_str());
+                }
+            }
+        }
+    }
+}
+
+void initAndCheckClientAuthCerts(SoupSession* session, const URL &connectionURL) {
+    /* Read client certificates and build certificate list */
+    maybeSetUpClientAuthCertificates();
+
+    auto foundCert =
+        std::find_if(
+            clientAuthCertificates().begin(), clientAuthCertificates().end(),
+            [&connectionURL](const std::pair<std::string, GRefPtr<GTlsCertificate>>& p) {
+                URL certURL({ }, makeString(p.first.c_str()));
+                return protocolHostAndPortAreEqual(certURL, connectionURL);
+        });
+
+    if (foundCert != clientAuthCertificates().end()) {
+        LOG(Network, "%s:%d Found certificate for host %s\n", __func__, __LINE__, connectionURL.hostAndPort().utf8().data());
+        WebKitGTlsInteraction *WKInteraction = webkit_get_tls_cert_interaction_new(foundCert->second.get());
+        g_object_set(session, SOUP_SESSION_TLS_INTERACTION, WKInteraction, nullptr);
+    }
+}
+}
+#endif
 
 static const size_t gDefaultReadBufferSize = 8192;
 
@@ -68,6 +221,11 @@ NetworkDataTaskSoup::NetworkDataTaskSoup(NetworkSession& session, NetworkDataTas
 
     auto request = parameters.request;
     if (request.url().protocolIsInHTTPFamily()) {
+
+#if PLATFORM(WPE)
+    initAndCheckClientAuthCerts(static_cast<NetworkSessionSoup&>(*m_session).soupSession(), request.url());
+#endif
+
 #if USE(SOUP2)
         m_networkLoadMetrics.fetchStart = MonotonicTime::now();
         m_networkLoadMetrics.redirectStart = m_networkLoadMetrics.fetchStart;
