@@ -450,10 +450,11 @@ void SourceBuffer::removedFromMediaSource()
     m_extraMemoryCost = 0;
 }
 
-void SourceBuffer::seekToTime(const MediaTime& time)
+void SourceBuffer::seekToTarget(const SeekTarget& target, CompletionHandler<void(const MediaTime&)>&& completionHandler)
+
 {
-    ALWAYS_LOG(LOGIDENTIFIER, time);
-    m_private->seekToTime(time);
+    ALWAYS_LOG(LOGIDENTIFIER, target);
+    m_private->seekToTarget(target, WTFMove(completionHandler));
 }
 
 bool SourceBuffer::virtualHasPendingActivity() const
