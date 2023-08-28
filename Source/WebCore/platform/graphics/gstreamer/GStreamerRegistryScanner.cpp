@@ -762,8 +762,7 @@ MediaPlayerEnums::SupportsType GStreamerRegistryScanner::isContentTypeSupported(
     if (codecs.isEmpty())
         return SupportsType::MayBeSupported;
 
-    for (const auto& item : codecs) {
-        auto codec = item.convertToASCIILowercase();
+    for (const auto& codec : codecs) {
         bool requiresHardwareSupport = contentTypesRequiringHardwareSupport
             .findIf([containerType, codec](auto& hardwareContentType) -> bool {
             auto hardwareContainer = hardwareContentType.containerType();
