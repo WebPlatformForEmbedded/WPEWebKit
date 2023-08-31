@@ -304,8 +304,8 @@ void MediaPlayerPrivateGStreamerMSE::propagateReadyStateToPlayer()
     GST_DEBUG("Propagating MediaSource readyState %s to player ready state (currently %s)", dumpReadyState(m_mediaSourceReadyState), dumpReadyState(m_readyState));
 
     m_readyState = m_mediaSourceReadyState;
-    updateStates(); // Set the pipeline to PLAYING or PAUSED if necessary.
     m_player->readyStateChanged();
+    updateStates(); // Set the pipeline to PLAYING or PAUSED if necessary.
 
     // The readyState change may be a result of monitorSourceBuffers() finding that currentTime == duration, which
     // should cause the video to be marked as ended. Let's have the player check that.
@@ -386,6 +386,10 @@ void MediaPlayerPrivateGStreamerMSE::updateStates()
     if (getStateResult == GST_STATE_CHANGE_SUCCESS && state >= GST_STATE_PAUSED) {
         // Update playback rate that was set before the pipeline was prerolled.
         updatePlaybackRate();
+        if (m_isSeeking && m_isWaitingForPreroll) {
+            // simulating "async" state change in case it's not supported by the pipeline
+            asyncStateChangeDone();
+        }
     }
 }
 
