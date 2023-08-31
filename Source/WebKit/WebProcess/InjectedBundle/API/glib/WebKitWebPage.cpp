@@ -86,6 +86,7 @@ enum {
     FORM_CONTROLS_ASSOCIATED_FOR_FRAME,
     WILL_SUBMIT_FORM,
     USER_MESSAGE_RECEIVED,
+    DID_START_PROVISIONAL_LOAD_FOR_FRAME,
 
     LAST_SIGNAL
 };
@@ -196,10 +197,7 @@ private:
 
     void didStartProvisionalLoadForFrame(WebPage&, WebFrame& frame, RefPtr<API::Object>&) override
     {
-        auto* webKitFrame = webkitFrameGet(&frame);
-        if (!webKitFrame && !frame.isMainFrame())
-            return;
-
+        auto* webKitFrame = webkitFrameGetOrCreate(&frame);
         const auto uri = getDocumentLoaderURL(frame.coreLocalFrame()->loader().provisionalDocumentLoader());
 
         if (webKitFrame)
@@ -207,6 +205,8 @@ private:
 
         if (frame.isMainFrame())
             webkitWebPageSetURI(m_webPage, uri);
+
+        g_signal_emit(m_webPage, signals[DID_START_PROVISIONAL_LOAD_FOR_FRAME], 0, webKitFrame);
     }
 
     void didReceiveServerRedirectForProvisionalLoadForFrame(WebPage&, WebFrame& frame, RefPtr<API::Object>&) override
@@ -777,6 +777,21 @@ ALLOW_DEPRECATED_DECLARATIONS_END
         g_cclosure_marshal_generic,
         G_TYPE_BOOLEAN, 1,
         WEBKIT_TYPE_USER_MESSAGE);
+
+    /**
+     * WebKitWebPage::did-start-provisional-load-for-frame:
+     * @web_page: the #WebKitWebPage on which the signal is emitted
+     * @frame: the #WebKitFrame
+     *
+     */
+    signals[DID_START_PROVISIONAL_LOAD_FOR_FRAME] = g_signal_new(
+        "did-start-provisional-load-for-frame",
+        G_TYPE_FROM_CLASS(klass),
+        G_SIGNAL_RUN_LAST,
+        0, 0, nullptr,
+        g_cclosure_marshal_generic,
+        G_TYPE_NONE, 1,
+        WEBKIT_TYPE_FRAME);
 }
 
 WebPage* webkitWebPageGetPage(WebKitWebPage *webPage)
