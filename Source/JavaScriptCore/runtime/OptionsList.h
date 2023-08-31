@@ -607,7 +607,7 @@ bool hasCapacityToUseLargeGigacage();
     v(Bool, useWebAssemblyRelaxedSIMD, false, Normal, "Allow the relaxed simd instructions and types from the wasm relaxed simd spec."_s) \
     v(Bool, useWebAssemblyTailCalls, false, Normal, "Allow the new instructions from the wasm tail calls spec."_s) \
     v(Bool, useWebAssemblyExtendedConstantExpressions, true, Normal, "Allow the use of global, element, and data init expressions from the extended constant expressions proposal."_s) \
-
+    v(Bool, disableConsoleLog, false, Normal, "Disable printing of JS console logs."_s) \
 
 
 enum OptionEquivalence {
