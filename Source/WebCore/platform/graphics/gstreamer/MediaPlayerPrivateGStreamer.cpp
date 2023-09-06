@@ -2117,6 +2117,8 @@ void MediaPlayerPrivateGStreamer::updateBufferingStatus(GstBufferingMode mode, d
     else
         m_fillTimer.stop();
 
+    // Force buffering flag to be always false so we don't enter buffering state at all
+    m_isBuffering = false;
     m_bufferingPercentage = percentage;
     switch (mode) {
     case GST_BUFFERING_STREAM: {
