@@ -1818,9 +1818,6 @@ void SourceBuffer::sourceBufferPrivateDidReceiveSample(MediaSample& sample)
             if (nextSampleInDecodeOrder == trackBuffer.samples.decodeOrder().end())
                 break;
 
-            if (nextSampleInDecodeOrder->second->isSync())
-                break;
-
             auto nextSyncSample = trackBuffer.samples.decodeOrder().findSyncSampleAfterDecodeIterator(nextSampleInDecodeOrder);
             INFO_LOG(LOGIDENTIFIER, "Discovered out-of-order frames, from: ", *nextSampleInDecodeOrder->second, " to: ", (nextSyncSample == trackBuffer.samples.decodeOrder().end() ? "[end]"_s : toString(*nextSyncSample->second)));
             erasedSamples.addRange(nextSampleInDecodeOrder, nextSyncSample);
