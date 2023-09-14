@@ -682,6 +682,8 @@ String PlatformKeyboardEvent::keyCodeForHardwareKeyCode(unsigned keyCode)
         return "AudioVolumeDown"_s;
     case 0x007B:
         return "AudioVolumeUp"_s;
+    case 0x007C:
+        return "PowerOff"_s;
     case 0x007D:
         return "NumpadEqual"_s;
     case 0x007F:
@@ -722,6 +724,8 @@ String PlatformKeyboardEvent::keyCodeForHardwareKeyCode(unsigned keyCode)
         return "Cut"_s;
     case 0x0092:
         return "Help"_s;
+    case 0x0093:
+        return "ContextMenu"_s;
     case 0x0094:
         return "LaunchApp2"_s;
     case 0x0097:
@@ -752,6 +756,10 @@ String PlatformKeyboardEvent::keyCodeForHardwareKeyCode(unsigned keyCode)
         return "MediaTrackPrevious"_s;
     case 0x00AE:
         return "MediaStop"_s;
+    case 0x00AF:
+        return "MediaRecord"_s;
+    case 0x00B0:
+        return "MediaRewind"_s;
     case 0x00B3:
         return "LaunchMediaPlayer"_s;
     case 0x00B4:
@@ -782,6 +790,8 @@ String PlatformKeyboardEvent::keyCodeForHardwareKeyCode(unsigned keyCode)
         return "F23"_s;
     case 0x00CA:
         return "F24"_s;
+    case 0x00D8:
+        return "MediaFastForward"_s;
     case 0x00E1:
         return "BrowserSearch"_s;
     case 0x016E:
@@ -790,8 +800,18 @@ String PlatformKeyboardEvent::keyCodeForHardwareKeyCode(unsigned keyCode)
         return "Guide"_s;
     case 0x0176:
         return "DVR"_s;
+    case 0x17A:
+        return "Subtitle"_s;
     case 0x0181:
         return "TV"_s;
+    case 0x0196:
+        return "ColorF0Red"_s;
+    case 0x0197:
+        return "ColorF1Green"_s;
+    case 0x0198:
+        return "ColorF2Yellow"_s;
+    case 0x0199:
+        return "ColorF3Blue"_s;
     case 0x024E:
         return "MicrophoneToggle"_s;
     case 0x027F:
