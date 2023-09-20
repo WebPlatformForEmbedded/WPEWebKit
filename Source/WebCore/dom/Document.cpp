@@ -9242,7 +9242,7 @@ bool Document::isSameSiteForCookies(const URL& url) const
 
 bool Document::lazyImageLoadingEnabled() const
 {
-    return m_settings->lazyImageLoadingEnabled() && !m_quirks->shouldDisableLazyImageLoadingQuirk();
+    return m_settings->lazyImageLoadingEnabled() && !m_quirks->shouldDisableLazyImageLoadingQuirk() && !getenv("WPE_DISABLE_IMAGE_LAZY_LOADING");
 }
 
 } // namespace WebCore
