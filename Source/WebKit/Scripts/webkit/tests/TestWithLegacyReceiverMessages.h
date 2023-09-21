@@ -54,6 +54,11 @@ class WebPreferencesStore;
 class WebTouchEvent;
 }
 
+namespace WTF {
+template<typename ResolveValueT, typename RejectValueT, bool IsExclusive>
+class NativePromise;
+} // namespace WTF
+
 namespace Messages {
 namespace TestWithLegacyReceiver {
 
@@ -285,6 +290,7 @@ public:
     static IPC::MessageName asyncMessageReplyName() { return IPC::MessageName::TestWithLegacyReceiver_CreatePluginReply; }
     static constexpr auto callbackThread = WTF::CompletionHandlerCallThread::ConstructionThread;
     using ReplyArguments = std::tuple<bool>;
+    using Promise = WTF::NativePromise<bool, IPC::Error, true>;
     CreatePlugin(uint64_t pluginInstanceID, const WebKit::Plugin::Parameters& parameters)
         : m_arguments(pluginInstanceID, parameters)
     {
@@ -309,6 +315,7 @@ public:
     static IPC::MessageName asyncMessageReplyName() { return IPC::MessageName::TestWithLegacyReceiver_RunJavaScriptAlertReply; }
     static constexpr auto callbackThread = WTF::CompletionHandlerCallThread::ConstructionThread;
     using ReplyArguments = std::tuple<>;
+    using Promise = WTF::NativePromise<void, IPC::Error, true>;
     RunJavaScriptAlert(uint64_t frameID, const String& message)
         : m_arguments(frameID, message)
     {
@@ -333,6 +340,7 @@ public:
     static IPC::MessageName asyncMessageReplyName() { return IPC::MessageName::TestWithLegacyReceiver_GetPluginsReply; }
     static constexpr auto callbackThread = WTF::CompletionHandlerCallThread::ConstructionThread;
     using ReplyArguments = std::tuple<Vector<WebCore::PluginInfo>>;
+    using Promise = WTF::NativePromise<Vector<WebCore::PluginInfo>, IPC::Error, true>;
     explicit GetPlugins(bool refresh)
         : m_arguments(refresh)
     {
@@ -485,6 +493,7 @@ public:
     static IPC::MessageName asyncMessageReplyName() { return IPC::MessageName::TestWithLegacyReceiver_InterpretKeyEventReply; }
     static constexpr auto callbackThread = WTF::CompletionHandlerCallThread::ConstructionThread;
     using ReplyArguments = std::tuple<Vector<WebCore::KeypressCommand>>;
+    using Promise = WTF::NativePromise<Vector<WebCore::KeypressCommand>, IPC::Error, true>;
     explicit InterpretKeyEvent(uint32_t type)
         : m_arguments(type)
     {
