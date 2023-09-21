@@ -27,10 +27,9 @@
 #include "ArgumentCoders.h"
 #include "Connection.h"
 #include "MessageNames.h"
-#include <WebCore/ImageData.h>
 #include <wtf/Forward.h>
-#include <wtf/RefCounted.h>
 #include <wtf/ThreadSafeRefCounted.h>
+#include <wtf/text/WTFString.h>
 
 
 namespace WTF {
@@ -39,22 +38,24 @@ class NativePromise;
 } // namespace WTF
 
 namespace Messages {
-namespace TestWithImageData {
+namespace TestWithEnabledIf {
 
 static inline IPC::ReceiverName messageReceiverName()
 {
-    return IPC::ReceiverName::TestWithImageData;
+    return IPC::ReceiverName::TestWithEnabledIf;
 }
 
-class SendImageData {
+class AlwaysEnabled {
 public:
-    using Arguments = std::tuple<RefPtr<WebCore::ImageData>>;
+    using Arguments = std::tuple<String>;
 
-    static IPC::MessageName name() { return IPC::MessageName::TestWithImageData_SendImageData; }
+    static IPC::MessageName name() { return IPC::MessageName::TestWithEnabledIf_AlwaysEnabled; }
     static constexpr bool isSync = false;
+    static constexpr bool canDispatchOutOfOrder = false;
+    static constexpr bool replyCanDispatchOutOfOrder = false;
 
-    explicit SendImageData(const RefPtr<WebCore::ImageData>& s0)
-        : m_arguments(s0)
+    explicit AlwaysEnabled(const String& url)
+        : m_arguments(url)
     {
     }
 
@@ -64,28 +65,31 @@ public:
     }
 
 private:
-    std::tuple<const RefPtr<WebCore::ImageData>&> m_arguments;
+    std::tuple<const String&> m_arguments;
 };
 
-class ReceiveImageData {
+class OnlyEnabledIfFeatureEnabled {
 public:
-    using Arguments = std::tuple<>;
+    using Arguments = std::tuple<String>;
 
-    static IPC::MessageName name() { return IPC::MessageName::TestWithImageData_ReceiveImageData; }
+    static IPC::MessageName name() { return IPC::MessageName::TestWithEnabledIf_OnlyEnabledIfFeatureEnabled; }
     static constexpr bool isSync = false;
+    static constexpr bool canDispatchOutOfOrder = false;
+    static constexpr bool replyCanDispatchOutOfOrder = false;
 
-    static IPC::MessageName asyncMessageReplyName() { return IPC::MessageName::TestWithImageData_ReceiveImageDataReply; }
-    static constexpr auto callbackThread = WTF::CompletionHandlerCallThread::ConstructionThread;
-    using ReplyArguments = std::tuple<RefPtr<WebCore::ImageData>>;
-    using Promise = WTF::NativePromise<RefPtr<WebCore::ImageData>, IPC::Error, true>;
+    explicit OnlyEnabledIfFeatureEnabled(const String& url)
+        : m_arguments(url)
+    {
+    }
+
     auto&& arguments()
     {
         return WTFMove(m_arguments);
     }
 
 private:
-    std::tuple<> m_arguments;
+    std::tuple<const String&> m_arguments;
 };
 
-} // namespace TestWithImageData
+} // namespace TestWithEnabledIf
 } // namespace Messages
