@@ -257,6 +257,17 @@ bool MediaPlayerPrivateGStreamerMSE::doSeek(const MediaTime& position, float rat
 
     // Notify MediaSource and have new frames enqueued (when they're available).
     m_mediaSource->seekToTime(m_seekTime);
+
+    if (!m_player->isVideoPlayer() && m_audioSink) {
+        gboolean audioSinkPerformsAsyncStateChanges;
+        g_object_get(m_audioSink.get(), "async", &audioSinkPerformsAsyncStateChanges, nullptr);
+        if (!audioSinkPerformsAsyncStateChanges) {
+            // If audio-only pipeline's sink is not performing async state changes
+            // we must simulate preroll right away as otherwise nothing will trigger it.
+            asyncStateChangeDone();
+        }
+    }
+
     return true;
 }
 
