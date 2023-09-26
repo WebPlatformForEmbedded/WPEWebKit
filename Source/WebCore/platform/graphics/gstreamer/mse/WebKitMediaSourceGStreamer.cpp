@@ -98,7 +98,7 @@ static gboolean webKitMediaSrcActivateMode(GstPad*, GstObject*, GstPadMode, gboo
 static void webKitMediaSrcLoop(void*);
 static void webKitMediaSrcTearDownStream(WebKitMediaSrc* source, const AtomString& name);
 static void webKitMediaSrcGetProperty(GObject*, unsigned propId, GValue*, GParamSpec*);
-static void webKitMediaSrcStreamFlush(Stream*, bool isSeekingFlush);
+static void webKitMediaSrcStreamFlush(Stream*, bool isSeekingFlush, GstClockTime time);
 static gboolean webKitMediaSrcSendEvent(GstElement*, GstEvent*);
 static MediaPlayerPrivateGStreamerMSE* webKitMediaSrcPlayer(WebKitMediaSrc*);
 
@@ -518,7 +518,7 @@ static void webKitMediaSrcTearDownStream(WebKitMediaSrc* source, const AtomStrin
     GST_DEBUG_OBJECT(source, "Tearing down stream '%s'", name.string().utf8().data());
 
     // Flush the source element **and** downstream. We want to stop the streaming thread and for that we need all elements downstream to be idle.
-    webKitMediaSrcStreamFlush(stream, false);
+    webKitMediaSrcStreamFlush(stream, false, GST_CLOCK_TIME_NONE);
     // Stop the thread now.
     gst_pad_set_active(stream->pad.get(), false);
 
@@ -752,7 +752,7 @@ static void webKitMediaSrcLoop(void* userData)
         ASSERT_NOT_REACHED();
 }
 
-static void webKitMediaSrcStreamFlush(Stream* stream, bool isSeekingFlush)
+static void webKitMediaSrcStreamFlush(Stream* stream, bool isSeekingFlush, GstClockTime time)
 {
     ASSERT(isMainThread());
     bool skipFlush = false;
@@ -808,16 +808,14 @@ static void webKitMediaSrcStreamFlush(Stream* stream, bool isSeekingFlush)
     } else {
         // In the case of non-seeking flushes we don't reset the timeline, so instead we need to increase the `base` field
         // by however running time we're starting after the flush.
-        MediaPlayerPrivateGStreamerMSE* player = webKitMediaSrcPlayer(stream->source);
-        if (player) {
-            MediaTime streamTime = player->currentMediaTime();
-            GstClockTime pipelineStreamTime = toGstClockTime(streamTime);
+        GstClockTime pipelineStreamTime = time;
+        if (GST_CLOCK_TIME_IS_VALID(pipelineStreamTime)) {
             DataMutexLocker streamingMembers { stream->streamingMembersDataMutex };
             // We need to increase the base by the running time accumulated during the previous segment.
             GstClockTime pipelineRunningTime = gst_segment_to_running_time(&streamingMembers->segment, GST_FORMAT_TIME, pipelineStreamTime);
             if ((GST_CLOCK_TIME_IS_VALID(pipelineRunningTime))) {
                 GST_DEBUG_OBJECT(stream->source, "Resetting segment to current pipeline running time (%" GST_TIME_FORMAT " and stream time (%" GST_TIME_FORMAT " = %s)",
-                    GST_TIME_ARGS(pipelineRunningTime), GST_TIME_ARGS(pipelineStreamTime), streamTime.toString().ascii().data());
+                    GST_TIME_ARGS(pipelineRunningTime), GST_TIME_ARGS(pipelineStreamTime), GST_TIME_ARGS(pipelineStreamTime));
                 streamingMembers->segment.base = pipelineRunningTime;
                 streamingMembers->segment.start = streamingMembers->segment.time = static_cast<GstClockTime>(pipelineStreamTime);
             }
@@ -866,13 +864,13 @@ static void webKitMediaSrcStreamFlush(Stream* stream, bool isSeekingFlush)
         stream->track->trackId().string().utf8().data(), boolForPrinting(isSeekingFlush));
 }
 
-void webKitMediaSrcFlush(WebKitMediaSrc* source, const AtomString& streamName)
+void webKitMediaSrcFlush(WebKitMediaSrc* source, const AtomString& streamName, GstClockTime time)
 {
     ASSERT(isMainThread());
     GST_DEBUG_OBJECT(source, "Received non-seek flush request for stream '%s'.", streamName.string().utf8().data());
     Stream* stream = source->priv->streamByName(streamName);
 
-    webKitMediaSrcStreamFlush(stream, false);
+    webKitMediaSrcStreamFlush(stream, false, time);
 }
 
 static void webKitMediaSrcSeek(WebKitMediaSrc* source, uint64_t startTime, double rate)
@@ -883,7 +881,7 @@ static void webKitMediaSrcSeek(WebKitMediaSrc* source, uint64_t startTime, doubl
     GST_DEBUG_OBJECT(source, "Seek requested to time %" GST_TIME_FORMAT " with rate %f.", GST_TIME_ARGS(startTime), rate);
 
     for (const RefPtr<Stream>& stream : source->priv->streams.values())
-        webKitMediaSrcStreamFlush(stream.get(), true);
+        webKitMediaSrcStreamFlush(stream.get(), true, startTime);
 }
 
 static int countStreamsOfType(WebKitMediaSrc* source, WebCore::TrackPrivateBaseGStreamer::TrackType type)

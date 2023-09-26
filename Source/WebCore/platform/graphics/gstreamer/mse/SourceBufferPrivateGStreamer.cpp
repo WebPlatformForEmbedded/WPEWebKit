@@ -151,7 +151,7 @@ void SourceBufferPrivateGStreamer::flush(const AtomString& trackId)
     }
 
     GST_DEBUG_OBJECT(m_playerPrivate.pipeline(), "Source element has emitted tracks, let it handle the flush, which may cause a pipeline flush as well. trackId = '%s'", trackId.string().utf8().data());
-    webKitMediaSrcFlush(m_playerPrivate.webKitMediaSrc(), trackId);
+    webKitMediaSrcFlush(m_playerPrivate.webKitMediaSrc(), trackId, toGstClockTime(m_playerPrivate.currentMediaTime()));
 }
 
 void SourceBufferPrivateGStreamer::enqueueSample(Ref<MediaSample>&& sample, const AtomString& trackId)
