@@ -667,6 +667,11 @@ static void webKitMediaSrcStreamFlush(Stream* stream, bool isSeekingFlush)
         gst_pad_push_event(stream->pad.get(), gst_event_new_flush_stop(isSeekingFlush));
         GST_DEBUG_OBJECT(stream->pad.get(), "FLUSH_STOP sent.");
 
+        {
+            DataMutexLocker streamingMembers { stream->streamingMembersDataMutex };
+            streamingMembers->hasPoppedFirstObject = false;
+        }
+
         GST_DEBUG_OBJECT(stream->pad.get(), "Starting webKitMediaSrcLoop task and releasing the STREAM_LOCK.");
         gst_pad_start_task(stream->pad.get(), webKitMediaSrcLoop, stream->pad.get(), nullptr);
     }
