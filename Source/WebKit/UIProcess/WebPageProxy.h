@@ -2398,6 +2398,8 @@ public:
 
     WebPageProxyMessageReceiverRegistration& messageReceiverRegistration();
 
+    void sendMemoryPressureEvent(bool critical) const;
+
 #if HAVE(ESIM_AUTOFILL_SYSTEM_SUPPORT)
     bool shouldAllowAutoFillForCellularIdentifiers() const;
 #endif

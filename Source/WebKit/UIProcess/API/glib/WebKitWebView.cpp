@@ -5731,3 +5731,10 @@ pid_t webkit_web_view_get_web_process_identifier(WebKitWebView *webView)
 
     return getPage(webView).legacyMainFrameProcessID();
 }
+
+void webkit_web_view_send_memory_pressure_event(WebKitWebView *webView, gboolean critical)
+{
+    g_return_if_fail(WEBKIT_IS_WEB_VIEW(webView));
+
+    getPage(webView).sendMemoryPressureEvent(critical);
+}
