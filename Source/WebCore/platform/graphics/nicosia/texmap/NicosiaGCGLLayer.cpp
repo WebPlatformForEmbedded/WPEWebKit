@@ -43,6 +43,43 @@ namespace Nicosia {
 
 using namespace WebCore;
 
+#if USE(FORCE_WEBGL_BUFFER_SYNC)
+
+#if HAVE(OPENGL_4) || HAVE(OPENGL_ES_3)
+#define HAS_GL_SYNC_API
+#endif // HAVE(OPENGL_4) || HAVE(OPENGL_ES_3)
+class BufferGLSync : public TextureMapperPlatformLayerBuffer::UnmanagedBufferDataHolder
+{
+public:
+    BufferGLSync() {
+#if defined(HAS_GL_SYNC_API)
+        m_sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+        glFlush();
+#else
+        // Just call glFinish() if sync api is not available
+        glFinish();
+#endif
+    }
+
+#if defined(HAS_GL_SYNC_API)
+    void waitForCPUSync() override {
+        if (!m_sync)
+            return;
+        glWaitSync(m_sync, 0, GL_TIMEOUT_IGNORED);
+        glDeleteSync(m_sync);
+        m_sync = nullptr;
+    }
+    virtual ~BufferGLSync() {
+        if (!m_sync)
+            return;
+        glDeleteSync(m_sync);
+    }
+private:
+    GLsync m_sync = nullptr;
+#endif
+};
+#endif // USE(FORCE_WEBGL_BUFFER_SYNC)
+
 static std::unique_ptr<GLContext> s_windowContext;
 
 static void terminateWindowContext()
@@ -132,7 +169,11 @@ void GCGLLayer::swapBuffersIfNeeded()
         auto& proxy = downcast<Nicosia::ContentLayerTextureMapperImpl>(m_contentLayer->impl()).proxy();
         Locker locker { proxy.lock() };
         ASSERT(is<TextureMapperPlatformLayerProxyGL>(proxy));
-        downcast<TextureMapperPlatformLayerProxyGL>(proxy).pushNextBuffer(makeUnique<TextureMapperPlatformLayerBuffer>(m_context.m_compositorTexture, textureSize, flags, m_context.m_internalColorFormat));
+        auto buffer = makeUnique<TextureMapperPlatformLayerBuffer>(m_context.m_compositorTexture, textureSize, flags, m_context.m_internalColorFormat);
+#if USE(FORCE_WEBGL_BUFFER_SYNC)
+        buffer->setUnmanagedBufferDataHolder(makeUnique<BufferGLSync>());
+#endif // USE(FORCE_WEBGL_BUFFER_SYNC)
+        downcast<TextureMapperPlatformLayerProxyGL>(proxy).pushNextBuffer(WTFMove(buffer));
     }
 
     m_context.markLayerComposited();

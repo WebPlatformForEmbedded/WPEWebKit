@@ -124,10 +124,10 @@ void TextureMapperPlatformLayerBuffer::paintToTextureMapper(TextureMapper& textu
         return;
     }
 
-#if USE(GSTREAMER_GL)
+#if USE(GSTREAMER_GL) || USE(FORCE_WEBGL_BUFFER_SYNC)
     if (m_unmanagedBufferDataHolder)
         m_unmanagedBufferDataHolder->waitForCPUSync();
-#endif // USE(GSTREAMER_GL)
+#endif // USE(GSTREAMER_GL) || USE(FORCE_WEBGL_BUFFER_SYNC)
 
     WTF::switchOn(m_variant,
         [&](const RGBTexture& texture) {
