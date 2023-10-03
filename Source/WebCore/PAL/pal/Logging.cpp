@@ -31,6 +31,11 @@
 #if PLATFORM(COCOA)
 #include <notify.h>
 #include <wtf/BlockPtr.h>
+#elif PLATFORM(WPE)
+#include <glib.h>
+#include <gio/gio.h>
+#include <wtf/FileSystem.h>
+#include <wtf/glib/GRefPtr.h>
 #endif
 
 namespace PAL {
@@ -42,6 +47,25 @@ void registerNotifyCallback(ASCIILiteral notifyID, Function<void()>&& callback)
     notify_register_dispatch(notifyID.characters(), &token, dispatch_get_main_queue(), makeBlockPtr([callback = WTFMove(callback)](int) {
         callback();
     }).get());
+#elif PLATFORM(WPE)
+    using namespace FileSystem;
+
+    // Triggers callback with "touch <user config dir>/notify/<notifyID>".
+    CString notifyFilePath = fileSystemRepresentation(pathByAppendingComponents(StringView::fromLatin1(g_get_user_config_dir()), {"notify"_s, notifyID}));
+    GRefPtr<GFile> notifyFile = adoptGRef(g_file_new_for_path(notifyFilePath.data()));
+    GFileMonitor* monitor = g_file_monitor_file(notifyFile.get(), G_FILE_MONITOR_NONE, nullptr, nullptr);
+
+    g_signal_connect(monitor, "changed", G_CALLBACK(+[](GFileMonitor*, GFile* file, GFile*, GFileMonitorEvent event, WTF::Function<void()> *callback) {
+        const char *path = g_file_get_path(file);
+        if ((nullptr == path) || !g_file_test(path, G_FILE_TEST_EXISTS)) {
+            return;
+        }
+        if ((G_FILE_MONITOR_EVENT_CREATED == event) || (G_FILE_MONITOR_EVENT_ATTRIBUTE_CHANGED == event)) {
+            (*callback)();
+        }
+        // We are not releasing the allocated memory for the Function object, as this code will get called each time the signal is raised
+        // No "unregisterNotifyCallback" available to do proper cleanup (signal disconnection and memory release)
+    }), new WTF::Function<void()>(WTFMove(callback)));
 #else
     UNUSED_PARAM(notifyID);
     UNUSED_PARAM(callback);
