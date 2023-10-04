@@ -259,7 +259,19 @@ bool MediaPlayerPrivateGStreamerMSE::doSeek(const MediaTime& position, float rat
     invalidateCachedPosition();
 
     // Notify MediaSource and have new frames enqueued (when they're available).
+
     m_mediaSource->seekToTime(m_seekTime);
+
+    if (m_player && !m_player->isVideoPlayer() && m_audioSink) {
+        gboolean audioSinkPerformsAsyncStateChanges;
+        g_object_get(m_audioSink.get(), "async", &audioSinkPerformsAsyncStateChanges, nullptr);
+        if (!audioSinkPerformsAsyncStateChanges) {
+            // If audio-only pipeline's sink is not performing async state changes
+            // we must simulate preroll right away as otherwise nothing will trigger it.
+            didPreroll();
+        }
+    }
+
     return true;
 }
 
@@ -310,7 +322,7 @@ void MediaPlayerPrivateGStreamerMSE::propagateReadyStateToPlayer()
         m_player->timeChanged();
 }
 
-void MediaPlayerPrivateGStreamerMSE::asyncStateChangeDone()
+void MediaPlayerPrivateGStreamerMSE::didPreroll()
 {
     ASSERT(GST_STATE(m_pipeline.get()) >= GST_STATE_PAUSED);
     // There are three circumstances in which a preroll can occur:
