@@ -2732,7 +2732,7 @@ void MediaPlayerPrivateGStreamer::didEnd()
 
     if (!m_player->isLooping() && !isMediaSource()) {
         m_isPaused = true;
-        changePipelineState(GST_STATE_READY);
+        changePipelineState(GST_STATE_PAUSED);
         m_didDownloadFinish = false;
         configureMediaStreamAudioTracks();
 
