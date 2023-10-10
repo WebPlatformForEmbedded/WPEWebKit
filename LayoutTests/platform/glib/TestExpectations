@@ -3417,6 +3417,10 @@ imported/w3c/web-platform-tests/html/canvas/offscreen/text/fontVariantCaps-1.htm
 imported/w3c/web-platform-tests/html/canvas/offscreen/text/fontVariantCaps-3.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/html/canvas/offscreen/text/fontVariantCaps-4.html [ ImageOnlyFailure ]
 
+
+// Flakily crashing on GTK and WPE bots
+webkit.org/b/262949 media/media-garbage-collection.html [ Pass Crash ]
+
 # End: Common failures between GTK and WPE.
 
 #////////////////////////////////////////////////////////////////////////////////////////
