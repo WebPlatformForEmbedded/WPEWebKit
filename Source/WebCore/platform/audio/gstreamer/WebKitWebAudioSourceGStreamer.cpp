@@ -297,7 +297,6 @@ static GRefPtr<GstBuffer> webKitWebAudioSrcAllocateBuffer(WebKitWebAudioSrc* src
     }
 
     ASSERT(buffer);
-    ASSERT(&priv->info);
     gst_buffer_add_audio_meta(buffer.get(), &priv->info, priv->framesToPull, nullptr);
 
     {
