@@ -1313,6 +1313,15 @@ set(WebCore_NON_SVG_IDL_FILES
     xml/XSLTProcessor.idl
 )
 
+if (ENABLE_OIPF_VK)
+    list(APPEND WebCore_NON_SVG_IDL_FILES
+        page/VkConsts.idl
+    )
+    list(APPEND WebCore_UNIFIED_SOURCE_LIST_FILES
+        SourcesOIPF.txt
+    )
+endif ()
+
 set(WebCore_SVG_IDL_FILES
     svg/Document+SVG.idl
     svg/SVGAElement.idl

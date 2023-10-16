@@ -89,6 +89,10 @@ class WebCoreOpaqueRoot;
 class WebKitNamespace;
 class WebKitPoint;
 
+#if ENABLE(OIPF_VK)
+class VkConsts;
+#endif
+
 #if ENABLE(DEVICE_ORIENTATION)
 class DeviceMotionController;
 class DeviceOrientationController;
@@ -161,6 +165,10 @@ public:
     WEBCORE_EXPORT static void dispatchAllPendingUnloadEvents();
 
     static FloatRect adjustWindowRect(Page&, const FloatRect& pendingChanges);
+
+#if ENABLE(OIPF_VK)
+    RefPtr<VkConsts> keyEvent();
+#endif
 
     bool allowPopUp(); // Call on first window, not target window.
     static bool allowPopUp(Frame& firstFrame);
@@ -462,6 +470,9 @@ private:
     mutable RefPtr<BarProp> m_toolbar;
     mutable RefPtr<Location> m_location;
     mutable RefPtr<VisualViewport> m_visualViewport;
+#if ENABLE(OIPF_VK)
+    mutable RefPtr<VkConsts> m_keyEvent;
+#endif
 
     String m_status;
     String m_defaultStatus;

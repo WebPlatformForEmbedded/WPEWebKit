@@ -134,6 +134,10 @@
 #include <wtf/URL.h>
 #include <wtf/text/WTFString.h>
 
+#if ENABLE(OIPF_VK)
+#include "VkConsts.h"
+#endif
+
 #if ENABLE(USER_MESSAGE_HANDLERS)
 #include "UserContentController.h"
 #include "UserMessageHandlerDescriptor.h"
@@ -353,6 +357,18 @@ FloatRect DOMWindow::adjustWindowRect(Page& page, const FloatRect& pendingChange
 
     return window;
 }
+
+#if ENABLE(OIPF_VK)
+RefPtr<VkConsts> DOMWindow::keyEvent()
+{
+    if (!isCurrentlyDisplayedInFrame())
+        return nullptr;
+    if (!m_keyEvent)
+        m_keyEvent = VkConsts::create(*this);
+
+    return m_keyEvent;
+}
+#endif
 
 bool DOMWindow::allowPopUp(Frame& firstFrame)
 {
