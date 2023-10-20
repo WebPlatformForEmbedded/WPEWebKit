@@ -2927,6 +2927,21 @@ void MediaPlayerPrivateGStreamer::createGSTPlayBin(const URL& url)
 
     ASSERT(!m_pipeline);
 
+#if PLATFORM(BCM_NEXUS)
+    {
+        auto registry = gst_registry_get();
+        GRefPtr<GstPluginFeature> brcmaudfilter = gst_registry_lookup_feature(registry, "brcmaudfilter");
+        GRefPtr<GstPluginFeature> mpegaudioparse = gst_registry_lookup_feature(registry, "mpegaudioparse");
+
+        if (brcmaudfilter && mpegaudioparse) {
+            GST_INFO("overriding mpegaudioparse rank with brcmaudfilter rank + 1");
+            gst_plugin_feature_set_rank(
+                mpegaudioparse.get(),
+                gst_plugin_feature_get_rank(brcmaudfilter.get()) + 1);
+        }
+    }
+#endif
+
     auto elementId = m_player->elementId();
     if (elementId.isEmpty())
         elementId = "media-player"_s;
