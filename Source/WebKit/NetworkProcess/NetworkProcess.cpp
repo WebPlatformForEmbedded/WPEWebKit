@@ -118,6 +118,13 @@
 #include <WebCore/CurlContext.h>
 #endif
 
+namespace {
+#if ENABLE(RDK_LOGGER)
+void glibLogHandler(const gchar*, GLogLevelFlags, const gchar *message, gpointer) {
+    RDK_LOG(RDK_LOG_DEBUG, RDK_LOG_CHANNEL(GLib-GIO), message);
+}
+#endif // ENABLE(RDK_LOGGER)
+} // namespace
 namespace WebKit {
 using namespace WebCore;
 
@@ -2471,6 +2478,9 @@ void NetworkProcess::initializeProcess(const AuxiliaryProcessInitializationParam
 {
 #if ENABLE(RDK_LOGGER)
     rdk_logger_init("/etc/debug.ini");
+    if (rdk_dbg_enabled(RDK_LOG_CHANNEL(GLib-GIO), RDK_LOG_DEBUG)) {
+        g_log_set_handler("GLib-GIO", G_LOG_LEVEL_DEBUG, glibLogHandler, nullptr);
+    }
 #endif
 }
 
