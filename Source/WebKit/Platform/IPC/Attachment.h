@@ -111,7 +111,7 @@ private:
 
 #if USE(UNIX_DOMAIN_SOCKETS)
     UnixFileDescriptor m_fd;
-    size_t m_size;
+    size_t m_size { };
     CustomWriter m_customWriter;
 #elif OS(WINDOWS)
     HANDLE m_handle { INVALID_HANDLE_VALUE };

@@ -157,7 +157,14 @@ SoupNetworkSession::~SoupNetworkSession() = default;
 void SoupNetworkSession::setupLogger()
 {
 #if !LOG_DISABLED || !RELEASE_LOG_DISABLED
-    if (LogNetwork.state != WTFLogChannelState::On || soup_session_get_feature(m_soupSession.get(), SOUP_TYPE_LOGGER))
+    if (
+#if ENABLE(RDK_LOGGER)
+        !rdk_dbg_enabled(RDK_LOG_CHANNEL(NETWORK), RDK_LOG_DEBUG)
+#else
+        LogNetwork.state != WTFLogChannelState::On
+#endif // ENABLE(RDK_LOGGER)
+         || soup_session_get_feature(m_soupSession.get(), SOUP_TYPE_LOGGER)
+    )
         return;
 
 #if USE(SOUP2)

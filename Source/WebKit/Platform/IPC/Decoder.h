@@ -167,7 +167,7 @@ private:
     OptionSet<MessageFlags> m_messageFlags;
     MessageName m_messageName;
 
-    uint64_t m_destinationID;
+    uint64_t m_destinationID { };
 
 #if PLATFORM(MAC)
     ImportanceAssertion m_importanceAssertion;

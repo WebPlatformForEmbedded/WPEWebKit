@@ -71,7 +71,7 @@ private:
 #if USE(CF)
     RetainPtr<CFBundleRef> m_bundle;
 #elif USE(GLIB)
-    GModule* m_handle;
+    GModule* m_handle = nullptr;;
 #endif
 };
 
