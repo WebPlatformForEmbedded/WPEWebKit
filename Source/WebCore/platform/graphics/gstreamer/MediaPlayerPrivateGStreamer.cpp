@@ -358,10 +358,6 @@ void MediaPlayerPrivateGStreamer::load(const String& urlString)
     m_areVolumeAndMuteInitialized = false;
     m_hasTaintedOrigin = std::nullopt;
 
-#if PLATFORM(BCM_NEXUS) || PLATFORM(BROADCOM)
-    m_isShoutcastStreaming = false;
-#endif // PLATFORM(BCM_NEXUS) || PLATFORM(BROADCOM)
-
     if (!m_isDelayingLoad)
         commitLoad();
 }
@@ -1884,12 +1880,6 @@ void MediaPlayerPrivateGStreamer::handleMessage(GstMessage* message)
         }
 #endif
 
-#if PLATFORM(BCM_NEXUS) || PLATFORM(BROADCOM)
-        if (currentState == GST_STATE_NULL && newState == GST_STATE_READY && g_strstr_len(GST_MESSAGE_SRC_NAME(message), 8, "icydemux")) {
-            m_isShoutcastStreaming = true;
-        }
-#endif // PLATFORM(BCM_NEXUS) || PLATFORM(BROADCOM)
-
         if (!messageSourceIsPlaybin || m_isDelayingLoad)
             break;
 
@@ -2085,13 +2075,6 @@ void MediaPlayerPrivateGStreamer::processBufferingStats(GstMessage* message)
     gst_message_parse_buffering(message, &percentage);
 
     updateBufferingStatus(mode, percentage);
-
-#if PLATFORM(BCM_NEXUS) || PLATFORM(BROADCOM)
-    if (m_isShoutcastStreaming) {
-        GstObject *queue2 = GST_MESSAGE_SRC(message);
-        tryReduceQueueSize(queue2);
-    }
-#endif // PLATFORM(BCM_NEXUS) || PLATFORM(BROADCOM)
 }
 
 void MediaPlayerPrivateGStreamer::updateMaxTimeLoaded(double percentage)
@@ -4555,22 +4538,6 @@ void MediaPlayerPrivateGStreamer::checkPlayingConsistency()
             m_didTryToRecoverPlayingState = false;
     }
 }
-
-#if PLATFORM(BCM_NEXUS) || PLATFORM(BROADCOM)
-void MediaPlayerPrivateGStreamer::tryReduceQueueSize(GstObject* queue)
-{
-    guint max_size_bytes = 0;
-    g_object_get(queue, "max-size-bytes", &max_size_bytes, NULL);
-
-    // ARRISEOS-43118 : for some specific aac shoutcast streams mpegaudioparse plugin is not attached to pipeline and in consequence bitstream
-    // value cannot be correctly calculated. UriDecodeBin is setting queue size based on that bitstream value.
-    // Let's reduce for those specific audio streams queue size to reasonable size
-    if (max_size_bytes >= 2097152) {
-         GST_DEBUG("Hardcode queue max size\n");
-         g_object_set(queue, "max-size-bytes", 16000, NULL);
-    }
-}
-#endif // PLATFORM(BCM_NEXUS) || PLATFORM(BROADCOM)
 
 }
 
