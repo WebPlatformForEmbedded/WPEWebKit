@@ -277,6 +277,7 @@
 #include <wtf/SetForScope.h>
 #include <wtf/SystemTracing.h>
 #include <wtf/text/TextStream.h>
+#include <WebCore/CairoUtilities.h>
 
 #if ENABLE(APP_HIGHLIGHTS)
 #include <WebCore/AppHighlightStorage.h>
@@ -1770,6 +1771,7 @@ void WebPage::loadRequest(LoadParameters&& loadParameters)
 
     ASSERT(!m_pendingNavigationID);
     ASSERT(!m_pendingWebsitePolicies);
+    WebCore::resetRenderingStartedFlag();
 }
 
 // LoadRequestWaitingForProcessLaunch should never be sent to the WebProcess. It must always be converted to a LoadRequest message.

@@ -290,6 +290,7 @@ private:
     bool m_frameHasCustomContentProvider { false };
     bool m_frameCameFromBackForwardCache { false };
     bool m_useIconLoadingClient { false };
+    bool m_sendRenderingAfterFailedLoad { false };
 #if ENABLE(INTELLIGENT_TRACKING_PREVENTION)
     std::optional<FrameSpecificStorageAccessIdentifier> m_frameSpecificStorageAccessIdentifier;
 #endif

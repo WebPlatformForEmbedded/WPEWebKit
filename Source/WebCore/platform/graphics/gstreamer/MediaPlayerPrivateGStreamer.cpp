@@ -25,6 +25,7 @@
 
 #include "config.h"
 #include "MediaPlayerPrivateGStreamer.h"
+#include "CairoUtilities.h"
 
 #if ENABLE(VIDEO) && USE(GSTREAMER)
 
@@ -1896,7 +1897,9 @@ void MediaPlayerPrivateGStreamer::handleMessage(GstMessage* message)
 
         if (!m_isLegacyPlaybin && currentState == GST_STATE_PAUSED && newState == GST_STATE_PLAYING)
             playbin3SendSelectStreamsIfAppropriate();
-        updateStates();
+
+	WebCore::renderingStarted();
+	updateStates();
         checkPlayingConsistency();
 
         break;

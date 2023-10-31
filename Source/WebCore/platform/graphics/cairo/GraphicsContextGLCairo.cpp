@@ -137,6 +137,7 @@ void GraphicsContextGL::paintToCanvas(const GraphicsContextGLAttributes& sourceC
     context.scale(FloatSize(1, -1));
     context.translate(0, -imageSize.height());
     context.setImageInterpolationQuality(InterpolationQuality::DoNotInterpolate);
+    renderingStarted();
     context.drawNativeImage(*image, imageSize, FloatRect({ }, canvasSize), FloatRect({ }, imageSize), { CompositeOperator::Copy });
 }
 

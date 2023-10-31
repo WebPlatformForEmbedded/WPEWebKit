@@ -28,7 +28,7 @@
 #include "CairoUtilities.h"
 
 #if USE(CAIRO)
-
+#include <atomic>
 #include "AffineTransform.h"
 #include "CairoUniquePtr.h"
 #include "Color.h"
@@ -51,6 +51,10 @@
 #if OS(WINDOWS)
 #include <cairo-win32.h>
 #endif
+
+namespace {
+    std::atomic_flag renderingStartedFlag = ATOMIC_FLAG_INIT;
+}
 
 namespace WebCore {
 
@@ -393,6 +397,24 @@ void attachSurfaceUniqueID(cairo_surface_t* surface)
 uintptr_t getSurfaceUniqueID(cairo_surface_t* surface)
 {
     return reinterpret_cast<uintptr_t>(cairo_surface_get_user_data(surface, &s_surfaceUniqueIDKey));
+}
+
+void resetRenderingStartedFlag()
+{
+    WTFLogAlways("resetRenderingStartedFlag \n");
+    renderingStartedFlag.clear();
+}
+
+void setRenderingStartedFlag() {
+    WTFLogAlways("setRenderingStartedFlag \n");
+    renderingStartedFlag.test_and_set();
+}
+
+void renderingStarted()
+{
+    if (!renderingStartedFlag.test_and_set()) {
+        WTFLogAlways("renderingStarted\n");
+    }
 }
 
 } // namespace WebCore
