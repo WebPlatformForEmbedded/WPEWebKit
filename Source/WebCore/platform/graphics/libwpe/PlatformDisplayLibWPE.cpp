@@ -73,6 +73,12 @@ bool PlatformDisplayLibWPE::initialize(int hostFd)
     if (!m_backend)
         return false;
 
+    #ifdef EGL_PLATFORM_WAYLAND_EXT
+    PFNEGLGETPLATFORMDISPLAYEXTPROC eglGetPlatformDisplayEXT= (PFNEGLGETPLATFORMDISPLAYEXTPROC)eglGetProcAddress("eglGetPlatformDisplayEXT");
+    if (eglGetPlatformDisplayEXT)
+       m_eglDisplay = eglGetPlatformDisplayEXT(EGL_PLATFORM_WAYLAND_EXT, wpe_renderer_backend_egl_get_native_display(m_backend), NULL);
+    else
+    #endif
     m_eglDisplay = eglGetDisplay(wpe_renderer_backend_egl_get_native_display(m_backend));
     if (m_eglDisplay == EGL_NO_DISPLAY) {
         WTFLogAlways("PlatformDisplayLibWPE: could not create the EGL display: %s.", GLContextEGL::lastErrorString());
