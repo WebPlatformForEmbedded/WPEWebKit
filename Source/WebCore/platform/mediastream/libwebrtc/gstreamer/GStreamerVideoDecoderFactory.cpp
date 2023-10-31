@@ -307,7 +307,7 @@ public:
 
     static GRefPtr<GstElementFactory> GstDecoderFactory(const char *capsStr)
     {
-        return GStreamerRegistryScanner::singleton().isCodecSupported(GStreamerRegistryScanner::Configuration::Decoding, String::fromUTF8(capsStr), false).factory;
+        return GStreamerRegistryScanner::singleton().isCodecSupported(GStreamerRegistryScanner::Configuration::Decoding, String::fromUTF8(capsStr), true).factory;
     }
 
     bool HasGstDecoder()
