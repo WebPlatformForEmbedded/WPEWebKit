@@ -378,8 +378,44 @@ public:
     webrtc::H264PacketizationMode packetizationMode;
 };
 
+struct NoopEncoder : public webrtc::VideoEncoder
+{
+    int32_t InitEncode(const webrtc::VideoCodec*, int32_t, size_t) final
+    {
+        return WEBRTC_VIDEO_CODEC_ERROR;
+    }
+    int32_t RegisterEncodeCompleteCallback(webrtc::EncodedImageCallback*) final
+    {
+        return WEBRTC_VIDEO_CODEC_ERROR;
+    }
+    int32_t Release() final
+    {
+        return WEBRTC_VIDEO_CODEC_OK;
+    }
+    void SetRates(const webrtc::VideoEncoder::RateControlParameters&) final
+    {
+    }
+    int32_t Encode(const webrtc::VideoFrame&, const std::vector<webrtc::VideoFrameType>*) final
+    {
+        return WEBRTC_VIDEO_CODEC_ERROR;
+    }
+    void AddCodecIfSupported(std::vector<webrtc::SdpVideoFormat>* supportedFormats)
+    {
+        auto h264Format = webrtc::SdpVideoFormat(cricket::kH264CodecName,
+            { { cricket::kH264FmtpProfileLevelId, cricket::kH264ProfileLevelConstrainedBaseline },
+                { cricket::kH264FmtpLevelAsymmetryAllowed, "1" },
+                { cricket::kH264FmtpPacketizationMode, "1" } });
+        supportedFormats->push_back(h264Format);
+    }
+};
+
+static bool useNoopEncoder() {  return true; }
+
 std::unique_ptr<webrtc::VideoEncoder> GStreamerVideoEncoderFactory::CreateVideoEncoder(const webrtc::SdpVideoFormat& format)
 {
+    if (useNoopEncoder())
+        return std::make_unique<NoopEncoder>();
+
     // FIXME: vpxenc doesn't support simulcast nor SVC. vp9enc supports only profile 0. These
     // shortcomings trigger webrtc/vp9.html and webrtc/simulcast-h264.html timeouts and most likely
     // bad UX in WPE/GTK browsers. So for now we prefer to use LibWebRTC's VPx encoders.
@@ -421,6 +457,11 @@ GStreamerVideoEncoderFactory::GStreamerVideoEncoderFactory(bool isSupportingVP9P
 std::vector<webrtc::SdpVideoFormat> GStreamerVideoEncoderFactory::GetSupportedFormats() const
 {
     std::vector<webrtc::SdpVideoFormat> supportedCodecs;
+
+    if (useNoopEncoder()) {
+        NoopEncoder().AddCodecIfSupported(&supportedCodecs);
+        return supportedCodecs;
+    }
 
     supportedCodecs.push_back(webrtc::SdpVideoFormat(cricket::kVp8CodecName));
     if (m_isSupportingVP9Profile0)
