@@ -353,9 +353,9 @@ ICECandidateFilteringEnabled:
     WebKitLegacy:
       default: true
     WebKit:
-      default: true
+      default: false
     WebCore:
-      default: true
+      default: false
 
 IOSFormControlRefreshEnabled:
   type: bool
