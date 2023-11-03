@@ -121,6 +121,7 @@ private:
     GRefPtr<GSubprocess> m_browser;
     RefPtr<SocketConnection> m_socketConnection;
     GRefPtr<GCancellable> m_cancellable;
+    const bool m_isWPE = true;
 #elif USE(INSPECTOR_SOCKET_SERVER)
     String m_targetIp;
     uint16_t m_targetPort { 0 };
