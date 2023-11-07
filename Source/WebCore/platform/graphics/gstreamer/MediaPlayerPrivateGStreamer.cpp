@@ -1351,8 +1351,7 @@ MediaTime MediaPlayerPrivateGStreamer::playbackPosition() const
         m_isWaitingValidPlaybackPosition = false;
     }
     else if (m_canFallBackToLastFinishedSeekPosition) {
-        m_cachedPosition = m_seekTime;
-        m_isWaitingValidPlaybackPosition = true;
+        useSeekTimeAsPlaybackPositionUntilPipelinePositionIsValid();
     }
     else if (!m_cachedPosition) {
         // At playback start, this may have not been set yet
@@ -1366,6 +1365,12 @@ MediaTime MediaPlayerPrivateGStreamer::playbackPosition() const
         invalidateCachedPositionOnNextIteration();
     }
     return m_cachedPosition.value();
+}
+
+void MediaPlayerPrivateGStreamer::useSeekTimeAsPlaybackPositionUntilPipelinePositionIsValid() const
+{
+    m_cachedPosition = m_seekTime;
+    m_isWaitingValidPlaybackPosition = true;
 }
 
 void MediaPlayerPrivateGStreamer::updateEnabledVideoTrack()

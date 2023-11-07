@@ -360,6 +360,7 @@ protected:
 
     virtual bool doSeek(const MediaTime& position, float rate, GstSeekFlags);
     void invalidateCachedPosition() const;
+    void useSeekTimeAsPlaybackPositionUntilPipelinePositionIsValid() const;
 
     static void sourceSetupCallback(MediaPlayerPrivateGStreamer*, GstElement*);
 

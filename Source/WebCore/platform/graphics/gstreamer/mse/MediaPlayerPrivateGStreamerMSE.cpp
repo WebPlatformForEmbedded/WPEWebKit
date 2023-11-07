@@ -268,6 +268,7 @@ bool MediaPlayerPrivateGStreamerMSE::doSeek(const MediaTime& position, float rat
         if (!audioSinkPerformsAsyncStateChanges) {
             // If audio-only pipeline's sink is not performing async state changes
             // we must simulate preroll right away as otherwise nothing will trigger it.
+            useSeekTimeAsPlaybackPositionUntilPipelinePositionIsValid();
             didPreroll();
         }
     }
