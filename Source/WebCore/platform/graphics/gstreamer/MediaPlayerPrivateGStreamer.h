@@ -666,6 +666,8 @@ private:
     // Specific to MediaStream playback.
     MediaTime m_startTime;
     MediaTime m_pausedTime;
+
+    mutable bool m_isWaitingValidPlaybackPosition { false };
 };
 
 }

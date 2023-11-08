@@ -1334,24 +1334,38 @@ MediaTime MediaPlayerPrivateGStreamer::playbackPosition() const
     if (m_isEndReached)
         return m_playbackRate > 0 ? durationMediaTime() : MediaTime::zeroTime();
 
-    if (m_cachedPosition) {
+    // During normal playback, the cached position is invalidated after each iteration and latest one will be retrieved
+    // again from the pipleine/element on the next call to this function. Right after a seek operation, the element may
+    // however not return a valid position right away. In such case, we'll use the seeked-to position until we get a
+    // valid one from the pipeline, but we must ensure we'll query the pipeline for a new position till then so we bypass
+    // the return of the cached position in such case
+    if (m_cachedPosition && !m_isWaitingValidPlaybackPosition) {
         GST_TRACE_OBJECT(pipeline(), "Returning cached position: %s", m_cachedPosition.value().toString().utf8().data());
         return m_cachedPosition.value();
     }
 
     GstClockTime gstreamerPosition = gstreamerPositionFromSinks();
-    GST_TRACE_OBJECT(pipeline(), "Position %" GST_TIME_FORMAT ", canFallBackToLastFinishedSeekPosition: %s", GST_TIME_ARGS(gstreamerPosition), boolForPrinting(m_canFallBackToLastFinishedSeekPosition));
 
-    MediaTime playbackPosition = MediaTime::zeroTime();
+    if (GST_CLOCK_TIME_IS_VALID(gstreamerPosition)) {
+        m_cachedPosition = MediaTime(gstreamerPosition, GST_SECOND);
+        m_isWaitingValidPlaybackPosition = false;
+    }
+    else if (m_canFallBackToLastFinishedSeekPosition) {
+        m_cachedPosition = m_seekTime;
+        m_isWaitingValidPlaybackPosition = true;
+    }
+    else if (!m_cachedPosition) {
+        // At playback start, this may have not been set yet
+        m_cachedPosition = MediaTime::zeroTime();
+    }
 
-    if (GST_CLOCK_TIME_IS_VALID(gstreamerPosition))
-        playbackPosition = MediaTime(gstreamerPosition, GST_SECOND);
-    else if (m_canFallBackToLastFinishedSeekPosition)
-        playbackPosition = m_seekTime;
+    GST_TRACE_OBJECT(pipeline(), "Position %" GST_TIME_FORMAT ", cachedPosition %s, canFallBackToLastFinishedSeekPosition: %s, waitValidPlaybackPosition: %s",
+        GST_TIME_ARGS(gstreamerPosition), m_cachedPosition.value().toString().utf8().data(), boolForPrinting(m_canFallBackToLastFinishedSeekPosition), boolForPrinting(m_isWaitingValidPlaybackPosition));
 
-    m_cachedPosition = playbackPosition;
-    invalidateCachedPositionOnNextIteration();
-    return playbackPosition;
+    if (!m_isWaitingValidPlaybackPosition) {
+        invalidateCachedPositionOnNextIteration();
+    }
+    return m_cachedPosition.value();
 }
 
 void MediaPlayerPrivateGStreamer::updateEnabledVideoTrack()
@@ -3641,7 +3655,7 @@ void MediaPlayerPrivateGStreamer::invalidateCachedPosition() const
 void MediaPlayerPrivateGStreamer::invalidateCachedPositionOnNextIteration() const
 {
     RunLoop::main().dispatch([weakThis = WeakPtr { *this }, this] {
-        if (!weakThis)
+        if (!weakThis || m_isWaitingValidPlaybackPosition)
             return;
         invalidateCachedPosition();
     });
