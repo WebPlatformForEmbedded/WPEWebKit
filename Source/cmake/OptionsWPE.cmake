@@ -112,6 +112,7 @@ WEBKIT_OPTION_DEFINE(USE_SOUP2 "Whether to enable usage of Soup 2 instead of Sou
 # Private options specific to the WPE port.
 WEBKIT_OPTION_DEFINE(USE_EXTERNAL_HOLEPUNCH "Whether to enable external holepunch" PRIVATE OFF)
 WEBKIT_OPTION_DEFINE(USE_ANGLE_GBM "Whether to enable ANGLE implementation with GBM" PRIVATE OFF)
+WEBKIT_OPTION_DEFINE(ENABLE_OIPF_VK "Whether to enable OIPF keys for DAE applications" PRIVATE OFF)
 
 WEBKIT_OPTION_DEPEND(ENABLE_DOCUMENTATION ENABLE_INTROSPECTION)
 

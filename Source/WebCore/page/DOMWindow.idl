@@ -120,6 +120,10 @@
     // Internal operations, not exposed to the Web.
     [EnabledForWorld=shadowRootIsAlwaysOpen] NodeList collectMatchingElementsInFlatTree(Node scope, DOMString selectors);
     [EnabledForWorld=shadowRootIsAlwaysOpen] Element? matchingElementInFlatTree(Node scope, DOMString selectors);
+
+#if defined(ENABLE_OIPF_VK) && ENABLE_OIPF_VK
+    readonly attribute VkConsts KeyEvent;
+#endif
 };
 
 DOMWindow includes AnimationFrameProvider;
