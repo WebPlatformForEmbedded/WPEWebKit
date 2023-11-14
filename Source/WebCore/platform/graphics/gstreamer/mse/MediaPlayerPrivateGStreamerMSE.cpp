@@ -262,13 +262,22 @@ bool MediaPlayerPrivateGStreamerMSE::doSeek(const MediaTime& position, float rat
 
     m_mediaSource->seekToTime(m_seekTime);
 
-    if (m_player && !m_player->isVideoPlayer() && m_audioSink) {
+    if (m_player && !hasVideo() && m_audioSink) {
         gboolean audioSinkPerformsAsyncStateChanges;
         g_object_get(m_audioSink.get(), "async", &audioSinkPerformsAsyncStateChanges, nullptr);
         if (!audioSinkPerformsAsyncStateChanges) {
             // If audio-only pipeline's sink is not performing async state changes
             // we must simulate preroll right away as otherwise nothing will trigger it.
-            didPreroll();
+
+            // Post this on HTML media element queue so it will be executed
+            // synchonously with media events (e.g. seeking). This will ensure
+            // that HTML element attributes (like HTMLmedia.seeking) are not reseted
+            // before app receives "seeking" event
+            m_player->queueTaskOnEventLoop([weakThis = WeakPtr { *this }, this] {
+                if (!weakThis)
+                    return;
+                didPreroll();
+            });
         }
     }
 
