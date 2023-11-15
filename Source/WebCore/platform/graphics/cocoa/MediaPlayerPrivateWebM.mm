@@ -54,9 +54,11 @@
 #import "VideoTrackPrivateWebM.h"
 #import "WebCoreDecompressionSession.h"
 #import "WebMResourceClient.h"
+#import <AVFoundation/AVFoundation.h>
 #import <pal/avfoundation/MediaTimeAVFoundation.h>
 #import <pal/spi/cocoa/AVFoundationSPI.h>
 #import <wtf/MainThread.h>
+#import <wtf/NativePromise.h>
 #import <wtf/SoftLinking.h>
 #import <wtf/WeakPtr.h>
 #import <wtf/WorkQueue.h>
@@ -68,7 +70,6 @@
 #import <pal/cocoa/AVFoundationSoftLink.h>
 
 @interface AVSampleBufferDisplayLayer (WebCoreAVSampleBufferDisplayLayerQueueManagementPrivate)
-- (void)prerollDecodeWithCompletionHandler:(void (^)(BOOL success))block;
 - (void)expectMinimumUpcomingSampleBufferPresentationTime: (CMTime)minimumUpcomingPresentationTime;
 - (void)resetUpcomingSampleBufferPresentationTimeExpectations;
 @end
@@ -86,7 +87,7 @@ static const MediaTime discontinuityTolerance = MediaTime(1, 1);
 MediaPlayerPrivateWebM::MediaPlayerPrivateWebM(MediaPlayer* player)
     : m_player(player)
     , m_synchronizer(adoptNS([PAL::allocAVSampleBufferRenderSynchronizerInstance() init]))
-    , m_parser(adoptRef(*new SourceBufferParserWebM()))
+    , m_parser(SourceBufferParserWebM::create().releaseNonNull())
     , m_appendQueue(WorkQueue::create("MediaPlayerPrivateWebM data parser queue"))
     , m_logger(player->mediaPlayerLogger())
     , m_logIdentifier(player->mediaPlayerLogIdentifier())
@@ -111,7 +112,6 @@ MediaPlayerPrivateWebM::~MediaPlayerPrivateWebM()
     clearTracks();
 
     cancelLoad();
-    abort();
     resetParserState();
 }
 
@@ -127,9 +127,9 @@ static bool isCopyDisplayedPixelBufferAvailable()
 
 #endif // HAVE(AVSAMPLEBUFFERDISPLAYLAYER_COPYDISPLAYEDPIXELBUFFER)
 
-static HashSet<String, ASCIICaseInsensitiveHash>& mimeTypeCache()
+static HashSet<String>& mimeTypeCache()
 {
-    static NeverDestroyed cache = HashSet<String, ASCIICaseInsensitiveHash>();
+    static NeverDestroyed cache = HashSet<String>();
     if (cache->isEmpty()) {
         auto types = SourceBufferParserWebM::supportedMIMETypes();
         cache->add(types.begin(), types.end());
@@ -137,7 +137,7 @@ static HashSet<String, ASCIICaseInsensitiveHash>& mimeTypeCache()
     return cache;
 }
 
-void MediaPlayerPrivateWebM::getSupportedTypes(HashSet<String, ASCIICaseInsensitiveHash>& types)
+void MediaPlayerPrivateWebM::getSupportedTypes(HashSet<String>& types)
 {
     types = mimeTypeCache();
 }
@@ -167,7 +167,6 @@ void MediaPlayerPrivateWebM::load(const String& url)
 
     ResourceRequest request(url);
     request.setAllowCookies(true);
-    request.setFirstPartyForCookies(URL(url));
 
     auto loader = player->createResourceLoader();
     m_resourceClient = WebMResourceClient::create(*this, *loader, WTFMove(request));
@@ -214,7 +213,8 @@ void MediaPlayerPrivateWebM::loadFailed(const ResourceError& error)
 void MediaPlayerPrivateWebM::loadFinished(const FragmentedSharedBuffer&)
 {
     ALWAYS_LOG(LOGIDENTIFIER);
-    setNetworkState(MediaPlayer::NetworkState::Idle);
+    if (m_readyState >= MediaPlayer::ReadyState::HaveMetadata)
+        setNetworkState(MediaPlayer::NetworkState::Idle);
     m_loadFinished = true;
 }
 
@@ -255,7 +255,7 @@ bool MediaPlayerPrivateWebM::paused() const
     return ![m_synchronizer rate];
 }
 
-void MediaPlayerPrivateWebM::setPageIsVisible(bool visible)
+void MediaPlayerPrivateWebM::setPageIsVisible(bool visible, String&&)
 {
     if (m_visible == visible)
         return;
@@ -387,7 +387,7 @@ void MediaPlayerPrivateWebM::setLoadingProgresssed(bool loadingProgressed)
 
 bool MediaPlayerPrivateWebM::didLoadingProgress() const
 {
-    return m_loadingProgressed;
+    return std::exchange(m_loadingProgressed, false);
 }
 
 RefPtr<NativeImage> MediaPlayerPrivateWebM::nativeImageForCurrentTime()
@@ -512,10 +512,13 @@ void MediaPlayerPrivateWebM::setNaturalSize(FloatSize size)
         INFO_LOG(LOGIDENTIFIER, "was ", oldSize, ", is ", size);
         if (auto player = m_player.get())
             player->sizeChanged();
-        
-        if (m_readyState < MediaPlayer::ReadyState::HaveMetadata)
-            setReadyState(MediaPlayer::ReadyState::HaveMetadata);
     }
+
+    if (m_readyState < MediaPlayer::ReadyState::HaveMetadata)
+        setReadyState(MediaPlayer::ReadyState::HaveMetadata);
+
+    if (m_loadFinished)
+        setNetworkState(MediaPlayer::NetworkState::Idle);
 }
 
 void MediaPlayerPrivateWebM::setHasAudio(bool hasAudio)
@@ -1077,13 +1080,6 @@ void MediaPlayerPrivateWebM::didParseInitializationData(InitializationSegment&& 
         setReadyState(MediaPlayer::ReadyState::HaveMetadata);
 }
 
-void MediaPlayerPrivateWebM::didEncounterErrorDuringParsing(int32_t code)
-{
-    ERROR_LOG(LOGIDENTIFIER, code);
-
-    m_parsingSucceeded = false;
-}
-
 void MediaPlayerPrivateWebM::didProvideMediaDataForTrackId(Ref<MediaSampleAVFObjC>&& originalSample, uint64_t trackId, const String& mediaType)
 {
     UNUSED_PARAM(mediaType);
@@ -1131,50 +1127,31 @@ void MediaPlayerPrivateWebM::append(SharedBuffer& buffer)
 {
     ALWAYS_LOG(LOGIDENTIFIER, "data length = ", buffer.size());
 
-    m_parser->setDidParseInitializationDataCallback([weakThis = WeakPtr { *this }, abortCalled = m_abortCalled.load()] (InitializationSegment&& segment) {
-        if (!weakThis || abortCalled != weakThis->m_abortCalled)
+    setNetworkState(MediaPlayer::NetworkState::Loading);
+
+    m_parser->setDidParseInitializationDataCallback([weakThis = WeakPtr { *this }] (InitializationSegment&& segment) {
+        if (!weakThis)
             return;
 
         weakThis->didParseInitializationData(WTFMove(segment));
     });
 
-    m_parser->setDidEncounterErrorDuringParsingCallback([weakThis = WeakPtr { *this }, abortCalled = m_abortCalled.load()] (int32_t errorCode) {
-        if (!weakThis || abortCalled != weakThis->m_abortCalled)
-            return;
-        weakThis->didEncounterErrorDuringParsing(errorCode);
-    });
-
-    m_parser->setDidProvideMediaDataCallback([weakThis = WeakPtr { *this }, abortCalled = m_abortCalled.load()] (Ref<MediaSampleAVFObjC>&& sample, uint64_t trackId, const String& mediaType) {
-        if (!weakThis || abortCalled != weakThis->m_abortCalled)
+    m_parser->setDidProvideMediaDataCallback([weakThis = WeakPtr { *this }] (Ref<MediaSampleAVFObjC>&& sample, uint64_t trackId, const String& mediaType) {
+        if (!weakThis)
             return;
         weakThis->didProvideMediaDataForTrackId(WTFMove(sample), trackId, mediaType);
     });
 
-    m_parsingSucceeded = true;
     m_pendingAppends++;
 
     SourceBufferParser::Segment segment(Ref { buffer });
-    m_appendQueue->dispatch([weakThis = WeakPtr { *this }, this, segment = WTFMove(segment), parser = m_parser, abortCalled = m_abortCalled.load()]() mutable {
-        // Our destructor ensures all dispatched lambdas are executed before destruction
-        ASSERT(weakThis);
-        if (abortCalled != m_abortCalled)
+    invokeAsync(m_appendQueue, [segment = WTFMove(segment), parser = m_parser]() mutable {
+        return GenericPromise::createAndSettle(parser->appendData(WTFMove(segment)));
+    })->whenSettled(RunLoop::current(), [weakThis = WeakPtr { *this }] {
+        if (!weakThis)
             return;
-        parser->appendData(WTFMove(segment), [weakThis = WTFMove(weakThis), abortCalled]() mutable {
-            callOnMainThread([weakThis = WTFMove(weakThis), abortCalled] {
-                if (!weakThis || abortCalled != weakThis->m_abortCalled)
-                    return;
-
-                weakThis->appendCompleted();
-            });
-        });
+        weakThis->appendCompleted();
     });
-}
-
-void MediaPlayerPrivateWebM::abort()
-{
-    ERROR_LOG(LOGIDENTIFIER);
-
-    m_abortCalled++;
 }
 
 void MediaPlayerPrivateWebM::resetParserState()
@@ -1279,17 +1256,16 @@ void MediaPlayerPrivateWebM::ensureLayer()
         setNetworkState(MediaPlayer::NetworkState::DecodeError);
         return;
     }
-    
-    if ([m_displayLayer respondsToSelector:@selector(setPreventsDisplaySleepDuringVideoPlayback:)])
-        m_displayLayer.get().preventsDisplaySleepDuringVideoPlayback = NO;
+
+    [m_displayLayer setPreventsDisplaySleepDuringVideoPlayback:NO];
 
     if ([m_displayLayer respondsToSelector:@selector(setPreventsAutomaticBackgroundingDuringVideoPlayback:)])
-        m_displayLayer.get().preventsAutomaticBackgroundingDuringVideoPlayback = NO;
+        [m_displayLayer setPreventsAutomaticBackgroundingDuringVideoPlayback:NO];
 
     @try {
         [m_synchronizer addRenderer:m_displayLayer.get()];
     } @catch(NSException *exception) {
-        ERROR_LOG(LOGIDENTIFIER, "-[AVSampleBufferRenderSynchronizer addRenderer:] threw an exception: ", [[exception name] UTF8String], ", reason : ", [[exception reason] UTF8String]);
+        ERROR_LOG(LOGIDENTIFIER, "-[AVSampleBufferRenderSynchronizer addRenderer:] threw an exception: ", exception.name, ", reason : ", exception.reason);
         ASSERT_NOT_REACHED();
 
         setNetworkState(MediaPlayer::NetworkState::DecodeError);
@@ -1370,7 +1346,7 @@ void MediaPlayerPrivateWebM::addAudioRenderer(uint64_t trackId)
     @try {
         [m_synchronizer addRenderer:renderer.get()];
     } @catch(NSException *exception) {
-        ERROR_LOG(LOGIDENTIFIER, "-[AVSampleBufferRenderSynchronizer addRenderer:] threw an exception: ", [[exception name] UTF8String], ", reason : ", [[exception reason] UTF8String]);
+        ERROR_LOG(LOGIDENTIFIER, "-[AVSampleBufferRenderSynchronizer addRenderer:] threw an exception: ", exception.name, ", reason : ", exception.reason);
         ASSERT_NOT_REACHED();
 
         setNetworkState(MediaPlayer::NetworkState::DecodeError);
@@ -1401,9 +1377,7 @@ void MediaPlayerPrivateWebM::destroyLayer()
         return;
 
     CMTime currentTime = PAL::CMTimebaseGetTime([m_synchronizer timebase]);
-    [m_synchronizer removeRenderer:m_displayLayer.get() atTime:currentTime withCompletionHandler:^(BOOL){
-        // No-op.
-    }];
+    [m_synchronizer removeRenderer:m_displayLayer.get() atTime:currentTime completionHandler:nil];
 
     m_videoLayerManager->didDestroyVideoLayer();
     [m_displayLayer flush];
@@ -1428,9 +1402,7 @@ void MediaPlayerPrivateWebM::destroyDecompressionSession()
 void MediaPlayerPrivateWebM::destroyAudioRenderer(RetainPtr<AVSampleBufferAudioRenderer> renderer)
 {
     CMTime currentTime = PAL::CMTimebaseGetTime([m_synchronizer timebase]);
-    [m_synchronizer removeRenderer:renderer.get() atTime:currentTime withCompletionHandler:^(BOOL){
-        // No-op.
-    }];
+    [m_synchronizer removeRenderer:renderer.get() atTime:currentTime completionHandler:nil];
 
     [renderer flush];
     [renderer stopRequestingMediaData];
@@ -1541,7 +1513,7 @@ private:
         return makeUnique<MediaPlayerPrivateWebM>(player);
     }
 
-    void getSupportedTypes(HashSet<String, ASCIICaseInsensitiveHash>& types) const final
+    void getSupportedTypes(HashSet<String>& types) const final
     {
         return MediaPlayerPrivateWebM::getSupportedTypes(types);
     }
@@ -1562,7 +1534,8 @@ void MediaPlayerPrivateWebM::registerMediaEngine(MediaEngineRegistrar registrar)
 
 bool MediaPlayerPrivateWebM::isAvailable()
 {
-    return PAL::isAVFoundationFrameworkAvailable()
+    return SourceBufferParserWebM::isAvailable()
+        && PAL::isAVFoundationFrameworkAvailable()
         && PAL::isCoreMediaFrameworkAvailable()
         && PAL::getAVSampleBufferAudioRendererClass()
         && PAL::getAVSampleBufferRenderSynchronizerClass()
