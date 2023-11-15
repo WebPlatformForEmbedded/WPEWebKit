@@ -2004,10 +2004,19 @@ void MediaPlayerPrivateGStreamer::handleMessage(GstMessage* message)
                     GST_INFO_OBJECT(pipeline(), "%s stream detected", m_isLiveStream.value_or(false) ? "Live" : "Non-live");
                     updateDownloadBufferingFlag();
                 }
-            }
+	    }
         } else if (gst_structure_has_name(structure, "webkit-network-statistics")) {
-            if (gst_structure_get(structure, "read-position", G_TYPE_UINT64, &m_networkReadPosition, "size", G_TYPE_UINT64, &m_httpResponseTotalSize, nullptr))
+            if (gst_structure_get(structure, "read-position", G_TYPE_UINT64, &m_networkReadPosition, "size", G_TYPE_UINT64, &m_httpResponseTotalSize, nullptr)) {
                 GST_LOG_OBJECT(pipeline(), "Updated network read position %" G_GUINT64_FORMAT ", size: %" G_GUINT64_FORMAT, m_networkReadPosition, m_httpResponseTotalSize);
+	        MediaTime mediaDuration = durationMediaTime();
+		// Update maxTimeLoaded only if the media duration is
+                // available. Otherwise we can't compute it.
+                if (mediaDuration && m_httpResponseTotalSize) {
+                    const double fillStatus = static_cast<double>(m_networkReadPosition) / static_cast<double>(m_httpResponseTotalSize);
+                    m_maxTimeLoaded = MediaTime(fillStatus * static_cast<double>(toGstUnsigned64Time(mediaDuration)), GST_SECOND);
+                    GST_DEBUG("Updated maxTimeLoaded base on network read position: %s", toString(m_maxTimeLoaded).utf8().data());
+                }	
+	    }
         } else if (gst_structure_has_name(structure, "GstCacheDownloadComplete")) {
             GST_INFO_OBJECT(pipeline(), "Stream is fully downloaded, stopping monitoring downloading progress.");
             m_fillTimer.stop();
