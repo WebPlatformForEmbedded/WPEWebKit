@@ -255,13 +255,13 @@ void RemoteDeviceProxy::createComputePipelineAsync(const WebCore::WebGPU::Comput
     }
 
     auto identifier = WebGPUIdentifier::generate();
-    auto sendResult = sendWithAsyncReply(Messages::RemoteDevice::CreateComputePipelineAsync(*convertedDescriptor, identifier), [identifier, callback = WTFMove(callback), strongThis = Ref { *this }](auto result) mutable {
+    auto sendResult = sendWithAsyncReply(Messages::RemoteDevice::CreateComputePipelineAsync(*convertedDescriptor, identifier), [identifier, callback = WTFMove(callback), protectedThis = Ref { *this }](auto result) mutable {
         if (!result) {
             callback(nullptr);
             return;
         }
 
-        callback(RemoteComputePipelineProxy::create(strongThis, strongThis->m_convertToBackingContext, identifier));
+        callback(RemoteComputePipelineProxy::create(protectedThis, protectedThis->m_convertToBackingContext, identifier));
     });
     UNUSED_PARAM(sendResult);
 }
@@ -274,13 +274,13 @@ void RemoteDeviceProxy::createRenderPipelineAsync(const WebCore::WebGPU::RenderP
         return;
 
     auto identifier = WebGPUIdentifier::generate();
-    auto sendResult = sendWithAsyncReply(Messages::RemoteDevice::CreateRenderPipelineAsync(*convertedDescriptor, identifier), [identifier, callback = WTFMove(callback), strongThis = Ref { *this }](auto result) mutable {
+    auto sendResult = sendWithAsyncReply(Messages::RemoteDevice::CreateRenderPipelineAsync(*convertedDescriptor, identifier), [identifier, callback = WTFMove(callback), protectedThis = Ref { *this }](auto result) mutable {
         if (!result) {
             callback(nullptr);
             return;
         }
 
-        callback(RemoteRenderPipelineProxy::create(strongThis, strongThis->m_convertToBackingContext, identifier));
+        callback(RemoteRenderPipelineProxy::create(protectedThis, protectedThis->m_convertToBackingContext, identifier));
     });
     UNUSED_PARAM(sendResult);
 }

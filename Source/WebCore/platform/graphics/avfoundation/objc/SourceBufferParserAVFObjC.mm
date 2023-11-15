@@ -37,6 +37,7 @@
 #import "MediaDescription.h"
 #import "MediaSample.h"
 #import "MediaSampleAVFObjC.h"
+#import "MediaSessionManagerCocoa.h"
 #import "NotImplemented.h"
 #import "SharedBuffer.h"
 #import "SourceBufferPrivate.h"
@@ -302,8 +303,8 @@ void SourceBufferParserAVFObjC::setLogger(const Logger& newLogger, const void* n
 
 void SourceBufferParserAVFObjC::didParseStreamDataAsAsset(AVAsset* asset)
 {
-    INFO_LOG_IF_POSSIBLE(LOGIDENTIFIER, [[asset description] UTF8String]);
-    m_callOnClientThreadCallback([this, strongThis = Ref { *this }, asset = retainPtr(asset)] {
+    INFO_LOG_IF_POSSIBLE(LOGIDENTIFIER, asset);
+    m_callOnClientThreadCallback([this, protectedThis = Ref { *this }, asset = retainPtr(asset)] {
         if (!m_didParseInitializationDataCallback)
             return;
 
@@ -342,8 +343,8 @@ void SourceBufferParserAVFObjC::didParseStreamDataAsAsset(AVAsset* asset)
 
 void SourceBufferParserAVFObjC::didFailToParseStreamDataWithError(NSError* error)
 {
-    ERROR_LOG_IF_POSSIBLE(LOGIDENTIFIER, [[error description] UTF8String]);
-    m_callOnClientThreadCallback([this, strongThis = Ref { *this }, error = retainPtr(error)] {
+    ERROR_LOG_IF_POSSIBLE(LOGIDENTIFIER, error);
+    m_callOnClientThreadCallback([this, protectedThis = Ref { *this }, error = retainPtr(error)] {
         if (m_didEncounterErrorDuringParsingCallback)
             m_didEncounterErrorDuringParsingCallback(error.get().code);
     });
@@ -353,7 +354,7 @@ void SourceBufferParserAVFObjC::didProvideMediaDataForTrackID(uint64_t trackID, 
 {
     INFO_LOG_IF_POSSIBLE(LOGIDENTIFIER, "trackID = ", trackID, ", mediaType = ", mediaType);
     UNUSED_PARAM(flags);
-    m_callOnClientThreadCallback([this, strongThis = Ref { *this }, sampleBuffer = retainPtr(sampleBuffer), trackID, mediaType = mediaType] {
+    m_callOnClientThreadCallback([this, protectedThis = Ref { *this }, sampleBuffer = retainPtr(sampleBuffer), trackID, mediaType = mediaType] {
         if (!m_didProvideMediaDataCallback)
             return;
 
@@ -384,7 +385,7 @@ void SourceBufferParserAVFObjC::didProvideContentKeyRequestInitializationDataFor
 void SourceBufferParserAVFObjC::didProvideContentKeyRequestSpecifierForTrackID(NSData* nsInitData, uint64_t trackID)
 {
     INFO_LOG_IF_POSSIBLE(LOGIDENTIFIER, "trackID = ", trackID);
-    m_callOnClientThreadCallback([this, strongThis = Ref { *this }, nsInitData = retainPtr(nsInitData), trackID] {
+    m_callOnClientThreadCallback([this, protectedThis = Ref { *this }, nsInitData = retainPtr(nsInitData), trackID] {
         m_didProvideContentKeyRequestIdentifierForTrackIDCallback(SharedBuffer::create(nsInitData.get()), trackID);
     });
 }
