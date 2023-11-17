@@ -42,6 +42,11 @@
 #include <wtf/text/StringBuilder.h>
 #include <wtf/text/WTFString.h>
 
+#if USE(ODH_TELEMETRY)
+#include <rdk/libodherr/odherr.h>
+#include <rdk/libodherr/odherr_ctx.h>
+#endif
+
 #if USE(CF)
 #include <CoreFoundation/CFString.h>
 #endif // USE(CF)
@@ -378,10 +383,50 @@ void WTFReportError(const char* file, int line, const char* function, const char
     va_list args;
     va_start(args, format);
     vprintf_stderr_with_prefix("ERROR: ", format, args);
+#if USE(ODH_TELEMETRY)
+    WTFReportOdhErrorV(file, line, function, format, args);
+#endif
     va_end(args);
     printf_stderr_common("\n");
     printCallSite(file, line, function);
 }
+
+#if USE(ODH_TELEMETRY)
+void WTFReportOdhError(const char* file, int line, const char* function, const char* format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    WTFReportOdhErrorV(file, line, function, format, args);
+    va_end(args);
+}
+
+void WTFReportOdhErrorV(const char* file, int line, const char* function, const char* format, va_list args)
+{
+    int length = vsnprintf(NULL, 0, format, args);
+    if (length < 0) return;
+
+    char *msg = (char*)malloc(length + 1);
+    if (!msg) return;
+
+    vsnprintf(msg, length + 1, format, args);
+
+    char* backtrace = odh_error_report_sprintf("%s:%d %s", file, line, function);
+    char* ctx = odh_ctx_create_json("wpe", "ss",
+                                    "function", function,
+                                     "file", file);
+    odh_error_report_send_v3(ODH_ERROR_REPORT_SENSITIVITY_NONSENSITIVE,
+                             ODH_ERROR_REPORT_LEVEL_ERROR,
+                             "WPE0050",
+                             nullptr,
+                             msg,
+                             ctx,
+                             backtrace,
+                             "browser");
+    free(ctx);
+    free(backtrace);
+    free(msg);
+}
+#endif
 
 class WTFLoggingAccumulator {
     WTF_MAKE_FAST_ALLOCATED;

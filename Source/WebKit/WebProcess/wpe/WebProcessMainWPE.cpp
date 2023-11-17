@@ -31,6 +31,10 @@
 #include "WebProcess.h"
 #include <glib.h>
 
+#if USE(ODH_TELEMETRY)
+#include <rdk/libodherr/odherr.h>
+#endif
+
 #if USE(GCRYPT)
 #include <pal/crypto/gcrypt/Initialization.h>
 #endif
@@ -59,6 +63,9 @@ public:
         // FIXME: This should be probably called in other processes as well.
         g_set_prgname("WPEWebProcess");
 
+#if USE(ODH_TELEMETRY)
+        odh_error_report_init("WebKitBrowser");
+#endif
         return true;
     }
 
@@ -66,6 +73,9 @@ public:
     {
 #if USE(GSTREAMER)
         gst_deinit();
+#endif
+#if USE(ODH_TELEMETRY)
+        odh_error_report_deinit(ODH_ERROR_REPORT_DEINIT_MODE_DEFERRED);
 #endif
     }
 };

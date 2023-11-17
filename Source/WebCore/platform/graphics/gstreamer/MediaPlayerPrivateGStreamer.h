@@ -50,6 +50,10 @@
 
 typedef struct _GstMpegtsSection GstMpegtsSection;
 
+#if USE(ODH_TELEMETRY)
+#include "odhott/odhott_av.h"
+#endif
+
 #if USE(GSTREAMER_GL)
 #if USE(LIBEPOXY)
 // Include the <epoxy/gl.h> header before <gst/gl/gl.h>.
@@ -397,6 +401,24 @@ protected:
     MediaTime m_seekTime;
     GRefPtr<GstElement> m_source { nullptr };
     bool m_areVolumeAndMuteInitialized { false };
+
+#if USE(ODH_TELEMETRY)
+    // ODH AV telemetry reports
+    class AvContextGetterImpl: public AvContextGetter {
+    public:
+        void setPipeline(GRefPtr<GstElement> pipeline) { m_pipeline = pipeline; }
+
+        //AvContextGetter
+        OdhDrm getDrm() override;
+        OdhOwner getOwner() override;
+        GstElement* getPipeline() override;
+
+    private:
+        GRefPtr<GstElement> m_pipeline;
+    };
+    AvContextGetterImpl m_avContextGetter;
+    AvOdhReporter m_odhReporter;
+#endif
 
 #if USE(TEXTURE_MAPPER_GL)
     TextureMapperGL::Flags m_textureMapperFlags { TextureMapperGL::NoFlag };
