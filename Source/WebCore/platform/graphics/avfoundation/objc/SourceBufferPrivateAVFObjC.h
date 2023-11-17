@@ -181,7 +181,7 @@ private:
     void processPendingTrackChangeTasks();
     void enqueueSample(Ref<MediaSampleAVFObjC>&&, uint64_t trackID);
     void didBecomeReadyForMoreSamples(uint64_t trackID);
-    void appendCompleted();
+    void appendCompleted(bool);
     void destroyStreamDataParser();
     void destroyRenderers();
     void clearTracks();
@@ -247,7 +247,6 @@ ALLOW_NEW_API_WITHOUT_GUARDS_END
 
     std::optional<FloatSize> m_cachedSize;
     FloatSize m_currentSize;
-    bool m_parsingSucceeded { true };
     bool m_waitingForKey { true };
     bool m_seeking { false };
     uint64_t m_enabledVideoTrackID { notFound };

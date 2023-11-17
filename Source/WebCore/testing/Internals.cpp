@@ -253,7 +253,9 @@
 #include <wtf/Language.h>
 #include <wtf/MemoryPressureHandler.h>
 #include <wtf/MonotonicTime.h>
+#include <wtf/NativePromise.h>
 #include <wtf/ProcessID.h>
+#include <wtf/RunLoop.h>
 #include <wtf/URLHelpers.h>
 #include <wtf/text/StringBuilder.h>
 #include <wtf/text/StringConcatenateNumbers.h>
@@ -4476,15 +4478,15 @@ void Internals::initializeMockMediaSource()
 
 void Internals::bufferedSamplesForTrackId(SourceBuffer& buffer, const AtomString& trackId, BufferedSamplesPromise&& promise)
 {
-    buffer.bufferedSamplesForTrackId(trackId, [promise = WTFMove(promise)](auto&& samples) mutable {
-        promise.resolve(WTFMove(samples));
+    buffer.bufferedSamplesForTrackId(trackId)->whenSettled(RunLoop::current(), [promise = WTFMove(promise)](auto&& samples) mutable {
+        promise.resolve(WTFMove(*samples));
     });
 }
 
 void Internals::enqueuedSamplesForTrackID(SourceBuffer& buffer, const AtomString& trackID, BufferedSamplesPromise&& promise)
 {
-    return buffer.enqueuedSamplesForTrackID(trackID, [promise = WTFMove(promise)](auto&& samples) mutable {
-        promise.resolve(WTFMove(samples));
+    buffer.enqueuedSamplesForTrackID(trackID)->whenSettled(RunLoop::current(), [promise = WTFMove(promise)](auto&& samples) mutable {
+        promise.resolve(WTFMove(*samples));
     });
 }
 

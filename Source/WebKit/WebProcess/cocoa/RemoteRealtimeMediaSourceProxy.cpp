@@ -39,11 +39,12 @@
 #include <WebCore/RealtimeMediaSource.h>
 #include <WebCore/RealtimeMediaSourceCenter.h>
 #include <WebCore/WebAudioBufferList.h>
+#include <wtf/NativePromise.h>
 
 namespace WebKit {
 using namespace WebCore;
 
-static IPC::Connection& getSourceConnection(bool shouldCaptureInGPUProcess)
+static Ref<IPC::Connection> getSourceConnection(bool shouldCaptureInGPUProcess)
 {
     ASSERT(isMainRunLoop());
 #if ENABLE(GPU_PROCESS)
@@ -110,6 +111,31 @@ void RemoteRealtimeMediaSourceProxy::applyConstraints(const MediaConstraints& co
     m_pendingApplyConstraintsCallbacks.append(WTFMove(completionHandler));
     // FIXME: Use sendAsyncWithReply.
     m_connection->send(Messages::UserMediaCaptureManagerProxy::ApplyConstraints { m_identifier, constraints }, 0);
+}
+
+Ref<WebCore::RealtimeMediaSource::TakePhotoNativePromise> RemoteRealtimeMediaSourceProxy::takePhoto(PhotoSettings&& settings)
+{
+    return m_connection->sendWithPromisedReply(Messages::UserMediaCaptureManagerProxy::TakePhoto(identifier(), WTFMove(settings)))->whenSettled(RunLoop::current(), [](Messages::UserMediaCaptureManagerProxy::TakePhoto::Promise::Result&& result) {
+        if (result)
+            return WebCore::RealtimeMediaSource::TakePhotoNativePromise::createAndSettle(WTFMove(result.value()));
+
+        return WebCore::RealtimeMediaSource::TakePhotoNativePromise::createAndReject(String("IPC Connection closed"_s));
+    });
+}
+
+void RemoteRealtimeMediaSourceProxy::getPhotoCapabilities(WebCore::RealtimeMediaSource::PhotoCapabilitiesHandler&& handler)
+{
+    m_connection->sendWithAsyncReply(Messages::UserMediaCaptureManagerProxy::GetPhotoCapabilities(identifier()), WTFMove(handler));
+}
+
+Ref<WebCore::RealtimeMediaSource::PhotoSettingsNativePromise> RemoteRealtimeMediaSourceProxy::getPhotoSettings()
+{
+    return m_connection->sendWithPromisedReply(Messages::UserMediaCaptureManagerProxy::GetPhotoSettings(identifier()))->whenSettled(RunLoop::current(), [](Messages::UserMediaCaptureManagerProxy::GetPhotoSettings::Promise::Result&& result) {
+        if (result)
+            return WebCore::RealtimeMediaSource::PhotoSettingsNativePromise::createAndSettle(WTFMove(result.value()));
+
+        return WebCore::RealtimeMediaSource::PhotoSettingsNativePromise::createAndReject(String("IPC Connection closed"_s));
+    });
 }
 
 void RemoteRealtimeMediaSourceProxy::applyConstraintsSucceeded()
