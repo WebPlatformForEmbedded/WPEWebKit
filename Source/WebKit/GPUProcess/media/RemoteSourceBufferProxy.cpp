@@ -68,10 +68,10 @@ RemoteSourceBufferProxy::~RemoteSourceBufferProxy()
         m_connectionToWebProcess->messageReceiverMap().removeMessageReceiver(Messages::RemoteSourceBufferProxy::messageReceiverName(), m_identifier.toUInt64());
 }
 
-Ref<RemoteSourceBufferProxy::ReceiveResultPromise> RemoteSourceBufferProxy::sourceBufferPrivateDidReceiveInitializationSegment(InitializationSegment&& segment)
+Ref<MediaPromise> RemoteSourceBufferProxy::sourceBufferPrivateDidReceiveInitializationSegment(InitializationSegment&& segment)
 {
     if (!m_remoteMediaPlayerProxy)
-        return ReceiveResultPromise::createAndReject(ReceiveResult::ClientDisconnected);
+        return MediaPromise::createAndReject(PlatformMediaError::ClientDisconnected);
 
     InitializationSegmentInfo segmentInfo;
     segmentInfo.duration = segment.duration;
@@ -104,10 +104,10 @@ Ref<RemoteSourceBufferProxy::ReceiveResultPromise> RemoteSourceBufferProxy::sour
     });
 
     if (!m_connectionToWebProcess)
-        return ReceiveResultPromise::createAndReject(ReceiveResult::IPCError);
+        return MediaPromise::createAndReject(PlatformMediaError::IPCError);
 
     return m_connectionToWebProcess->connection().sendWithPromisedReply(Messages::SourceBufferPrivateRemote::SourceBufferPrivateDidReceiveInitializationSegment(segmentInfo), m_identifier)->whenSettled(RunLoop::current(), [](auto&& result) {
-        return ReceiveResultPromise::createAndSettle(!result ? makeUnexpected(ReceiveResult::IPCError) : WTFMove(*result));
+        return MediaPromise::createAndSettle(!result ? makeUnexpected(PlatformMediaError::IPCError) : WTFMove(*result));
     });
 }
 
@@ -119,13 +119,13 @@ void RemoteSourceBufferProxy::sourceBufferPrivateHighestPresentationTimestampCha
     m_connectionToWebProcess->connection().send(Messages::SourceBufferPrivateRemote::SourceBufferPrivateHighestPresentationTimestampChanged(timestamp), m_identifier);
 }
 
-Ref<GenericPromise> RemoteSourceBufferProxy::sourceBufferPrivateDurationChanged(const MediaTime& duration)
+Ref<MediaPromise> RemoteSourceBufferProxy::sourceBufferPrivateDurationChanged(const MediaTime& duration)
 {
     if (!m_connectionToWebProcess)
-        return GenericPromise::createAndReject(-1);
+        return MediaPromise::createAndReject(PlatformMediaError::IPCError);
 
-    return m_connectionToWebProcess->connection().sendWithPromisedReply(Messages::SourceBufferPrivateRemote::SourceBufferPrivateDurationChanged(duration), m_identifier)->whenSettled(RunLoop::current(), [] {
-        return GenericPromise::createAndResolve();
+    return m_connectionToWebProcess->connection().sendWithPromisedReply(Messages::SourceBufferPrivateRemote::SourceBufferPrivateDurationChanged(duration), m_identifier)->whenSettled(RunLoop::current(), [](auto&& result) {
+        return result ? MediaPromise::createAndResolve() : MediaPromise::createAndReject(PlatformMediaError::IPCError);
     });
 }
 
@@ -136,13 +136,13 @@ void RemoteSourceBufferProxy::sourceBufferPrivateTrackBuffersChanged(const Vecto
     m_connectionToWebProcess->connection().send(Messages::SourceBufferPrivateRemote::SourceBufferPrivateTrackBuffersChanged(trackBuffers), m_identifier);
 }
 
-Ref<GenericPromise> RemoteSourceBufferProxy::sourceBufferPrivateBufferedChanged(const PlatformTimeRanges& buffered)
+Ref<MediaPromise> RemoteSourceBufferProxy::sourceBufferPrivateBufferedChanged(const PlatformTimeRanges& buffered)
 {
     if (!m_connectionToWebProcess)
-        return GenericPromise::createAndResolve();
+        return MediaPromise::createAndResolve();
 
-    return m_connectionToWebProcess->connection().sendWithPromisedReply(Messages::SourceBufferPrivateRemote::SourceBufferPrivateBufferedChanged(buffered), m_identifier)->whenSettled(RunLoop::current(), [] {
-        return GenericPromise::createAndResolve();
+    return m_connectionToWebProcess->connection().sendWithPromisedReply(Messages::SourceBufferPrivateRemote::SourceBufferPrivateBufferedChanged(buffered), m_identifier)->whenSettled(RunLoop::current(), [](auto&& result) {
+        return result ? MediaPromise::createAndResolve() : MediaPromise::createAndReject(PlatformMediaError::IPCError);
     });
 }
 
@@ -178,11 +178,11 @@ void RemoteSourceBufferProxy::sourceBufferPrivateReportExtraMemoryCost(uint64_t 
     m_connectionToWebProcess->connection().send(Messages::SourceBufferPrivateRemote::SourceBufferPrivateReportExtraMemoryCost(extraMemory), m_identifier);
 }
 
-void RemoteSourceBufferProxy::append(IPC::SharedBufferReference&& buffer, CompletionHandler<void(GenericPromise::Result, uint64_t, const MediaTime&)>&& completionHandler)
+void RemoteSourceBufferProxy::append(IPC::SharedBufferReference&& buffer, CompletionHandler<void(MediaPromise::Result, uint64_t, const MediaTime&)>&& completionHandler)
 {
     auto sharedMemory = buffer.sharedCopy();
     if (!sharedMemory)
-        return completionHandler(makeUnexpected(-1), m_sourceBufferPrivate->totalTrackBufferSizeInBytes(), m_sourceBufferPrivate->timestampOffset());
+        return completionHandler(makeUnexpected(PlatformMediaError::MemoryError), m_sourceBufferPrivate->totalTrackBufferSizeInBytes(), m_sourceBufferPrivate->timestampOffset());
 
     auto handle = sharedMemory->createHandle(SharedMemory::Protection::ReadOnly);
     if (handle && m_connectionToWebProcess)

@@ -2056,6 +2056,7 @@ platform/Pasteboard.cpp
 platform/PasteboardCustomData.cpp
 platform/PasteboardWriterData.cpp
 platform/PlatformKeyboardEvent.cpp
+platform/PlatformMediaError.cpp
 platform/PlatformScreen.cpp
 platform/PlatformSpeechSynthesisUtterance.cpp
 platform/PlatformSpeechSynthesisVoice.cpp
@@ -2282,7 +2283,6 @@ platform/graphics/RoundedRect.cpp
 platform/graphics/ShadowBlur.cpp
 platform/graphics/SourceBrush.cpp
 platform/graphics/SourceBufferPrivate.cpp
-platform/graphics/SourceBufferPrivateClient.cpp
 platform/graphics/SourceImage.cpp
 platform/graphics/StringTruncator.cpp
 platform/graphics/SystemFontDatabase.cpp

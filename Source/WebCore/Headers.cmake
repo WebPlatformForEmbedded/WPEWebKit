@@ -1657,6 +1657,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/MediaCapabilitiesEncodingInfo.h
     platform/MediaCapabilitiesInfo.h
     platform/MediaDescription.h
+    platform/MediaPromiseTypes.h
     platform/MediaSample.h
     platform/MediaSelectionOption.h
     platform/MediaSessionGroupIdentifier.h
@@ -1680,6 +1681,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/PlatformEvent.h
     platform/PlatformExportMacros.h
     platform/PlatformKeyboardEvent.h
+    platform/PlatformMediaError.h
     platform/PlatformMouseEvent.h
     platform/PlatformPasteboard.h
     platform/PlatformScreen.h
