@@ -167,6 +167,13 @@ struct SeekTarget {
     WEBCORE_EXPORT String toString() const;
 };
 
+enum class MediaPlatformType {
+    Mock,
+    AVFObjC,
+    GStreamer,
+    Remote
+};
+
 class MediaPlayerClient {
 public:
     virtual ~MediaPlayerClient() = default;
@@ -787,7 +794,7 @@ private:
     PitchCorrectionAlgorithm m_pitchCorrectionAlgorithm { PitchCorrectionAlgorithm::BestAllAround };
 
 #if ENABLE(MEDIA_SOURCE)
-    WeakPtr<MediaSourcePrivateClient> m_mediaSource;
+    ThreadSafeWeakPtr<MediaSourcePrivateClient> m_mediaSource;
 #endif
 #if ENABLE(MEDIA_STREAM)
     RefPtr<MediaStreamPrivate> m_mediaStream;
