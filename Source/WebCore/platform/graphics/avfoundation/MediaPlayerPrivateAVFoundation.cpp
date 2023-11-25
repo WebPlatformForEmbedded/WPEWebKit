@@ -111,7 +111,7 @@ MediaPlayerPrivateAVFoundation::MediaRenderingMode MediaPlayerPrivateAVFoundatio
     if (m_readyState >= MediaPlayer::ReadyState::HaveMetadata && !haveBeenAskedToPaint())
         return MediaRenderingMode::MediaRenderingToLayer;
 
-    auto player = m_player.get();
+    RefPtr player = m_player.get();
     if (supportsAcceleratedRendering() && player && player->renderingCanBeAccelerated())
         return MediaRenderingMode::MediaRenderingToLayer;
 
@@ -160,9 +160,9 @@ void MediaPlayerPrivateAVFoundation::setNeedsRenderingModeChanged()
 
     ALWAYS_LOG(LOGIDENTIFIER);
 
-    queueTaskOnEventLoop([weakThis = WeakPtr { *this }] {
-        if (weakThis)
-            weakThis->renderingModeChanged();
+    queueTaskOnEventLoop([weakThis = ThreadSafeWeakPtr { *this }] {
+        if (RefPtr protectedThis = weakThis.get())
+            protectedThis->renderingModeChanged();
     });
 }
 
@@ -170,7 +170,7 @@ void MediaPlayerPrivateAVFoundation::renderingModeChanged()
 {
     ASSERT(m_needsRenderingModeChanged);
     m_needsRenderingModeChanged = false;
-    if (auto player = m_player.get())
+    if (RefPtr player = m_player.get())
         player->renderingModeChanged();
 }
 
@@ -328,7 +328,7 @@ void MediaPlayerPrivateAVFoundation::setNaturalSize(FloatSize size)
     m_cachedNaturalSize = size;
     if (oldSize != m_cachedNaturalSize) {
         INFO_LOG(LOGIDENTIFIER, "was ", oldSize.width(), " x ", oldSize.height(), ", is ", size.width(), " x ", size.height());
-        if (auto player = m_player.get())
+        if (RefPtr player = m_player.get())
             player->sizeChanged();
     }
 }
@@ -363,7 +363,7 @@ void MediaPlayerPrivateAVFoundation::setNetworkState(MediaPlayer::NetworkState s
         return;
 
     m_networkState = state;
-    if (auto player = m_player.get())
+    if (RefPtr player = m_player.get())
         player->networkStateChanged();
 }
 
@@ -373,7 +373,7 @@ void MediaPlayerPrivateAVFoundation::setReadyState(MediaPlayer::ReadyState state
         return;
 
     auto oldState = std::exchange(m_readyState, state);
-    auto player = m_player.get();
+    RefPtr player = m_player.get();
     if (player)
         player->readyStateChanged();
 
@@ -396,7 +396,7 @@ void MediaPlayerPrivateAVFoundation::characteristicsChanged()
     }
 
     m_characteristicsChanged = false;
-    if (auto player = m_player.get())
+    if (RefPtr player = m_player.get())
         player->characteristicChanged();
 }
 
@@ -581,7 +581,7 @@ void MediaPlayerPrivateAVFoundation::updateStates()
     if (firstVideoFrameBecomeAvailable) {
         if (m_readyState < MediaPlayer::ReadyState::HaveCurrentData)
             newReadyState = MediaPlayer::ReadyState::HaveCurrentData;
-        if (auto player = m_player.get())
+        if (RefPtr player = m_player.get())
             player->firstVideoFrameAvailable();
     }
 
@@ -635,7 +635,7 @@ void MediaPlayerPrivateAVFoundation::metadataLoaded()
 
 void MediaPlayerPrivateAVFoundation::rateChanged()
 {
-    if (auto player = m_player.get())
+    if (RefPtr player = m_player.get())
         player->rateChanged();
 }
 
@@ -643,7 +643,7 @@ void MediaPlayerPrivateAVFoundation::loadedTimeRangesChanged()
 {
     m_cachedMaxTimeLoaded = MediaTime::zeroTime();
     invalidateCachedDuration();
-    if (auto player = m_player.get())
+    if (RefPtr player = m_player.get())
         player->bufferedTimeRangesChanged();
 }
 
@@ -651,7 +651,7 @@ void MediaPlayerPrivateAVFoundation::seekableTimeRangesChanged()
 {
     m_cachedMaxTimeSeekable = MediaTime::zeroTime();
     m_cachedMinTimeSeekable = MediaTime::zeroTime();
-    if (auto player = m_player.get())
+    if (RefPtr player = m_player.get())
         player->seekableTimeRangesChanged();
 }
 
@@ -685,7 +685,7 @@ void MediaPlayerPrivateAVFoundation::seekCompleted(bool finished)
 
     updateStates();
 
-    if (auto player = m_player.get()) {
+    if (RefPtr player = m_player.get()) {
         player->seeked(m_lastSeekTime);
         player->timeChanged();
     }
@@ -701,7 +701,7 @@ void MediaPlayerPrivateAVFoundation::didEnd()
         m_cachedDuration = now;
 
     updateStates();
-    if (auto player = m_player.get())
+    if (RefPtr player = m_player.get())
         player->timeChanged();
 }
 
@@ -1007,7 +1007,7 @@ void MediaPlayerPrivateAVFoundation::processNewAndRemovedTextTracks(const Vector
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
 void MediaPlayerPrivateAVFoundation::playbackTargetIsWirelessChanged()
 {
-    if (auto player = m_player.get())
+    if (RefPtr player = m_player.get())
         player->currentPlaybackTargetIsWirelessChanged(player->isCurrentPlaybackTargetWireless());
 }
 #endif
@@ -1105,7 +1105,7 @@ bool MediaPlayerPrivateAVFoundation::shouldEnableInheritURIQueryComponent() cons
 void MediaPlayerPrivateAVFoundation::queueTaskOnEventLoop(Function<void()>&& task)
 {
     ASSERT(isMainThread());
-    if (auto player = m_player.get())
+    if (RefPtr player = m_player.get())
         player->queueTaskOnEventLoop(WTFMove(task));
 }
 
