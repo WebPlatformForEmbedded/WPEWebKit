@@ -763,7 +763,7 @@ private:
 
     MediaPlayerClient* m_client;
     Timer m_reloadTimer;
-    std::unique_ptr<MediaPlayerPrivateInterface> m_private;
+    RefPtr<MediaPlayerPrivateInterface> m_private;
     const MediaPlayerFactory* m_currentMediaEngine { nullptr };
     HashSet<const MediaPlayerFactory*> m_attemptedEngines;
     URL m_url;
@@ -808,7 +808,7 @@ public:
     virtual ~MediaPlayerFactory() = default;
 
     virtual MediaPlayerEnums::MediaEngineIdentifier identifier() const  = 0;
-    virtual std::unique_ptr<MediaPlayerPrivateInterface> createMediaEnginePlayer(MediaPlayer*) const = 0;
+    virtual Ref<MediaPlayerPrivateInterface> createMediaEnginePlayer(MediaPlayer *) const = 0;
     virtual void getSupportedTypes(HashSet<String, ASCIICaseInsensitiveHash>&) const = 0;
     virtual MediaPlayer::SupportsType supportsTypeAndCodecs(const MediaEngineSupportParameters&) const = 0;
 

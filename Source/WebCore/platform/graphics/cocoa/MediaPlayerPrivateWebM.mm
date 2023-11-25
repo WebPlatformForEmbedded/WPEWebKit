@@ -1508,9 +1508,9 @@ class MediaPlayerFactoryWebM final : public MediaPlayerFactory {
 private:
     MediaPlayerEnums::MediaEngineIdentifier identifier() const final { return MediaPlayerEnums::MediaEngineIdentifier::CocoaWebM; };
 
-    std::unique_ptr<MediaPlayerPrivateInterface> createMediaEnginePlayer(MediaPlayer* player) const final
+    Ref<MediaPlayerPrivateInterface> createMediaEnginePlayer(MediaPlayer* player) const final
     {
-        return makeUnique<MediaPlayerPrivateWebM>(player);
+        return adoptRef(*new MediaPlayerPrivateWebM(player));
     }
 
     void getSupportedTypes(HashSet<String>& types) const final
