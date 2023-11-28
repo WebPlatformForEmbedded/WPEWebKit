@@ -46,10 +46,25 @@ class SourceBufferPrivate;
 class LegacyCDMSession;
 #endif
 
+enum class MediaSourcePrivateAddStatus : uint8_t {
+    Ok,
+    NotSupported,
+    ReachedIdLimit
+};
+
+enum class MediaSourcePrivateEndOfStreamStatus : uint8_t {
+    NoError,
+    NetworkError,
+    DecodeError
+};
+
 class WEBCORE_EXPORT MediaSourcePrivate
     : public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<MediaSourcePrivate> {
 public:
     typedef Vector<String> CodecsArray;
+
+    using AddStatus = MediaSourcePrivateAddStatus;
+    using EndOfStreamStatus = MediaSourcePrivateEndOfStreamStatus;
 
     explicit MediaSourcePrivate(MediaSourcePrivateClient&);
     virtual ~MediaSourcePrivate();
@@ -57,11 +72,6 @@ public:
     RefPtr<MediaSourcePrivateClient> client() const;
 
     virtual constexpr MediaPlatformType platformType() const = 0;
-    enum class AddStatus : uint8_t {
-        Ok,
-        NotSupported,
-        ReachedIdLimit
-    };
     virtual AddStatus addSourceBuffer(const ContentType&, bool webMParserEnabled, RefPtr<SourceBufferPrivate>&) = 0;
     virtual void removeSourceBuffer(SourceBufferPrivate&);
     void sourceBufferPrivateDidChangeActiveState(SourceBufferPrivate&, bool active);
@@ -69,7 +79,6 @@ public:
     virtual void durationChanged(const MediaTime&); // Base class method must be called in overrides. Must be thread-safe
     virtual void bufferedChanged(const PlatformTimeRanges&); // Base class method must be called in overrides. Must be thread-safe.
 
-    enum EndOfStreamStatus { EosNoError, EosNetworkError, EosDecodeError };
     virtual void markEndOfStream(EndOfStreamStatus) { m_isEnded = true; }
     virtual void unmarkEndOfStream() { m_isEnded = false; }
     bool isEnded() const { return m_isEnded; }
@@ -130,30 +139,12 @@ struct LogArgument<WebCore::MediaSourcePrivate::AddStatus> {
     }
 };
 
-template<> struct EnumTraits<WebCore::MediaSourcePrivate::AddStatus> {
-    using values = EnumValues<
-        WebCore::MediaSourcePrivate::AddStatus,
-        WebCore::MediaSourcePrivate::AddStatus::Ok,
-        WebCore::MediaSourcePrivate::AddStatus::NotSupported,
-        WebCore::MediaSourcePrivate::AddStatus::ReachedIdLimit
-    >;
-};
-
 template <>
 struct LogArgument<WebCore::MediaSourcePrivate::EndOfStreamStatus> {
     static String toString(const WebCore::MediaSourcePrivate::EndOfStreamStatus status)
     {
         return convertEnumerationToString(status);
     }
-};
-
-template<> struct EnumTraits<WebCore::MediaSourcePrivate::EndOfStreamStatus> {
-    using values = EnumValues<
-        WebCore::MediaSourcePrivate::EndOfStreamStatus,
-        WebCore::MediaSourcePrivate::EndOfStreamStatus::EosNoError,
-        WebCore::MediaSourcePrivate::EndOfStreamStatus::EosNetworkError,
-        WebCore::MediaSourcePrivate::EndOfStreamStatus::EosDecodeError
-    >;
 };
 
 } // namespace WTF

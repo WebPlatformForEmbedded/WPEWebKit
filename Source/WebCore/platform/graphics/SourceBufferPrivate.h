@@ -262,16 +262,4 @@ private:
 
 } // namespace WebCore
 
-namespace WTF {
-
-template<> struct EnumTraits<WebCore::SourceBufferAppendMode> {
-    using values = EnumValues<
-        WebCore::SourceBufferAppendMode,
-        WebCore::SourceBufferAppendMode::Segments,
-        WebCore::SourceBufferAppendMode::Sequence
-    >;
-};
-
-}; // namespace WTF
-
 #endif
