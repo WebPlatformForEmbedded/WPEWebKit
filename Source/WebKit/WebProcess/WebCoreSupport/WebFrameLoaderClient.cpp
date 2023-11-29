@@ -281,10 +281,6 @@ void WebFrameLoaderClient::dispatchDidReceiveResponse(DocumentLoader*, ResourceL
         return;
 
     webPage->injectedBundleResourceLoadClient().didReceiveResponseForResource(*webPage, m_frame, identifier, response);
-    if (response.httpStatusCode() >= 400) {
-        String message = "Failed to load resource: the server responded with a status of " + String::number(response.httpStatusCode()) + " (" + response.httpStatusText() + ')';
-        LOG(Loading,"dispatchDidReceiveResponse->message:%s", message.utf8().data());
-    }
 }
 
 void WebFrameLoaderClient::dispatchDidReceiveContentLength(DocumentLoader*, ResourceLoaderIdentifier identifier, int dataLength)
@@ -324,7 +320,6 @@ void WebFrameLoaderClient::dispatchDidFailLoading(DocumentLoader*, ResourceLoade
 
     webPage->injectedBundleResourceLoadClient().didFailLoadForResource(*webPage, m_frame, identifier, error);
     webPage->removeResourceRequest(identifier);
-    LOG(Loading,"dispatchedDidFailLoading: isTimeout=%d, isCancellation=%d, isAccessControl=%d, errorCode=%d description:%s", error.isTimeout(), error.isCancellation(), error.isAccessControl(), error.errorCode(), error.localizedDescription().utf8().data());
 }
 
 bool WebFrameLoaderClient::dispatchDidLoadResourceFromMemoryCache(DocumentLoader*, const ResourceRequest&, const ResourceResponse&, int /*length*/)
@@ -638,8 +633,6 @@ void WebFrameLoaderClient::dispatchDidFailLoad(const ResourceError& error)
     // If we have a load listener, notify it.
     if (WebFrame::LoadListener* loadListener = m_frame->loadListener())
         loadListener->didFailLoad(m_frame.ptr(), error.isCancellation());
-
-    LOG(Loading,"dispatchDidFailLoad: isTimeout= %d, isCancellation= %d, isAccessControl= %d, errorCode= %d description: %s", error.isTimeout(), error.isCancellation(), error.isAccessControl(), error.errorCode(), error.localizedDescription().utf8().data());
 }
 
 void WebFrameLoaderClient::dispatchDidFinishDocumentLoad()
