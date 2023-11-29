@@ -162,6 +162,10 @@ public:
 
     bool shouldDisableLazyImageLoadingQuirk() const;
     
+#if ENABLE(MEDIA_SOURCE)
+    bool shouldBypassAudioFlushOnSampleReplacement() const;
+#endif
+
 private:
     bool needsQuirks() const;
 
@@ -217,6 +221,10 @@ private:
     mutable std::optional<bool> m_needsVideoShouldMaintainAspectRatioQuirk;
     mutable std::optional<bool> m_shouldExposeShowModalDialog;
     mutable std::optional<bool> m_shouldDisableLazyImageLoadingQuirk;
+#if ENABLE(MEDIA_SOURCE)
+    mutable std::optional<bool> m_shouldBypassAudioFlushOnSampleReplacementQuirk;
+#endif
+
 };
 
 } // namespace WebCore

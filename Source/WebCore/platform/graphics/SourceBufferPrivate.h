@@ -130,6 +130,7 @@ public:
     virtual const void* sourceBufferLogIdentifier() = 0;
 #endif
 
+    void setShouldBypassAudioFlushOnSampleReplacement(bool flag) { m_shouldBypassAudioFlushOnSampleReplacement = flag; }
 protected:
     // The following method should never be called directly and be overridden instead.
     WEBCORE_EXPORT virtual void append(Vector<unsigned char>&&);
@@ -193,6 +194,7 @@ private:
 
     bool m_isMediaSourceEnded { false };
     RefPtr<TimeRanges> m_buffered;
+    bool m_shouldBypassAudioFlushOnSampleReplacement { false };
 };
 
 } // namespace WebCore

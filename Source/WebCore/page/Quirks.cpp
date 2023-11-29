@@ -1490,4 +1490,22 @@ bool Quirks::shouldDisableLazyImageLoadingQuirk() const
     return m_shouldDisableLazyImageLoadingQuirk.value();
 }
 
+#if ENABLE(MEDIA_SOURCE)
+bool Quirks::shouldBypassAudioFlushOnSampleReplacement() const
+{
+    if (!needsQuirks())
+        return false;
+
+    if (m_shouldBypassAudioFlushOnSampleReplacementQuirk)
+        return m_shouldBypassAudioFlushOnSampleReplacementQuirk.value();
+
+    auto domain = m_document->securityOrigin().domain().convertToASCIILowercase();
+
+    m_shouldBypassAudioFlushOnSampleReplacementQuirk =
+        (domain.endsWith(".spotify.com"_s) || domain == "tv.scdn.co"_s);
+
+    return m_shouldBypassAudioFlushOnSampleReplacementQuirk.value();
+}
+#endif
+
 }

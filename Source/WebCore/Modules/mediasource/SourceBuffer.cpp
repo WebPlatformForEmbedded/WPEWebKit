@@ -101,6 +101,10 @@ SourceBuffer::SourceBuffer(Ref<SourceBufferPrivate>&& sourceBufferPrivate, Media
 
     m_private->setClient(this);
     m_private->setIsAttached(true);
+
+    if (document().quirks().shouldBypassAudioFlushOnSampleReplacement()) {
+        m_private->setShouldBypassAudioFlushOnSampleReplacement(true);
+    }
 }
 
 SourceBuffer::~SourceBuffer()
