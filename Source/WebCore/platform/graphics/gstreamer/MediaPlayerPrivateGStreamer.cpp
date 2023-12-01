@@ -1353,8 +1353,7 @@ MediaTime MediaPlayerPrivateGStreamer::playbackPosition() const
     else if (m_canFallBackToLastFinishedSeekPosition)
         playbackPosition = m_seekTime;
 
-    setCachedPosition(playbackPosition);
-    invalidateCachedPositionOnNextIteration();
+    setCachedPositionForOneIteration(playbackPosition);
     return playbackPosition;
 }
 
@@ -3613,6 +3612,12 @@ void MediaPlayerPrivateGStreamer::setCachedPosition(const MediaTime& cachedPosit
 {
     m_cachedPosition = cachedPosition;
     m_isCachedPositionValid = true;
+}
+
+void MediaPlayerPrivateGStreamer::setCachedPositionForOneIteration(const MediaTime& position) const
+{
+    setCachedPosition(position);
+    invalidateCachedPositionOnNextIteration();
 }
 
 void MediaPlayerPrivateGStreamer::invalidateCachedPosition() const

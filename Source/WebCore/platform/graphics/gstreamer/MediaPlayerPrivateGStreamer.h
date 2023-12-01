@@ -372,6 +372,7 @@ protected:
 #endif
 
     void setCachedPosition(const MediaTime&) const;
+    void setCachedPositionForOneIteration(const MediaTime&) const;
 
     Ref<MainThreadNotifier<MainThreadNotification>> m_notifier;
     MediaPlayer* m_player;
