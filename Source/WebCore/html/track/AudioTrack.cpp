@@ -62,7 +62,7 @@ const AtomString& AudioTrack::translationKeyword()
 }
 
 AudioTrack::AudioTrack(ScriptExecutionContext* context, AudioTrackPrivate& trackPrivate)
-    : MediaTrackBase(context, MediaTrackBase::AudioTrack, trackPrivate.id(), trackPrivate.label(), trackPrivate.language())
+    : MediaTrackBase(context, MediaTrackBase::AudioTrack, trackPrivate.trackUID(), trackPrivate.id(), trackPrivate.label(), trackPrivate.language())
     , m_private(trackPrivate)
     , m_enabled(trackPrivate.enabled())
     , m_configuration(AudioTrackConfiguration::create())
@@ -159,7 +159,7 @@ void AudioTrack::configurationChanged(const PlatformAudioTrackConfiguration& con
     m_configuration->setState(configuration);
 }
 
-void AudioTrack::idChanged(const AtomString& id)
+void AudioTrack::idChanged(TrackID id)
 {
     setId(id);
     m_clients.forEach([this] (auto& client) {
