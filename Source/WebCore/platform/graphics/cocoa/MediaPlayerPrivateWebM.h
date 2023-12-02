@@ -34,15 +34,15 @@
 #include "VideoFrameMetadata.h"
 #include "WebMResourceClient.h"
 #include <wtf/HashFunctions.h>
-#include <wtf/HashMap.h>
 #include <wtf/LoggerHelper.h>
-#include <wtf/RobinHoodHashMap.h>
+#include <wtf/StdUnorderedMap.h>
 #include <wtf/UniqueRef.h>
 #include <wtf/Vector.h>
 #include <wtf/threads/BinarySemaphore.h>
 
 OBJC_CLASS AVSampleBufferAudioRenderer;
 OBJC_CLASS AVSampleBufferDisplayLayer;
+OBJC_CLASS AVSampleBufferRenderSynchronizer;
 
 typedef struct __CVBuffer *CVPixelBufferRef;
 
@@ -114,7 +114,7 @@ private:
     bool hasVideo() const final { return m_hasVideo; }
     bool hasAudio() const final { return m_hasAudio; }
 
-    void setPageIsVisible(bool) final;
+    void setPageIsVisible(bool, String&& sceneIdentifier) final;
 
     MediaTime timeFudgeFactor() const { return { 1, 10 }; }
     MediaTime currentMediaTime() const final;
@@ -191,46 +191,45 @@ private:
     bool wirelessVideoPlaybackDisabled() const final { return false; }
 #endif
 
-    void enqueueSample(Ref<MediaSample>&&, uint64_t);
-    void reenqueSamples(uint64_t);
-    void reenqueueMediaForTime(TrackBuffer&, uint64_t, const MediaTime&);
-    void notifyClientWhenReadyForMoreSamples(uint64_t);
+    void enqueueSample(Ref<MediaSample>&&, TrackID);
+    void reenqueSamples(TrackID);
+    void reenqueueMediaForTime(TrackBuffer&, TrackID, const MediaTime&);
+    void notifyClientWhenReadyForMoreSamples(TrackID);
 
-    bool canSetMinimumUpcomingPresentationTime(uint64_t) const;
-    void setMinimumUpcomingPresentationTime(uint64_t, const MediaTime&);
-    void clearMinimumUpcomingPresentationTime(uint64_t);
+    bool canSetMinimumUpcomingPresentationTime(TrackID) const;
+    void setMinimumUpcomingPresentationTime(TrackID, const MediaTime&);
+    void clearMinimumUpcomingPresentationTime(TrackID);
 
-    bool isReadyForMoreSamples(uint64_t);
-    void didBecomeReadyForMoreSamples(uint64_t);
-    void appendCompleted();
-    void provideMediaData(uint64_t);
-    void provideMediaData(TrackBuffer&, uint64_t);
+    bool isReadyForMoreSamples(TrackID);
+    void didBecomeReadyForMoreSamples(TrackID);
+    void appendCompleted(bool);
+    void provideMediaData(TrackID);
+    void provideMediaData(TrackBuffer&, TrackID);
 
     void trackDidChangeSelected(VideoTrackPrivate&, bool);
     void trackDidChangeEnabled(AudioTrackPrivate&, bool);
 
     using InitializationSegment = SourceBufferParserWebM::InitializationSegment;
     void didParseInitializationData(InitializationSegment&&);
-    void didProvideMediaDataForTrackId(Ref<MediaSampleAVFObjC>&&, uint64_t trackId, const String& mediaType);
-    void didUpdateFormatDescriptionForTrackId(Ref<TrackInfo>&&, uint64_t);
+    void didProvideMediaDataForTrackId(Ref<MediaSampleAVFObjC>&&, TrackID, const String& mediaType);
+    void didUpdateFormatDescriptionForTrackId(Ref<TrackInfo>&&, TrackID);
 
     void append(SharedBuffer&);
-    void resetParserState();
 
     void flush();
 #if PLATFORM(IOS_FAMILY)
     void flushIfNeeded();
 #endif
-    void flushTrack(uint64_t);
+    void flushTrack(TrackID);
     void flushVideo();
     void flushAudio(AVSampleBufferAudioRenderer*);
 
-    void addTrackBuffer(uint64_t, RefPtr<MediaDescription>&&);
+    void addTrackBuffer(TrackID, RefPtr<MediaDescription>&&);
 
     void ensureLayer();
     void ensureDecompressionSession();
-    void addAudioRenderer(uint64_t);
-    void removeAudioRenderer(uint64_t);
+    void addAudioRenderer(TrackID);
+    void removeAudioRenderer(TrackID);
 
     void destroyLayer();
     void destroyDecompressionSession();
@@ -254,7 +253,7 @@ private:
 
     friend class MediaPlayerFactoryWebM;
     static bool isAvailable();
-    static void getSupportedTypes(HashSet<String, ASCIICaseInsensitiveHash>&);
+    static void getSupportedTypes(HashSet<String>&);
     static MediaPlayer::SupportsType supportsType(const MediaEngineSupportParameters&);
 
     ThreadSafeWeakPtr<MediaPlayer> m_player;
@@ -268,11 +267,11 @@ private:
 
     Vector<RefPtr<VideoTrackPrivateWebM>> m_videoTracks;
     Vector<RefPtr<AudioTrackPrivateWebM>> m_audioTracks;
-    HashMap<uint64_t, UniqueRef<TrackBuffer>, DefaultHash<uint64_t>, WTF::UnsignedWithZeroKeyHashTraits<uint64_t>> m_trackBufferMap;
+    StdUnorderedMap<TrackID, UniqueRef<TrackBuffer>> m_trackBufferMap;
     PlatformTimeRanges m_buffered;
 
     RetainPtr<AVSampleBufferDisplayLayer> m_displayLayer;
-    HashMap<uint64_t, RetainPtr<AVSampleBufferAudioRenderer>, DefaultHash<uint64_t>, WTF::UnsignedWithZeroKeyHashTraits<uint64_t>> m_audioRenderers;
+    StdUnorderedMap<TrackID, RetainPtr<AVSampleBufferAudioRenderer>> m_audioRenderers;
     Ref<SourceBufferParserWebM> m_parser;
     const Ref<WTF::WorkQueue> m_appendQueue;
 
@@ -302,7 +301,8 @@ private:
     MediaTime m_duration;
     double m_rate { 1 };
 
-    uint64_t m_enabledVideoTrackID { notFound };
+    bool isEnabledVideoTrackID(TrackID) const;
+    std::optional<TrackID> m_enabledVideoTrackID;
     std::atomic<uint32_t> m_abortCalled { 0 };
     uint32_t m_pendingAppends { 0 };
 #if PLATFORM(IOS_FAMILY)
@@ -312,8 +312,10 @@ private:
     bool m_hasVideo { false };
     bool m_hasAvailableVideoFrame { false };
     bool m_visible { false };
-    bool m_loadingProgressed { false };
+    mutable bool m_loadingProgressed { false };
     bool m_loadFinished { false };
+    bool m_delayedIdle { false };
+    bool m_errored { false };
     bool m_processingInitializationSegment { false };
 };
 

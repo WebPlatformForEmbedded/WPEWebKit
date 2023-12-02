@@ -33,15 +33,15 @@
 #include "TrackPrivateBase.h"
 #include <gst/tag/tag.h>
 #include <wtf/text/CString.h>
+#include <wtf/text/StringToIntegerConversion.h>
 
 GST_DEBUG_CATEGORY_EXTERN(webkit_media_player_debug);
 #define GST_CAT_DEFAULT webkit_media_player_debug
 
 namespace WebCore {
 
-AtomString TrackPrivateBaseGStreamer::generateUniquePlaybin2StreamID(TrackType trackType, unsigned index)
+char TrackPrivateBaseGStreamer::prefixForType(TrackType trackType)
 {
-    auto prefix = [trackType]() -> char {
         switch (trackType) {
         case TrackPrivateBaseGStreamer::TrackType::Audio:
             return 'A';
@@ -53,9 +53,11 @@ AtomString TrackPrivateBaseGStreamer::generateUniquePlaybin2StreamID(TrackType t
             ASSERT_NOT_REACHED();
             return 'U';
         }
-    }();
+}
 
-    return makeAtomString(prefix, index);
+AtomString TrackPrivateBaseGStreamer::generateUniquePlaybin2StreamID(TrackType trackType, unsigned index)
+{
+    return makeAtomString(prefixForType(trackType), index);
 }
 
 static GRefPtr<GstPad> findBestUpstreamPad(GRefPtr<GstPad> pad)
@@ -84,8 +86,6 @@ TrackPrivateBaseGStreamer::TrackPrivateBaseGStreamer(TrackType type, TrackPrivat
     setPad(WTFMove(pad));
     ASSERT(m_pad);
 
-    m_id = AtomString(trackIdFromPadStreamStartOrUniqueID(type, index, m_pad));
-
     // We can't call notifyTrackOfTagsChanged() directly, because we need tagsChanged() to setup m_tags.
     tagsChanged();
 }
@@ -93,12 +93,13 @@ TrackPrivateBaseGStreamer::TrackPrivateBaseGStreamer(TrackType type, TrackPrivat
 TrackPrivateBaseGStreamer::TrackPrivateBaseGStreamer(TrackType type, TrackPrivateBase* owner, unsigned index, GstStream* stream)
     : m_notifier(MainThreadNotifier<MainThreadNotification>::create())
     , m_index(index)
+    , m_stringId(AtomString::fromLatin1(gst_stream_get_stream_id(stream)))
+    , m_id(trackIdFromStringIdOrIndex(type, m_stringId, index))
     , m_stream(stream)
     , m_type(type)
     , m_owner(owner)
 {
     ASSERT(m_stream);
-    m_id = AtomString::fromLatin1(gst_stream_get_stream_id(m_stream.get()));
 
     g_signal_connect_swapped(m_stream.get(), "notify::tags", G_CALLBACK(+[](TrackPrivateBaseGStreamer* track) {
         track->tagsChanged();
@@ -115,7 +116,8 @@ void TrackPrivateBaseGStreamer::setPad(GRefPtr<GstPad>&& pad)
 
     m_pad = WTFMove(pad);
     m_bestUpstreamPad = findBestUpstreamPad(m_pad);
-    m_id = AtomString(trackIdFromPadStreamStartOrUniqueID(m_type, m_index, m_pad));
+    m_stringId = AtomString(trackIdFromPadStreamStartOrUniqueID(m_type, m_index, m_pad));
+    m_id = trackIdFromStringIdOrIndex(m_type, m_stringId, m_index);
 
     if (!m_bestUpstreamPad)
         return;
@@ -131,7 +133,7 @@ void TrackPrivateBaseGStreamer::setPad(GRefPtr<GstPad>&& pad)
                 track->streamChanged();
             break;
         case GST_EVENT_CAPS: {
-            String streamId = track->m_id;
+            String streamId = track->m_stringId;
             if (!streamId)
                 break;
 
@@ -292,7 +294,7 @@ void TrackPrivateBaseGStreamer::notifyTrackOfStreamChanged()
         return;
 
     GST_INFO("Track %d got stream start for stream %s.", m_index, streamId.get());
-    m_id = AtomString::fromLatin1(streamId.get());
+    m_stringId = AtomString::fromLatin1(streamId.get());
 }
 
 void TrackPrivateBaseGStreamer::streamChanged()
@@ -363,6 +365,14 @@ String TrackPrivateBaseGStreamer::trackIdFromPadStreamStartOrUniqueID(TrackType 
         return generateUniquePlaybin2StreamID(type, index);
 
     return streamIdView.substring(position + 1).toString();
+}
+
+TrackID TrackPrivateBaseGStreamer::trackIdFromStringIdOrIndex(TrackType type, const AtomString& stringId, unsigned index)
+{
+    if (!stringId.startsWith(prefixForType(type)))
+        return index;
+    auto stringView = StringView { stringId }.substring(1);
+    return parseIntegerAllowingTrailingJunk<TrackID>(stringView).value_or(index);
 }
 
 GRefPtr<GstTagList> TrackPrivateBaseGStreamer::getAllTags(const GRefPtr<GstPad>& pad)

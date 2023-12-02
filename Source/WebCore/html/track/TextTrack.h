@@ -47,6 +47,7 @@ class VTTRegionList;
 class TextTrack : public TrackBase, public EventTarget, public ActiveDOMObject {
     WTF_MAKE_ISO_ALLOCATED(TextTrack);
 public:
+    static Ref<TextTrack> create(Document*, const AtomString& kind, TrackID, const AtomString& label, const AtomString& language);
     static Ref<TextTrack> create(Document*, const AtomString& kind, const AtomString& id, const AtomString& label, const AtomString& language);
     virtual ~TextTrack();
 
@@ -119,7 +120,7 @@ public:
 
     void setLanguage(const AtomString&) final;
 
-    void setId(const AtomString&) override;
+    void setId(TrackID) override;
     void setLabel(const AtomString&) override;
 
     virtual bool isInband() const { return false; }
@@ -137,6 +138,7 @@ public:
     Document& document() const;
 
 protected:
+    TextTrack(ScriptExecutionContext*, const AtomString& kind, TrackID, const AtomString& label, const AtomString& language, TextTrackType);
     TextTrack(ScriptExecutionContext*, const AtomString& kind, const AtomString& id, const AtomString& label, const AtomString& language, TextTrackType);
 
     RefPtr<TextTrackCue> matchCue(TextTrackCue&, TextTrackCue::CueMatchRules = TextTrackCue::MatchAllFields);
@@ -169,9 +171,10 @@ private:
     RefPtr<VTTRegionList> m_regions;
 
     TextTrackCueList& ensureTextTrackCueList();
+    Kind convertKind(const AtomString&);
 
     Mode m_mode { Mode::Disabled };
-    Kind m_kind { Kind::Subtitles };
+    Kind m_kind;
     TextTrackType m_trackType;
     ReadinessState m_readinessState { NotLoaded };
     std::optional<int> m_trackIndex;
