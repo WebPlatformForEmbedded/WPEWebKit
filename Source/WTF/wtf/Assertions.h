@@ -671,8 +671,6 @@ constexpr bool assertionFailureDueToUnreachableCode = false;
 
 #define RELEASE_LOG_WITH_LEVEL(channel, logLevel, ...)  LOG_WITH_LEVEL(channel, logLevel, ...)
 #define RELEASE_LOG_WITH_LEVEL_IF(isAllowed, channel, logLevel, ...) do { \
-    if ((isAllowed) && LOG_CHANNEL(channel).level >= (logLevel)) \
-        LOG(channel, __VA_ARGS__); \
     if (isAllowed) \
         LOG_WITH_LEVEL(channel, logLevel,__VA_ARGS__); \
 } while (0)
