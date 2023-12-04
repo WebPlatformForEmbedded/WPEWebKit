@@ -65,7 +65,7 @@ public:
     virtual void removeSourceBuffer(SourceBufferPrivate&);
     void sourceBufferPrivateDidChangeActiveState(SourceBufferPrivate&, bool active);
     virtual void notifyActiveSourceBuffersChanged() = 0;
-    virtual void durationChanged(const MediaTime&) = 0;
+    virtual void durationChanged(const MediaTime&);
     virtual void bufferedChanged(const PlatformTimeRanges&) { }
 
     enum EndOfStreamStatus { EosNoError, EosNetworkError, EosDecodeError };
@@ -86,7 +86,7 @@ public:
     MediaTime duration() const;
     const PlatformTimeRanges& buffered() const;
 
-    bool hasFutureTime(const MediaTime& currentTime, const MediaTime& duration, const PlatformTimeRanges&) const;
+    bool hasFutureTime(const MediaTime& currentTime) const;
     bool hasAudio() const;
     bool hasVideo() const;
 
@@ -100,6 +100,7 @@ protected:
     bool m_isEnded { false };
 
 private:
+    MediaTime m_duration { MediaTime::invalidTime() };
     MediaTime m_timeFudgeFactor;
     ThreadSafeWeakPtr<MediaSourcePrivateClient> m_client;
 };

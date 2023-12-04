@@ -345,19 +345,19 @@ size_t SourceBufferPrivateGStreamer::platformMaximumBufferSize() const
             }
         }
 
-        if (hasVideo || m_tracks.isEmpty()) {
+        if (hasVideo || m_tracks.empty()) {
             if (maxBufferSizeVideo)
                 bufferSize += maxBufferSizeVideo;
             else
                 break;
         }
-        if (hasAudio || m_tracks.isEmpty()) {
+        if (hasAudio || m_tracks.empty()) {
             if (maxBufferSizeAudio)
                 bufferSize += maxBufferSizeAudio;
             else
                 break;
         }
-        if (hasText || m_tracks.isEmpty()) {
+        if (hasText || m_tracks.empty()) {
             if (maxBufferSizeText)
                 bufferSize += maxBufferSizeText;
             else

@@ -74,6 +74,7 @@ MediaSourcePrivate::AddStatus MockMediaSourcePrivate::addSourceBuffer(const Cont
 
 void MockMediaSourcePrivate::durationChanged(const MediaTime& duration)
 {
+    MediaSourcePrivate::durationChanged(duration);
     if (m_player)
         m_player->updateDuration(duration);
 }
