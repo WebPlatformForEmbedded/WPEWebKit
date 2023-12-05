@@ -1115,7 +1115,7 @@ public:
     WEBCORE_EXPORT String designMode() const;
     WEBCORE_EXPORT void setDesignMode(const String&);
 
-    Document* parentDocument() const;
+    WEBCORE_EXPORT Document* parentDocument() const;
     WEBCORE_EXPORT Document& topDocument() const;
     bool isTopDocument() const { return &topDocument() == this; }
     
