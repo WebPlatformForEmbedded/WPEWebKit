@@ -171,6 +171,7 @@ def function_parameter_type(type, kind):
         'int32_t',
         'int64_t',
         'size_t',
+        'WebCore::TrackID',
     ])
 
     if type in builtin_types:
@@ -345,7 +346,6 @@ def serialized_identifiers():
         'WebKit::StorageAreaMapIdentifier',
         'WebKit::StorageNamespaceIdentifier',
         'WebKit::TapIdentifier',
-        'WebKit::TrackPrivateRemoteIdentifier',
         'WebKit::TransactionID',
         'WebKit::UserContentControllerIdentifier',
         'WebKit::VideoDecoderIdentifier',
@@ -403,6 +403,7 @@ def types_that_cannot_be_forward_declared():
         'WebCore::SharedWorkerObjectIdentifier',
         'WebCore::SourceBufferAppendMode',
         'WebCore::StorageType',
+        'WebCore::TrackID',
         'WebCore::TransferredMessagePort',
         'WebCore::WebLockIdentifier',
         'WebKit::ActivityStateChangeID',
@@ -816,6 +817,7 @@ def headers_for_type(type):
         'WebCore::TextIndicatorData': ['<WebCore/TextIndicator.h>'],
         'WebCore::TextManipulationTokenIdentifier': ['<WebCore/TextManipulationToken.h>'],
         'WebCore::ThirdPartyCookieBlockingMode': ['<WebCore/NetworkStorageSession.h>'],
+        'WebCore::TrackID': ['<WebCore/TrackBase.h>'],
         'WebCore::UsedLegacyTLS': ['<WebCore/ResourceResponseBase.h>'],
         'WebCore::VideoPlaybackQualityMetrics': ['<WebCore/VideoPlaybackQualityMetrics.h>'],
         'WebCore::VideoPresetData': ['<WebCore/VideoPreset.h>'],
