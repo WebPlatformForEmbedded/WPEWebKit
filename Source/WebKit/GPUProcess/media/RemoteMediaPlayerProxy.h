@@ -37,7 +37,6 @@
 #include "RemoteVideoFrameProxy.h"
 #include "SandboxExtension.h"
 #include "ScopedRenderingResourcesRequest.h"
-#include "TrackPrivateRemoteIdentifier.h"
 #include <WebCore/Cookie.h>
 #include <WebCore/InbandTextTrackPrivate.h>
 #include <WebCore/MediaPlayer.h>
@@ -206,9 +205,9 @@ public:
     void notifyTrackModeChanged();
     void tracksChanged();
 
-    void audioTrackSetEnabled(const TrackPrivateRemoteIdentifier&, bool);
-    void videoTrackSetSelected(const TrackPrivateRemoteIdentifier&, bool);
-    void textTrackSetMode(const TrackPrivateRemoteIdentifier&, WebCore::InbandTextTrackPrivate::Mode);
+    void audioTrackSetEnabled(WebCore::TrackID, bool);
+    void videoTrackSetSelected(WebCore::TrackID, bool);
+    void textTrackSetMode(WebCore::TrackID, WebCore::InbandTextTrackPrivate::Mode);
 
     using PerformTaskAtMediaTimeCompletionHandler = CompletionHandler<void(std::optional<MediaTime>, std::optional<MonotonicTime>)>;
     void performTaskAtMediaTime(const MediaTime&, MonotonicTime, PerformTaskAtMediaTimeCompletionHandler&&);
@@ -224,9 +223,9 @@ public:
 
     RefPtr<WebCore::MediaPlayer> mediaPlayer() { return m_player; }
 
-    TrackPrivateRemoteIdentifier addRemoteAudioTrackProxy(WebCore::AudioTrackPrivate&);
-    TrackPrivateRemoteIdentifier addRemoteVideoTrackProxy(WebCore::VideoTrackPrivate&);
-    TrackPrivateRemoteIdentifier addRemoteTextTrackProxy(WebCore::InbandTextTrackPrivate&);
+    void addRemoteAudioTrackProxy(WebCore::AudioTrackPrivate&);
+    void addRemoteVideoTrackProxy(WebCore::VideoTrackPrivate&);
+    void addRemoteTextTrackProxy(WebCore::InbandTextTrackPrivate&);
 
 private:
     RemoteMediaPlayerProxy(RemoteMediaPlayerManagerProxy&, WebCore::MediaPlayerIdentifier, Ref<IPC::Connection>&&, WebCore::MediaPlayerEnums::MediaEngineIdentifier, RemoteMediaPlayerProxyConfiguration&&, RemoteVideoFrameObjectHeap&, const WebCore::ProcessIdentity&);
@@ -368,9 +367,9 @@ private:
     WTFLogChannel& logChannel() const;
 #endif
 
-    HashMap<Ref<WebCore::AudioTrackPrivate>, Ref<RemoteAudioTrackProxy>> m_audioTracks;
-    HashMap<Ref<WebCore::VideoTrackPrivate>, Ref<RemoteVideoTrackProxy>> m_videoTracks;
-    HashMap<Ref<WebCore::InbandTextTrackPrivate>, Ref<RemoteTextTrackProxy>> m_textTracks;
+    Vector<Ref<RemoteAudioTrackProxy>> m_audioTracks;
+    Vector<Ref<RemoteVideoTrackProxy>> m_videoTracks;
+    Vector<Ref<RemoteTextTrackProxy>> m_textTracks;
 
     WebCore::MediaPlayerIdentifier m_id;
     RefPtr<SandboxExtension> m_sandboxExtension;
