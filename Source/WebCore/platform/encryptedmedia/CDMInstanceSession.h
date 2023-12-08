@@ -45,6 +45,14 @@ namespace WebCore {
 
 class SharedBuffer;
 
+enum class CDMInstanceSessionLoadFailure : uint8_t {
+    None,
+    NoSessionData,
+    MismatchedSessionType,
+    QuotaExceeded,
+    Other,
+};
+
 class CDMInstanceSessionClient : public CanMakeWeakPtr<CDMInstanceSessionClient> {
 public:
     virtual ~CDMInstanceSessionClient() = default;
@@ -86,13 +94,7 @@ public:
     using LicenseUpdateCallback = CompletionHandler<void(bool sessionWasClosed, std::optional<KeyStatusVector>&& changedKeys, std::optional<double>&& changedExpiration, std::optional<Message>&& message, SuccessValue succeeded)>;
     virtual void updateLicense(const String& sessionId, LicenseType, Ref<SharedBuffer>&& response, LicenseUpdateCallback&&) = 0;
 
-    enum class SessionLoadFailure : uint8_t {
-        None,
-        NoSessionData,
-        MismatchedSessionType,
-        QuotaExceeded,
-        Other,
-    };
+    using SessionLoadFailure = CDMInstanceSessionLoadFailure;
 
     using LoadSessionCallback = CompletionHandler<void(std::optional<KeyStatusVector>&&, std::optional<double>&&, std::optional<Message>&&, SuccessValue, SessionLoadFailure)>;
     virtual void loadSession(LicenseType, const String& sessionId, const String& origin, LoadSessionCallback&&) = 0;
