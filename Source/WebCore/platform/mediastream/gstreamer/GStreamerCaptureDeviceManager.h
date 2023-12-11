@@ -29,17 +29,25 @@
 #include "GStreamerVideoCapturer.h"
 #include "RealtimeMediaSourceFactory.h"
 
+#include <wtf/Noncopyable.h>
+
 namespace WebCore {
 
 using NodeAndFD = GStreamerVideoCapturer::NodeAndFD;
 
-class GStreamerCaptureDeviceManager : public CaptureDeviceManager {
+void teardownGStreamerCaptureDeviceManagers();
+
+class GStreamerCaptureDeviceManager : public CaptureDeviceManager
+WTF_MAKE_NONCOPYABLE(GStreamerCaptureDeviceManager)
+{
 public:
     ~GStreamerCaptureDeviceManager();
     std::optional<GStreamerCaptureDevice> gstreamerDeviceWithUID(const String&);
 
     const Vector<CaptureDevice>& captureDevices() final;
     virtual CaptureDevice::DeviceType deviceType() = 0;
+
+    void teardown();
 
 private:
     void addDevice(GRefPtr<GstDevice>&&);
@@ -48,6 +56,7 @@ private:
     GRefPtr<GstDeviceMonitor> m_deviceMonitor;
     Vector<GStreamerCaptureDevice> m_gstreamerDevices;
     Vector<CaptureDevice> m_devices;
+    bool m_isTearingDown { false };
 };
 
 class GStreamerAudioCaptureDeviceManager final : public GStreamerCaptureDeviceManager {
