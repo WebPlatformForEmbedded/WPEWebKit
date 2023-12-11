@@ -205,6 +205,16 @@ bool WorkQueue::isCurrent() const
     return currentSequence() == m_threadID;
 }
 
+void WorkQueue::ref() const
+{
+    ThreadSafeRefCounted::ref();
+}
+
+void WorkQueue::deref() const
+{
+    ThreadSafeRefCounted::deref();
+}
+
 ConcurrentWorkQueue::ConcurrentWorkQueue(const char* name, QOS qos)
     : WorkQueueBase(name, Type::Concurrent, qos)
 {
