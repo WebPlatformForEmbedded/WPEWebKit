@@ -1307,7 +1307,6 @@ void SourceBuffer::updateBuffered()
 {
     const auto oldRanges = m_buffered->ranges();
     auto updatePrivate = makeScopeExit([&] {
-#if ENABLE(MANAGED_MEDIA_SOURCE)
         if (oldRanges == m_buffered->ranges())
             return;
         setBufferedDirty(true);
@@ -1323,7 +1322,6 @@ void SourceBuffer::updateBuffered()
 
             queueTaskToDispatchEvent(*this, TaskSource::MediaElement, BufferedChangeEvent::create(WTFMove(addedTimeRanges), WTFMove(removedTimeRanges)));
         }
-#endif
         if (isRemoved())
             return;
         m_source->monitorSourceBuffers();
@@ -1404,14 +1402,12 @@ WebCoreOpaqueRoot SourceBuffer::opaqueRoot()
     return WebCoreOpaqueRoot { this };
 }
 
-#if ENABLE(MANAGED_MEDIA_SOURCE)
 void SourceBuffer::memoryPressure()
 {
     if (!isManaged())
         return;
     m_private->memoryPressure(maximumBufferSize(), m_source->currentTime());
 }
-#endif
 
 #if !RELEASE_LOG_DISABLED
 WTFLogChannel& SourceBuffer::logChannel() const
