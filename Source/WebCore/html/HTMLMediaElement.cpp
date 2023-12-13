@@ -160,11 +160,7 @@
 
 #if ENABLE(MEDIA_SOURCE)
 #include "LocalDOMWindow.h"
-#if ENABLE(MANAGED_MEDIA_SOURCE)
 #include "ManagedMediaSource.h"
-#else
-#include "MediaSource.h"
-#endif
 #include "SourceBufferList.h"
 #endif
 
@@ -4176,7 +4172,7 @@ bool HTMLMediaElement::hasMediaSource() const
 
 bool HTMLMediaElement::hasManagedMediaSource() const
 {
-#if ENABLE(MANAGED_MEDIA_SOURCE)
+#if ENABLE(MEDIA_SOURCE)
     return is<ManagedMediaSource>(m_mediaSource);
 #else
     return false;
@@ -8694,16 +8690,12 @@ MediaProducerMediaStateFlags HTMLMediaElement::mediaState() const
 
 #if ENABLE(MEDIA_SOURCE)
     bool streaming = false;
-#if ENABLE(MANAGED_MEDIA_SOURCE)
     RefPtr managedMediasource = is<ManagedMediaSource>(m_mediaSource) ? downcast<ManagedMediaSource>(m_mediaSource.get()) : nullptr;
     streaming |= managedMediasource && managedMediasource->streamingAllowed() && managedMediasource->streaming();
     if (!managedMediasource) {
-#endif
-    // We can assume that if we have active source buffers, later networking activity (such as stream or XHR requests) will be media related.
-    streaming |= m_mediaSource && m_mediaSource->activeSourceBuffers() && m_mediaSource->activeSourceBuffers()->length();
-#if ENABLE(MANAGED_MEDIA_SOURCE)
+        // We can assume that if we have active source buffers, later networking activity (such as stream or XHR requests) will be media related.
+        streaming |= m_mediaSource && m_mediaSource->activeSourceBuffers() && m_mediaSource->activeSourceBuffers()->length();
     }
-#endif
     if (streaming)
         state.add(MediaProducerMediaState::HasStreamingActivity);
 #endif
@@ -8818,7 +8810,7 @@ void HTMLMediaElement::setBufferingPolicy(BufferingPolicy policy)
     m_bufferingPolicy = policy;
     if (m_player)
         m_player->setBufferingPolicy(policy);
-#if ENABLE(MANAGED_MEDIA_SOURCE)
+#if ENABLE(MEDIA_SOURCE)
     if (m_mediaSource && policy == BufferingPolicy::PurgeResources)
         m_mediaSource->memoryPressure();
 #endif
@@ -8829,7 +8821,7 @@ void HTMLMediaElement::purgeBufferedDataIfPossible()
     ALWAYS_LOG(LOGIDENTIFIER);
 
     bool isPausedOrMSE = [&] {
-#if ENABLE(MANAGED_MEDIA_SOURCE)
+#if ENABLE(MEDIA_SOURCE)
         if (m_mediaSource)
             return true;
 #endif
