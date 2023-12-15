@@ -560,6 +560,9 @@ void SourceBufferPrivate::evictCodedFrames(uint64_t newDataSize, uint64_t maximu
 
 bool SourceBufferPrivate::isBufferFullFor(uint64_t requiredSize, uint64_t maximumBufferSize)
 {
+    if (!m_receivedFirstInitializationSegment)
+        return false;
+
     auto totalRequired = checkedSum<uint64_t>(totalTrackBufferSizeInBytes(), requiredSize);
     if (totalRequired.hasOverflowed())
         return true;
