@@ -205,22 +205,13 @@ MediaPlayerPrivateGStreamer::MediaPlayerPrivateGStreamer(MediaPlayer* player)
     if (is<PlatformDisplayLibWPE>(sharedDisplay))
         m_wpeVideoPlaneDisplayDmaBuf.reset(wpe_video_plane_display_dmabuf_source_create(downcast<PlatformDisplayLibWPE>(sharedDisplay).backend()));
 #endif
-
-#if USE(ODH_TELEMETRY)
-    m_odhReporter.start_report_thread();
-#endif
 }
 
 MediaPlayerPrivateGStreamer::~MediaPlayerPrivateGStreamer()
 {
     GST_DEBUG_OBJECT(pipeline(), "Disposing player");
     m_isPlayerShuttingDown.store(true);
-
-#if USE(ODH_TELEMETRY)
-    // Send AVPipelineReport with stop state before destroy to include stream statistics
-    m_odhReporter.watch_odh_statistics(m_avContextGetter);
-    m_odhReporter.report(ODH_REPORT_AVPIPELINE_STATE_STOP, "", {OdhMediaType::VIDEO, OdhMediaType::AUDIO}, m_avContextGetter);
-#endif
+    Telemetry::reportPlaybackState(Telemetry::avpipeline_state_t::STOP);
 
 #if USE(GSTREAMER_HOLEPUNCH)
     if (m_gstreamerHolePunchHost)
@@ -290,14 +281,7 @@ MediaPlayerPrivateGStreamer::~MediaPlayerPrivateGStreamer()
 
     m_player = nullptr;
     m_notifier->invalidate();
-
-#if USE(ODH_TELEMETRY)
-    m_odhReporter.watch_odh_statistics(m_avContextGetter);
-    m_odhReporter.report(ODH_REPORT_AVPIPELINE_STATE_DESTROY, "", OdhMediaType::NONE, m_avContextGetter);
-    m_odhReporter.unset_reporting_callbacks();
-    m_odhReporter.report_all_and_stop();
-    m_avContextGetter.setPipeline(nullptr);
-#endif
+    Telemetry::reportPlaybackState(Telemetry::avpipeline_state_t::DESTROY);
 }
 
 bool MediaPlayerPrivateGStreamer::isAvailable()
@@ -439,10 +423,7 @@ void MediaPlayerPrivateGStreamer::play()
         m_preload = MediaPlayer::Preload::Auto;
         updateDownloadBufferingFlag();
         GST_INFO_OBJECT(pipeline(), "Play");
-#if USE(ODH_TELEMETRY)
-        m_odhReporter.watch_odh_statistics(m_avContextGetter);
-        m_odhReporter.report(ODH_REPORT_AVPIPELINE_STATE_PLAY, "", {OdhMediaType::VIDEO, OdhMediaType::AUDIO}, m_avContextGetter);
-#endif
+        Telemetry::reportPlaybackState(Telemetry::avpipeline_state_t::PLAY);
     } else
         loadingFailed(MediaPlayer::NetworkState::Empty);
 }
@@ -460,10 +441,7 @@ void MediaPlayerPrivateGStreamer::pause()
 
     if (changePipelineState(GST_STATE_PAUSED)) {
         GST_INFO_OBJECT(pipeline(), "Pause");
-#if USE(ODH_TELEMETRY)
-        m_odhReporter.watch_odh_statistics(m_avContextGetter);
-        m_odhReporter.report(ODH_REPORT_AVPIPELINE_STATE_PAUSE, "", {OdhMediaType::VIDEO, OdhMediaType::AUDIO}, m_avContextGetter);
-#endif
+        Telemetry::reportPlaybackState(Telemetry::avpipeline_state_t::PAUSE);
     } else
         loadingFailed(MediaPlayer::NetworkState::Empty);
 }
@@ -536,15 +514,8 @@ void MediaPlayerPrivateGStreamer::seek(const MediaTime& mediaTime)
 
     MediaTime time = std::min(mediaTime, durationMediaTime());
     GST_INFO_OBJECT(pipeline(), "[Seek] seeking to %s", toString(time).utf8().data());
-
-#if USE(ODH_TELEMETRY)
-    char json_str[100];
-    int len = snprintf(json_str, 100, "{\"seek_from\":%f, \"seek_to\":%f}", playbackPosition().toDouble(), time.toDouble());
-    if (len > 0 && len < 100) {
-        m_odhReporter.watch_odh_statistics(m_avContextGetter);
-        m_odhReporter.report(ODH_REPORT_AVPIPELINE_STATE_SEEK_START, json_str, {OdhMediaType::VIDEO, OdhMediaType::AUDIO}, m_avContextGetter);
-    }
-#endif
+    Telemetry::reportPlaybackState(Telemetry::avpipeline_state_t::SEEK_START,
+        "seek_from:"+std::to_string(playbackPosition().toDouble())+", seek_to:"+std::to_string(time.toDouble()));
 
     if (m_isSeeking) {
         m_timeOfOverlappingSeek = time;
@@ -1796,10 +1767,8 @@ void MediaPlayerPrivateGStreamer::handleMessage(GstMessage* message)
         m_errorMessage = String::fromLatin1(err->message);
 
         error = MediaPlayer::NetworkState::Empty;
-#if USE(ODH_TELEMETRY)
-        m_odhReporter.watch_odh_statistics(m_avContextGetter);
-        m_odhReporter.report(ODH_REPORT_AVPIPELINE_STATE_PLAYBACK_ERROR, m_errorMessage.utf8().data(), {OdhMediaType::VIDEO, OdhMediaType::AUDIO}, m_avContextGetter);
-#endif
+        Telemetry::reportPlaybackState(Telemetry::avpipeline_state_t::PLAYBACK_ERROR, std::string(err->message));
+
         if (g_error_matches(err.get(), GST_STREAM_ERROR, GST_STREAM_ERROR_CODEC_NOT_FOUND)
             || g_error_matches(err.get(), GST_STREAM_ERROR, GST_STREAM_ERROR_DECRYPT)
             || g_error_matches(err.get(), GST_STREAM_ERROR, GST_STREAM_ERROR_DECRYPT_NOKEY)
@@ -2454,14 +2423,8 @@ void MediaPlayerPrivateGStreamer::purgeOldDownloadFiles(const String& downloadFi
 void MediaPlayerPrivateGStreamer::finishSeek()
 {
     GST_DEBUG_OBJECT(pipeline(), "[Seek] seeked to %s", toString(m_seekTime).utf8().data());
-#if USE(ODH_TELEMETRY)
-    char json_str[100];
-    int len = snprintf(json_str, 100, "{\"seek_to\":%f}", m_seekTime.toDouble());
-    if (len > 0 && len < 100) {
-        m_odhReporter.watch_odh_statistics(m_avContextGetter);
-        m_odhReporter.report(ODH_REPORT_AVPIPELINE_STATE_SEEK_DONE, json_str, {OdhMediaType::VIDEO, OdhMediaType::AUDIO}, m_avContextGetter);
-    }
-#endif
+    Telemetry::reportPlaybackState(Telemetry::avpipeline_state_t::SEEK_DONE, "seek_to:"+std::to_string(m_seekTime.toDouble()));
+
     m_isSeeking = false;
     invalidateCachedPosition();
     if (m_timeOfOverlappingSeek != m_seekTime && m_timeOfOverlappingSeek.isValid()) {
@@ -2494,13 +2457,6 @@ void MediaPlayerPrivateGStreamer::updateStates()
         m_currentState = state;
         stateReallyChanged = true;
     }
-
-#if USE(ODH_TELEMETRY)
-    if (m_currentState == GST_STATE_PAUSED && m_oldState == GST_STATE_READY) {
-        m_odhReporter.setup_reporting_callbacks(&m_avContextGetter);
-    }
-#endif
-
     bool shouldUpdatePlaybackState = false;
     switch (getStateResult) {
     case GST_STATE_CHANGE_SUCCESS: {
@@ -2820,11 +2776,7 @@ void MediaPlayerPrivateGStreamer::didEnd()
 #endif
     }
     timeChanged();
-
-#if USE(ODH_TELEMETRY)
-    m_odhReporter.watch_odh_statistics(m_avContextGetter);
-    m_odhReporter.report(ODH_REPORT_AVPIPELINE_STATE_END_OF_STREAM, "", OdhMediaType::NONE, m_avContextGetter);
-#endif
+    Telemetry::reportPlaybackState(Telemetry::avpipeline_state_t::END_OF_STREAM);
 }
 
 void MediaPlayerPrivateGStreamer::getSupportedTypes(HashSet<String, ASCIICaseInsensitiveHash>& types)
@@ -3083,12 +3035,8 @@ void MediaPlayerPrivateGStreamer::createGSTPlayBin(const URL& url)
     if (m_videoSink)
         configureElementPlatformQuirks(m_videoSink.get());
 #endif
-
-#if USE(ODH_TELEMETRY)
-    m_avContextGetter.setPipeline(m_pipeline);
-    m_odhReporter.watch_odh_statistics(m_avContextGetter);
-    m_odhReporter.report(ODH_REPORT_AVPIPELINE_STATE_CREATE, "", OdhMediaType::NONE, m_avContextGetter);
-#endif
+    Telemetry::reportDrmInfo(getDrm());
+    Telemetry::reportPlaybackState(Telemetry::avpipeline_state_t::CREATE);
 }
 
 void MediaPlayerPrivateGStreamer::configureVideoDecoder(GstElement* decoder)
@@ -3178,11 +3126,7 @@ void MediaPlayerPrivateGStreamer::pausedTimerFired()
 {
     GST_DEBUG_OBJECT(pipeline(), "In PAUSED for too long. Releasing pipeline resources.");
     changePipelineState(GST_STATE_NULL);
-#if USE(ODH_TELEMETRY)
-    m_odhReporter.unset_reporting_callbacks();
-    m_avContextGetter.setPipeline(nullptr);
-    m_odhReporter.report(ODH_REPORT_AVPIPELINE_STATE_DESTROY, "", OdhMediaType::NONE, m_avContextGetter);
-#endif
+    Telemetry::reportPlaybackState(Telemetry::avpipeline_state_t::DESTROY);
 }
 
 void MediaPlayerPrivateGStreamer::acceleratedRenderingStateChanged()
@@ -4621,51 +4565,45 @@ void MediaPlayerPrivateGStreamer::checkPlayingConsistency()
     }
 }
 
-#if USE(ODH_TELEMETRY)
-OdhDrm MediaPlayerPrivateGStreamer::AvContextGetterImpl::getDrm()
+Telemetry::drm_type_t MediaPlayerPrivateGStreamer::getDrm()
 {
+#if USE(RDK_TELEMETRY)
     if (m_pipeline.get()) {
         GstContext* drmCdmInstanceContext = gst_element_get_context(GST_ELEMENT(m_pipeline.get()), "drm-cdm-instance");
         if (!drmCdmInstanceContext) {
-            return {OdhDrm::NONE};
+            return {Telemetry::drm_type_t::NONE};
         }
 
         const GstStructure* drmCdmInstanceStructure = gst_context_get_structure(drmCdmInstanceContext);
         if (!drmCdmInstanceStructure) {
-            return {OdhDrm::NONE};
+            return {Telemetry::drm_type_t::NONE};
         }
 
         const GValue* drmCdmInstanceVal = gst_structure_get_value(drmCdmInstanceStructure, "cdm-instance");
         if (!drmCdmInstanceVal) {
-            return {OdhDrm::NONE};
+            return {Telemetry::drm_type_t::NONE};
         }
 
         const CDMInstance* drmCdmInstance = (const CDMInstance*)g_value_get_pointer(drmCdmInstanceVal);
         if (!drmCdmInstance) {
-            return {OdhDrm::NONE};
+            return {Telemetry::drm_type_t::NONE};
         }
 
         const std::string keySystem = drmCdmInstance->keySystem().utf8().data();
         if (keySystem.find("playready") != string::npos) {
-            return {OdhDrm::PLAYREADY_DRM};
+            return {Telemetry::drm_type_t::PLAYREADY};
         } else if (keySystem.find("widevine") != string::npos) {
-            return {OdhDrm::WIDEVINE_DRM};
+            return {Telemetry::drm_type_t::WIDEVINE};
+        }
+        else {
+            return {Telemetry::drm_type_t::UNKNOWN};
         }
     }
-    return {OdhDrm::NONE};
+    return {Telemetry::drm_type_t::NONE};
+#else
+    return {Telemetry::drm_type_t::UNKNOWN};
+#endif // USE(RDK_TELEMETRY)
 }
-
-OdhOwner MediaPlayerPrivateGStreamer::AvContextGetterImpl::getOwner()
-{
-    return OdhOwner::WPE;
-}
-
-GstElement* MediaPlayerPrivateGStreamer::AvContextGetterImpl::getPipeline()
-{
-    return m_pipeline.get();
-}
-#endif
-
 }
 
 #endif // USE(GSTREAMER)

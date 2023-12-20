@@ -47,12 +47,9 @@
 #include <wtf/RunLoop.h>
 #include <wtf/WeakPtr.h>
 #include <wtf/text/AtomStringHash.h>
+#include <wtf/TelemetryReport.h>
 
 typedef struct _GstMpegtsSection GstMpegtsSection;
-
-#if USE(ODH_TELEMETRY)
-#include "odhott/odhott_av.h"
-#endif
 
 #if USE(GSTREAMER_GL)
 #if USE(LIBEPOXY)
@@ -402,24 +399,6 @@ protected:
     GRefPtr<GstElement> m_source { nullptr };
     bool m_areVolumeAndMuteInitialized { false };
 
-#if USE(ODH_TELEMETRY)
-    // ODH AV telemetry reports
-    class AvContextGetterImpl: public AvContextGetter {
-    public:
-        void setPipeline(GRefPtr<GstElement> pipeline) { m_pipeline = pipeline; }
-
-        //AvContextGetter
-        OdhDrm getDrm() override;
-        OdhOwner getOwner() override;
-        GstElement* getPipeline() override;
-
-    private:
-        GRefPtr<GstElement> m_pipeline;
-    };
-    AvContextGetterImpl m_avContextGetter;
-    AvOdhReporter m_odhReporter;
-#endif
-
 #if USE(TEXTURE_MAPPER_GL)
     TextureMapperGL::Flags m_textureMapperFlags { TextureMapperGL::NoFlag };
 #endif
@@ -573,6 +552,7 @@ private:
     InitData parseInitDataFromProtectionMessage(GstMessage*);
     bool waitForCDMAttachment();
 #endif
+    Telemetry::drm_type_t getDrm();
 
     void configureMediaStreamAudioTracks();
     void invalidateCachedPositionOnNextIteration() const;

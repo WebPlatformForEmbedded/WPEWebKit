@@ -381,11 +381,10 @@ GLContextEGL::GLContextEGL(PlatformDisplay& display, EGLContext context, EGLSurf
         }
         RELEASE_ASSERT(!m_eglCreateImageKHR == !m_eglDestroyImageKHR);
     }
-#if USE(ODH_TELEMETRY)
     if(m_type == WindowSurface) {
-        odh_ott_wayland_report(*this, ODH_REPORT_WAYLAND_OWNER_WPE, ODH_REPORT_WAYLAND_ACTION_INIT_GFX, true, true);
+        Telemetry::reportWaylandInfo(*this, Telemetry::wayland_action_t::INIT_GFX,
+            Telemetry::wayland_graphics_state_t::GFX_INITIALIZED, Telemetry::wayland_inputs_state_t::INPUTS_INITIALIZED);
     }
-#endif
 }
 
 GLContextEGL::~GLContextEGL()
@@ -406,11 +405,10 @@ GLContextEGL::~GLContextEGL()
 #if USE(WPE_RENDERER)
     destroyWPETarget();
 #endif
-#if USE(ODH_TELEMETRY)
     if(m_type == WindowSurface) {
-        odh_ott_wayland_report(*this, ODH_REPORT_WAYLAND_OWNER_WPE, ODH_REPORT_WAYLAND_ACTION_DEINIT_GFX, false, true);
+        Telemetry::reportWaylandInfo(*this, Telemetry::wayland_action_t::DEINIT_GFX,
+            Telemetry::wayland_graphics_state_t::GFX_NOT_INITIALIZED, Telemetry::wayland_inputs_state_t::INPUTS_INITIALIZED);
     }
-#endif
 }
 
 EGLImage GLContextEGL::createImage(EGLenum target, EGLClientBuffer clientBuffer, const Vector<EGLAttrib>& attribList) const
@@ -553,7 +551,6 @@ GCGLContext GLContextEGL::platformContext()
     return m_context;
 }
 
-#if USE(ODH_TELEMETRY)
 EGLDisplay GLContextEGL::getEGLDisplay() const
 {
     return m_display.eglDisplay();
@@ -598,7 +595,6 @@ unsigned int GLContextEGL::getWindowHeight() const
         ret_val = atoi(tmp);
     return ret_val;
 }
-#endif // USE(ODH_TELEMETRY)
 } // namespace WebCore
 
 #endif // USE(EGL)

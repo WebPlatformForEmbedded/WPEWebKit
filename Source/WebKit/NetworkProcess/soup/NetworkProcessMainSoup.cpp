@@ -31,9 +31,7 @@
 #include "NetworkProcess.h"
 #include <WebCore/NetworkStorageSession.h>
 
-#if USE(ODH_TELEMETRY)
-#include <rdk/libodherr/odherr.h>
-#endif
+#include <wtf/TelemetryReport.h>
 
 #if USE(GCRYPT)
 #include <pal/crypto/gcrypt/Initialization.h>
@@ -45,9 +43,7 @@ class NetworkProcessMainSoup final: public AuxiliaryProcessMainBaseNoSingleton<N
 public:
     bool platformInitialize() override
     {
-#if USE(ODH_TELEMETRY)
-        odh_error_report_init("WebKitBrowser");
-#endif
+        Telemetry::init();
 #if USE(GCRYPT)
         PAL::GCrypt::initialize();
 #endif
@@ -60,9 +56,7 @@ public:
         // Needed to destroy the SoupSession and SoupCookieJar, e.g. to avoid
         // leaking SQLite temporary journaling files.
         process().destroySession(PAL::SessionID::defaultSessionID());
-#if USE(ODH_TELEMETRY)
-        odh_error_report_deinit(ODH_ERROR_REPORT_DEINIT_MODE_DEFERRED);
-#endif
+        Telemetry::deinit();
     }
 };
 

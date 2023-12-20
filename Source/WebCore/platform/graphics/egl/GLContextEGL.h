@@ -36,9 +36,7 @@ struct wl_egl_window;
 struct wpe_renderer_backend_egl_offscreen_target;
 #endif
 
-#if USE(ODH_TELEMETRY)
-#include "odhott/odhott_wl.h"
-#endif
+#include "wtf/TelemetryReport.h"
 
 typedef intptr_t EGLAttrib;
 typedef unsigned EGLBoolean;
@@ -67,11 +65,7 @@ typedef EGLBoolean (*PFNEGLDESTROYIMAGEKHRPROC) (EGLDisplay, EGLImageKHR);
 
 namespace WebCore {
 
-#if USE(ODH_TELEMETRY)
-class GLContextEGL final : public GLContext, public WaylandContextInfoGetter {
-#else
-class GLContextEGL final : public GLContext {
-#endif
+class GLContextEGL final : public GLContext, public Telemetry::WaylandInfoGetter {
     WTF_MAKE_NONCOPYABLE(GLContextEGL);
 public:
     static std::unique_ptr<GLContextEGL> createContext(GLNativeWindowType, PlatformDisplay&);
@@ -152,14 +146,12 @@ private:
 #if USE(WPE_RENDERER)
     struct wpe_renderer_backend_egl_offscreen_target* m_wpeTarget { nullptr };
 #endif
-#if USE(ODH_TELEMETRY)
     EGLDisplay getEGLDisplay() const override;
     EGLConfig getEGLConfig() const override;
     EGLSurface getEGLSurface() const override;
     EGLContext getEGLContext() const override;
     unsigned int getWindowWidth() const override;
     unsigned int getWindowHeight() const override;
-#endif
 };
 
 } // namespace WebCore

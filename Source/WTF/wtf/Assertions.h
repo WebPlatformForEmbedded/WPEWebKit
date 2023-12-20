@@ -26,6 +26,7 @@
 #pragma once
 
 #include <wtf/Platform.h>
+#include <wtf/TelemetryReport.h>
 
 /*
    no namespaces because this file has to be includable from C and Objective-C
@@ -247,14 +248,6 @@ void WTFPrintBacktraceWithPrefixAndPrintStream(WTF::PrintStream&, void** stack, 
 WTF_EXPORT_PRIVATE void WTFPrintBacktrace(void** stack, int size);
 #if !RELEASE_LOG_DISABLED
 WTF_EXPORT_PRIVATE void WTFReleaseLogStackTrace(WTFLogChannel*);
-#endif
-
-#if USE(ODH_TELEMETRY)
-#define REPORT_ODH_ERROR(file, line, func, ...)    WTFReportOdhError(file, line, func, __VA_ARGS__)
-WTF_EXPORT_PRIVATE void WTFReportOdhError(const char* file, int line, const char* function, const char* format, ...);
-WTF_EXPORT_PRIVATE void WTFReportOdhErrorV(const char* file, int line, const char* function, const char* format, va_list args);
-#else
-#define REPORT_ODH_ERROR(file, line, func, ...)    ((void)0)
 #endif
 
 WTF_EXPORT_PRIVATE bool WTFIsDebuggerAttached(void);
@@ -524,7 +517,7 @@ constexpr bool assertionFailureDueToUnreachableCode = false;
 #define LOG_ERROR(...) do { \
     RDK_LOG_VERBOSE(RDK_LOG_ERROR, RDK_LOG_DEFAULT_CHANNEL); \
     RDK_LOG(RDK_LOG_ERROR, RDK_LOG_DEFAULT_CHANNEL, __VA_ARGS__); \
-    REPORT_ODH_ERROR(__FILE__, __LINE__, WTF_PRETTY_FUNCTION, __VA_ARGS__); \
+    Telemetry::reportError(__FILE__, __LINE__, WTF_PRETTY_FUNCTION, __VA_ARGS__); \
 } while (0)
 #else
 #define LOG_ERROR(...) WTFReportError(__FILE__, __LINE__, WTF_PRETTY_FUNCTION, __VA_ARGS__)
