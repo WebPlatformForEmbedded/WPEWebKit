@@ -1881,6 +1881,14 @@ set(webrtc_SOURCES
     Source/webrtc/video/video_stream_buffer_controller.cc
     Source/webrtc/video/video_stream_decoder2.cc
     Source/webrtc/video/video_stream_encoder.cc
+    Source/webrtc/modules/rtp_rtcp/source/flexfec_03_header_reader_writer.cc
+    Source/webrtc/p2p/base/stun_dictionary.cc
+    Source/webrtc/rtc_base/async_dns_resolver.cc
+    Source/webrtc/rtc_base/bitrate_tracker.cc
+    Source/webrtc/rtc_base/frequency_tracker.cc
+    Source/webrtc/rtc_base/network/received_packet.cc
+    Source/webrtc/rtc_tools/video_encoder/encoded_image_file_writer.cc
+    Source/webrtc/rtc_tools/video_encoder/video_encoder.cc
 
     $<TARGET_OBJECTS:libsrtp>
 )
