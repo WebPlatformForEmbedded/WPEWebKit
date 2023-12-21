@@ -996,12 +996,41 @@ const URL& aboutSrcDocURL()
     return staticSrcDocURL;
 }
 
+static bool protocolIsWhitelistedForAllPortsAcccess(StringView protocol)
+{
+    static Vector<String> s_protocolsWhitelisted;
+    static std::once_flag s_onceFlag;
+    std::call_once(s_onceFlag,
+        [] {
+            // The env var contains a comma separated list of protocols that need to have
+            // access to all ports.
+            // Example: WPE_WHITELIST_ALL_PORTS_FOR_PROTOCOLS="dvb,echo,custom"
+            String s(String::fromLatin1(std::getenv("WPE_WHITELIST_ALL_PORTS_FOR_PROTOCOLS")));
+            if (s.isEmpty())
+                return;
+
+            s_protocolsWhitelisted.appendVector(s.convertToASCIILowercase().split(','));
+
+            const Vector<String> excludeFromWhitelist( { "http"_s, "https"_s, "ws"_s, "wss"_s, "ftp"_s, "ftps"_s} );
+
+            // Ensure reserved protocols are not whitelisted
+            s_protocolsWhitelisted.removeAllMatching([&](const auto& protocol) {
+                return excludeFromWhitelist.contains(protocol);
+            });
+        });
+
+    return s_protocolsWhitelisted.contains(protocol.convertToASCIILowercase());
+}
+
 bool portAllowed(const URL& url)
 {
     std::optional<uint16_t> port = url.port();
 
     // Since most URLs don't have a port, return early for the "no port" case.
     if (!port)
+        return true;
+
+    if (protocolIsWhitelistedForAllPortsAcccess(url.protocol()))
         return true;
 
     // This blocked port list matches the port blocking that Mozilla implements.
