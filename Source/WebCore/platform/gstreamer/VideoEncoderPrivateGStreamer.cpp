@@ -170,6 +170,11 @@ public:
     }
 };
 
+void teardownVideoEncoderSingleton()
+{
+    Encoders::singleton().clear();
+}
+
 /* Internal bin structure: videoconvert ! inputCapsFilter ! encoder ! outputCapsFilter ! (optional
    parser) ! capsFilter */
 struct _WebKitVideoEncoderPrivate {

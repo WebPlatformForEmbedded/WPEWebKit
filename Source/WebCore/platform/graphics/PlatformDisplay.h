@@ -98,6 +98,7 @@ public:
 #if ENABLE(VIDEO) && USE(GSTREAMER_GL)
     GstGLDisplay* gstGLDisplay() const;
     GstGLContext* gstGLContext() const;
+    void clearGStreamerGLState();
 #endif
 
 #if USE(LCMS)

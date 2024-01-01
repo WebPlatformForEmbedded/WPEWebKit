@@ -33,6 +33,7 @@
 #include "GUniquePtrGStreamer.h"
 #include "GstAllocatorFastMalloc.h"
 #include "IntSize.h"
+#include "PlatformDisplay.h"
 #include "RuntimeApplicationChecks.h"
 #include "SharedBuffer.h"
 #include "WebKitAudioSinkGStreamer.h"
@@ -461,6 +462,10 @@ void unregisterPipeline(const GRefPtr<GstElement>& pipeline)
 
 void deinitializeGStreamer()
 {
+#if USE(GSTREAMER_GL)
+    auto& sharedDisplay = PlatformDisplay::sharedDisplayForCompositing();
+    sharedDisplay.clearGStreamerGLState();
+#endif
 #if ENABLE(MEDIA_SOURCE)
     teardownGStreamerRegistryScannerMSE();
 #endif
@@ -489,6 +494,9 @@ void deinitializeGStreamer()
         activePipelinesMap().clear();
     }
 
+#if ENABLE(VIDEO)
+    teardownVideoEncoderSingleton();
+#endif
     gst_deinit();
 }
 

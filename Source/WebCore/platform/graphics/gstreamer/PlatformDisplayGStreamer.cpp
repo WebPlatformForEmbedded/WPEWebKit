@@ -134,3 +134,9 @@ GstGLContext* PlatformDisplay::gstGLContext() const
         return nullptr;
     return m_gstGLContext.get();
 }
+
+void PlatformDisplay::clearGStreamerGLState()
+{
+    m_gstGLDisplay = nullptr;
+    m_gstGLContext = nullptr;
+}
