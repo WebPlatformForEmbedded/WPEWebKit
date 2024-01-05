@@ -266,8 +266,8 @@ void LayerTreeHost::pauseRendering()
 void LayerTreeHost::resumeRendering()
 {
     m_isSuspended = false;
+	renderNextFrame(true);
     m_compositor->resume();
-    scheduleLayerFlush();
 }
 
 GraphicsLayerFactory* LayerTreeHost::graphicsLayerFactory()
