@@ -610,6 +610,9 @@ webkit.org/b/232255 accessibility/math-has-non-presentational-children.html [ Fa
 
 webkit.org/b/232256 accessibility/auto-fill-crash.html [ Timeout ]
 
+# Times out due to missing AccessibilityUIElement::takeFocus
+http/tests/accessibility/focus-text-field-in-iframe.html [ Skip ]
+
 #////////////////////////////////////////////////////////////////////////////////////////
 # End of Accessibility-related bugs
 #////////////////////////////////////////////////////////////////////////////////////////
@@ -1232,9 +1235,6 @@ webkit.org/b/264708 [ Debug ] imported/w3c/web-platform-tests/media-source/media
 
 webkit.org/b/264708 media/media-source/media-webm-opus-partial-abort.html [ Pass Crash Failure ]
 
-webkit.org/b/264934 imported/w3c/web-platform-tests/webaudio/the-audio-api/the-audioworklet-interface/audioworklet-registerprocessor-called-on-globalthis.https.html [ Pass Crash ]
-webkit.org/b/264934 http/wpt/webaudio/the-audio-api/the-audioworklet-interface/exposed-properties.https.html [ Pass Crash ]
-
 webkit.org/b/265205 imported/w3c/web-platform-tests/media-source/mediasource-remove-preserves-currentTime.html [ Pass Crash ]
 
 webkit.org/b/265206 media/encrypted-media/encrypted-media-append-encrypted-unencrypted.html [ Pass Crash ]
@@ -1287,7 +1287,8 @@ webkit.org/b/213293 fast/images/hidpi-image-position-on-device-pixels-with-borde
 http/tests/push-api [ Skip ]
 
 # <CR>same-origin<CR> seems to be parsed as same-origin instead of failing
-webkit.org/b/251345 imported/w3c/web-platform-tests/html/cross-origin-opener-policy/header-parsing-failures.https.html?1-4 [ Failure ]
+# Uncomment when webkit.org/b/266280 is fixed
+#webkit.org/b/251345 imported/w3c/web-platform-tests/html/cross-origin-opener-policy/header-parsing-failures.https.html?1-4 [ Failure ]
 
 # Slight difference where the failure happens in relation to mac's baseline
 webkit.org/b/251344 imported/w3c/web-platform-tests/html/cross-origin-opener-policy/tentative/restrict-properties/iframe-popup-to-un.https.html?5-6 [ Failure ]
@@ -1500,7 +1501,8 @@ imported/w3c/web-platform-tests/fetch/metadata/generated/worker-dedicated-import
 imported/w3c/web-platform-tests/fetch/metadata/generated/worker-dedicated-importscripts.sub.html [ DumpJSConsoleLogInStdErr ]
 
 imported/w3c/web-platform-tests/fetch/private-network-access/service-worker-fetch.https.window.html [ DumpJSConsoleLogInStdErr ]
-imported/w3c/web-platform-tests/fetch/private-network-access/iframe.tentative.window.html [ DumpJSConsoleLogInStdErr ]
+# Uncomment when webkit.org/b/266280 is fixed
+#imported/w3c/web-platform-tests/fetch/private-network-access/iframe.tentative.window.html [ DumpJSConsoleLogInStdErr ]
 
 imported/w3c/web-platform-tests/fetch/private-network-access/service-worker-update.https.window.html [ DumpJSConsoleLogInStdErr ]
 imported/w3c/web-platform-tests/fetch/private-network-access/service-worker-background-fetch.https.window.html [ DumpJSConsoleLogInStdErr ]
@@ -1650,7 +1652,6 @@ webkit.org/b/129958 svg/clip-path/mask-objectboundingbox-content-clip.svg [ Imag
 webkit.org/b/129958 svg/clip-path/mask-userspaceonuse-content-clip-transform.svg [ ImageOnlyFailure ]
 webkit.org/b/129958 svg/clip-path/mask-userspaceonuse-content-clip.svg [ ImageOnlyFailure ]
 
-webkit.org/b/135529 svg/animations/animate-css-xml-attributeType.html [ Failure ]
 webkit.org/b/135529 svg/css/parse-height.html [ Failure ]
 webkit.org/b/135529 svg/css/parse-length.html [ Failure ]
 
@@ -1691,6 +1692,9 @@ webkit.org/b/264583 imported/w3c/web-platform-tests/css/filter-effects/repaint-a
 webkit.org/b/264584 imported/w3c/web-platform-tests/fetch/api/request/request-keepalive-quota.html?include=slow-2 [ Failure ]
 webkit.org/b/264584 imported/w3c/web-platform-tests/fetch/metadata/generated/css-font-face.sub.tentative.html [ Failure ]
 webkit.org/b/264584 imported/w3c/web-platform-tests/fetch/private-network-access/fetch.https.window.html [ Failure ]
+
+# SVG Animations Failures on WPT Import
+imported/w3c/web-platform-tests/svg/animations/reinserting-svg-into-document.html [ Failure ]
 
 imported/w3c/web-platform-tests/css/filter-effects/css-filters-animation-opacity.html [ ImageOnlyFailure ]
 
@@ -2163,6 +2167,8 @@ webkit.org/b/212741 imported/w3c/web-platform-tests/content-security-policy/navi
 webkit.org/b/213709 imported/w3c/web-platform-tests/cors/credentials-flag.htm [ Pass DumpJSConsoleLogInStdErr ]
 
 webkit.org/b/214029 imported/w3c/web-platform-tests/html/semantics/embedded-content/the-video-element/resize-during-playback.html [ Failure ]
+# Uncomment when webkit.org/b/266280 is fixed
+#webkit.org/b/262391 imported/w3c/web-platform-tests/html/semantics/embedded-content/the-iframe-element/sandbox-top-navigation-escalate-privileges.tentative.sub.window.html [ Failure ]
 
 webkit.org/b/214125 imported/w3c/web-platform-tests/html/rendering/widgets/select-wrap-no-spill.optional.html [ Failure ]
 
@@ -2189,9 +2195,9 @@ webkit.org/b/214290 imported/w3c/web-platform-tests/css/css-text/line-break/line
 webkit.org/b/214290 imported/w3c/web-platform-tests/css/css-text/line-break/line-break-anywhere-overrides-uax-behavior-009.html [ Pass ]
 webkit.org/b/214290 imported/w3c/web-platform-tests/css/css-text/line-break/line-break-anywhere-overrides-uax-behavior-010.html [ Pass ]
 webkit.org/b/214290 imported/w3c/web-platform-tests/css/css-text/line-break/line-break-loose-hyphens-002.html [ Pass ]
-webkit.org/b/214290 imported/w3c/web-platform-tests/css/css-text/shaping/shaping-023.html [ Pass ]
-webkit.org/b/214290 imported/w3c/web-platform-tests/css/css-text/shaping/shaping-024.html [ Pass ]
-webkit.org/b/214290 imported/w3c/web-platform-tests/css/css-text/shaping/shaping-025.html [ Pass ]
+webkit.org/b/214290 imported/w3c/web-platform-tests/css/css-text/shaping/shaping-023.html [ ImageOnlyFailure ]
+webkit.org/b/214290 imported/w3c/web-platform-tests/css/css-text/shaping/shaping-024.html [ ImageOnlyFailure ]
+webkit.org/b/214290 imported/w3c/web-platform-tests/css/css-text/shaping/shaping-025.html [ ImageOnlyFailure ]
 webkit.org/b/214290 imported/w3c/web-platform-tests/css/css-text/shaping/shaping-arabic-diacritics-002.html [ ImageOnlyFailure ]
 webkit.org/b/214290 imported/w3c/web-platform-tests/css/css-text/text-encoding/shaping-no-join-001.html [ Pass ]
 webkit.org/b/214290 imported/w3c/web-platform-tests/css/css-text/text-encoding/shaping-no-join-002.html [ Pass ]
@@ -3681,12 +3687,21 @@ webkit.org/b/266280 http/tests/xmlhttprequest/logout.html [ Pass Failure Crash ]
 webkit.org/b/266280 http/tests/xmlhttprequest/readystatechange-and-abort.html [ Pass Crash ]
 webkit.org/b/266280 http/wpt/cross-origin-opener-policy/header-parsing-with-report-to.https.html [ Pass Crash ]
 webkit.org/b/266280 imported/w3c/web-platform-tests/html/infrastructure/urls/terminology-0/document-base-url.html [ Pass Crash ]
-# Failure is tracked here webkit.org/b/262391
 webkit.org/b/266280 imported/w3c/web-platform-tests/html/semantics/embedded-content/the-iframe-element/sandbox-top-navigation-escalate-privileges.tentative.sub.window.html [ Failure Crash ]
 webkit.org/b/266280 imported/w3c/web-platform-tests/html/semantics/forms/form-submission-target/form-target-iframe.html [ Pass Crash ]
 webkit.org/b/266280 imported/w3c/web-platform-tests/service-workers/cache-storage/cache-abort.https.any.worker.html [ Pass Crash ]
 webkit.org/b/266280 imported/w3c/web-platform-tests/service-workers/cache-storage/serviceworker/cache-abort.https.html [ Pass Crash ]
 webkit.org/b/266280 imported/w3c/web-platform-tests/service-workers/service-worker/navigation-headers.https.html [ Pass Crash ]
+webkit.org/b/266280 http/tests/xmlhttprequest/cross-site-denied-response-sync.html [ Pass Crash ]
+webkit.org/b/266280 imported/w3c/web-platform-tests/html/anonymous-iframe/require-corp-embed-anonymous-iframe.tentative.https.window.html [ Pass Crash ]
+webkit.org/b/266280 imported/w3c/web-platform-tests/service-workers/cache-storage/window/cache-abort.https.html [ Pass Crash ]
+webkit.org/b/266280 imported/w3c/web-platform-tests/fetch/private-network-access/iframe.tentative.window.html [ DumpJSConsoleLogInStdErr Pass Crash ]
+webkit.org/b/266280 imported/w3c/web-platform-tests/html/cross-origin-embedder-policy/anonymous-iframe/cookie-store.tentative.https.window.html [ Pass Crash ]
+webkit.org/b/266280 imported/w3c/web-platform-tests/webmessaging/broadcastchannel/detached-iframe.html [ Pass Crash ]
+webkit.org/b/266280 imported/w3c/web-platform-tests/html/anonymous-iframe/local-storage.tentative.https.window.html [ Pass Crash ]
+webkit.org/b/266280 imported/w3c/web-platform-tests/html/infrastructure/urls/resolving-urls/query-encoding/windows-1251.html?include=loading [ Pass Failure Crash ]
+webkit.org/b/266280 imported/w3c/web-platform-tests/html/anonymous-iframe/anonymous-window.tentative.https.window.html [ Pass Crash ]
+webkit.org/b/266280 imported/w3c/web-platform-tests/html/cross-origin-opener-policy/header-parsing-failures.https.html?1-4 [ Failure Crash ]
 
 # Flakily crashing on GTK and WPE bots
 webkit.org/b/262949 media/media-garbage-collection.html [ Pass Crash Timeout Failure ]
@@ -3727,6 +3742,15 @@ webkit.org/b/264680 media/video-page-visibility-restriction.html [ Pass Timeout 
 webkit.org/b/264680 webgl/webgl-visible-after-context-restore.html [ ImageOnlyFailure Pass ]
 
 webkit.org/b/265942 imported/w3c/web-platform-tests/editing/run [ Slow ]
+webkit.org/b/266465 [ Debug ] imported/w3c/web-platform-tests/editing/run/delete.html?6001-7000 [ Crash ]
+
+webkit.org/b/266636 fast/multicol/last-set-crash.html [ Skip ]
+
+webkit.org/b/266708 imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/loading-the-media-resource/resource-selection-currentSrc.html [ Pass Crash ]
+
+webkit.org/b/266719 fast/canvas/offscreen-giant.html [ ImageOnlyFailure ]
+
+webkit.org/b/266713 webrtc/processIceTransportStateChange-gc.html [ Skip ]
 
 # End: Common failures between GTK and WPE.
 
