@@ -147,14 +147,6 @@ void RemoteSourceBufferProxy::sourceBufferPrivateDurationChanged(const MediaTime
     m_connectionToWebProcess->connection().sendWithAsyncReply(Messages::SourceBufferPrivateRemote::SourceBufferPrivateDurationChanged(duration), WTFMove(completionHandler), m_identifier);
 }
 
-void RemoteSourceBufferProxy::sourceBufferPrivateDidParseSample(double sampleDuration)
-{
-    if (!m_connectionToWebProcess)
-        return;
-
-    m_connectionToWebProcess->connection().send(Messages::SourceBufferPrivateRemote::SourceBufferPrivateDidParseSample(sampleDuration), m_identifier);
-}
-
 void RemoteSourceBufferProxy::sourceBufferPrivateDidDropSample()
 {
     if (!m_connectionToWebProcess)

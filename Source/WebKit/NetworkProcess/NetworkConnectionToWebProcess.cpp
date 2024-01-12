@@ -75,6 +75,7 @@
 #include "WebsiteDataStoreParameters.h"
 #include <WebCore/DocumentStorageAccess.h>
 #include <WebCore/HTTPCookieAcceptPolicy.h>
+#include <WebCore/LegacySchemeRegistry.h>
 #include <WebCore/NetworkStorageSession.h>
 #include <WebCore/ResourceError.h>
 #include <WebCore/ResourceLoadObserver.h>
@@ -1440,6 +1441,11 @@ void NetworkConnectionToWebProcess::installMockContentFilter(WebCore::MockConten
     MockContentFilterSettings::singleton() = WTFMove(settings);
 }
 #endif
+
+void NetworkConnectionToWebProcess::registerURLSchemeAsHandledBySchemeHandler(const String& scheme)
+{
+    WebCore::LegacySchemeRegistry::registerURLSchemeAsHandledBySchemeHandler(scheme);
+}
 
 } // namespace WebKit
 

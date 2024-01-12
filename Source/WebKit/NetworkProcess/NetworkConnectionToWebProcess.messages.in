@@ -117,4 +117,5 @@ messages -> NetworkConnectionToWebProcess LegacyReceiver {
 #if ENABLE(CONTENT_FILTERING_IN_NETWORKING_PROCESS)
     InstallMockContentFilter(WebCore::MockContentFilterSettings settings)
 #endif
+    RegisterURLSchemeAsHandledBySchemeHandler(String scheme)
 }

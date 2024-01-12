@@ -16,7 +16,7 @@ EVENT(canplay)
 EVENT(updateend)
 EVENT(canplaythrough)
 EVENT(playing)
-video.readyState : HAVE_ENOUGH_DATA
+EXPECTED (video.readyState >= readyStateString.indexOf("HAVE_CURRENT_DATA") == 'true') OK
 RUN(sourceBuffer.remove(0,10))
 EVENT(updateend)
 EVENT(waiting)

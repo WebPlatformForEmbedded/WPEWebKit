@@ -441,12 +441,6 @@ void SourceBufferPrivateRemote::sourceBufferPrivateDurationChanged(const MediaTi
         completionHandler();
 }
 
-void SourceBufferPrivateRemote::sourceBufferPrivateDidParseSample(double sampleDuration)
-{
-    if (m_client)
-        m_client->sourceBufferPrivateDidParseSample(sampleDuration);
-}
-
 void SourceBufferPrivateRemote::sourceBufferPrivateDidDropSample()
 {
     if (m_client)
