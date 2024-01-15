@@ -33,6 +33,7 @@ messages -> SourceBufferPrivateRemote NotRefCounted {
     SourceBufferPrivateBufferedChanged(WebCore::PlatformTimeRanges buffered) -> ()
     SourceBufferPrivateTrackBuffersChanged(Vector<WebCore::PlatformTimeRanges> trackBuffers)
     SourceBufferPrivateDurationChanged(MediaTime duration) -> ()
+    SourceBufferPrivateDidParseSample(double sampleDuration)
     SourceBufferPrivateDidDropSample()
     SourceBufferPrivateDidReceiveRenderingError(int64_t errorCode)
     SourceBufferPrivateReportExtraMemoryCost(uint64_t extraMemory)
