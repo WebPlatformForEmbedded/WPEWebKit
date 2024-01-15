@@ -485,6 +485,12 @@ void SourceBufferPrivateRemote::sourceBufferPrivateTrackBuffersChanged(Vector<We
     m_trackBufferRanges = WTFMove(trackBuffersRanges);
 }
 
+void SourceBufferPrivateRemote::sourceBufferPrivateDidParseSample(double sampleDuration)
+{
+    if (m_client)
+        m_client->sourceBufferPrivateDidParseSample(sampleDuration);
+}
+
 void SourceBufferPrivateRemote::sourceBufferPrivateDidDropSample()
 {
     if (m_client)
