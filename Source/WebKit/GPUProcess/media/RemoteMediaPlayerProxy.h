@@ -357,6 +357,7 @@ private:
     void setShouldDisableHDR(bool);
     using LayerHostingContextIDCallback = WebCore::MediaPlayer::LayerHostingContextIDCallback;
     void requestHostingContextID(LayerHostingContextIDCallback&&);
+    void setShouldCheckHardwareSupport(bool);
 
 #if !RELEASE_LOG_DISABLED
     const Logger& mediaPlayerLogger() final { return m_logger; }
@@ -415,6 +416,7 @@ private:
     bool m_observingTimeChanges { false };
     Ref<RemoteVideoFrameObjectHeap> m_videoFrameObjectHeap;
     RefPtr<WebCore::VideoFrame> m_videoFrameForCurrentTime;
+    bool m_shouldCheckHardwareSupport { false };
 #if !RELEASE_LOG_DISABLED
     const Logger& m_logger;
 #endif
