@@ -562,6 +562,11 @@ void MediaPlayerPrivateRemote::updateCachedState(RemoteMediaPlayerState&& state)
         m_cachedBufferedTimeRanges = *state.bufferedRanges;
 }
 
+void MediaPlayerPrivateRemote::updatePlaybackQualityMetrics(VideoPlaybackQualityMetrics&& metrics)
+{
+    m_cachedState.videoMetrics = WTFMove(metrics);
+}
+
 bool MediaPlayerPrivateRemote::shouldIgnoreIntrinsicSize()
 {
     return m_configuration.shouldIgnoreIntrinsicSize;
