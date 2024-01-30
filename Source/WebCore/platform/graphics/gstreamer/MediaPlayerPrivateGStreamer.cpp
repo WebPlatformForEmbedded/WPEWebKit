@@ -3951,8 +3951,7 @@ void MediaPlayerPrivateGStreamer::paint(GraphicsContext& context, const FloatRec
     if (!GST_IS_SAMPLE(m_sample.get()))
         return;
 
-    auto* buffer = gst_sample_get_buffer(m_sample.get());
-    auto frame = VideoFrameGStreamer::createWrappedSample(m_sample, fromGstClockTime(GST_BUFFER_PTS(buffer)));
+    auto frame = VideoFrameGStreamer::createWrappedSample(m_sample);
     frame->paintInContext(context, rect, m_videoSourceOrientation, false);
 }
 
@@ -3968,8 +3967,7 @@ RefPtr<VideoFrame> MediaPlayerPrivateGStreamer::videoFrameForCurrentTime()
     if (!GST_IS_SAMPLE(m_sample.get()))
         return nullptr;
 
-    auto* buffer = gst_sample_get_buffer(m_sample.get());
-    auto frame = VideoFrameGStreamer::createWrappedSample(m_sample.get(), fromGstClockTime(GST_BUFFER_PTS(buffer)));
+    auto frame = VideoFrameGStreamer::createWrappedSample(m_sample);
     auto convertedSample = frame->downloadSample(GST_VIDEO_FORMAT_BGRA);
     auto size = getVideoResolutionFromCaps(gst_sample_get_caps(m_sample.get())).value_or(FloatSize { 0, 0 });
     return VideoFrameGStreamer::create(WTFMove(convertedSample), size);
