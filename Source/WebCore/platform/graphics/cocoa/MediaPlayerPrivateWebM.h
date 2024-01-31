@@ -32,6 +32,7 @@
 #include "SourceBufferParserWebM.h"
 #include "TimeRanges.h"
 #include "VideoFrameMetadata.h"
+#include "WebAVSampleBufferListener.h"
 #include "WebMResourceClient.h"
 #include <wtf/HashFunctions.h>
 #include <wtf/LoggerHelper.h>
@@ -64,22 +65,23 @@ class SharedBuffer;
 class TextTrackRepresentation;
 class TrackBuffer;
 class VideoFrame;
+class VideoMediaSampleRenderer;
 class VideoLayerManagerObjC;
 class VideoTrackPrivateWebM;
 class WebCoreDecompressionSession;
 
 class MediaPlayerPrivateWebM
     : public MediaPlayerPrivateInterface
-    , public RefCounted<MediaPlayerPrivateWebM>
     , public WebMResourceClientParent
+    , public WebAVSampleBufferListenerClient
     , private LoggerHelper {
     WTF_MAKE_FAST_ALLOCATED;
 public:
     MediaPlayerPrivateWebM(MediaPlayer*);
     ~MediaPlayerPrivateWebM();
 
-    void ref() final { RefCounted::ref(); }
-    void deref() final { RefCounted::deref(); }
+    void ref() final { WebMResourceClientParent::ref(); }
+    void deref() final { WebMResourceClientParent::deref(); }
 
     static void registerMediaEngine(MediaEngineRegistrar);
 private:
@@ -96,7 +98,7 @@ private:
     friend class WebMResourceClient;
     void dataReceived(const SharedBuffer&) final;
     void loadFailed(const ResourceError&) final;
-    void loadFinished(const FragmentedSharedBuffer&) final;
+    void loadFinished() final;
 
     void cancelLoad() final;
 
@@ -121,9 +123,6 @@ private:
     MediaTime durationMediaTime() const final { return m_duration; }
     MediaTime startTime() const final { return MediaTime::zeroTime(); }
     MediaTime initialTime() const final { return MediaTime::zeroTime(); }
-
-    void seekToTarget(const SeekTarget&) final;
-    bool seeking() const final { return false; }
 
     void setRateDouble(double) final;
     double rate() const final { return m_rate; }
@@ -196,7 +195,6 @@ private:
     void reenqueueMediaForTime(TrackBuffer&, TrackID, const MediaTime&);
     void notifyClientWhenReadyForMoreSamples(TrackID);
 
-    bool canSetMinimumUpcomingPresentationTime(TrackID) const;
     void setMinimumUpcomingPresentationTime(TrackID, const MediaTime&);
     void clearMinimumUpcomingPresentationTime(TrackID);
 
@@ -213,8 +211,6 @@ private:
     void didParseInitializationData(InitializationSegment&&);
     void didProvideMediaDataForTrackId(Ref<MediaSampleAVFObjC>&&, TrackID, const String& mediaType);
     void didUpdateFormatDescriptionForTrackId(Ref<TrackInfo>&&, TrackID);
-
-    void append(SharedBuffer&);
 
     void flush();
 #if PLATFORM(IOS_FAMILY)
@@ -246,6 +242,12 @@ private:
 
     void checkNewVideoFrameMetadata(CMTime);
 
+    // WebAVSampleBufferListenerParent
+    // Methods are called on the WebMResourceClient's WorkQueue
+    void layerDidReceiveError(AVSampleBufferDisplayLayer*, NSError*) final;
+    void rendererDidReceiveError(AVSampleBufferAudioRenderer*, NSError*) final;
+    void layerReadyForDisplayChanged(AVSampleBufferDisplayLayer*, bool isReadyForDisplay) final;
+
     const Logger& logger() const final { return m_logger.get(); }
     const char* logClassName() const final { return "MediaPlayerPrivateWebM"; }
     const void* logIdentifier() const final { return reinterpret_cast<const void*>(m_logIdentifier); }
@@ -256,6 +258,8 @@ private:
     static void getSupportedTypes(HashSet<String>&);
     static MediaPlayer::SupportsType supportsType(const MediaEngineSupportParameters&);
 
+    void maybeFinishLoading();
+
     ThreadSafeWeakPtr<MediaPlayer> m_player;
     RetainPtr<AVSampleBufferRenderSynchronizer> m_synchronizer;
     RetainPtr<id> m_durationObserver;
@@ -263,14 +267,14 @@ private:
     RefPtr<NativeImage> m_lastImage;
     std::unique_ptr<PixelBufferConformerCV> m_rgbConformer;
     RefPtr<WebCoreDecompressionSession> m_decompressionSession;
-    WeakPtr<WebMResourceClient> m_resourceClient;
+    RefPtr<WebMResourceClient> m_resourceClient;
 
     Vector<RefPtr<VideoTrackPrivateWebM>> m_videoTracks;
     Vector<RefPtr<AudioTrackPrivateWebM>> m_audioTracks;
     StdUnorderedMap<TrackID, UniqueRef<TrackBuffer>> m_trackBufferMap;
     PlatformTimeRanges m_buffered;
 
-    RetainPtr<AVSampleBufferDisplayLayer> m_displayLayer;
+    RefPtr<VideoMediaSampleRenderer> m_videoLayer;
     StdUnorderedMap<TrackID, RetainPtr<AVSampleBufferAudioRenderer>> m_audioRenderers;
     Ref<SourceBufferParserWebM> m_parser;
     const Ref<WTF::WorkQueue> m_appendQueue;
@@ -317,6 +321,28 @@ private:
     bool m_delayedIdle { false };
     bool m_errored { false };
     bool m_processingInitializationSegment { false };
+    Ref<WebAVSampleBufferListener> m_listener;
+
+    // Seek logic support
+    void seekToTarget(const SeekTarget&) final;
+    bool seeking() const final;
+    void seekInternal();
+    void maybeCompleteSeek();
+    MediaTime clampTimeToLastSeekTime(const MediaTime&) const;
+    bool shouldBePlaying() const;
+
+    bool m_isPlaying { false };
+    RetainPtr<id> m_timeJumpedObserver;
+    Timer m_seekTimer;
+    MediaTime m_lastSeekTime;
+    std::optional<SeekTarget> m_pendingSeek;
+    enum SeekState {
+        Seeking,
+        WaitingForAvailableFame,
+        SeekCompleted,
+    };
+    SeekState m_seekState { SeekCompleted };
+    bool m_isSynchronizerSeeking { false };
 };
 
 } // namespace WebCore
