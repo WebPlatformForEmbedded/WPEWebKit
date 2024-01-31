@@ -33,6 +33,7 @@
 #include <wtf/Function.h>
 #include <wtf/Observer.h>
 #include <wtf/RobinHoodHashMap.h>
+#include <wtf/WorkQueue.h>
 
 OBJC_CLASS AVAssetImageGenerator;
 OBJC_CLASS AVAssetTrack;
@@ -490,6 +491,7 @@ private:
     ProcessIdentity m_resourceOwner;
     PlatformTimeRanges m_buffered;
     TrackID m_currentTextTrackID { 0 };
+    Ref<WorkQueue> m_targetQueue { WorkQueue::main() };
 };
 
 }

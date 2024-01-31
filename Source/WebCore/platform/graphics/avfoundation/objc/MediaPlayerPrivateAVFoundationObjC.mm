@@ -453,8 +453,11 @@ MediaPlayerPrivateAVFoundationObjC::~MediaPlayerPrivateAVFoundationObjC()
 {
     [[m_avAsset resourceLoader] setDelegate:nil queue:0];
 
-    for (auto& pair : m_resourceLoaderMap)
-        pair.value->invalidate();
+    for (auto& pair : m_resourceLoaderMap) {
+        m_targetQueue->dispatch([loader = pair.value] () mutable {
+            loader->stopLoading();
+        });
+    }
 
     if (m_videoOutput)
         m_videoOutput->invalidate();
@@ -1029,11 +1032,13 @@ void MediaPlayerPrivateAVFoundationObjC::createAVAssetForURL(const URL& url, Ret
         }
     }
 
-    AVAssetResourceLoader *resourceLoader = m_avAsset.get().resourceLoader;
+    AVAssetResourceLoader *resourceLoader = [m_avAsset resourceLoader];
     [resourceLoader setDelegate:m_loaderDelegate.get() queue:globalLoaderDelegateQueue()];
 
-    if (auto mediaResourceLoader = player->createResourceLoader())
+    if (auto mediaResourceLoader = player->createResourceLoader()) {
+        m_targetQueue = mediaResourceLoader->targetQueue();
         resourceLoader.URLSession = (NSURLSession *)adoptNS([[WebCoreNSURLSession alloc] initWithResourceLoader:*mediaResourceLoader delegate:resourceLoader.URLSessionDataDelegate delegateQueue:resourceLoader.URLSessionDataDelegateQueue]).get();
+    }
 
     [[NSNotificationCenter defaultCenter] addObserver:m_objcObserver.get() selector:@selector(chapterMetadataDidChange:) name:AVAssetChapterMetadataGroupsDidChangeNotification object:m_avAsset.get()];
 
@@ -2178,25 +2183,27 @@ bool MediaPlayerPrivateAVFoundationObjC::shouldWaitForLoadingOfResource(AVAssetR
 #endif
 #endif
 
-    auto resourceLoader = WebCoreAVFResourceLoader::create(this, avRequest);
+    auto resourceLoader = WebCoreAVFResourceLoader::create(this, avRequest, m_targetQueue);
     m_resourceLoaderMap.add((__bridge CFTypeRef)avRequest, resourceLoader.copyRef());
     resourceLoader->startLoading();
+
     return true;
 }
 
 void MediaPlayerPrivateAVFoundationObjC::didCancelLoadingRequest(AVAssetResourceLoadingRequest* avRequest)
 {
-    String scheme = [[[avRequest request] URL] scheme];
-
-    WebCoreAVFResourceLoader* resourceLoader = m_resourceLoaderMap.get((__bridge CFTypeRef)avRequest);
-
-    if (resourceLoader)
-        resourceLoader->stopLoading();
+    ASSERT(isMainThread());
+    if (RefPtr resourceLoader = m_resourceLoaderMap.get((__bridge CFTypeRef)avRequest)) {
+        m_targetQueue->dispatch([resourceLoader = WTFMove(resourceLoader)] { resourceLoader->stopLoading();
+        });
+    }
 }
 
 void MediaPlayerPrivateAVFoundationObjC::didStopLoadingRequest(AVAssetResourceLoadingRequest *avRequest)
 {
-    m_resourceLoaderMap.remove((__bridge CFTypeRef)avRequest);
+    ASSERT(isMainThread());
+    if (RefPtr resourceLoader = m_resourceLoaderMap.take((__bridge CFTypeRef)avRequest))
+        m_targetQueue->dispatch([resourceLoader = WTFMove(resourceLoader)] { });
 }
 
 bool MediaPlayerPrivateAVFoundationObjC::isAvailable()
@@ -2608,7 +2615,7 @@ void MediaPlayerPrivateAVFoundationObjC::resolvedURLChanged()
 
 bool MediaPlayerPrivateAVFoundationObjC::didPassCORSAccessCheck() const
 {
-    AVAssetResourceLoader *resourceLoader = m_avAsset.get().resourceLoader;
+    AVAssetResourceLoader *resourceLoader = [m_avAsset resourceLoader];
     WebCoreNSURLSession *session = (WebCoreNSURLSession *)resourceLoader.URLSession;
     if ([session isKindOfClass:[WebCoreNSURLSession class]])
         return session.didPassCORSAccessChecks;
@@ -2618,7 +2625,9 @@ bool MediaPlayerPrivateAVFoundationObjC::didPassCORSAccessCheck() const
 
 std::optional<bool> MediaPlayerPrivateAVFoundationObjC::isCrossOrigin(const SecurityOrigin& origin) const
 {
-    AVAssetResourceLoader *resourceLoader = m_avAsset.get().resourceLoader;
+    assertIsMainThread();
+
+    AVAssetResourceLoader *resourceLoader = [m_avAsset resourceLoader];
     WebCoreNSURLSession *session = (WebCoreNSURLSession *)resourceLoader.URLSession;
     if ([session isKindOfClass:[WebCoreNSURLSession class]])
         return [session isCrossOrigin:origin];
