@@ -153,7 +153,7 @@ private:
 
     void processSDPMessage(const GstSDPMessage*, Function<void(unsigned index, const char* mid, const GstSDPMedia*)>);
 
-    GRefPtr<GstPad> requestPad(std::optional<unsigned> mlineIndex, const GRefPtr<GstCaps>&, const String& mediaStreamID);
+    WARN_UNUSED_RETURN GRefPtr<GstPad> requestPad(const GRefPtr<GstCaps>&, const String& mediaStreamID);
 
     std::optional<bool> isIceGatheringComplete(const String& currentLocalDescription);
 
@@ -182,7 +182,6 @@ private:
 
     Ref<GStreamerStatsCollector> m_statsCollector;
 
-    unsigned m_requestPadCounter { 0 };
     unsigned m_pendingIncomingStreams { 0 };
     uint32_t m_negotiationNeededEventId { 0 };
 
