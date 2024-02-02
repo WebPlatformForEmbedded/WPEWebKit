@@ -297,11 +297,17 @@ protected:
         Playing, // Pipeline is playing and it should be.
     };
 
+    enum class ChangePipelineStateResult {
+        Ok,
+        Rejected,
+        Failed,
+    };
+    ChangePipelineStateResult changePipelineState(GstState);
+
     static bool isAvailable();
 
     virtual void durationChanged();
     virtual void sourceSetup(GstElement*);
-    virtual bool changePipelineState(GstState);
     virtual void updatePlaybackRate();
 
 #if USE(GSTREAMER_HOLEPUNCH)
@@ -371,6 +377,9 @@ protected:
 
     void setCachedPosition(const MediaTime&) const;
 
+    bool isPipelineSeeking(GstState current, GstState pending, GstStateChangeReturn) const;
+    bool isPipelineSeeking() const;
+
     Ref<MainThreadNotifier<MainThreadNotification>> m_notifier;
     ThreadSafeWeakPtr<MediaPlayer> m_player;
     String m_referrer;
@@ -383,6 +392,7 @@ protected:
     bool m_didErrorOccur { false };
     mutable bool m_isEndReached { false };
     mutable std::optional<bool> m_isLiveStream;
+    bool m_isPipelinePlaying = false;
 
     // m_isPaused represents:
     // A) In MSE streams, whether playback or pause has last been requested with pause() and play(),

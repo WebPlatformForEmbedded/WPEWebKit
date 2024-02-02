@@ -788,6 +788,7 @@ public:
     bool elementIsBlockingDisplaySleep(const HTMLMediaElement&) const;
     bool isPlayerVisibleInViewport(const HTMLMediaElement&) const;
     bool isPlayerMuted(const HTMLMediaElement&) const;
+    bool isPlayerPaused(const HTMLMediaElement&) const;
     void beginAudioSessionInterruption();
     void endAudioSessionInterruption();
     void suspendAllMediaBuffering();
