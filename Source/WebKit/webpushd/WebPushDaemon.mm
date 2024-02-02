@@ -714,7 +714,7 @@ void Daemon::handleIncomingPush(const String& bundleIdentifier, WebKit::WebPushM
 
 void Daemon::notifyClientPushMessageIsAvailable(const String& clientCodeSigningIdentifier)
 {
-    RELEASE_LOG(Push, "Launching %{public}s in response to push", clientCodeSigningIdentifier.utf8().data());
+    RELEASE_LOG(Push, "Launching %" PUBLIC_LOG_STRING " in response to push", clientCodeSigningIdentifier.utf8().data());
 
 #if PLATFORM(MAC)
     CFArrayRef urls = (__bridge CFArrayRef)@[ [NSURL URLWithString:@"x-webkit-app-launch://1"] ];
@@ -761,7 +761,7 @@ void Daemon::getPendingPushMessages(ClientConnection* connection, CompletionHand
         m_testingPushMessages.remove(iterator);
     }
 
-    RELEASE_LOG(Push, "Fetched %zu pending push messages for %{public}s", resultMessages.size(), hostAppCodeSigningIdentifier.utf8().data());
+    RELEASE_LOG(Push, "Fetched %zu pending push messages for %" PUBLIC_LOG_STRING "", resultMessages.size(), hostAppCodeSigningIdentifier.utf8().data());
     connection->broadcastDebugMessage(makeString("Fetching ", String::number(resultMessages.size()), " pending push messages"));
 
     replySender(WTFMove(resultMessages));

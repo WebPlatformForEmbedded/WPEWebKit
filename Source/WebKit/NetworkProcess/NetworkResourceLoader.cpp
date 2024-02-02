@@ -1662,12 +1662,12 @@ static void logBlockedCookieInformation(NetworkConnectionToWebProcess& connectio
 #define LOCAL_LOG(str, ...) \
     LOCAL_LOG_IF_ALLOWED("logCookieInformation: BLOCKED cookie access for webPageID=%s, frameID=%s, resourceID=%s, firstParty=%s: " str, escapedPageID.utf8().data(), escapedFrameID.utf8().data(), escapedIdentifier.utf8().data(), escapedFirstParty.utf8().data(), ##__VA_ARGS__)
 
-    LOCAL_LOG(R"({ "url": "%{public}s",)", escapedURL.utf8().data());
-    LOCAL_LOG(R"(  "partition": "%{public}s",)", "BLOCKED");
-    LOCAL_LOG(R"(  "hasStorageAccess": %{public}s,)", "false");
-    LOCAL_LOG(R"(  "referer": "%{public}s",)", escapedReferrer.utf8().data());
-    LOCAL_LOG(R"(  "isSameSite": "%{public}s",)", sameSiteInfo.isSameSite ? "true" : "false");
-    LOCAL_LOG(R"(  "isTopSite": "%{public}s",)", sameSiteInfo.isTopSite ? "true" : "false");
+    LOCAL_LOG(R"({ "url": "%" PUBLIC_LOG_STRING "",)", escapedURL.utf8().data());
+    LOCAL_LOG(R"(  "partition": "%" PUBLIC_LOG_STRING "",)", "BLOCKED");
+    LOCAL_LOG(R"(  "hasStorageAccess": %" PUBLIC_LOG_STRING ",)", "false");
+    LOCAL_LOG(R"(  "referer": "%" PUBLIC_LOG_STRING "",)", escapedReferrer.utf8().data());
+    LOCAL_LOG(R"(  "isSameSite": "%" PUBLIC_LOG_STRING "",)", sameSiteInfo.isSameSite ? "true" : "false");
+    LOCAL_LOG(R"(  "isTopSite": "%" PUBLIC_LOG_STRING "",)", sameSiteInfo.isTopSite ? "true" : "false");
     LOCAL_LOG(R"(  "cookies": [])");
     LOCAL_LOG(R"(  })");
 #undef LOCAL_LOG
@@ -1694,12 +1694,12 @@ static void logCookieInformationInternal(NetworkConnectionToWebProcess& connecti
 #define LOCAL_LOG(str, ...) \
     LOCAL_LOG_IF_ALLOWED("logCookieInformation: webPageID=%s, frameID=%s, resourceID=%s: " str, escapedPageID.utf8().data(), escapedFrameID.utf8().data(), escapedIdentifier.utf8().data(), ##__VA_ARGS__)
 
-    LOCAL_LOG(R"({ "url": "%{public}s",)", escapedURL.utf8().data());
-    LOCAL_LOG(R"(  "partition": "%{public}s",)", escapedPartition.utf8().data());
-    LOCAL_LOG(R"(  "hasStorageAccess": %{public}s,)", hasStorageAccess ? "true" : "false");
-    LOCAL_LOG(R"(  "referer": "%{public}s",)", escapedReferrer.utf8().data());
-    LOCAL_LOG(R"(  "isSameSite": "%{public}s",)", sameSiteInfo.isSameSite ? "true" : "false");
-    LOCAL_LOG(R"(  "isTopSite": "%{public}s",)", sameSiteInfo.isTopSite ? "true" : "false");
+    LOCAL_LOG(R"({ "url": "%" PUBLIC_LOG_STRING "",)", escapedURL.utf8().data());
+    LOCAL_LOG(R"(  "partition": "%" PUBLIC_LOG_STRING "",)", escapedPartition.utf8().data());
+    LOCAL_LOG(R"(  "hasStorageAccess": %" PUBLIC_LOG_STRING ",)", hasStorageAccess ? "true" : "false");
+    LOCAL_LOG(R"(  "referer": "%" PUBLIC_LOG_STRING "",)", escapedReferrer.utf8().data());
+    LOCAL_LOG(R"(  "isSameSite": "%" PUBLIC_LOG_STRING "",)", sameSiteInfo.isSameSite ? "true" : "false");
+    LOCAL_LOG(R"(  "isTopSite": "%" PUBLIC_LOG_STRING "",)", sameSiteInfo.isTopSite ? "true" : "false");
     LOCAL_LOG(R"(  "cookies": [)");
 
     auto size = cookies.size();
@@ -1717,18 +1717,18 @@ static void logCookieInformationInternal(NetworkConnectionToWebProcess& connecti
         auto escapedCommentURL = escapeForJSON(cookie.commentURL.string());
         // FIXME: Log Same-Site policy for each cookie. See <https://bugs.webkit.org/show_bug.cgi?id=184894>.
 
-        LOCAL_LOG(R"(  { "name": "%{public}s",)", escapedName.utf8().data());
-        LOCAL_LOG(R"(    "value": "%{public}s",)", escapedValue.utf8().data());
-        LOCAL_LOG(R"(    "domain": "%{public}s",)", escapedDomain.utf8().data());
-        LOCAL_LOG(R"(    "path": "%{public}s",)", escapedPath.utf8().data());
+        LOCAL_LOG(R"(  { "name": "%" PUBLIC_LOG_STRING "",)", escapedName.utf8().data());
+        LOCAL_LOG(R"(    "value": "%" PUBLIC_LOG_STRING "",)", escapedValue.utf8().data());
+        LOCAL_LOG(R"(    "domain": "%" PUBLIC_LOG_STRING "",)", escapedDomain.utf8().data());
+        LOCAL_LOG(R"(    "path": "%" PUBLIC_LOG_STRING "",)", escapedPath.utf8().data());
         LOCAL_LOG(R"(    "created": %f,)", cookie.created);
         LOCAL_LOG(R"(    "expires": %f,)", cookie.expires.value_or(0));
-        LOCAL_LOG(R"(    "httpOnly": %{public}s,)", cookie.httpOnly ? "true" : "false");
-        LOCAL_LOG(R"(    "secure": %{public}s,)", cookie.secure ? "true" : "false");
-        LOCAL_LOG(R"(    "session": %{public}s,)", cookie.session ? "true" : "false");
-        LOCAL_LOG(R"(    "comment": "%{public}s",)", escapedComment.utf8().data());
-        LOCAL_LOG(R"(    "commentURL": "%{public}s")", escapedCommentURL.utf8().data());
-        LOCAL_LOG(R"(  }%{public}s)", trailingComma);
+        LOCAL_LOG(R"(    "httpOnly": %" PUBLIC_LOG_STRING ",)", cookie.httpOnly ? "true" : "false");
+        LOCAL_LOG(R"(    "secure": %" PUBLIC_LOG_STRING ",)", cookie.secure ? "true" : "false");
+        LOCAL_LOG(R"(    "session": %" PUBLIC_LOG_STRING ",)", cookie.session ? "true" : "false");
+        LOCAL_LOG(R"(    "comment": "%" PUBLIC_LOG_STRING "",)", escapedComment.utf8().data());
+        LOCAL_LOG(R"(    "commentURL": "%" PUBLIC_LOG_STRING "")", escapedCommentURL.utf8().data());
+        LOCAL_LOG(R"(  }%" PUBLIC_LOG_STRING ")", trailingComma);
     }
     LOCAL_LOG(R"(]})");
 #undef LOCAL_LOG

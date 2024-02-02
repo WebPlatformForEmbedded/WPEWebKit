@@ -313,7 +313,7 @@ private:
 #if RELEASE_LOG_DISABLED
         WTFLog(&channel, "%s", logMessage.utf8().data());
 #elif USE(OS_LOG)
-        os_log(channel.osLogChannel, "%{public}s", logMessage.utf8().data());
+        os_log(channel.osLogChannel, "%" PUBLIC_LOG_STRING "", logMessage.utf8().data());
 #elif ENABLE(JOURNALD_LOG)
         sd_journal_send("WEBKIT_SUBSYSTEM=%s", channel.subsystem, "WEBKIT_CHANNEL=%s", channel.name, "MESSAGE=%s", logMessage.utf8().data(), nullptr);
 #else
@@ -339,7 +339,7 @@ private:
 #if RELEASE_LOG_DISABLED
         WTFLogVerbose(file, line, function, &channel, "%s", logMessage.utf8().data());
 #elif USE(OS_LOG)
-        os_log(channel.osLogChannel, "%{public}s", logMessage.utf8().data());
+        os_log(channel.osLogChannel, "%" PUBLIC_LOG_STRING "", logMessage.utf8().data());
         UNUSED_PARAM(file);
         UNUSED_PARAM(line);
         UNUSED_PARAM(function);

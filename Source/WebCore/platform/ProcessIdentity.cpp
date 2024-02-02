@@ -42,7 +42,7 @@ ProcessIdentity::ProcessIdentity(CurrentProcessTag)
     if (kr == KERN_SUCCESS)
         m_taskIdToken = MachSendRight::adopt(identityToken);
     else
-        RELEASE_LOG_ERROR(Process, "task_create_identity_token() failed: %{private}s (%x)", mach_error_string(kr), kr);
+        RELEASE_LOG_ERROR(Process, "task_create_identity_token() failed: %" PRIVATE_LOG_STRING " (%x)", mach_error_string(kr), kr);
 #endif
 }
 

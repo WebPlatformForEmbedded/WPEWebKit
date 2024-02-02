@@ -454,7 +454,7 @@ static void encodeObject(WKRemoteObjectEncoder *encoder, id object)
         [NSException raise:NSInvalidArgumentException format:@"-classForCoder returned nil for %@", object];
 
     if (encoder->_objectsBeingEncoded.contains(object)) {
-        RELEASE_LOG_FAULT(IPC, "WKRemoteObjectCode::encodeObject: Object of type '%{private}s' contains a cycle", class_getName(object_getClass(object)));
+        RELEASE_LOG_FAULT(IPC, "WKRemoteObjectCode::encodeObject: Object of type '%" PRIVATE_LOG_STRING "' contains a cycle", class_getName(object_getClass(object)));
         [NSException raise:NSInvalidArgumentException format:@"Object of type '%s' contains a cycle", class_getName(object_getClass(object))];
         return;
     }

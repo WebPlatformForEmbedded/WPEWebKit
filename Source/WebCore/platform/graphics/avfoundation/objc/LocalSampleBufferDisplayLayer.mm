@@ -214,7 +214,7 @@ void LocalSampleBufferDisplayLayer::layerStatusDidChange()
 {
     ASSERT(isMainThread());
     if (m_client && m_sampleBufferDisplayLayer.get().status == AVQueuedSampleBufferRenderingStatusFailed) {
-        RELEASE_LOG_ERROR(WebRTC, "LocalSampleBufferDisplayLayer::layerStatusDidChange going to failed status (%{public}s) ", m_logIdentifier.utf8().data());
+        RELEASE_LOG_ERROR(WebRTC, "LocalSampleBufferDisplayLayer::layerStatusDidChange going to failed status (%" PUBLIC_LOG_STRING ") ", m_logIdentifier.utf8().data());
         if (!m_didFail) {
             m_didFail = true;
             m_client->sampleBufferDisplayLayerStatusDidFail();
@@ -225,7 +225,7 @@ void LocalSampleBufferDisplayLayer::layerStatusDidChange()
 void LocalSampleBufferDisplayLayer::layerErrorDidChange()
 {
     ASSERT(isMainThread());
-    RELEASE_LOG_ERROR(WebRTC, "LocalSampleBufferDisplayLayer::layerErrorDidChange (%{public}s) ", m_logIdentifier.utf8().data());
+    RELEASE_LOG_ERROR(WebRTC, "LocalSampleBufferDisplayLayer::layerErrorDidChange (%" PUBLIC_LOG_STRING ") ", m_logIdentifier.utf8().data());
     if (!m_client || m_didFail)
         return;
     m_didFail = true;
@@ -344,7 +344,7 @@ void LocalSampleBufferDisplayLayer::enqueueVideoFrame(VideoFrame& videoFrame)
 
     m_processingQueue->dispatch([this, videoFrame = Ref { videoFrame }]() mutable {
         if (![m_sampleBufferDisplayLayer isReadyForMoreMediaData]) {
-            RELEASE_LOG(WebRTC, "LocalSampleBufferDisplayLayer::enqueueSample (%{public}s) not ready for more media data", m_logIdentifier.utf8().data());
+            RELEASE_LOG(WebRTC, "LocalSampleBufferDisplayLayer::enqueueSample (%" PUBLIC_LOG_STRING ") not ready for more media data", m_logIdentifier.utf8().data());
             addVideoFrameToPendingQueue(WTFMove(videoFrame));
             requestNotificationWhenReadyForVideoData();
             return;
@@ -377,7 +377,7 @@ void LocalSampleBufferDisplayLayer::enqueueBuffer(CVPixelBufferRef pixelBuffer, 
     constexpr size_t frameCountPerLog = 1800; // log every minute at 30 fps
     if (!(m_frameRateMonitor.frameCount() % frameCountPerLog)) {
         if (auto* metrics = [m_sampleBufferDisplayLayer videoPerformanceMetrics])
-            RELEASE_LOG(WebRTC, "LocalSampleBufferDisplayLayer (%{public}s) metrics, total=%lu, dropped=%lu, corrupted=%lu, display-composited=%lu, non-display-composited=%lu (pending=%lu)", m_logIdentifier.utf8().data(), metrics.totalNumberOfVideoFrames, metrics.numberOfDroppedVideoFrames, metrics.numberOfCorruptedVideoFrames, metrics.numberOfDisplayCompositedVideoFrames, metrics.numberOfNonDisplayCompositedVideoFrames, m_pendingVideoFrameQueue.size());
+            RELEASE_LOG(WebRTC, "LocalSampleBufferDisplayLayer (%" PUBLIC_LOG_STRING ") metrics, total=%lu, dropped=%lu, corrupted=%lu, display-composited=%lu, non-display-composited=%lu (pending=%lu)", m_logIdentifier.utf8().data(), metrics.totalNumberOfVideoFrames, metrics.numberOfDroppedVideoFrames, metrics.numberOfCorruptedVideoFrames, metrics.numberOfDisplayCompositedVideoFrames, metrics.numberOfNonDisplayCompositedVideoFrames, m_pendingVideoFrameQueue.size());
     }
     m_frameRateMonitor.update();
 #endif
@@ -389,7 +389,7 @@ void LocalSampleBufferDisplayLayer::onIrregularFrameRateNotification(MonotonicTi
     callOnMainThread([frameTime = frameTime.secondsSinceEpoch().value(), lastFrameTime = lastFrameTime.secondsSinceEpoch().value(), observedFrameRate = m_frameRateMonitor.observedFrameRate(), frameCount = m_frameRateMonitor.frameCount(), weakThis = WeakPtr { *this }] {
         if (!weakThis)
             return;
-        RELEASE_LOG(WebRTC, "LocalSampleBufferDisplayLayer::enqueueVideoFrame (%{public}s) at %f, previous frame was at %f, observed frame rate is %f, delay since last frame is %f ms, frame count is %lu", weakThis->m_logIdentifier.utf8().data(), frameTime, lastFrameTime, observedFrameRate, (frameTime - lastFrameTime) * 1000, frameCount);
+        RELEASE_LOG(WebRTC, "LocalSampleBufferDisplayLayer::enqueueVideoFrame (%" PUBLIC_LOG_STRING ") at %f, previous frame was at %f, observed frame rate is %f, delay since last frame is %f ms, frame count is %lu", weakThis->m_logIdentifier.utf8().data(), frameTime, lastFrameTime, observedFrameRate, (frameTime - lastFrameTime) * 1000, frameCount);
     });
 }
 #endif

@@ -139,7 +139,7 @@ void EndowmentStateTracker::setState(State&& state)
 
     m_state = WTFMove(state);
 
-    RELEASE_LOG(ViewState, "%p - EndowmentStateTracker::setState() isUserFacing: %{public}s isVisible: %{public}s", this, m_state->isUserFacing ? "true" : "false", m_state->isVisible ? "true" : "false");
+    RELEASE_LOG(ViewState, "%p - EndowmentStateTracker::setState() isUserFacing: %" PUBLIC_LOG_STRING " isVisible: %" PUBLIC_LOG_STRING "", this, m_state->isUserFacing ? "true" : "false", m_state->isVisible ? "true" : "false");
 
     for (auto& client : copyToVector(m_clients)) {
         if (isUserFacingChanged && client)

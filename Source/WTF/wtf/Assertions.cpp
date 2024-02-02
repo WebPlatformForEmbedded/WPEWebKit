@@ -607,9 +607,9 @@ void WTFReleaseLogStackTrace(WTFLogChannel* channel)
             auto demangled = WTF::StackTrace::demangle(stackFrame);
 #if USE(OS_LOG)
             if (demangled && demangled->demangledName())
-                os_log(channel->osLogChannel, "%-3d %p %{public}s", frameNumber, stackFrame, demangled->demangledName());
+                os_log(channel->osLogChannel, "%-3d %p %" PUBLIC_LOG_STRING "", frameNumber, stackFrame, demangled->demangledName());
             else if (demangled && demangled->mangledName())
-                os_log(channel->osLogChannel, "%-3d %p %{public}s", frameNumber, stackFrame, demangled->mangledName());
+                os_log(channel->osLogChannel, "%-3d %p %" PUBLIC_LOG_STRING "", frameNumber, stackFrame, demangled->mangledName());
             else
                 os_log(channel->osLogChannel, "%-3d %p", frameNumber, stackFrame);
 #else

@@ -169,13 +169,13 @@ bool AVAudioSessionCaptureDeviceManager::setPreferredAudioSessionDeviceUIDIntern
     }
 
     if (!preferredPort) {
-        RELEASE_LOG_ERROR(WebRTC, "failed to find preferred input '%{public}s'", deviceUID.ascii().data());
+        RELEASE_LOG_ERROR(WebRTC, "failed to find preferred input '%" PUBLIC_LOG_STRING "'", deviceUID.ascii().data());
         return false;
     }
 
     NSError *error = nil;
     if (![[PAL::getAVAudioSessionClass() sharedInstance] setPreferredInput:preferredPort error:&error]) {
-        RELEASE_LOG_ERROR(WebRTC, "failed to set preferred input to '%{public}s' with error: %@", deviceUID.ascii().data(), error.localizedDescription);
+        RELEASE_LOG_ERROR(WebRTC, "failed to set preferred input to '%" PUBLIC_LOG_STRING "' with error: %@", deviceUID.ascii().data(), error.localizedDescription);
         return false;
     }
 

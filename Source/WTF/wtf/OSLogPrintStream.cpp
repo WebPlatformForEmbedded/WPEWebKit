@@ -69,7 +69,7 @@ void OSLogPrintStream::vprintf(const char* format, va_list argList)
         if (buffer[offset] == '\n') {
             // Set the new line to a null character so os_log stops copying there.
             buffer[offset] = '\0';
-            os_log_with_type(m_log, m_logType, "%{public}s", buffer);
+            os_log_with_type(m_log, m_logType, "%" PUBLIC_LOG_STRING "", buffer);
             buffer += offset + 1;
             newOffset -= offset + 1;
             offset = 0;

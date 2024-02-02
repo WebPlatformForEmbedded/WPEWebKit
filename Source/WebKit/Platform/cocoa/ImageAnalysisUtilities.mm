@@ -183,7 +183,7 @@ static TextRecognitionResult makeTextRecognitionResult(VKCImageAnalysisTranslati
 
     for (VKCTranslatedParagraph *paragraph in paragraphs) {
         if (!paragraph.text.length) {
-            RELEASE_LOG(Translation, "[#%{public}s] Skipping empty translation paragraph", transactionID.loggingString().utf8().data());
+            RELEASE_LOG(Translation, "[#%" PUBLIC_LOG_STRING "] Skipping empty translation paragraph", transactionID.loggingString().utf8().data());
             continue;
         }
 
@@ -222,20 +222,20 @@ void requestVisualTranslation(CocoaImageAnalyzer *analyzer, NSURL *imageURL, con
     static TransactionID imageAnalysisRequestID;
     auto currentRequestID = imageAnalysisRequestID.increment();
     if (shouldLogFullImageTranslationResults())
-        RELEASE_LOG(Translation, "[#%{public}s] Image translation started for %{private}@", currentRequestID.loggingString().utf8().data(), imageURL);
+        RELEASE_LOG(Translation, "[#%" PUBLIC_LOG_STRING "] Image translation started for %{private}@", currentRequestID.loggingString().utf8().data(), imageURL);
     else
-        RELEASE_LOG(Translation, "[#%{public}s] Image translation started", currentRequestID.loggingString().utf8().data());
+        RELEASE_LOG(Translation, "[#%" PUBLIC_LOG_STRING "] Image translation started", currentRequestID.loggingString().utf8().data());
     auto request = createImageAnalyzerRequest(image, VKAnalysisTypeText);
     [analyzer processRequest:request.get() progressHandler:nil completionHandler:makeBlockPtr([completion = WTFMove(completion), sourceLocale, targetLocale, currentRequestID, startTime] (CocoaImageAnalysis *analysis, NSError *analysisError) mutable {
         callOnMainRunLoop([completion = WTFMove(completion), analysis = RetainPtr { analysis }, analysisError = RetainPtr { analysisError }, sourceLocale, targetLocale, currentRequestID, startTime] () mutable {
             auto imageAnalysisDelay = MonotonicTime::now() - startTime;
             if (!analysis) {
-                RELEASE_LOG(Translation, "[#%{public}s] Image translation failed in %.3f sec. (error: %{public}@)", currentRequestID.loggingString().utf8().data(), imageAnalysisDelay.seconds(), analysisError.get());
+                RELEASE_LOG(Translation, "[#%" PUBLIC_LOG_STRING "] Image translation failed in %.3f sec. (error: %{public}@)", currentRequestID.loggingString().utf8().data(), imageAnalysisDelay.seconds(), analysisError.get());
                 return completion({ });
             }
 
             if (![analysis hasResultsForAnalysisTypes:VKAnalysisTypeText]) {
-                RELEASE_LOG(Translation, "[#%{public}s] Image translation completed in %.3f sec. (no text)", currentRequestID.loggingString().utf8().data(), imageAnalysisDelay.seconds());
+                RELEASE_LOG(Translation, "[#%" PUBLIC_LOG_STRING "] Image translation completed in %.3f sec. (no text)", currentRequestID.loggingString().utf8().data(), imageAnalysisDelay.seconds());
                 return completion({ });
             }
 
@@ -249,15 +249,15 @@ void requestVisualTranslation(CocoaImageAnalyzer *analyzer, NSURL *imageURL, con
                     stringToLog.append(String { info.string });
                     firstLine = false;
                 }
-                RELEASE_LOG(Translation, "[#%{public}s] Image translation recognized text in %.3f sec. (line count: %zu): \"%{private}s\"", currentRequestID.loggingString().utf8().data(), imageAnalysisDelay.seconds(), allLines.count, stringToLog.toString().utf8().data());
+                RELEASE_LOG(Translation, "[#%" PUBLIC_LOG_STRING "] Image translation recognized text in %.3f sec. (line count: %zu): \"%" PRIVATE_LOG_STRING "\"", currentRequestID.loggingString().utf8().data(), imageAnalysisDelay.seconds(), allLines.count, stringToLog.toString().utf8().data());
             } else
-                RELEASE_LOG(Translation, "[#%{public}s] Image translation recognized text in %.3f sec. (line count: %zu)", currentRequestID.loggingString().utf8().data(), imageAnalysisDelay.seconds(), allLines.count);
+                RELEASE_LOG(Translation, "[#%" PUBLIC_LOG_STRING "] Image translation recognized text in %.3f sec. (line count: %zu)", currentRequestID.loggingString().utf8().data(), imageAnalysisDelay.seconds(), allLines.count);
 
             auto translationStartTime = MonotonicTime::now();
             auto completionBlock = makeBlockPtr([completion = WTFMove(completion), currentRequestID, translationStartTime](VKCImageAnalysisTranslation *translation, NSError *error) mutable {
                 auto translationDelay = MonotonicTime::now() - translationStartTime;
                 if (error) {
-                    RELEASE_LOG(Translation, "[#%{public}s] Image translation failed in %.3f sec. (error: %{public}@)", currentRequestID.loggingString().utf8().data(), translationDelay.seconds(), error);
+                    RELEASE_LOG(Translation, "[#%" PUBLIC_LOG_STRING "] Image translation failed in %.3f sec. (error: %{public}@)", currentRequestID.loggingString().utf8().data(), translationDelay.seconds(), error);
                     return completion({ });
                 }
 
@@ -270,9 +270,9 @@ void requestVisualTranslation(CocoaImageAnalyzer *analyzer, NSURL *imageURL, con
                         stringToLog.append(String { paragraph.text });
                         firstLine = false;
                     }
-                    RELEASE_LOG(Translation, "[#%{public}s] Image translation completed in %.3f sec. (paragraph count: %zu): \"%{private}s\"", currentRequestID.loggingString().utf8().data(), translationDelay.seconds(), translation.paragraphs.count, stringToLog.toString().utf8().data());
+                    RELEASE_LOG(Translation, "[#%" PUBLIC_LOG_STRING "] Image translation completed in %.3f sec. (paragraph count: %zu): \"%" PRIVATE_LOG_STRING "\"", currentRequestID.loggingString().utf8().data(), translationDelay.seconds(), translation.paragraphs.count, stringToLog.toString().utf8().data());
                 } else
-                    RELEASE_LOG(Translation, "[#%{public}s] Image translation completed in %.3f sec. (paragraph count: %zu)", currentRequestID.loggingString().utf8().data(), translationDelay.seconds(), translation.paragraphs.count);
+                    RELEASE_LOG(Translation, "[#%" PUBLIC_LOG_STRING "] Image translation completed in %.3f sec. (paragraph count: %zu)", currentRequestID.loggingString().utf8().data(), translationDelay.seconds(), translation.paragraphs.count);
 
                 completion(makeTextRecognitionResult(translation, currentRequestID));
             });

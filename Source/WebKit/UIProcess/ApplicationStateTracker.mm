@@ -170,14 +170,14 @@ ApplicationStateTracker::ApplicationStateTracker(UIView *view, SEL didEnterBackg
         if ([serviceViewController._hostApplicationBundleIdentifier isEqualToString:@"com.apple.ios.StoreKitUIService"])
             m_isInBackground = false;
 
-        RELEASE_LOG(ProcessSuspension, "%{public}s has PID %d, host application PID=%d, isInBackground=%d", _UIApplicationIsExtension() ? "Extension" : "ViewService", getpid(), applicationPID, m_isInBackground);
+        RELEASE_LOG(ProcessSuspension, "%" PUBLIC_LOG_STRING " has PID %d, host application PID=%d, isInBackground=%d", _UIApplicationIsExtension() ? "Extension" : "ViewService", getpid(), applicationPID, m_isInBackground);
 
         m_didEnterBackgroundObserver = [notificationCenter addObserverForName:viewServiceBackgroundNotificationName object:serviceViewController queue:nil usingBlock:[this, applicationPID](NSNotification *) {
-            RELEASE_LOG(ProcessSuspension, "%{public}s has PID %d, host application PID=%d, didEnterBackground", _UIApplicationIsExtension() ? "Extension" : "ViewService", getpid(), applicationPID);
+            RELEASE_LOG(ProcessSuspension, "%" PUBLIC_LOG_STRING " has PID %d, host application PID=%d, didEnterBackground", _UIApplicationIsExtension() ? "Extension" : "ViewService", getpid(), applicationPID);
             applicationDidEnterBackground();
         }];
         m_willEnterForegroundObserver = [notificationCenter addObserverForName:viewServiceForegroundNotificationName object:serviceViewController queue:nil usingBlock:[this, applicationPID](NSNotification *) {
-            RELEASE_LOG(ProcessSuspension, "%{public}s has PID %d, host application PID=%d, willEnterForeground", _UIApplicationIsExtension() ? "Extension" : "ViewService", getpid(), applicationPID);
+            RELEASE_LOG(ProcessSuspension, "%" PUBLIC_LOG_STRING " has PID %d, host application PID=%d, willEnterForeground", _UIApplicationIsExtension() ? "Extension" : "ViewService", getpid(), applicationPID);
             applicationWillEnterForeground();
         }];
 

@@ -30,7 +30,7 @@
     _callbackLogger = [[RTC_OBJC_TYPE(RTCCallbackLogger) alloc] init];
     os_log_t rtc_os_log = os_log_create("com.google.AppRTCMobile", "RTCLog");
     [_callbackLogger start:^(NSString *logMessage) {
-      os_log(rtc_os_log, "%{public}s", [logMessage cStringUsingEncoding:NSUTF8StringEncoding]);
+      os_log(rtc_os_log, "%" PUBLIC_LOG_STRING "", [logMessage cStringUsingEncoding:NSUTF8StringEncoding]);
     }];
   }
   return self;

@@ -511,7 +511,7 @@ std::optional<audit_token_t> WebProcess::auditTokenForSelf()
     mach_msg_type_number_t info_size = TASK_AUDIT_TOKEN_COUNT;
     kern_return_t kr = task_info(mach_task_self(), TASK_AUDIT_TOKEN, reinterpret_cast<integer_t *>(&auditToken), &info_size);
     if (kr != KERN_SUCCESS) {
-        WEBPROCESS_RELEASE_LOG_ERROR(Process, "Unable to get audit token for self. Error: %{public}s (%x)", mach_error_string(kr), kr);
+        WEBPROCESS_RELEASE_LOG_ERROR(Process, "Unable to get audit token for self. Error: %" PUBLIC_LOG_STRING " (%x)", mach_error_string(kr), kr);
         return std::nullopt;
     }
     return auditToken;

@@ -72,10 +72,10 @@ static void XPCServiceEventHandler(xpc_connection_t peer)
     xpc_connection_set_event_handler(peer, ^(xpc_object_t event) {
         xpc_type_t type = xpc_get_type(event);
         if (type != XPC_TYPE_DICTIONARY) {
-            RELEASE_LOG_ERROR(IPC, "XPCServiceEventHandler: Received unexpected XPC event type: %{public}s", xpc_type_get_name(type));
+            RELEASE_LOG_ERROR(IPC, "XPCServiceEventHandler: Received unexpected XPC event type: %" PUBLIC_LOG_STRING "", xpc_type_get_name(type));
             if (type == XPC_TYPE_ERROR) {
                 if (event == XPC_ERROR_CONNECTION_INVALID || event == XPC_ERROR_TERMINATION_IMMINENT) {
-                    RELEASE_LOG_ERROR(IPC, "Exiting: Received XPC event type: %{public}s", event == XPC_ERROR_CONNECTION_INVALID ? "XPC_ERROR_CONNECTION_INVALID" : "XPC_ERROR_TERMINATION_IMMINENT");
+                    RELEASE_LOG_ERROR(IPC, "Exiting: Received XPC event type: %" PUBLIC_LOG_STRING "", event == XPC_ERROR_CONNECTION_INVALID ? "XPC_ERROR_CONNECTION_INVALID" : "XPC_ERROR_TERMINATION_IMMINENT");
                     // FIXME: Handle this case more gracefully.
                     [[NSRunLoop mainRunLoop] performBlock:^{
                         exit(EXIT_FAILURE);
@@ -104,7 +104,7 @@ static void XPCServiceEventHandler(xpc_connection_t peer)
             else if (!strcmp(serviceName, "com.apple.WebKit.GPU"))
                 entryPointFunctionName = CFSTR(STRINGIZE_VALUE_OF(GPU_SERVICE_INITIALIZER));
             else {
-                RELEASE_LOG_ERROR(IPC, "XPCServiceEventHandler: Unexpected 'service-name': %{public}s", serviceName);
+                RELEASE_LOG_ERROR(IPC, "XPCServiceEventHandler: Unexpected 'service-name': %" PUBLIC_LOG_STRING "", serviceName);
                 return;
             }
 

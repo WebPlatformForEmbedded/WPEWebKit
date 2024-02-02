@@ -67,7 +67,7 @@ void deallocateSendRightSafely(mach_port_t port)
     if (kr == KERN_SUCCESS)
         return;
 
-    RELEASE_LOG_ERROR(Process, "mach_port_deallocate error for port %d: %{private}s (%#x)", port, mach_error_string(kr), kr);
+    RELEASE_LOG_ERROR(Process, "mach_port_deallocate error for port %d: %" PRIVATE_LOG_STRING " (%#x)", port, mach_error_string(kr), kr);
     if (kr == KERN_INVALID_RIGHT || kr == KERN_INVALID_NAME)
         CRASH();
 }
@@ -85,7 +85,7 @@ static void assertSendRight(mach_port_t port)
     if (kr == KERN_SUCCESS && count > 0)
         return;
 
-    RELEASE_LOG_ERROR(Process, "mach_port_get_refs error for port %d: %{private}s (%#x)", port, mach_error_string(kr), kr);
+    RELEASE_LOG_ERROR(Process, "mach_port_get_refs error for port %d: %" PRIVATE_LOG_STRING " (%#x)", port, mach_error_string(kr), kr);
     CRASH();
 }
 
