@@ -109,12 +109,14 @@ Ref<MediaSource> MediaSource::create(ScriptExecutionContext& context)
 
 MediaSource::MediaSource(ScriptExecutionContext& context)
     : ActiveDOMObject(&context)
+    , m_dispatcher(RunLoop::current())
     , m_sourceBuffers(SourceBufferList::create(scriptExecutionContext()))
     , m_activeSourceBuffers(SourceBufferList::create(scriptExecutionContext()))
 #if !RELEASE_LOG_DISABLED
     , m_logger(downcast<Document>(context).logger())
 #endif
 {
+    ASSERT(isMainThread());
 }
 
 MediaSource::~MediaSource()
@@ -192,43 +194,42 @@ const PlatformTimeRanges& MediaSource::buffered() const
 
 Ref<MediaTimePromise> MediaSource::waitForTarget(const SeekTarget& target)
 {
-    if (isClosed())
-        return MediaTimePromise::createAndReject(PlatformMediaError::SourceRemoved);
+    return promisedWeakOnDispatcher<MediaTimePromise>([this, target] {
+        ALWAYS_LOG(LOGIDENTIFIER, target.time);
 
-    ALWAYS_LOG(LOGIDENTIFIER, target.time);
+        // 2.4.3 Seeking
+        // https://rawgit.com/w3c/media-source/45627646344eea0170dd1cbc5a3d508ca751abb8/media-source-respec.html#mediasource-seeking
 
-    // 2.4.3 Seeking
-    // https://rawgit.com/w3c/media-source/45627646344eea0170dd1cbc5a3d508ca751abb8/media-source-respec.html#mediasource-seeking
+        if (m_seekTargetPromise) {
+            ALWAYS_LOG(LOGIDENTIFIER, "Previous seeking to ", m_pendingSeekTarget->time, "pending, cancelling it");
+            m_seekTargetPromise->reject(PlatformMediaError::Cancelled);
+        }
+        m_seekTargetPromise.emplace();
+        m_pendingSeekTarget = target;
 
-    if (m_seekTargetPromise) {
-        ALWAYS_LOG(LOGIDENTIFIER, "Previous seeking to ", m_pendingSeekTarget->time, "pending, cancelling it");
-        m_seekTargetPromise->reject(PlatformMediaError::Cancelled);
-    }
-    m_seekTargetPromise.emplace();
-    m_pendingSeekTarget = target;
+        // Run the following steps as part of the "Wait until the user agent has established whether or not the
+        // media data for the new playback position is available, and, if it is, until it has decoded enough data
+        // to play back that position" step of the seek algorithm:
+        // ↳ If new playback position is not in any TimeRange of HTMLMediaElement.buffered
+        if (!hasBufferedTime(target.time)) {
+            ALWAYS_LOG(LOGIDENTIFIER, "No data at seeked time, waiting");
+            // 1. If the HTMLMediaElement.readyState attribute is greater than HAVE_METADATA,
+            // then set the HTMLMediaElement.readyState attribute to HAVE_METADATA.
+            m_private->setMediaPlayerReadyState(MediaPlayer::ReadyState::HaveMetadata);
 
-    // Run the following steps as part of the "Wait until the user agent has established whether or not the
-    // media data for the new playback position is available, and, if it is, until it has decoded enough data
-    // to play back that position" step of the seek algorithm:
-    // ↳ If new playback position is not in any TimeRange of HTMLMediaElement.buffered
-    if (!hasBufferedTime(target.time)) {
-        ALWAYS_LOG(LOGIDENTIFIER, "No data at seeked time, waiting");
-        // 1. If the HTMLMediaElement.readyState attribute is greater than HAVE_METADATA,
-        // then set the HTMLMediaElement.readyState attribute to HAVE_METADATA.
-        m_private->setMediaPlayerReadyState(MediaPlayer::ReadyState::HaveMetadata);
+            // 2. The media element waits until an appendBuffer() or an appendStream() call causes the coded
+            // frame processing algorithm to set the HTMLMediaElement.readyState attribute to a value greater
+            // than HAVE_METADATA.
+            monitorSourceBuffers();
 
-        // 2. The media element waits until an appendBuffer() or an appendStream() call causes the coded
-        // frame processing algorithm to set the HTMLMediaElement.readyState attribute to a value greater
-        // than HAVE_METADATA.
-        monitorSourceBuffers();
-
-        return *m_seekTargetPromise;
-    }
-    // ↳ Otherwise
-    // Continue
-    auto promise = static_cast<Ref<MediaTimePromise>>(*m_seekTargetPromise);
-    completeSeek();
-    return promise;
+            return m_seekTargetPromise->promise();
+        }
+        // ↳ Otherwise
+        // Continue
+        auto promise = m_seekTargetPromise->promise();
+        completeSeek();
+        return promise;
+    });
 }
 
 void MediaSource::completeSeek()
@@ -251,7 +252,7 @@ void MediaSource::completeSeek()
 
     Ref<MediaTimePromise> promise = SourceBuffer::ComputeSeekPromise::all(WTF::map(*m_activeSourceBuffers, [&](auto&& sourceBuffer) {
         return sourceBuffer->computeSeekTime(seekTarget);
-    }))->whenSettled(RunLoop::current(), [time = seekTarget.time, protectedThis = Ref { *this }] (auto&& results) mutable {
+    }))->whenSettled(m_dispatcher, [time = seekTarget.time, protectedThis = Ref { *this }] (auto&& results) mutable {
         if (!results)
             return MediaTimePromise::createAndReject(results.error());
         auto seekTime = time;
@@ -271,15 +272,17 @@ void MediaSource::completeSeek()
 
 Ref<MediaPromise> MediaSource::seekToTime(const MediaTime& time)
 {
-    if (isClosed())
-        return MediaPromise::createAndReject(PlatformMediaError::SourceRemoved);
-    for (auto& sourceBuffer : *m_activeSourceBuffers)
-        sourceBuffer->seekToTime(time);
-    return MediaPromise::createAndResolve();
+    return promisedWeakOnDispatcher<MediaPromise>([this, time] {
+        for (auto& sourceBuffer : *m_activeSourceBuffers)
+            sourceBuffer->seekToTime(time);
+        return MediaPromise::createAndResolve();
+    });
 }
 
 Ref<TimeRanges> MediaSource::seekable()
 {
+    assertIsCurrent(m_dispatcher);
+
     // 6. HTMLMediaElement Extensions, seekable
     // W3C Editor's Draft 16 September 2016
     // https://rawgit.com/w3c/media-source/45627646344eea0170dd1cbc5a3d508ca751abb8/media-source-respec.html#htmlmediaelement-extensions
@@ -319,6 +322,8 @@ Ref<TimeRanges> MediaSource::seekable()
 
 ExceptionOr<void> MediaSource::setLiveSeekableRange(double start, double end)
 {
+    assertIsCurrent(m_dispatcher);
+
     // W3C Editor's Draft 16 September 2016
     // https://rawgit.com/w3c/media-source/45627646344eea0170dd1cbc5a3d508ca751abb8/media-source-respec.html#dom-mediasource-setliveseekablerange
 
@@ -341,6 +346,8 @@ ExceptionOr<void> MediaSource::setLiveSeekableRange(double start, double end)
 
 ExceptionOr<void> MediaSource::clearLiveSeekableRange()
 {
+    assertIsCurrent(m_dispatcher);
+
     // W3C Editor's Draft 16 September 2016
     // https://rawgit.com/w3c/media-source/45627646344eea0170dd1cbc5a3d508ca751abb8/media-source-respec.html#dom-mediasource-clearliveseekablerange
 
@@ -367,6 +374,8 @@ bool MediaSource::contentTypeShouldGenerateTimestamps(const ContentType& content
 
 bool MediaSource::hasBufferedTime(const MediaTime& time)
 {
+    assertIsCurrent(m_dispatcher);
+
     if (isClosed())
         return false;
 
@@ -387,6 +396,8 @@ bool MediaSource::hasCurrentTime()
 
 bool MediaSource::hasFutureTime()
 {
+    assertIsCurrent(m_dispatcher);
+
     if (isClosed())
         return false;
 
@@ -395,85 +406,86 @@ bool MediaSource::hasFutureTime()
 
 void MediaSource::monitorSourceBuffers()
 {
-    if (isClosed())
-        return;
+    ensureWeakOnDispatcher([this] {
+        // 2.4.4 SourceBuffer Monitoring
+        // https://rawgit.com/w3c/media-source/45627646344eea0170dd1cbc5a3d508ca751abb8/media-source-respec.html#buffer-monitoring
 
-    // 2.4.4 SourceBuffer Monitoring
-    // https://rawgit.com/w3c/media-source/45627646344eea0170dd1cbc5a3d508ca751abb8/media-source-respec.html#buffer-monitoring
+        // Note, the behavior if activeSourceBuffers is empty is undefined.
+        if (!m_activeSourceBuffers) {
+            m_private->setMediaPlayerReadyState(MediaPlayer::ReadyState::HaveNothing);
+            return;
+        }
 
-    // Note, the behavior if activeSourceBuffers is empty is undefined.
-    if (!m_activeSourceBuffers) {
-        m_private->setMediaPlayerReadyState(MediaPlayer::ReadyState::HaveNothing);
-        return;
-    }
+        // ↳ If the HTMLMediaElement.readyState attribute equals HAVE_NOTHING:
+        if (m_private->mediaPlayerReadyState() == MediaPlayer::ReadyState::HaveNothing) {
+            // 1. Abort these steps.
+            return;
+        }
 
-    // ↳ If the HTMLMediaElement.readyState attribute equals HAVE_NOTHING:
-    if (mediaElement()->readyState() == HTMLMediaElement::HAVE_NOTHING) {
-        // 1. Abort these steps.
-        return;
-    }
+        // ↳ If HTMLMediaElement.buffered does not contain a TimeRange for the current playback position:
+        if (!hasCurrentTime()) {
+            // 1. Set the HTMLMediaElement.readyState attribute to HAVE_METADATA.
+            // 2. If this is the first transition to HAVE_METADATA, then queue a task to fire a simple event
+            // named loadedmetadata at the media element.
+            m_private->setMediaPlayerReadyState(MediaPlayer::ReadyState::HaveMetadata);
 
-    // ↳ If HTMLMediaElement.buffered does not contain a TimeRange for the current playback position:
-    if (!hasCurrentTime()) {
-        // 1. Set the HTMLMediaElement.readyState attribute to HAVE_METADATA.
-        // 2. If this is the first transition to HAVE_METADATA, then queue a task to fire a simple event
-        // named loadedmetadata at the media element.
-        m_private->setMediaPlayerReadyState(MediaPlayer::ReadyState::HaveMetadata);
+            // 3. Abort these steps.
+            return;
+        }
 
-        // 3. Abort these steps.
-        return;
-    }
+        // ↳ If HTMLMediaElement.buffered contains a TimeRange that includes the current
+        //  playback position and enough data to ensure uninterrupted playback:
+        if (std::all_of(m_activeSourceBuffers->begin(), m_activeSourceBuffers->end(), [&](auto& sourceBuffer) {
+            return sourceBuffer->canPlayThroughRange(m_private->buffered());
+        })) {
+            // 1. Set the HTMLMediaElement.readyState attribute to HAVE_ENOUGH_DATA.
+            // 2. Queue a task to fire a simple event named canplaythrough at the media element.
+            // 3. Playback may resume at this point if it was previously suspended by a transition to HAVE_CURRENT_DATA.
+            m_private->setMediaPlayerReadyState(MediaPlayer::ReadyState::HaveEnoughData);
 
-    // ↳ If HTMLMediaElement.buffered contains a TimeRange that includes the current
-    //  playback position and enough data to ensure uninterrupted playback:
-    if (std::all_of(m_activeSourceBuffers->begin(), m_activeSourceBuffers->end(), [&](auto& sourceBuffer) {
-        return sourceBuffer->canPlayThroughRange(m_private->buffered());
-    })) {
-        // 1. Set the HTMLMediaElement.readyState attribute to HAVE_ENOUGH_DATA.
-        // 2. Queue a task to fire a simple event named canplaythrough at the media element.
-        // 3. Playback may resume at this point if it was previously suspended by a transition to HAVE_CURRENT_DATA.
-        m_private->setMediaPlayerReadyState(MediaPlayer::ReadyState::HaveEnoughData);
+            if (m_pendingSeekTarget)
+                completeSeek();
+
+            // 4. Abort these steps.
+            return;
+        }
+
+        // ↳ If HTMLMediaElement.buffered contains a TimeRange that includes the current playback
+        //  position and some time beyond the current playback position, then run the following steps:
+        if (hasFutureTime()) {
+            // 1. Set the HTMLMediaElement.readyState attribute to HAVE_FUTURE_DATA.
+            // 2. If the previous value of HTMLMediaElement.readyState was less than HAVE_FUTURE_DATA, then queue a task to fire a simple event named canplay at the media element.
+            // 3. Playback may resume at this point if it was previously suspended by a transition to HAVE_CURRENT_DATA.
+            m_private->setMediaPlayerReadyState(MediaPlayer::ReadyState::HaveFutureData);
+
+            if (m_pendingSeekTarget)
+                completeSeek();
+
+            // 4. Abort these steps.
+            return;
+        }
+
+        // ↳ If HTMLMediaElement.buffered contains a TimeRange that ends at the current playback position and does not have a range covering the time immediately after the current position:
+        // NOTE: Logically, !(all objects do not contain currentTime) == (some objects contain current time)
+
+        // 1. Set the HTMLMediaElement.readyState attribute to HAVE_CURRENT_DATA.
+        // 2. If this is the first transition to HAVE_CURRENT_DATA, then queue a task to fire a simple
+        // event named loadeddata at the media element.
+        // 3. Playback is suspended at this point since the media element doesn't have enough data to
+        // advance the media timeline.
+        m_private->setMediaPlayerReadyState(MediaPlayer::ReadyState::HaveCurrentData);
 
         if (m_pendingSeekTarget)
             completeSeek();
 
         // 4. Abort these steps.
-        return;
-    }
-
-    // ↳ If HTMLMediaElement.buffered contains a TimeRange that includes the current playback
-    //  position and some time beyond the current playback position, then run the following steps:
-    if (hasFutureTime()) {
-        // 1. Set the HTMLMediaElement.readyState attribute to HAVE_FUTURE_DATA.
-        // 2. If the previous value of HTMLMediaElement.readyState was less than HAVE_FUTURE_DATA, then queue a task to fire a simple event named canplay at the media element.
-        // 3. Playback may resume at this point if it was previously suspended by a transition to HAVE_CURRENT_DATA.
-        m_private->setMediaPlayerReadyState(MediaPlayer::ReadyState::HaveFutureData);
-
-        if (m_pendingSeekTarget)
-            completeSeek();
-
-        // 4. Abort these steps.
-        return;
-    }
-
-    // ↳ If HTMLMediaElement.buffered contains a TimeRange that ends at the current playback position and does not have a range covering the time immediately after the current position:
-    // NOTE: Logically, !(all objects do not contain currentTime) == (some objects contain current time)
-
-    // 1. Set the HTMLMediaElement.readyState attribute to HAVE_CURRENT_DATA.
-    // 2. If this is the first transition to HAVE_CURRENT_DATA, then queue a task to fire a simple
-    // event named loadeddata at the media element.
-    // 3. Playback is suspended at this point since the media element doesn't have enough data to
-    // advance the media timeline.
-    m_private->setMediaPlayerReadyState(MediaPlayer::ReadyState::HaveCurrentData);
-
-    if (m_pendingSeekTarget)
-        completeSeek();
-
-    // 4. Abort these steps.
+    });
 }
 
 ExceptionOr<void> MediaSource::setDuration(double duration)
 {
+    assertIsCurrent(m_dispatcher);
+
     // 2.1 Attributes - Duration
     // https://www.w3.org/TR/2016/REC-media-source-20161117/#attributes
 
@@ -501,6 +513,8 @@ ExceptionOr<void> MediaSource::setDuration(double duration)
 
 ExceptionOr<void> MediaSource::setDurationInternal(const MediaTime& newDuration)
 {
+    assertIsCurrent(m_dispatcher);
+
     // 2.4.6 Duration Change
     // https://www.w3.org/TR/2016/REC-media-source-20161117/#duration-change-algorithm
 
@@ -540,6 +554,8 @@ ExceptionOr<void> MediaSource::setDurationInternal(const MediaTime& newDuration)
 
 void MediaSource::setReadyState(ReadyState state)
 {
+    assertIsCurrent(m_dispatcher);
+
     auto oldState = readyState();
     if (oldState == state)
         return;
@@ -551,6 +567,8 @@ void MediaSource::setReadyState(ReadyState state)
 
 ExceptionOr<void> MediaSource::endOfStream(std::optional<EndOfStreamError> error)
 {
+    assertIsCurrent(m_dispatcher);
+
     ALWAYS_LOG(LOGIDENTIFIER);
 
     // 2.2 https://dvcs.w3.org/hg/html-media/raw-file/tip/media-source/media-source.html#widl-MediaSource-endOfStream-void-EndOfStreamError-error
@@ -572,6 +590,8 @@ ExceptionOr<void> MediaSource::endOfStream(std::optional<EndOfStreamError> error
 
 void MediaSource::streamEndedWithError(std::optional<EndOfStreamError> error)
 {
+    assertIsCurrent(m_dispatcher);
+
 #if !RELEASE_LOG_DISABLED
     if (error)
         ALWAYS_LOG(LOGIDENTIFIER, error.value());
@@ -671,6 +691,8 @@ static ContentType addVP9FullRangeVideoFlagToContentType(const ContentType& type
 
 ExceptionOr<Ref<SourceBuffer>> MediaSource::addSourceBuffer(const String& type)
 {
+    assertIsCurrent(m_dispatcher);
+
     DEBUG_LOG(LOGIDENTIFIER, type);
 
     // 2.2 http://www.w3.org/TR/media-source/#widl-MediaSource-addSourceBuffer-SourceBuffer-DOMString-type
@@ -973,6 +995,7 @@ void MediaSource::detachFromElement(HTMLMediaElement& element)
     // 1. Set the readyState attribute to "closed".
     // 7. Queue a task to fire a simple event named sourceclose at the MediaSource.
     setReadyState(ReadyState::Closed);
+    elementDetached();
 
     // 2. Update duration to NaN.
     // Step is done in duration() method which will now always return invalidTime()
@@ -1078,6 +1101,8 @@ MediaSource::ReadyState MediaSource::readyState() const
 
 void MediaSource::onReadyStateChange(ReadyState oldState, ReadyState newState)
 {
+    assertIsCurrent(m_dispatcher);
+
     ALWAYS_LOG(LOGIDENTIFIER, "old state = ", oldState, ", new state = ", newState);
 
     if (isOpen()) {
@@ -1114,6 +1139,8 @@ void MediaSource::onReadyStateChange(ReadyState oldState, ReadyState newState)
 
 Vector<PlatformTimeRanges> MediaSource::activeRanges() const
 {
+    assertIsCurrent(m_dispatcher);
+
     return WTF::map(*m_activeSourceBuffers, [](auto& sourceBuffer) {
         return sourceBuffer->bufferedInternal();
     });
@@ -1172,6 +1199,8 @@ URLRegistry& MediaSource::registry() const
 
 void MediaSource::regenerateActiveSourceBuffers()
 {
+    assertIsCurrent(m_dispatcher);
+
     Vector<RefPtr<SourceBuffer>> newList;
     for (auto& sourceBuffer : *m_sourceBuffers) {
         if (sourceBuffer->active())
@@ -1188,18 +1217,23 @@ void MediaSource::regenerateActiveSourceBuffers()
 
 void MediaSource::notifyElementUpdateMediaState() const
 {
-    if (!mediaElement())
-        return;
-    mediaElement()->updateMediaState();
+    ensureOnMainThread([weakThis = ThreadSafeWeakPtr { *this }, this] {
+        if (RefPtr protectedThis = weakThis.get(); protectedThis && mediaElement())
+            mediaElement()->updateMediaState();
+    });
 }
 
 void MediaSource::sourceBufferBufferedChanged()
 {
+    assertIsCurrent(m_dispatcher);
+
     updateBufferedIfNeeded();
 }
 
 void MediaSource::updateBufferedIfNeeded(bool force)
 {
+    assertIsCurrent(m_dispatcher);
+
     if (isClosed())
         return;
 
@@ -1270,12 +1304,16 @@ WTFLogChannel& MediaSource::logChannel() const
 
 void MediaSource::failedToCreateRenderer(RendererType type)
 {
+    assertIsCurrent(m_dispatcher);
+
     if (auto context = scriptExecutionContext())
         context->addConsoleMessage(MessageSource::JS, MessageLevel::Error, makeString("MediaSource ", type == RendererType::Video ? "video" : "audio", " renderer creation failed."));
 }
 
 void MediaSource::sourceBufferReceivedFirstInitializationSegmentChanged()
 {
+    assertIsCurrent(m_dispatcher);
+
     if (m_private && m_private->mediaPlayerReadyState() == MediaPlayer::ReadyState::HaveNothing) {
         // 6.1 If one or more objects in sourceBuffers have first initialization segment flag set to false, then abort these steps.
         for (auto& sourceBuffer : *sourceBuffers()) {
@@ -1290,6 +1328,8 @@ void MediaSource::sourceBufferReceivedFirstInitializationSegmentChanged()
 
 void MediaSource::sourceBufferActiveTrackFlagChanged(bool activeTrackFlag)
 {
+    assertIsCurrent(m_dispatcher);
+
     if (!m_private)
         return;
     if (activeTrackFlag && m_private->mediaPlayerReadyState() > MediaPlayer::ReadyState::HaveCurrentData)
@@ -1298,6 +1338,8 @@ void MediaSource::sourceBufferActiveTrackFlagChanged(bool activeTrackFlag)
 
 void MediaSource::setMediaPlayerReadyState(MediaPlayer::ReadyState readyState)
 {
+    assertIsCurrent(m_dispatcher);
+
     if (!m_private)
         return;
     m_private->setMediaPlayerReadyState(readyState);
@@ -1305,10 +1347,27 @@ void MediaSource::setMediaPlayerReadyState(MediaPlayer::ReadyState readyState)
 
 void MediaSource::memoryPressure()
 {
+    assertIsCurrent(m_dispatcher);
+
     if (!isManaged())
         return;
     for (auto& sourceBuffer : *m_sourceBuffers)
         sourceBuffer->memoryPressure();
+}
+
+void MediaSource::ensureWeakOnDispatcher(Function<void()>&& function) const
+{
+    if (isClosed())
+        return;
+    if (m_dispatcher->isCurrent()) {
+        function();
+        return;
+    }
+    auto weakWrapper = [function = WTFMove(function), weakThis = ThreadSafeWeakPtr(*this)] {
+        if (RefPtr protectedThis = weakThis.get(); protectedThis && !protectedThis->isClosed())
+            function();
+    };
+    m_dispatcher->dispatch(WTFMove(weakWrapper));
 }
 
 } // namespace WebCore

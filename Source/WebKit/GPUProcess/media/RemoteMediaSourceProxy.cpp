@@ -29,7 +29,7 @@
 #if ENABLE(GPU_PROCESS) && ENABLE(MEDIA_SOURCE)
 
 #include "GPUConnectionToWebProcess.h"
-#include "MediaSourcePrivateRemoteMessages.h"
+#include "MediaSourcePrivateRemoteMessageReceiverMessages.h"
 #include "RemoteMediaPlayerProxy.h"
 #include "RemoteMediaSourceProxyMessages.h"
 #include "RemoteSourceBufferProxy.h"
@@ -52,10 +52,19 @@ RemoteMediaSourceProxy::RemoteMediaSourceProxy(GPUConnectionToWebProcess& connec
 
 RemoteMediaSourceProxy::~RemoteMediaSourceProxy()
 {
+    disconnect();
+}
+
+void RemoteMediaSourceProxy::disconnect()
+{
+    for (auto& sourceBuffer : m_sourceBuffers)
+        sourceBuffer->disconnect();
+
     if (!m_connectionToWebProcess)
         return;
 
     m_connectionToWebProcess->messageReceiverMap().removeMessageReceiver(Messages::RemoteMediaSourceProxy::messageReceiverName(), m_identifier.toUInt64());
+    m_connectionToWebProcess = nullptr;
 }
 
 void RemoteMediaSourceProxy::setPrivateAndOpen(Ref<MediaSourcePrivate>&& mediaSourcePrivate)
@@ -69,7 +78,7 @@ Ref<MediaTimePromise> RemoteMediaSourceProxy::waitForTarget(const SeekTarget& ta
     if (!m_connectionToWebProcess)
         return MediaTimePromise::createAndReject(PlatformMediaError::IPCError);
 
-    return m_connectionToWebProcess->connection().sendWithPromisedReply(Messages::MediaSourcePrivateRemote::ProxyWaitForTarget(target), m_identifier)->whenSettled(RunLoop::current(), [](auto&& result) {
+    return m_connectionToWebProcess->connection().sendWithPromisedReply(Messages::MediaSourcePrivateRemoteMessageReceiver::ProxyWaitForTarget(target), m_identifier)->whenSettled(RunLoop::current(), [](auto&& result) {
         return result ? MediaTimePromise::createAndSettle(WTFMove(*result)) : MediaTimePromise::createAndReject(PlatformMediaError::IPCError);
     });
 }
@@ -79,7 +88,7 @@ Ref<MediaPromise> RemoteMediaSourceProxy::seekToTime(const MediaTime& time)
     if (!m_connectionToWebProcess)
         return MediaPromise::createAndReject(PlatformMediaError::IPCError);
 
-    return m_connectionToWebProcess->connection().sendWithPromisedReply(Messages::MediaSourcePrivateRemote::ProxySeekToTime(time), m_identifier)->whenSettled(RunLoop::current(), [](auto&& result) {
+    return m_connectionToWebProcess->connection().sendWithPromisedReply(Messages::MediaSourcePrivateRemoteMessageReceiver::ProxySeekToTime(time), m_identifier)->whenSettled(RunLoop::current(), [](auto&& result) {
         return result ? MediaPromise::createAndSettle(WTFMove(*result)) : MediaPromise::createAndReject(PlatformMediaError::IPCError);
     });
 }
@@ -157,7 +166,9 @@ void RemoteMediaSourceProxy::shutdown()
     if (!m_connectionToWebProcess)
         return;
 
-    m_connectionToWebProcess->connection().sendWithAsyncReply(Messages::MediaSourcePrivateRemote::MediaSourcePrivateShuttingDown(), [self = RefPtr { this }] { }, m_identifier);
+    m_connectionToWebProcess->connection().sendWithAsyncReply(Messages::MediaSourcePrivateRemoteMessageReceiver::MediaSourcePrivateShuttingDown(), [this, protectedThis = Ref { *this }, protectedConnection = Ref { *m_connectionToWebProcess }] {
+        disconnect();
+    }, m_identifier);
 }
 
 } // namespace WebKit
