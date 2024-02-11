@@ -188,7 +188,7 @@ MediaTime MediaSource::duration() const
     return isClosed() ? MediaTime::invalidTime() : m_private->duration();
 }
 
-MediaTime MediaSource::currentMediaTime() const
+MediaTime MediaSource::currentTime() const
 {
     assertIsCurrent(m_dispatcher.get());
 
@@ -198,7 +198,7 @@ MediaTime MediaSource::currentMediaTime() const
     if (m_pendingSeekTarget)
         return m_pendingSeekTarget->time;
 
-    return m_private->currentMediaTime();
+    return m_private->currentTime();
 }
 
 const PlatformTimeRanges& MediaSource::buffered() const
@@ -412,7 +412,7 @@ bool MediaSource::hasBufferedTime(const MediaTime& time)
 
 bool MediaSource::hasCurrentTime()
 {
-    return hasBufferedTime(currentMediaTime());
+    return hasBufferedTime(currentTime());
 }
 
 bool MediaSource::hasFutureTime()
@@ -422,7 +422,7 @@ bool MediaSource::hasFutureTime()
     if (isClosed())
         return false;
 
-    return m_private->hasFutureTime(currentMediaTime());
+    return m_private->hasFutureTime(currentTime());
 }
 
 void MediaSource::monitorSourceBuffers()
