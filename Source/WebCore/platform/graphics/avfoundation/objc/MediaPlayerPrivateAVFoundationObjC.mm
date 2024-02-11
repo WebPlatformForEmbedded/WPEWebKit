@@ -697,7 +697,7 @@ bool MediaPlayerPrivateAVFoundationObjC::hasAvailableVideoFrame() const
     if (currentRenderingMode() == MediaRenderingMode::MediaRenderingToLayer)
         return m_cachedIsReadyForDisplay;
 
-    if (m_videoOutput && (m_lastPixelBuffer || m_videoOutput->hasImageForTime(currentMediaTime())))
+    if (m_videoOutput && (m_lastPixelBuffer || m_videoOutput->hasImageForTime(currentTime())))
         return true;
 
     return m_videoFrameHasDrawn;
@@ -1172,7 +1172,7 @@ void MediaPlayerPrivateAVFoundationObjC::createAVPlayer()
                 ALWAYS_LOG(identifier, "PeriodicTimeObserver called with called with infinite time");
             m_lastPeriodicObserverMediaTime = time;
 
-            currentMediaTimeDidChange(WTFMove(time));
+            currentTimeDidChange(WTFMove(time));
         });
     }];
 
@@ -1543,16 +1543,16 @@ MediaTime MediaPlayerPrivateAVFoundationObjC::platformDuration() const
     return MediaTime::invalidTime();
 }
 
-MediaTime MediaPlayerPrivateAVFoundationObjC::currentMediaTime() const
+MediaTime MediaPlayerPrivateAVFoundationObjC::currentTime() const
 {
     if (!metaDataAvailable() || !m_avPlayerItem)
         return MediaTime::zeroTime();
 
     if (!m_wallClockAtCachedCurrentTime)
-        currentMediaTimeDidChange(PAL::toMediaTime([m_avPlayerItem currentTime]));
+        currentTimeDidChange(PAL::toMediaTime([m_avPlayerItem currentTime]));
     ASSERT(m_wallClockAtCachedCurrentTime);
 
-    auto itemTime = m_cachedCurrentMediaTime;
+    auto itemTime = m_cachedCurrentTime;
     if (!itemTime.isFinite())
         return MediaTime::zeroTime();
 
@@ -1570,15 +1570,15 @@ bool MediaPlayerPrivateAVFoundationObjC::setCurrentTimeDidChangeCallback(MediaPl
     return true;
 }
 
-void MediaPlayerPrivateAVFoundationObjC::currentMediaTimeDidChange(MediaTime&& time) const
+void MediaPlayerPrivateAVFoundationObjC::currentTimeDidChange(MediaTime&& time) const
 {
-    m_cachedCurrentMediaTime = WTFMove(time);
+    m_cachedCurrentTime = WTFMove(time);
     m_wallClockAtCachedCurrentTime = WallTime::now();
     m_timeControlStatusAtCachedCurrentTime = m_cachedTimeControlStatus;
     m_requestedRateAtCachedCurrentTime = m_requestedRate;
 
     if (m_currentTimeDidChangeCallback)
-        m_currentTimeDidChangeCallback(m_cachedCurrentMediaTime.isFinite() ? m_cachedCurrentMediaTime : MediaTime::zeroTime());
+        m_currentTimeDidChangeCallback(m_cachedCurrentTime.isFinite() ? m_cachedCurrentTime : MediaTime::zeroTime());
 }
 
 void MediaPlayerPrivateAVFoundationObjC::seekToTargetInternal(const SeekTarget& target)
@@ -1776,7 +1776,7 @@ MediaTime MediaPlayerPrivateAVFoundationObjC::platformMaxTimeSeekable() const
         m_cachedSeekableRanges = [m_avPlayerItem seekableTimeRanges];
 
     if (![m_cachedSeekableRanges count])
-        return durationMediaTime();
+        return duration();
 
     MediaTime maxTimeSeekable;
     for (NSValue *thisRangeValue in m_cachedSeekableRanges.get()) {
@@ -2678,7 +2678,7 @@ bool MediaPlayerPrivateAVFoundationObjC::updateLastPixelBuffer()
         createVideoOutput();
     ASSERT(m_videoOutput);
 
-    auto currentTime = currentMediaTime();
+    auto currentTime = this->currentTime();
 
     if (!m_videoOutput->hasImageForTime(currentTime))
         return false;
@@ -2798,7 +2798,7 @@ RefPtr<VideoFrame> MediaPlayerPrivateAVFoundationObjC::videoFrameForCurrentTime(
     updateLastPixelBuffer();
     if (!m_lastPixelBuffer)
         return nullptr;
-    return VideoFrameCV::create(currentMediaTime(), false, VideoFrame::Rotation::None, RetainPtr { m_lastPixelBuffer });
+    return VideoFrameCV::create(currentTime(), false, VideoFrame::Rotation::None, RetainPtr { m_lastPixelBuffer });
 }
 
 RefPtr<NativeImage> MediaPlayerPrivateAVFoundationObjC::nativeImageForCurrentTime()
@@ -3887,7 +3887,7 @@ auto MediaPlayerPrivateAVFoundationObjC::asyncVideoPlaybackQualityMetrics() -> R
     });
 }
 
-bool MediaPlayerPrivateAVFoundationObjC::performTaskAtMediaTime(WTF::Function<void()>&& task, const MediaTime& time)
+bool MediaPlayerPrivateAVFoundationObjC::performTaskAtTime(WTF::Function<void()>&& task, const MediaTime& time)
 {
     if (!m_avPlayer)
         return false;
@@ -4220,7 +4220,7 @@ NSArray* playerKVOProperties()
         return;
 
     if (RefPtr player = m_player.get()) {
-        player->queueTaskOnEventLoop([player, metadataGroups = retainPtr(metadataGroups), currentTime = player->currentMediaTime()] {
+        player->queueTaskOnEventLoop([player, metadataGroups = retainPtr(metadataGroups), currentTime = player->currentTime()] {
             ScriptDisallowedScope::InMainThread scriptDisallowedScope;
 
             for (AVTimedMetadataGroup *group in metadataGroups.get())
@@ -4240,7 +4240,7 @@ NSArray* playerKVOProperties()
         return;
 
     if (RefPtr player = m_player.get()) {
-        player->queueTaskOnEventLoop([player, metadataGroups = retainPtr(metadataGroups), currentTime = player->currentMediaTime()] {
+        player->queueTaskOnEventLoop([player, metadataGroups = retainPtr(metadataGroups), currentTime = player->currentTime()] {
             player->metadataGroupDidArrive(metadataGroups, currentTime);
         });
     }
