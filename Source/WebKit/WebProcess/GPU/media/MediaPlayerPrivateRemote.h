@@ -41,9 +41,9 @@
 #include <WebCore/MediaPlayerPrivate.h>
 #include <WebCore/SecurityOriginData.h>
 #include <WebCore/VideoFrameMetadata.h>
+#include <wtf/Lock.h>
 #include <wtf/LoggerHelper.h>
 #include <wtf/MediaTime.h>
-#include <wtf/RefCounted.h>
 #include <wtf/StdUnorderedMap.h>
 
 #if ENABLE(MEDIA_SOURCE)
@@ -99,6 +99,7 @@ public:
     WebCore::MediaPlayerEnums::MediaEngineIdentifier remoteEngineIdentifier() const { return m_remoteEngineIdentifier; }
     WebCore::MediaPlayerIdentifier identifier() const final { return m_id; }
     IPC::Connection& connection() const { return m_manager.gpuProcessConnection().connection(); }
+    Ref<IPC::Connection> protectedConnection() const { return m_manager.gpuProcessConnection().protectedConnection(); }
     RefPtr<WebCore::MediaPlayer> player() const { return m_player.get(); }
 
     WebCore::MediaPlayer::ReadyState readyState() const final { return m_readyState; }
@@ -122,9 +123,9 @@ public:
     void firstVideoFrameAvailable();
     void renderingModeChanged();
 #if PLATFORM(COCOA)
-    void layerHostingContextIdChanged(std::optional<WebKit::LayerHostingContextID>&&, const WebCore::IntSize&);
-    WebCore::FloatSize videoInlineSize() const final { return m_videoInlineSize; }
-    void setVideoInlineSizeFenced(const WebCore::FloatSize&, WTF::MachSendRight&&) final;
+    void layerHostingContextIdChanged(std::optional<WebKit::LayerHostingContextID>&&, const WebCore::FloatSize&);
+    WebCore::FloatSize videoLayerSize() const final;
+    void setVideoLayerSizeFenced(const WebCore::FloatSize&, WTF::MachSendRight&&) final;
 #endif
 
     void currentTimeChanged(const MediaTime&, const MonotonicTime&, bool);
@@ -142,10 +143,10 @@ public:
     void remoteTextTrackConfigurationChanged(WebCore::TrackID, TextTrackPrivateRemoteConfiguration&&);
 
     void parseWebVTTFileHeader(WebCore::TrackID, String&&);
-    void parseWebVTTCueData(WebCore::TrackID, IPC::DataReference&&);
+    void parseWebVTTCueData(WebCore::TrackID, std::span<const uint8_t>);
     void parseWebVTTCueDataStruct(WebCore::TrackID, WebCore::ISOWebVTTCue&&);
 
-    void addDataCue(WebCore::TrackID, MediaTime&& start, MediaTime&& end, IPC::DataReference&&);
+    void addDataCue(WebCore::TrackID, MediaTime&& start, MediaTime&& end, std::span<const uint8_t>);
 #if ENABLE(DATACUE_VALUE)
     void addDataCueWithType(WebCore::TrackID, MediaTime&& start, MediaTime&& end, WebCore::SerializedPlatformDataCueValue&&, String&&);
     void updateDataCue(WebCore::TrackID, MediaTime&& start, MediaTime&& end, WebCore::SerializedPlatformDataCueValue&&);
@@ -169,7 +170,7 @@ public:
 
 #if ENABLE(ENCRYPTED_MEDIA)
     void waitingForKeyChanged(bool);
-    void initializationDataEncountered(const String&, IPC::DataReference&&);
+    void initializationDataEncountered(const String&, std::span<const uint8_t>);
 #endif
 
 #if ENABLE(MEDIA_SOURCE)
@@ -196,7 +197,32 @@ public:
     void requestHostingContextID(LayerHostingContextIDCallback&&) override;
     LayerHostingContextID hostingContextID()const override;
     void setLayerHostingContextID(LayerHostingContextID  inID);
+
+    MediaTime durationMediaTime() const final;
+    MediaTime currentMediaTime() const final;
+    MediaTime currentOrPendingSeekTime() const final;
+
 private:
+    class TimeProgressEstimator final {
+    public:
+        explicit TimeProgressEstimator(const MediaPlayerPrivateRemote& parent);
+        MediaTime currentTime() const;
+        MediaTime cachedTime() const;
+        bool timeIsProgressing() const;
+        void pause();
+        void setTime(const MediaTime&, const MonotonicTime& wallTime, std::optional<bool> timeIsProgressing = std::nullopt);
+        void setRate(double);
+        Lock& lock() const { return m_lock; };
+        MediaTime currentTimeWithLockHeld() const;
+    private:
+        mutable Lock m_lock;
+        bool m_timeIsProgressing WTF_GUARDED_BY_LOCK(m_lock) { false };
+        MediaTime m_cachedMediaTime WTF_GUARDED_BY_LOCK(m_lock);
+        MonotonicTime m_cachedMediaTimeQueryTime WTF_GUARDED_BY_LOCK(m_lock);
+        double m_rate WTF_GUARDED_BY_LOCK(m_lock) { 1.0 };
+        const MediaPlayerPrivateRemote& m_parent;
+    };
+    TimeProgressEstimator m_currentTimeEstimator;
 
 #if !RELEASE_LOG_DISABLED
     const Logger& logger() const final { return m_logger; }
@@ -263,13 +289,12 @@ private:
     bool hasVideo() const final;
     bool hasAudio() const final;
 
-    void setPageIsVisible(bool) final;
-
-    MediaTime durationMediaTime() const final;
-    MediaTime currentMediaTime() const final;
+    void setPageIsVisible(bool, String&& sceneIdentifier) final;
 
     MediaTime getStartDate() const final;
 
+    void willSeekToTarget(const MediaTime&) final;
+    MediaTime pendingSeekTime() const final;
     void seekToTarget(const WebCore::SeekTarget&) final;
     bool seeking() const final;
 
@@ -337,7 +362,6 @@ private:
 
     bool supportsAcceleratedRendering() const final;
     void acceleratedRenderingStateChanged() final;
-    void checkAcceleratedRenderingState();
 
     void setShouldMaintainAspectRatio(bool) final;
 
@@ -368,7 +392,7 @@ private:
     void setCDM(WebCore::LegacyCDM*) final;
     void setCDMSession(WebCore::LegacyCDMSession*) final;
     void keyAdded() final;
-    void mediaPlayerKeyNeeded(IPC::DataReference&&);
+    void mediaPlayerKeyNeeded(std::span<const uint8_t>);
 #endif
 
 #if ENABLE(ENCRYPTED_MEDIA)
@@ -469,9 +493,6 @@ private:
     WebCore::SecurityOriginData m_documentSecurityOrigin;
     mutable HashMap<WebCore::SecurityOriginData, std::optional<bool>> m_isCrossOriginCache;
 
-    MediaTime m_cachedMediaTime;
-    MonotonicTime m_cachedMediaTimeQueryTime;
-
     WebCore::MediaPlayer::VideoGravity m_videoFullscreenGravity { WebCore::MediaPlayer::VideoGravity::ResizeAspect };
     MonotonicTime m_lastPlaybackQualityMetricsQueryTime;
     Seconds m_videoPlaybackMetricsUpdateInterval;
@@ -480,11 +501,9 @@ private:
     double m_rate { 1 };
     long m_platformErrorCode { 0 };
     bool m_muted { false };
-    bool m_seeking { false };
+    std::atomic<bool> m_seeking { false };
     bool m_isCurrentPlaybackTargetWireless { false };
     bool m_waitingForKey { false };
-    bool m_timeIsProgressing { false };
-    bool m_renderingCanBeAccelerated { false };
     std::optional<bool> m_shouldMaintainAspectRatio;
     std::optional<bool> m_pageIsVisible;
     RefPtr<RemoteVideoFrameProxy> m_videoFrameForCurrentTime;
@@ -494,7 +513,6 @@ private:
 
     Vector<LayerHostingContextIDCallback> m_layerHostingContextIDRequests;
     LayerHostingContextID m_layerHostingContextID { 0 };
-    WebCore::FloatSize m_videoInlineSize;
     std::optional<WebCore::VideoFrameMetadata> m_videoFrameMetadata;
     bool m_isGatheringVideoFrameMetadata { false };
 #if PLATFORM(COCOA) && !HAVE(AVSAMPLEBUFFERDISPLAYLAYER_COPYDISPLAYEDPIXELBUFFER)
