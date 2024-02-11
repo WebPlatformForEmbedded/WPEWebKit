@@ -167,8 +167,6 @@ public:
     float duration() const final { return durationMediaTime().toFloat(); }
     double durationDouble() const final { return durationMediaTime().toDouble(); }
     MediaTime durationMediaTime() const override;
-    float currentTime() const final { return currentMediaTime().toFloat(); }
-    double currentTimeDouble() const final { return currentMediaTime().toDouble(); }
     MediaTime currentMediaTime() const override;
     const PlatformTimeRanges& buffered() const override;
     float maxTimeSeekable() const final { return maxMediaTimeSeekable().toFloat(); }
