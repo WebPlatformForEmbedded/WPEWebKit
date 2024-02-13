@@ -729,6 +729,9 @@ GRefPtr<GstElement> createOptionalParserForFormat(GstBin* bin, const AtomString&
     // more orthogonal.
     const char* elementClass = "identity";
 
+// Remove h264parse element, as it's modifying PTSes in BloombergTV content - ONEM-31680
+// Audio parsers have been removed because of ONEM-33163
+#if !PLATFORM(BROADCOM)
     if (!g_strcmp0(mediaType, "audio/x-opus")) {
         // Necessary for: metadata filling.
         // Frame durations are optional in Matroska/WebM. Although frame durations are not required
@@ -774,6 +777,7 @@ GRefPtr<GstElement> createOptionalParserForFormat(GstBin* bin, const AtomString&
             GST_WARNING_OBJECT(bin, "Unsupported audio mpeg caps: %" GST_PTR_FORMAT, caps);
         }
     }
+#endif //!PLATFORM(BROADCOM)
 
     GST_DEBUG_OBJECT(bin, "Creating %s parser for stream with caps %" GST_PTR_FORMAT, elementClass, caps);
     GRefPtr<GstElement> result(makeGStreamerElement(elementClass, parserName.ascii().data()));
