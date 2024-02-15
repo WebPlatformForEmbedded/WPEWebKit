@@ -1142,11 +1142,11 @@ LargeImageAsyncDecodingEnabled:
   type: bool
   defaultValue:
     WebKitLegacy:
-      default: true
+      default: false
     WebKit:
-      default: true
+      default: false
     WebCore:
-      default: true
+      default: false
 
 LayoutFallbackWidth:
   type: uint32_t
