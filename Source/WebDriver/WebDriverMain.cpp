@@ -45,3 +45,28 @@ extern "C" __declspec(dllexport) int WINAPI dllLauncherEntryPoint(int argc, cons
     return main(argc, const_cast<char**>(argv));
 }
 #endif
+
+/*
+ * ONEM-33809: Added dummy eglGetConfigAttrib() function which is needed by odhott library.
+ * This is dragged to WebDriver through WTF library which links libodhott.
+ * This function should be deleted in the future when libodhott will be taken out of WTF.
+ */
+extern "C" __attribute__((visibility("default"))) unsigned int eglGetConfigAttrib(void *eglDisplay, void *eglConfig, int32_t attribute, int32_t *value)
+{
+    return 0;
+}
+
+extern "C" __attribute__((visibility("default"))) unsigned int eglQueryContext(void *eglDisplay, void *eglCtx, int32_t attribute, int32_t *value)
+{
+    return 0;
+}
+
+extern "C" __attribute__((visibility("default"))) const char* eglQueryString(void *eglDisplay, int32_t name)
+{
+    return "";
+}
+
+extern "C" __attribute__((visibility("default"))) unsigned int eglQuerySurface(void *eglDisplay, void *eglSurface, int32_t attribute, int32_t *value)
+{
+    return 0;
+}
