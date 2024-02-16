@@ -201,7 +201,7 @@ MediaTime MediaSource::currentTime() const
     return m_private->currentTime();
 }
 
-const PlatformTimeRanges& MediaSource::buffered() const
+PlatformTimeRanges MediaSource::buffered() const
 {
     assertIsCurrent(m_dispatcher);
 
@@ -403,7 +403,7 @@ bool MediaSource::hasBufferedTime(const MediaTime& time)
     if (time > duration())
         return false;
 
-    auto& ranges = m_private->buffered();
+    auto ranges = m_private->buffered();
     if (!ranges.length())
         return false;
 
