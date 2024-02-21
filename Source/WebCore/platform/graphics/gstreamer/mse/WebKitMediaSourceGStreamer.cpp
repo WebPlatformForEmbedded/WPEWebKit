@@ -808,7 +808,7 @@ static void webKitMediaSrcStreamFlush(Stream* stream, bool isSeekingFlush, GstCl
     } else {
         // In the case of non-seeking flushes we don't reset the timeline, so instead we need to increase the `base` field
         // by however running time we're starting after the flush.
-	MediaPlayerPrivateGStreamerMSE* player = webKitMediaSrcPlayer(stream->source);
+	    MediaPlayerPrivateGStreamerMSE* player = webKitMediaSrcPlayer(stream->source);
         if (player) {
             MediaTime streamTime = player->currentMediaTime();
             GstClockTime pipelineStreamTime = time;
