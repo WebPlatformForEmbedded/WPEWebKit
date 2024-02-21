@@ -808,16 +808,20 @@ static void webKitMediaSrcStreamFlush(Stream* stream, bool isSeekingFlush, GstCl
     } else {
         // In the case of non-seeking flushes we don't reset the timeline, so instead we need to increase the `base` field
         // by however running time we're starting after the flush.
-        GstClockTime pipelineStreamTime = time;
-        if (GST_CLOCK_TIME_IS_VALID(pipelineStreamTime)) {
-            DataMutexLocker streamingMembers { stream->streamingMembersDataMutex };
-            // We need to increase the base by the running time accumulated during the previous segment.
-            GstClockTime pipelineRunningTime = gst_segment_to_running_time(&streamingMembers->segment, GST_FORMAT_TIME, pipelineStreamTime);
-            if ((GST_CLOCK_TIME_IS_VALID(pipelineRunningTime))) {
-                GST_DEBUG_OBJECT(stream->source, "Resetting segment to current pipeline running time (%" GST_TIME_FORMAT " and stream time (%" GST_TIME_FORMAT " = %s)",
-                    GST_TIME_ARGS(pipelineRunningTime), GST_TIME_ARGS(pipelineStreamTime), GST_TIME_ARGS(pipelineStreamTime));
-                streamingMembers->segment.base = pipelineRunningTime;
-                streamingMembers->segment.start = streamingMembers->segment.time = static_cast<GstClockTime>(pipelineStreamTime);
+	    MediaPlayerPrivateGStreamerMSE* player = webKitMediaSrcPlayer(stream->source);
+        if (player) {
+            MediaTime streamTime = player->currentMediaTime();
+            GstClockTime pipelineStreamTime = time;
+            if (GST_CLOCK_TIME_IS_VALID(pipelineStreamTime)) {
+                DataMutexLocker streamingMembers { stream->streamingMembersDataMutex };
+                // We need to increase the base by the running time accumulated during the previous segment.
+                GstClockTime pipelineRunningTime = gst_segment_to_running_time(&streamingMembers->segment, GST_FORMAT_TIME, pipelineStreamTime);
+                if ((GST_CLOCK_TIME_IS_VALID(pipelineRunningTime))) {
+                    GST_DEBUG_OBJECT(stream->source, "Resetting segment to current pipeline running time (%" GST_TIME_FORMAT " and stream time (%" GST_TIME_FORMAT " = %s)",
+                        GST_TIME_ARGS(pipelineRunningTime), GST_TIME_ARGS(pipelineStreamTime), streamTime.toString().ascii().data());
+                    streamingMembers->segment.base = pipelineRunningTime;
+                    streamingMembers->segment.start = streamingMembers->segment.time = static_cast<GstClockTime>(pipelineStreamTime);
+                }
             }
         }
     }
