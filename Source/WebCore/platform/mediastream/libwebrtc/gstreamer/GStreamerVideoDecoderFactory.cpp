@@ -226,6 +226,14 @@ public:
             return WEBRTC_VIDEO_CODEC_UNINITIALIZED;
         }
 
+        // No renderTime provided, probably some issue with the WebRTC clock. Use a monotonically
+        // incrementing counter instead.
+        static int64_t s_forgedRenderTime { 0 };
+        if (!renderTimeMs) {
+            renderTimeMs = s_forgedRenderTime;
+            s_forgedRenderTime += 30 * GST_MSECOND;
+        }
+
         if (!GST_CLOCK_TIME_IS_VALID(m_firstBufferPts)) {
             GRefPtr<GstPad> srcpad = adoptGRef(gst_element_get_static_pad(m_src, "src"));
             m_firstBufferPts = (static_cast<guint64>(renderTimeMs)) * GST_MSECOND;
@@ -305,7 +313,7 @@ public:
         return { webrtc::SdpVideoFormat(Name()) };
     }
 
-    static GRefPtr<GstElementFactory> GstDecoderFactory(const char *capsStr)
+    static GRefPtr<GstElementFactory> GstDecoderFactory(const char* capsStr)
     {
         return GStreamerRegistryScanner::singleton().isCodecSupported(GStreamerRegistryScanner::Configuration::Decoding, String::fromUTF8(capsStr), true).factory;
     }
