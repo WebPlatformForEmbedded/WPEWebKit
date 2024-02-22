@@ -2115,7 +2115,7 @@ endif ()
 add_library(webrtc STATIC ${webrtc_SOURCES})
 
 target_compile_options(webrtc PRIVATE
-    "$<$<COMPILE_LANGUAGE:CXX>:-std=gnu++11>"
+    "$<$<COMPILE_LANGUAGE:CXX>:-std=c++2a>"
     "-UHAVE_CONFIG_H"
     "-DWEBRTC_WEBKIT_BUILD=1"
     "-w"

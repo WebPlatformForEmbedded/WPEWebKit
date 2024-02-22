@@ -13,6 +13,8 @@
 
 #include <string.h>
 
+#include <cstdint>
+
 #include "rtc_base/system/file_wrapper.h"
 
 namespace webrtc {
