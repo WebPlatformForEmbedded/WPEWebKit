@@ -91,7 +91,6 @@ class TurnAllocateRequest : public StunRequest {
   void OnUnknownAttribute(StunMessage* response);
 
   TurnPort* port_;
-  bool ipv6_preference;
 };
 
 class TurnRefreshRequest : public StunRequest {
@@ -387,8 +386,7 @@ void TurnPort::PrepareAddress() {
     if (server_address_.proto == PROTO_UDP) {
       // If its UDP, send AllocateRequest now.
       // For TCP and TLS AllcateRequest will be sent by OnSocketConnect.
-      TurnAllocateRequest * newRequest = new TurnAllocateRequest(this);
-      SendRequest(newRequest, 0);
+      SendRequest(new TurnAllocateRequest(this), 0);
     }
   }
 }
@@ -517,8 +515,7 @@ void TurnPort::OnSocketConnect(rtc::AsyncPacketSocket* socket) {
   RTC_LOG(LS_INFO) << "TurnPort connected to "
                    << socket->GetRemoteAddress().ToSensitiveString()
                    << " using tcp.";
-  TurnAllocateRequest * newRequest = new TurnAllocateRequest(this);
-  SendRequest(newRequest, 0);
+  SendRequest(new TurnAllocateRequest(this), 0);
 }
 
 void TurnPort::OnSocketClose(rtc::AsyncPacketSocket* socket, int error) {
@@ -961,7 +958,6 @@ bool TurnPort::AllowedTurnPort(int port,
   }
   return false;
 }
-
 
 void TurnPort::TryAlternateServer() {
   if (server_address().proto == PROTO_UDP) {
@@ -1443,8 +1439,7 @@ void TurnAllocateRequest::OnAuthChallenge(StunMessage* response, int code) {
   port_->set_nonce(nonce_attr->string_view());
 
   // Send another allocate request, with the received realm and nonce values.
-  TurnAllocateRequest * newRequest = new TurnAllocateRequest(port_);
-  port_->SendRequest(newRequest, 0);
+  port_->SendRequest(new TurnAllocateRequest(port_), 0);
 }
 
 void TurnAllocateRequest::OnTryAlternate(StunMessage* response, int code) {

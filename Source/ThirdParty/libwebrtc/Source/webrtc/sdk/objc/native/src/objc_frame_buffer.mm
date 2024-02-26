@@ -60,12 +60,15 @@ ObjCFrameBuffer::ObjCFrameBuffer(id<RTCVideoFrameBuffer> frame_buffer)
 ObjCFrameBuffer::ObjCFrameBuffer(BufferProvider provider, int width, int height)
     : frame_buffer_provider_(provider), width_(width), height_(height) { }
 
+ObjCFrameBuffer::ObjCFrameBuffer(id<RTCVideoFrameBuffer> frame_buffer, int width, int height)
+    : frame_buffer_(frame_buffer), width_(width), height_(height) { }
+
 ObjCFrameBuffer::~ObjCFrameBuffer() {
-#if defined(WEBRTC_WEBKIT_BUILD)
-  [frame_buffer_ close];
-#endif
-  if (frame_buffer_provider_.releaseBuffer)
-    frame_buffer_provider_.releaseBuffer(frame_buffer_provider_.pointer);
+  if (!original_frame_) {
+    [frame_buffer_ close];
+    if (frame_buffer_provider_.releaseBuffer)
+      frame_buffer_provider_.releaseBuffer(frame_buffer_provider_.pointer);
+  }
 }
 
 VideoFrameBuffer::Type ObjCFrameBuffer::type() const {
@@ -81,23 +84,41 @@ int ObjCFrameBuffer::height() const {
 }
 
 rtc::scoped_refptr<I420BufferInterface> ObjCFrameBuffer::ToI420() {
+  auto frameBuffer = wrapped_frame_buffer();
+  if (!frameBuffer)
+    return nullptr;
   rtc::scoped_refptr<I420BufferInterface> buffer =
     rtc::make_ref_counted<ObjCI420FrameBuffer>([wrapped_frame_buffer() toI420]);
+
+  if (width_ != buffer->width() || height_ != buffer->height())
+      buffer = buffer->Scale(width_, height_)->ToI420();
 
   return buffer;
 }
 
 id<RTCVideoFrameBuffer> ObjCFrameBuffer::wrapped_frame_buffer() const {
-  if (frame_buffer_)
-    return frame_buffer_;
-
-  {
-    webrtc::MutexLock lock(&mutex_);
-    if (!frame_buffer_ && frame_buffer_provider_.getBuffer)
+#if defined(WEBRTC_WEBKIT_BUILD)
+  webrtc::MutexLock lock(&mutex_);
+  if (!frame_buffer_ && frame_buffer_provider_.getBuffer && frame_buffer_provider_.pointer) {
+    if (auto* buffer = frame_buffer_provider_.getBuffer(frame_buffer_provider_.pointer))
       const_cast<ObjCFrameBuffer*>(this)->frame_buffer_ = [[RTCCVPixelBuffer alloc] initWithPixelBuffer:frame_buffer_provider_.getBuffer(frame_buffer_provider_.pointer)];
   }
-
+#endif
   return frame_buffer_;
+}
+
+rtc::scoped_refptr<VideoFrameBuffer> ObjCFrameBuffer::CropAndScale(int offset_x, int offset_y, int crop_width, int crop_height, int scaled_width, int scaled_height)
+{
+  if (offset_x || offset_y || crop_width != width() || crop_height != height())
+    return VideoFrameBuffer::CropAndScale(offset_x, offset_y, crop_width, crop_height, scaled_width, scaled_height);
+
+  webrtc::MutexLock lock(&mutex_);
+  auto newFrame = (!frame_buffer_ && frame_buffer_provider_.getBuffer && frame_buffer_provider_.pointer) ?
+    rtc::make_ref_counted<ObjCFrameBuffer>(frame_buffer_provider_, scaled_width, scaled_height) :
+    rtc::make_ref_counted<ObjCFrameBuffer>(frame_buffer_, scaled_width, scaled_height);
+
+  newFrame->set_original_frame(original_frame_ ? *original_frame_ : *this);
+  return newFrame;
 }
 
 id<RTCVideoFrameBuffer> ToObjCVideoFrameBuffer(const rtc::scoped_refptr<VideoFrameBuffer>& buffer) {

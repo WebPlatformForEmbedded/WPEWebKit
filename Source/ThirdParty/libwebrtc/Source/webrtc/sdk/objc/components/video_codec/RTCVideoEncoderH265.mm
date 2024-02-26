@@ -26,6 +26,7 @@
 #import "helpers/UIDevice+RTCDevice.h"
 #endif
 
+#include "common_video/h265/h265_bitstream_parser.h"
 #include "common_video/include/bitrate_adjuster.h"
 #include "libyuv/convert_from.h"
 #include "modules/include/module_common_types.h"
@@ -35,6 +36,10 @@
 #include "rtc_base/time_utils.h"
 #include "sdk/objc/Framework/Classes/VideoToolbox/nalu_rewriter.h"
 #include "system_wrappers/include/clock.h"
+
+VT_EXPORT const CFStringRef kVTVideoEncoderSpecification_RequiredLowLatency;
+
+static constexpr int ErrorCallbackDefaultValue = -1;
 
 @interface RTCVideoEncoderH265 ()
 
@@ -46,15 +51,10 @@
            renderTimeMs:(int64_t)renderTimeMs
               timestamp:(uint32_t)timestamp
                rotation:(RTCVideoRotation)rotation;
-
 @end
 
 namespace {  // anonymous namespace
 
-// The ratio between kVTCompressionPropertyKey_DataRateLimits and
-// kVTCompressionPropertyKey_AverageBitRate. The data rate limit is set higher
-// than the average bit rate to avoid undershooting the target.
-const float kLimitToAverageBitRateFactor = 1.5f;
 // These thresholds deviate from the default h265 QP thresholds, as they
 // have been found to work better on devices that support VideoToolbox
 const int kLowh265QpThreshold = 28;
@@ -174,8 +174,13 @@ void compressionOutputCallback(void* encoder,
   VTCompressionSessionRef _compressionSession;
   RTCVideoCodecMode _mode;
   int framesLeft;
-
   std::vector<uint8_t> _nv12ScaleBuffer;
+  bool _useAnnexB;
+  bool _isLowLatencyEnabled;
+  bool _needsToSendDescription;
+  RTCVideoEncoderDescriptionCallback _descriptionCallback;
+  RTCVideoEncoderErrorCallback _errorCallback;
+  webrtc::H265BitstreamParser _h265BitstreamParser;
 }
 
 // .5 is set as a mininum to prevent overcompensating for large temporary
@@ -189,8 +194,11 @@ void compressionOutputCallback(void* encoder,
   if (self = [super init]) {
     _codecInfo = codecInfo;
     _bitrateAdjuster.reset(new webrtc::BitrateAdjuster(.5, .95));
+    _useAnnexB = true;
+    _isLowLatencyEnabled = true;
     RTC_CHECK([codecInfo.name isEqualToString:@"H265"]);
   }
+
   return self;
 }
 
@@ -214,12 +222,36 @@ void compressionOutputCallback(void* encoder,
   return [self resetCompressionSession];
 }
 
-- (NSInteger)encode:(RTCVideoFrame*)frame
-    codecSpecificInfo:(id<RTCCodecSpecificInfo>)codecSpecificInfo
-           frameTypes:(NSArray<NSNumber*>*)frameTypes {
+- (void)setUseAnnexB:(bool)useAnnexB
+{
+    _useAnnexB = useAnnexB;
+    _needsToSendDescription = !useAnnexB;
+}
+
+- (void)setLowLatency:(bool)enabled
+{
+    _isLowLatencyEnabled = enabled;
+}
+
+- (void)setDescriptionCallback:(RTCVideoEncoderDescriptionCallback)callback
+{
+    _descriptionCallback = callback;
+}
+
+- (void)setErrorCallback:(RTCVideoEncoderErrorCallback)callback
+{
+    _errorCallback = callback;
+}
+
+- (NSInteger)encode:(RTCVideoFrame *)frame
+    codecSpecificInfo:(nullable id<RTCCodecSpecificInfo>)codecSpecificInfo
+           frameTypes:(NSArray<NSNumber *> *)frameTypes {
   RTC_DCHECK_EQ(frame.width, _width);
   RTC_DCHECK_EQ(frame.height, _height);
   if (!_callback || !_compressionSession) {
+    if (_errorCallback) {
+      _errorCallback(ErrorCallbackDefaultValue);
+    }
     return WEBRTC_VIDEO_CODEC_UNINITIALIZED;
   }
   BOOL isKeyframeRequired = NO;
@@ -258,6 +290,9 @@ void compressionOutputCallback(void* encoder,
       // Cropping required, we need to crop and scale to a new pixel buffer.
       pixelBuffer = CreatePixelBuffer(pixelBufferPool);
       if (!pixelBuffer) {
+        if (_errorCallback) {
+          _errorCallback(ErrorCallbackDefaultValue);
+        }
         return WEBRTC_VIDEO_CODEC_ERROR;
       }
       int dstWidth = CVPixelBufferGetWidth(pixelBuffer);
@@ -273,6 +308,9 @@ void compressionOutputCallback(void* encoder,
       _nv12ScaleBuffer.shrink_to_fit();
       if (![rtcPixelBuffer cropAndScaleTo:pixelBuffer
                            withTempBuffer:_nv12ScaleBuffer.data()]) {
+        if (_errorCallback) {
+          _errorCallback(ErrorCallbackDefaultValue);
+        }
         return WEBRTC_VIDEO_CODEC_ERROR;
       }
     }
@@ -282,12 +320,18 @@ void compressionOutputCallback(void* encoder,
     // We did not have a native frame buffer
     pixelBuffer = CreatePixelBuffer(pixelBufferPool);
     if (!pixelBuffer) {
+      if (_errorCallback) {
+        _errorCallback(ErrorCallbackDefaultValue);
+      }
       return WEBRTC_VIDEO_CODEC_ERROR;
     }
     RTC_DCHECK(pixelBuffer);
     if (!CopyVideoFrameToPixelBuffer([frame.buffer toI420], pixelBuffer)) {
       RTC_LOG(LS_ERROR) << "Failed to copy frame data.";
       CVBufferRelease(pixelBuffer);
+      if (_errorCallback) {
+        _errorCallback(ErrorCallbackDefaultValue);
+      }
       return WEBRTC_VIDEO_CODEC_ERROR;
     }
   }
@@ -393,8 +437,8 @@ void compressionOutputCallback(void* encoder,
   CFDictionarySetValue(encoder_specs, kVTVideoEncoderSpecification_EnableHardwareAcceleratedVideoEncoder, kCFBooleanTrue);
 #endif
 #if HAVE_VTB_REQUIREDLOWLATENCY
-  // We will want to enable this property once working.
-  // CFDictionarySetValue(encoder_specs, kVTVideoEncoderSpecification_RequiredLowLatency, kCFBooleanTrue);
+  if (_isLowLatencyEnabled)
+    CFDictionarySetValue(encoder_specs, kVTVideoEncoderSpecification_RequiredLowLatency, kCFBooleanTrue);
 #endif
   OSStatus status = VTCompressionSessionCreate(
       nullptr,  // use default allocator
@@ -403,6 +447,17 @@ void compressionOutputCallback(void* encoder,
       sourceAttributes,
       nullptr,  // use default compressed data allocator
       compressionOutputCallback, nullptr, &_compressionSession);
+  if (status != noErr) {
+    if (encoder_specs)
+      CFDictionaryRemoveValue(encoder_specs, kVTVideoEncoderSpecification_RequiredLowLatency);
+    status = VTCompressionSessionCreate(
+        nullptr,  // use default allocator
+        _width, _height, kCMVideoCodecType_HEVC,
+        encoder_specs,  // use hardware accelerated encoder if available
+        sourceAttributes,
+        nullptr,  // use default compressed data allocator
+        compressionOutputCallback, nullptr, &_compressionSession);
+  }
   if (sourceAttributes) {
     CFRelease(sourceAttributes);
     sourceAttributes = nullptr;
@@ -433,20 +488,16 @@ void compressionOutputCallback(void* encoder,
 
 - (void)configureCompressionSession {
   RTC_DCHECK(_compressionSession);
-  SetVTSessionProperty(_compressionSession, nullptr, kVTCompressionPropertyKey_RealTime,
-                       false);
+  SetVTSessionProperty(_compressionSession, kVTCompressionPropertyKey_RealTime,
+                       _isLowLatencyEnabled);
   // SetVTSessionProperty(_compressionSession,
   // kVTCompressionPropertyKey_ProfileLevel, _profile);
-  SetVTSessionProperty(_compressionSession, nullptr,
-                       kVTCompressionPropertyKey_AllowFrameReordering, false);
+  SetVTSessionProperty(_compressionSession, kVTCompressionPropertyKey_AllowFrameReordering, false);
   [self setEncoderBitrateBps:_targetBitrateBps];
 
   // Set a relatively large value for keyframe emission (7200 frames or 4 minutes).
-  SetVTSessionProperty(_compressionSession, nullptr,
-                       kVTCompressionPropertyKey_MaxKeyFrameInterval, 7200);
-  SetVTSessionProperty(_compressionSession, nullptr,
-                       kVTCompressionPropertyKey_MaxKeyFrameIntervalDuration,
-                       240);
+  SetVTSessionProperty(_compressionSession, kVTCompressionPropertyKey_MaxKeyFrameInterval, 7200);
+  SetVTSessionProperty(_compressionSession, kVTCompressionPropertyKey_MaxKeyFrameIntervalDuration, 240);
   OSStatus status =
       VTCompressionSessionPrepareToEncodeFrames(_compressionSession);
   if (status != noErr) {
@@ -474,37 +525,7 @@ void compressionOutputCallback(void* encoder,
 
 - (void)setEncoderBitrateBps:(uint32_t)bitrateBps {
   if (_compressionSession) {
-    SetVTSessionProperty(_compressionSession, nullptr, 
-                         kVTCompressionPropertyKey_AverageBitRate, bitrateBps);
-
-    // TODO(tkchin): Add a helper method to set array value.
-    int64_t dataLimitBytesPerSecondValue =
-        static_cast<int64_t>(bitrateBps * kLimitToAverageBitRateFactor / 8);
-    CFNumberRef bytesPerSecond =
-        CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt64Type,
-                       &dataLimitBytesPerSecondValue);
-    int64_t oneSecondValue = 1;
-    CFNumberRef oneSecond = CFNumberCreate(
-        kCFAllocatorDefault, kCFNumberSInt64Type, &oneSecondValue);
-    const void* nums[2] = {bytesPerSecond, oneSecond};
-    CFArrayRef dataRateLimits =
-        CFArrayCreate(nullptr, nums, 2, &kCFTypeArrayCallBacks);
-    OSStatus status = VTSessionSetProperty(
-        _compressionSession, kVTCompressionPropertyKey_DataRateLimits,
-        dataRateLimits);
-    if (bytesPerSecond) {
-      CFRelease(bytesPerSecond);
-    }
-    if (oneSecond) {
-      CFRelease(oneSecond);
-    }
-    if (dataRateLimits) {
-      CFRelease(dataRateLimits);
-    }
-    if (status != noErr) {
-      RTC_LOG(LS_ERROR) << "Failed to set data rate limit";
-    }
-
+    SetVTSessionProperty(_compressionSession, kVTCompressionPropertyKey_AverageBitRate, bitrateBps);
     _encoderBitrateBps = bitrateBps;
   }
 }
@@ -519,10 +540,16 @@ void compressionOutputCallback(void* encoder,
                rotation:(RTCVideoRotation)rotation {
   if (status != noErr) {
     RTC_LOG(LS_ERROR) << "h265 encode failed.";
+    if (_errorCallback) {
+      _errorCallback(status);
+    }
     return;
   }
   if (infoFlags & kVTEncodeInfo_FrameDropped) {
     RTC_LOG(LS_INFO) << "h265 encoder dropped a frame.";
+    if (_errorCallback) {
+      _errorCallback(noErr);
+    }
     return;
   }
 
@@ -541,8 +568,43 @@ void compressionOutputCallback(void* encoder,
   }
 
   std::unique_ptr<rtc::Buffer> buffer(new rtc::Buffer());
-  if (!webrtc::H265CMSampleBufferToAnnexBBuffer(sampleBuffer, isKeyframe, buffer.get())) {
-    RTC_LOG(LS_INFO) << "Unable to parse H265 encoded buffer";
+  if (_useAnnexB) {
+    if (!webrtc::H265CMSampleBufferToAnnexBBuffer(sampleBuffer, isKeyframe, buffer.get())) {
+      RTC_LOG(LS_WARNING) << "Unable to parse H265 encoded buffer";
+      if (_errorCallback) {
+        _errorCallback(ErrorCallbackDefaultValue);
+      }
+      return;
+    }
+  } else {
+    buffer->SetSize(0);
+    CMBlockBufferRef blockBuffer = CMSampleBufferGetDataBuffer(sampleBuffer);
+    size_t currentStart = 0;
+    size_t size = CMBlockBufferGetDataLength(blockBuffer);
+    while (currentStart < size) {
+      char* data = nullptr;
+      size_t length;
+      if (auto error = CMBlockBufferGetDataPointer(blockBuffer, currentStart, &length, nullptr, &data)) {
+        RTC_LOG(LS_ERROR) << "H264 decoder: CMBlockBufferGetDataPointer failed with error " << error;
+        if (_errorCallback) {
+          _errorCallback(ErrorCallbackDefaultValue);
+        }
+        return;
+      }
+      buffer->AppendData(data, size);
+      currentStart += size;
+    }
+    if (_descriptionCallback && _needsToSendDescription) {
+      auto formatDescription = CMSampleBufferGetFormatDescription(sampleBuffer);
+      auto sampleExtensionsDict = static_cast<CFDictionaryRef>(CMFormatDescriptionGetExtension(formatDescription, kCMFormatDescriptionExtension_SampleDescriptionExtensionAtoms));
+      if (sampleExtensionsDict) {
+        auto sampleExtensions = static_cast<CFDataRef>(CFDictionaryGetValue(sampleExtensionsDict, CFSTR("hvcC")));
+        if (sampleExtensions) {
+          _needsToSendDescription = false;
+          _descriptionCallback(reinterpret_cast<const uint8_t*>(CFDataGetBytePtr(sampleExtensions)), CFDataGetLength(sampleExtensions));
+        }
+      }
+    }
   }
 
   RTCEncodedImage* frame = [[RTCEncodedImage alloc] init];
@@ -561,8 +623,13 @@ void compressionOutputCallback(void* encoder,
                           ? RTCVideoContentTypeScreenshare
                           : RTCVideoContentTypeUnspecified;
   frame.flags = webrtc::VideoSendTiming::kInvalid;
+  frame.temporalIndex = -1;
 
-  // FIXME: QP is ignored because there is no H.265 bitstream parser.
+  if (_useAnnexB) {
+      _h265BitstreamParser.ParseBitstream(*buffer);
+      auto qp = _h265BitstreamParser.GetLastSliceQp();
+      frame.qp = @(qp.value_or(0));
+  }
 
   BOOL res = _callback(frame, [[RTCCodecSpecificInfoH265 alloc] init], nullptr);
   if (!res) {
@@ -576,6 +643,11 @@ void compressionOutputCallback(void* encoder,
   return [[RTCVideoEncoderQpThresholds alloc]
       initWithThresholdsLow:kLowh265QpThreshold
                        high:kHighh265QpThreshold];
+}
+
+- (void)flush {
+    if (_compressionSession)
+        VTCompressionSessionCompleteFrames(_compressionSession, kCMTimeInvalid);
 }
 
 @end

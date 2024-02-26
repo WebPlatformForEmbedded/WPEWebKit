@@ -501,6 +501,14 @@ absl::optional<H265SpsParser::SpsState> H265SpsParser::ParseSpsInternal(
     TRUE_OR_RETURN(height_crop < pic_height_in_luma_samples);
   }
 
+#if WEBRTC_WEBKIT_BUILD
+  // log2_max_pic_order_cnt_lsb_minus4 is used with
+  // BitstreamReader::ConsumeBits, which can read at most INT_MAX bits at
+  // a time. We also have to avoid overflow when adding 4 to the on-wire
+  // golomb value, e.g., for evil input data.
+  const uint32_t kMaxLog2LsbMinus4 = std::numeric_limits<int>::max() - 4;
+#endif
+
   // bit_depth_luma_minus8: ue(v)
   sps.bit_depth_luma_minus8 = reader.ReadExponentialGolomb();
   IN_RANGE_OR_RETURN_NULL(sps.bit_depth_luma_minus8, 0, 8);

@@ -336,7 +336,6 @@ class TurnPort : public Port {
   std::string nonce_;  // From 401/438 response message.
   std::string hash_;   // Digest of username:realm:password
 
-  bool send_ipv6_request;
   int next_channel_number_;
   std::vector<std::unique_ptr<TurnEntry>> entries_;
 

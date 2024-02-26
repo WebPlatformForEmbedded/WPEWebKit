@@ -49,9 +49,9 @@ void setH264HardwareEncoderAllowed(bool);
 bool isH264HardwareEncoderAllowed();
 
 enum class BufferType { I420, I010 };
+CVPixelBufferRef copyPixelBufferForFrame(const VideoFrame&) CF_RETURNS_RETAINED;
 CVPixelBufferRef createPixelBufferFromFrame(const VideoFrame&, const std::function<CVPixelBufferRef(size_t, size_t, BufferType)>& createPixelBuffer) CF_RETURNS_RETAINED;
 CVPixelBufferRef createPixelBufferFromFrameBuffer(VideoFrameBuffer&, const std::function<CVPixelBufferRef(size_t, size_t, BufferType)>& createPixelBuffer) CF_RETURNS_RETAINED;
-CVPixelBufferRef pixelBufferFromFrame(const VideoFrame&) CF_RETURNS_RETAINED;
 rtc::scoped_refptr<webrtc::VideoFrameBuffer> pixelBufferToFrame(CVPixelBufferRef);
 bool copyVideoFrameBuffer(VideoFrameBuffer&, uint8_t*);
 
@@ -61,4 +61,22 @@ rtc::scoped_refptr<VideoFrameBuffer> toWebRTCVideoFrameBuffer(void*, GetBufferCa
 void* videoFrameBufferProvider(const VideoFrame&);
 
 bool convertBGRAToYUV(CVPixelBufferRef sourceBuffer, CVPixelBufferRef destinationBuffer);
+
+struct I420BufferLayout {
+    size_t offsetY { 0 };
+    size_t strideY { 0 };
+    size_t offsetU { 0 };
+    size_t strideU { 0 };
+    size_t offsetV { 0 };
+    size_t strideV { 0 };
+};
+
+struct I420ABufferLayout : I420BufferLayout {
+    size_t offsetA { 0 };
+    size_t strideA { 0 };
+};
+
+CVPixelBufferRef createPixelBufferFromI420Buffer(const uint8_t* buffer, size_t length, size_t width, size_t height, I420BufferLayout) CF_RETURNS_RETAINED;
+CVPixelBufferRef createPixelBufferFromI420ABuffer(const uint8_t* buffer, size_t length, size_t width, size_t height, I420ABufferLayout) CF_RETURNS_RETAINED;
+
 }

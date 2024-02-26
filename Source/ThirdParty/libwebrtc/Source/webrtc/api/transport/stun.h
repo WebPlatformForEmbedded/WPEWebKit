@@ -89,15 +89,6 @@ enum StunAddressFamily {
   STUN_ADDRESS_IPV6 = 2
 };
 
-// The REQUESTED-ADDRESS-FAMILY attribute is used by clients to request
-// the allocation of a specific address type from a server.
-// There are two values defined for this field and
-// specified in [RFC5389], Section 15.1: 0x01 for IPv4 addresses and 0x02 for IPv6 addresses.
-enum RequestedFamilyAtrributeValues {
-  STUN_ATTR_IPV4_FAMILY              = 0x01,
-  STUN_ATTR_IPV6_FAMILY              = 0x02,
-};
-
 // These are the types of STUN error codes defined in RFC 5389.
 enum StunErrorCode {
   STUN_ERROR_TRY_ALTERNATE = 300,
@@ -709,9 +700,6 @@ enum TurnAttributeType {
   // TODO(mallinath) - Uncomment after RelayAttributes are renamed.
   // STUN_ATTR_DATA                     = 0x0013,  // ByteString
   STUN_ATTR_XOR_RELAYED_ADDRESS = 0x0016,  // XorAddress
-// The REQUESTED-ADDRESS-FAMILY attribute is used by clients to request
-// the allocation of a specific address type from a server.
-  STUN_ATTR_REQUESTED_ADDRESS_FAMILY    = 0x0017,  // IPv6 RFC 6156
   STUN_ATTR_EVEN_PORT = 0x0018,            // ByteString, 1 byte.
   STUN_ATTR_REQUESTED_TRANSPORT = 0x0019,  // UInt32
   STUN_ATTR_DONT_FRAGMENT = 0x001A,        // No content, Length = 0

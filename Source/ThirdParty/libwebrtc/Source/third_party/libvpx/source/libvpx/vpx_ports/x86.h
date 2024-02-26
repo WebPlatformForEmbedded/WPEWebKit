@@ -223,6 +223,8 @@ static INLINE int x86_simd_caps(void) {
     }
   }
 
+  (void)reg_eax;  // Avoid compiler warning on unused-but-set variable.
+
   return flags & mask;
 }
 
@@ -308,6 +310,11 @@ static INLINE unsigned int x86_tsc_start(void) {
   unsigned int reg_eax, reg_ebx, reg_ecx, reg_edx;
   // This call should not be removed. See function notes above.
   cpuid(0, 0, reg_eax, reg_ebx, reg_ecx, reg_edx);
+  // Avoid compiler warnings on unused-but-set variables.
+  (void)reg_eax;
+  (void)reg_ebx;
+  (void)reg_ecx;
+  (void)reg_edx;
   return x86_readtsc();
 }
 
@@ -316,6 +323,11 @@ static INLINE unsigned int x86_tsc_end(void) {
   unsigned int reg_eax, reg_ebx, reg_ecx, reg_edx;
   // This call should not be removed. See function notes above.
   cpuid(0, 0, reg_eax, reg_ebx, reg_ecx, reg_edx);
+  // Avoid compiler warnings on unused-but-set variables.
+  (void)reg_eax;
+  (void)reg_ebx;
+  (void)reg_ecx;
+  (void)reg_edx;
   return v;
 }
 
