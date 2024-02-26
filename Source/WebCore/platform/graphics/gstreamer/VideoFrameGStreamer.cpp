@@ -363,7 +363,13 @@ void VideoFrame::copyTo(std::span<uint8_t> destination, VideoPixelFormat pixelFo
     auto* inputBuffer = gst_sample_get_buffer(sample);
     auto* inputCaps = gst_sample_get_caps(sample);
     gst_video_info_from_caps(&inputInfo, inputCaps);
-    GstMappedFrame inputFrame(inputBuffer, inputInfo, GST_MAP_READ);
+    GstMappedFrame inputFrame(inputBuffer, &inputInfo, GST_MAP_READ);
+    if (!inputFrame) {
+        GST_WARNING("could not map the input frame");
+        ASSERT_NOT_REACHED_WITH_MESSAGE("could not map the input frame");
+        callback({ });
+        return;
+    }
 
     GST_TRACE("Copying frame data to pixel format %d", static_cast<int>(pixelFormat));
     if (pixelFormat == VideoPixelFormat::NV12) {
