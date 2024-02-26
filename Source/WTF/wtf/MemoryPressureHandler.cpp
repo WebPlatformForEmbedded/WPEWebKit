@@ -36,6 +36,10 @@
 #include <wtf/RAMSize.h>
 #include <wtf/text/StringToIntegerConversion.h>
 
+#if USE(GLIB_EVENT_LOOP)
+#include <wtf/glib/RunLoopSourcePriority.h>
+#endif
+
 namespace WTF {
 
 WTF_EXPORT_PRIVATE bool MemoryPressureHandler::ReliefLogger::s_loggingEnabled = false;
@@ -154,6 +158,10 @@ void MemoryPressureHandler::setShouldUsePeriodicMemoryMonitor(bool use)
     if (use) {
         m_measurementTimer = makeUnique<RunLoop::Timer<MemoryPressureHandler>>(RunLoop::main(), this, &MemoryPressureHandler::measurementTimerFired);
         m_measurementTimer->startRepeating(m_configuration.pollInterval);
+#if USE(GLIB_EVENT_LOOP)
+        m_measurementTimer->setPriority(MemoryPressureHandlerTimer);
+#endif
+
     } else
         m_measurementTimer = nullptr;
 }
