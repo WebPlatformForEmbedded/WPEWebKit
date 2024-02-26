@@ -67,6 +67,14 @@ if (ENABLE_VIDEO OR ENABLE_WEB_AUDIO)
         platform/graphics/gstreamer/mse/WebKitMediaSourceGStreamer.cpp
 
         platform/gstreamer/GStreamerCodecUtilities.cpp
+        platform/gstreamer/GStreamerHolePunchQuirkBcmNexus.cpp
+        platform/gstreamer/GStreamerHolePunchQuirkWesteros.cpp
+        platform/gstreamer/GStreamerQuirkAmLogic.cpp
+        platform/gstreamer/GStreamerQuirkBcmNexus.cpp
+        platform/gstreamer/GStreamerQuirkBroadcom.cpp
+        platform/gstreamer/GStreamerQuirkRealtek.cpp
+        platform/gstreamer/GStreamerQuirkWesteros.cpp
+        platform/gstreamer/GStreamerQuirks.cpp
         platform/gstreamer/VideoEncoderPrivateGStreamer.cpp
 
         platform/mediarecorder/MediaRecorderPrivateGStreamer.cpp
