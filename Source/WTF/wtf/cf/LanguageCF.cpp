@@ -101,10 +101,12 @@ Vector<String> platformUserPreferredLanguages(ShouldMinimizeLanguages shouldMini
     if (!platformLanguagesCount)
         return { "en"_s };
 
-    Vector<String> languages(platformLanguagesCount, [&](size_t i) {
+    Vector<String> languages;
+    languages.reserveInitialCapacity(platformLanguagesCount);
+    for (CFIndex i = 0; i < platformLanguagesCount; i++) {
         auto platformLanguage = static_cast<CFStringRef>(CFArrayGetValueAtIndex(platformLanguages.get(), i));
-        return httpStyleLanguageCode(platformLanguage, shouldMinimizeLanguages);
-    });
+        languages.uncheckedAppend(httpStyleLanguageCode(platformLanguage, shouldMinimizeLanguages));
+    }
 
     LOG_WITH_STREAM(Language, stream << "After passing through httpStyleLanguageCode: " << languages);
 

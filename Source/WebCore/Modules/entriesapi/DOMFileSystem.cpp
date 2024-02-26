@@ -62,12 +62,16 @@ static ExceptionOr<Vector<ListedChild>> listDirectoryWithMetadata(const String& 
         return Exception { NotFoundError, "Path no longer exists or is no longer a directory"_s };
 
     auto childNames = FileSystem::listDirectory(fullPath);
-    return WTF::compactMap(WTFMove(childNames), [&](auto&& childName) -> std::optional<ListedChild> {
+    Vector<ListedChild> listedChildren;
+    listedChildren.reserveInitialCapacity(childNames.size());
+    for (auto& childName : childNames) {
         auto childPath = FileSystem::pathByAppendingComponent(fullPath, childName);
-        if (auto fileType = fileTypeIgnoringHiddenFiles(childPath))
-            return ListedChild { WTFMove(childName), *fileType };
-        return std::nullopt;
-    });
+        auto fileType = fileTypeIgnoringHiddenFiles(childPath);
+        if (!fileType)
+            continue;
+        listedChildren.uncheckedAppend(ListedChild { childName, *fileType });
+    }
+    return listedChildren;
 }
 
 static ExceptionOr<Vector<Ref<FileSystemEntry>>> toFileSystemEntries(ScriptExecutionContext& context, DOMFileSystem& fileSystem, ExceptionOr<Vector<ListedChild>>&& listedChildren, const String& parentVirtualPath)
@@ -76,18 +80,22 @@ static ExceptionOr<Vector<Ref<FileSystemEntry>>> toFileSystemEntries(ScriptExecu
     if (listedChildren.hasException())
         return listedChildren.releaseException();
 
-    return WTF::compactMap(listedChildren.returnValue(), [&](auto& child) -> RefPtr<FileSystemEntry> {
+    Vector<Ref<FileSystemEntry>> entries;
+    entries.reserveInitialCapacity(listedChildren.returnValue().size());
+    for (auto& child : listedChildren.returnValue()) {
         String virtualPath = parentVirtualPath + "/" + child.filename;
         switch (child.type) {
         case FileSystem::FileType::Regular:
-            return FileSystemFileEntry::create(context, fileSystem, virtualPath);
+            entries.uncheckedAppend(FileSystemFileEntry::create(context, fileSystem, virtualPath));
+            break;
         case FileSystem::FileType::Directory:
-            return FileSystemDirectoryEntry::create(context, fileSystem, virtualPath);
+            entries.uncheckedAppend(FileSystemDirectoryEntry::create(context, fileSystem, virtualPath));
+            break;
         default:
             break;
         }
-        return nullptr;
-    });
+    }
+    return entries;
 }
 
 // https://wicg.github.io/entries-api/#name

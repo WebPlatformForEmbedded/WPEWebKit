@@ -87,9 +87,9 @@ RTCEncodedAudioFrameMetadata LibWebRTCRtpTransformableFrame::audioMetadata() con
     if (!m_isAudioSenderFrame) {
         auto* audioFrame = static_cast<webrtc::TransformableAudioFrameInterface*>(m_rtcFrame.get());
         auto contributingSources = audioFrame->GetContributingSources();
-        cssrcs = Vector<uint32_t>(contributingSources.size(), [&](size_t cptr) {
-            return contributingSources[cptr];
-        });
+        cssrcs.reserveInitialCapacity(contributingSources.size());
+        for (size_t cptr = 0; cptr < contributingSources.size(); ++cptr)
+            cssrcs.uncheckedAppend(contributingSources[cptr]);
     }
     return { m_rtcFrame->GetSsrc(), WTFMove(cssrcs) };
 }
