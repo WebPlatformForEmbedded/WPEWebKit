@@ -94,7 +94,6 @@ Ref<VideoFrameGStreamer> VideoFrameGStreamer::createFromPixelBuffer(Ref<PixelBuf
             if (!inputFrame || !outputFrame) {
                 GST_WARNING("frames could not be mapped");
                 ASSERT_NOT_REACHED();
-                return nullptr;
             }
             gst_video_converter_frame(converter.get(), inputFrame.get(), outputFrame.get());
         }
