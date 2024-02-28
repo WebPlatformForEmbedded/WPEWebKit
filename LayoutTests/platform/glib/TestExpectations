@@ -2646,15 +2646,11 @@ fast/text/line-break-with-locale.html [ ImageOnlyFailure ]
 webkit.org/b/225423 fast/canvas/canvas-composite-text-alpha.html [ Failure ]
 
 # Non-sRGB color spaces are not currently supported by the glib ports.
-css3/color-filters/svg/color-filter-inline-svg.html [ ImageOnlyFailure ]
-css3/filters/reference-filter-color-space.html [ ImageOnlyFailure ]
 fast/canvas/canvas-color-space-display-p3.html [ Skip ]
 fast/canvas/canvas-color-space-display-p3-ImageData.html [ Skip ]
 imported/w3c/web-platform-tests/html/canvas/element/wide-gamut-canvas/ [ Skip ]
 imported/w3c/web-platform-tests/html/canvas/element/manual/wide-gamut-canvas/ [ Skip ]
 imported/w3c/web-platform-tests/html/canvas/offscreen/wide-gamut-canvas/ [ Skip ]
-svg/filters/feCompositeOpaque.html [ ImageOnlyFailure ]
-svg/filters/feDiffuseLighting-bottomRightPixel.html [ ImageOnlyFailure ]
 
 storage/indexeddb/structured-clone-image-data-display-p3.html [ Skip ]
 

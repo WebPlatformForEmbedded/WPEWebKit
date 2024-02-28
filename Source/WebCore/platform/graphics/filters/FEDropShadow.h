@@ -51,6 +51,10 @@ public:
 
     template<class Encoder> void encode(Encoder&) const;
     template<class Decoder> static std::optional<Ref<FEDropShadow>> decode(Decoder&);
+#if USE(CAIRO)
+    void setOperatingColorSpace(const DestinationColorSpace&) override { }
+#endif
+
 
 private:
     FEDropShadow(float stdX, float stdY, float dx, float dy, const Color& shadowColor, float shadowOpacity);
