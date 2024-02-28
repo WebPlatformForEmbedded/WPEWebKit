@@ -31,14 +31,15 @@
 
 namespace WebCore {
 
-Ref<SourceGraphic> SourceGraphic::create()
+Ref<SourceGraphic> SourceGraphic::create(const DestinationColorSpace& colorSpace)
 {
-    return adoptRef(*new SourceGraphic());
+    return adoptRef(*new SourceGraphic(colorSpace));
 }
 
-SourceGraphic::SourceGraphic()
+SourceGraphic::SourceGraphic(const DestinationColorSpace& colorSpace)
     : FilterEffect(FilterEffect::Type::SourceGraphic)
 {
+    setOperatingColorSpace(colorSpace);
 }
 
 bool SourceGraphic::supportsAcceleratedRendering() const

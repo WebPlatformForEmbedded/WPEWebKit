@@ -140,10 +140,10 @@ bool RenderSVGResourceFilter::applyResource(RenderElement& renderer, const Rende
         return false;
     }
 
-#if ENABLE(DESTINATION_COLOR_SPACE_LINEAR_SRGB)
-    auto colorSpace = DestinationColorSpace::LinearSRGB();
-#else
+#if USE(CAIRO)
     auto colorSpace = DestinationColorSpace::SRGB();
+#else
+    auto colorSpace = DestinationColorSpace::LinearSRGB();
 #endif
 
     filterData->sourceImage = context->createScaledImageBuffer(filterData->sourceImageRect, filterScale, colorSpace, filterData->filter->renderingMode());
@@ -203,6 +203,13 @@ void RenderSVGResourceFilter::postApplyResource(RenderElement& renderer, Graphic
 
     if (filterData.filter) {
         filterData.state = FilterData::Built;
+#if USE(CAIRO)
+        // Cairo operates in SRGB which is why the SourceImage initially is in SRGB color space,
+        // but before applying all filters it has to be transformed to LinearRGB to comply with
+        // specification (https://www.w3.org/TR/filter-effects-1/#attr-valuedef-in-sourcegraphic).
+        if (filterData.sourceImage.get())
+            filterData.sourceImage.get()->transformToColorSpace(DestinationColorSpace::LinearSRGB());
+#endif
         context->drawFilteredImageBuffer(filterData.sourceImage.get(), filterData.sourceImageRect, *filterData.filter, filterData.results);
     }
 
