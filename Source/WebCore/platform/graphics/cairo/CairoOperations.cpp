@@ -886,6 +886,7 @@ void drawPlatformImage(GraphicsContextCairo& platformContext, cairo_surface_t* s
     auto orientationSizing = options.orientation().usesWidthAsHeight() ? OrientationSizing::WidthAsHeight : OrientationSizing::Normal;
     drawSurface(platformContext, surface, dst, srcRect, options.interpolationQuality(), globalAlpha, shadowState, orientationSizing);
     platformContext.restore();
+    WebCore::renderingStarted();
 }
 
 void drawPattern(GraphicsContextCairo& platformContext, cairo_surface_t* surface, const IntSize& size, const FloatRect& destRect, const FloatRect& tileRect, const AffineTransform& patternTransform, const FloatPoint& phase, const ImagePaintingOptions& options)
