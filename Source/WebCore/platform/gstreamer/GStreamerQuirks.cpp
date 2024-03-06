@@ -56,10 +56,30 @@ GStreamerQuirksManager::GStreamerQuirksManager()
     return;
 #endif
 
-    const char* quirksList = g_getenv("WEBKIT_GST_QUIRKS");
-    GST_DEBUG("Attempting to parse requested quirks: %s", GST_STR_NULL(quirksList));
-    if (quirksList) {
-        StringView quirks { quirksList, static_cast<unsigned>(strlen(quirksList)) };
+    const char* quirksListFromEnvironment = g_getenv("WEBKIT_GST_QUIRKS");
+    StringBuilder quirksListBuilder;
+    if (quirksListFromEnvironment)
+        quirksListBuilder.append(quirksListFromEnvironment);
+    else {
+#if PLATFORM(AMLOGIC)
+        quirksListBuilder.append("amlogic,");
+#endif
+#if PLATFORM(BROADCOM)
+        quirksListBuilder.append("broadcom,");
+#endif
+#if PLATFORM(BCM_NEXUS)
+        quirksListBuilder.append("bcmnexus,");
+#endif
+#if PLATFORM(REALTEK)
+        quirksListBuilder.append("realtek,");
+#endif
+#if PLATFORM(WESTEROS)
+        quirksListBuilder.append("westeros");
+#endif
+    }
+    auto quirks = quirksListBuilder.toString();
+    GST_DEBUG("Attempting to parse requested quirks: %s", quirks.ascii().data());
+    if (!quirks.isEmpty()) {
         if (WTF::equalLettersIgnoringASCIICase(quirks, "help"_s)) {
             WTFLogAlways("Supported quirks for WEBKIT_GST_QUIRKS are: amlogic, broadcom, bcmnexus, realtek, westeros");
             return;
@@ -78,7 +98,7 @@ GStreamerQuirksManager::GStreamerQuirksManager()
             else if (WTF::equalLettersIgnoringASCIICase(identifier, "westeros"_s))
                 quirk = WTF::makeUnique<GStreamerQuirkWesteros>();
             else {
-                GST_WARNING("Unknown quirk requested: %s. Skipping", identifier.toStringWithoutCopying().ascii().data());
+                GST_WARNING("Unknown quirk requested: %s. Skipping", identifier.ascii().data());
                 continue;
             }
 
@@ -90,24 +110,33 @@ GStreamerQuirksManager::GStreamerQuirksManager()
         }
     }
 
-    const char* holePunchQuirk = g_getenv("WEBKIT_GST_HOLE_PUNCH_QUIRK");
-    GST_DEBUG("Attempting to parse requested hole-punch quirk: %s", GST_STR_NULL(holePunchQuirk));
-    if (!holePunchQuirk)
+    const char* holePunchQuirkFromEnvironment = g_getenv("WEBKIT_GST_HOLE_PUNCH_QUIRK");
+    String holePunchQuirk;
+    if (holePunchQuirkFromEnvironment)
+        holePunchQuirk = String::fromUTF8(holePunchQuirkFromEnvironment);
+    else {
+#if USE(WESTEROS_SINK)
+        holePunchQuirk = "westeros"_s;
+#elif PLATFORM(BCM_NEXUS)
+        holePunchQuirk = "bcmnexus"_s;
+#endif
+    }
+    GST_DEBUG("Attempting to parse requested hole-punch quirk: %s", holePunchQuirk.ascii().data());
+    if (holePunchQuirk.isEmpty())
         return;
 
-    StringView identifier { holePunchQuirk, static_cast<unsigned>(strlen(holePunchQuirk)) };
-    if (WTF::equalLettersIgnoringASCIICase(identifier, "help"_s)) {
+    if (WTF::equalLettersIgnoringASCIICase(holePunchQuirk, "help"_s)) {
         WTFLogAlways("Supported quirks for WEBKIT_GST_HOLE_PUNCH_QUIRK are: westeros, bcmnexus");
         return;
     }
 
     // TODO: Maybe check this is coherent (somehow) with the quirk(s) selected above.
-    if (WTF::equalLettersIgnoringASCIICase(identifier, "bcmnexus"_s))
+    if (WTF::equalLettersIgnoringASCIICase(holePunchQuirk, "bcmnexus"_s))
         m_holePunchQuirk = WTF::makeUnique<GStreamerHolePunchQuirkBcmNexus>();
-    else if (WTF::equalLettersIgnoringASCIICase(identifier, "westeros"_s))
+    else if (WTF::equalLettersIgnoringASCIICase(holePunchQuirk, "westeros"_s))
         m_holePunchQuirk = WTF::makeUnique<GStreamerHolePunchQuirkWesteros>();
     else
-        GST_WARNING("HolePunch quirk %s un-supported.", identifier.toStringWithoutCopying().ascii().data());
+        GST_WARNING("HolePunch quirk %s un-supported.", holePunchQuirk.ascii().data());
 }
 
 bool GStreamerQuirksManager::isEnabled() const
