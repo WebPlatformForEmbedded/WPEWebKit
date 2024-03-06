@@ -4040,12 +4040,8 @@ GstElement* MediaPlayerPrivateGStreamer::createHolePunchVideoSink()
     if (!isHolePunchRenderingEnabled())
         return nullptr;
 
-    auto player = m_player.get();
-    if (!player)
-        return nullptr;
-
     auto& quirksManager = GStreamerQuirksManager::singleton();
-    auto sink = quirksManager.createHolePunchVideoSink(m_isLegacyPlaybin, player.get());
+    auto sink = quirksManager.createHolePunchVideoSink(m_isLegacyPlaybin, m_player);
 
     // Configure sink before it allocates resources.
     if (sink)
