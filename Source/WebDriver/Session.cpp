@@ -124,10 +124,15 @@ void Session::close(Function<void (CommandResult&&)>&& completionHandler)
             completionHandler(WTFMove(result));
             return;
         }
+        // OneMW browser doesn't allow scripts to close window which leads below condition to infinite recursive calls.
+        // On session quit window should be left open.
+        // WKPreferencesSetAllowScriptsToCloseWindow() is being used for setting this preference.
+        /*
         if (auto handle = firstWindowHandleInResult(*result.result())) {
             closeAllToplevelBrowsingContexts(handle.value(), WTFMove(completionHandler));
             return;
         }
+        */
         completionHandler(CommandResult::success());
     });
 }
