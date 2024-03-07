@@ -1656,13 +1656,16 @@ FloatSize MediaPlayerPrivateGStreamer::naturalSize() const
     if (!hasVideo())
         return FloatSize();
 
-    if (!m_videoSize.isEmpty() && !isHolePunchRenderingEnabled())
+    if (!m_videoSize.isEmpty())
         return m_videoSize;
 
     // When using the holepunch we may not be able to get the video frames size, so we can't use
     // it. But we need to report some non empty naturalSize for the player's GraphicsLayer
     // to be properly created.
-    return s_holePunchDefaultFrameSize;
+    if (isHolePunchRenderingEnabled())
+        return s_holePunchDefaultFrameSize;
+
+    return m_videoSize;
 }
 
 void MediaPlayerPrivateGStreamer::configureMediaStreamAudioTracks()
