@@ -660,8 +660,9 @@ Document::~Document()
 {
     ASSERT(activeDOMObjectsAreStopped());
 
-    if (m_logger)
-        m_logger->removeObserver(*this);
+    //ONEM-34447: nothing to remove
+    //if (m_logger)
+    //    m_logger->removeObserver(*this);
 
     if (m_intersectionObserverData) {
         for (const auto& observer : m_intersectionObserverData->observers) {
@@ -8477,7 +8478,8 @@ Logger& Document::logger()
         m_logger = Logger::create(this);
         auto* page = this->page();
         m_logger->setEnabled(this, page && page->sessionID().isAlwaysOnLoggingAllowed());
-        m_logger->addObserver(*this);
+        //ONEM-34447: Do not add the observer - this generates too many logs in webinspector
+        //m_logger->addObserver(*this);
     }
 
     return *m_logger;

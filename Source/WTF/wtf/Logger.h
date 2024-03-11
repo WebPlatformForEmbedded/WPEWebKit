@@ -238,6 +238,9 @@ public:
 
     inline bool willLog(const WTFLogChannel& channel, WTFLogLevel level) const
     {
+#if ENABLE(RDK_LOGGER)
+        return rdk_dbg_enabled(channel.rdkChannel, TO_RDK_LOG_LEVEL(static_cast<int>(level)));
+#else
         if (!m_enabled)
             return false;
 
@@ -253,6 +256,7 @@ public:
             return false;
 
         return true;
+#endif // ENABLE(RDK_LOGGER)
     }
 
     bool enabled() const { return m_enabled; }

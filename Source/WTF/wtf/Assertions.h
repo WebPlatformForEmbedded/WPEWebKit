@@ -557,11 +557,14 @@ constexpr bool assertionFailureDueToUnreachableCode = false;
 #if LOG_DISABLED
 #define LOG_WITH_LEVEL(channel, level, ...) ((void)0)
 #elif ENABLE(RDK_LOGGER)
+
+#define TO_RDK_LOG_LEVEL(level) (level == 0 ? RDK_LOG_NOTICE : level == 1 ? RDK_LOG_ERROR : level == 2 ? RDK_LOG_WARN : level == 3 ? RDK_LOG_INFO : RDK_LOG_DEBUG)
+
 #define LOG_WITH_LEVEL_STRING(channel, level, ...) RDK_LOG( \
-        level == 0 ? RDK_LOG_NOTICE : level == 1 ? RDK_LOG_ERROR : level == 2 ? RDK_LOG_WARN : level == 3 ? RDK_LOG_INFO : RDK_LOG_DEBUG, \
+        TO_RDK_LOG_LEVEL(level), \
         channel, __VA_ARGS__)
 #define LOG_WITH_LEVEL(channel, level, ...) RDK_LOG( \
-        level == 0 ? RDK_LOG_NOTICE : level == 1 ? RDK_LOG_ERROR : level == 2 ? RDK_LOG_WARN : level == 3 ? RDK_LOG_INFO : RDK_LOG_DEBUG, \
+        TO_RDK_LOG_LEVEL(level), \
         RDK_LOG_CHANNEL(channel), __VA_ARGS__)
 #else
 #define LOG_WITH_LEVEL(channel, level, ...) do { \
@@ -656,11 +659,6 @@ constexpr bool assertionFailureDueToUnreachableCode = false;
 #define RELEASE_LOG_ERROR(channel, ...) LOG_ERROR(__VA_ARGS__)
 #define RELEASE_LOG_FAULT(channel, ...) FATAL(__VA_ARGS__)
 #define RELEASE_LOG_INFO(channel, ...) LOG_WITH_LEVEL(channel, 3, __VA_ARGS__)
-
-#define RELEASE_LOG_WITH_LEVEL(channel, logLevel, ...) do { \
-    if (LOG_CHANNEL(channel).level >= (logLevel)) \
-        LOG(channel, __VA_ARGS__); \
-} while (0)
 
 #define RELEASE_LOG_WITH_LEVEL(channel, logLevel, ...)  LOG_WITH_LEVEL(channel, logLevel, ...)
 #define RELEASE_LOG_WITH_LEVEL_IF(isAllowed, channel, logLevel, ...) do { \
