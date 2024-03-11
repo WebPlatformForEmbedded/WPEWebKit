@@ -3139,7 +3139,8 @@ PlatformLayer* MediaPlayerPrivateGStreamer::platformLayer() const
 #if USE(NICOSIA)
 void MediaPlayerPrivateGStreamer::swapBuffersIfNeeded()
 {
-    pushNextHolePunchBuffer();
+    if (isHolePunchRenderingEnabled())
+        pushNextHolePunchBuffer();
 }
 #else
 RefPtr<TextureMapperPlatformLayerProxy> MediaPlayerPrivateGStreamer::proxy() const
