@@ -25,6 +25,7 @@
 
 #include "GStreamerCommon.h"
 #include "GStreamerHolePunchQuirkBcmNexus.h"
+#include "GStreamerHolePunchQuirkFake.h"
 #include "GStreamerHolePunchQuirkWesteros.h"
 #include "GStreamerQuirkAmLogic.h"
 #include "GStreamerQuirkBcmNexus.h"
@@ -126,7 +127,7 @@ GStreamerQuirksManager::GStreamerQuirksManager()
         return;
 
     if (WTF::equalLettersIgnoringASCIICase(holePunchQuirk, "help"_s)) {
-        WTFLogAlways("Supported quirks for WEBKIT_GST_HOLE_PUNCH_QUIRK are: westeros, bcmnexus");
+        WTFLogAlways("Supported quirks for WEBKIT_GST_HOLE_PUNCH_QUIRK are: fake, westeros, bcmnexus");
         return;
     }
 
@@ -135,6 +136,8 @@ GStreamerQuirksManager::GStreamerQuirksManager()
         m_holePunchQuirk = WTF::makeUnique<GStreamerHolePunchQuirkBcmNexus>();
     else if (WTF::equalLettersIgnoringASCIICase(holePunchQuirk, "westeros"_s))
         m_holePunchQuirk = WTF::makeUnique<GStreamerHolePunchQuirkWesteros>();
+    else if (WTF::equalLettersIgnoringASCIICase(holePunchQuirk, "fake"_s))
+        m_holePunchQuirk = WTF::makeUnique<GStreamerHolePunchQuirkFake>();
     else
         GST_WARNING("HolePunch quirk %s un-supported.", holePunchQuirk.ascii().data());
 }
@@ -161,8 +164,7 @@ GstElement* GStreamerQuirksManager::createWebAudioSink()
 
 GstElement* GStreamerQuirksManager::createHolePunchVideoSink(bool isLegacyPlaybin, const MediaPlayer* player)
 {
-    RELEASE_ASSERT_WITH_MESSAGE(isEnabled() && m_holePunchQuirk, "createHolePunchVideoSink() should be called only if one hole-punch quirk was requested");
-    if (!isEnabled() || !m_holePunchQuirk) {
+    if (!m_holePunchQuirk) {
         GST_DEBUG("None of the quirks requested a HolePunchSink");
         return nullptr;
     }
