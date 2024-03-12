@@ -4015,14 +4015,14 @@ GstElement* MediaPlayerPrivateGStreamer::createVideoSinkGL()
 static void setRectangleToVideoSink(GstElement* videoSink, const IntRect& rect)
 {
     // Here goes the platform-dependant code to set to the videoSink the size
-    // and position of the video rendering window. Mark them unused as default.
+    // and position of the video rendering window.
 
     if (!videoSink)
         return;
 
+    ASSERT(isHolePunchRenderingEnabled());
     auto& quirksManager = GStreamerQuirksManager::singleton();
-    if (quirksManager.isEnabled())
-        quirksManager.setHolePunchVideoRectangle(videoSink, rect);
+    quirksManager.setHolePunchVideoRectangle(videoSink, rect);
 }
 
 class GStreamerHolePunchClient : public TextureMapperPlatformLayerBuffer::HolePunchClient {
