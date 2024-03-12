@@ -4020,7 +4020,6 @@ static void setRectangleToVideoSink(GstElement* videoSink, const IntRect& rect)
     if (!videoSink)
         return;
 
-    ASSERT(isHolePunchRenderingEnabled());
     auto& quirksManager = GStreamerQuirksManager::singleton();
     quirksManager.setHolePunchVideoRectangle(videoSink, rect);
 }
@@ -4068,6 +4067,7 @@ void MediaPlayerPrivateGStreamer::pushNextHolePunchBuffer()
             proxy.pushNextBuffer(WTFMove(layerBuffer));
         };
 
+    ASSERT(isHolePunchRenderingEnabled());
 #if USE(NICOSIA)
     auto& proxy = downcast<Nicosia::ContentLayerTextureMapperImpl>(m_nicosiaLayer->impl()).proxy();
     ASSERT(is<TextureMapperPlatformLayerProxyGL>(proxy));
