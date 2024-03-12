@@ -175,8 +175,7 @@ GstElement* GStreamerQuirksManager::createHolePunchVideoSink(bool isLegacyPlaybi
 
 void GStreamerQuirksManager::setHolePunchVideoRectangle(GstElement* videoSink, const IntRect& rect)
 {
-    RELEASE_ASSERT_WITH_MESSAGE(isEnabled() && m_holePunchQuirk, "setHolePunchVideoRectangle() should be called only if one hole-punch quirk was requested");
-    if (!isEnabled() || !m_holePunchQuirk) {
+    if (!m_holePunchQuirk) {
         GST_DEBUG("None of the quirks requested a HolePunchSink");
         return;
     }

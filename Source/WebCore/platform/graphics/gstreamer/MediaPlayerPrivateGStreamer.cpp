@@ -192,6 +192,9 @@ MediaPlayerPrivateGStreamer::MediaPlayerPrivateGStreamer(MediaPlayer* player)
 #if USE(TEXTURE_MAPPER_GL) && USE(NICOSIA)
     m_nicosiaLayer = Nicosia::ContentLayer::create(Nicosia::ContentLayerTextureMapperImpl::createFactory(*this,
         [&]() -> Ref<TextureMapperPlatformLayerProxy> {
+            if (isHolePunchRenderingEnabled())
+                return adoptRef(*new TextureMapperPlatformLayerProxyGL(true));
+
 #if USE(TEXTURE_MAPPER_DMABUF)
             if (webKitDMABufVideoSinkIsEnabled() && webKitDMABufVideoSinkProbePlatform())
                 return adoptRef(*new TextureMapperPlatformLayerProxyDMABuf);
