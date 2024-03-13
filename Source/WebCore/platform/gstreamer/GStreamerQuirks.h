@@ -25,6 +25,7 @@
 #include "GRefPtrGStreamer.h"
 #include "MediaPlayer.h"
 #include <wtf/Forward.h>
+#include <wtf/RefCounted.h>
 #include <wtf/Vector.h>
 
 namespace WebCore {
@@ -70,12 +71,17 @@ public:
     virtual bool setHolePunchVideoRectangle(GstElement*, const IntRect&) { return false; }
 };
 
-class GStreamerQuirksManager {
+class GStreamerQuirksManager : public RefCounted<GStreamerQuirksManager> {
     friend NeverDestroyed<GStreamerQuirksManager>;
     WTF_MAKE_FAST_ALLOCATED;
 
 public:
     static GStreamerQuirksManager& singleton();
+
+    static RefPtr<GStreamerQuirksManager> createForTesting()
+    {
+        return adoptRef(*new GStreamerQuirksManager(true, false));
+    }
 
     bool isEnabled() const;
 
@@ -89,11 +95,14 @@ public:
     GstElement* createHolePunchVideoSink(bool isLegacyPlaybin, const MediaPlayer*);
     void setHolePunchVideoRectangle(GstElement*, const IntRect&);
 
+    void setHolePunchEnabledForTesting(bool);
+
 private:
-    GStreamerQuirksManager();
+    GStreamerQuirksManager(bool, bool);
 
     Vector<std::unique_ptr<GStreamerQuirk>> m_quirks;
     std::unique_ptr<GStreamerHolePunchQuirk> m_holePunchQuirk;
+    bool m_isForTesting { false };
 };
 
 } // namespace WebCore

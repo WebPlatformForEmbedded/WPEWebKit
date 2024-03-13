@@ -43,19 +43,27 @@ GST_DEBUG_CATEGORY_STATIC(webkit_quirks_debug);
 
 GStreamerQuirksManager& GStreamerQuirksManager::singleton()
 {
-    static NeverDestroyed<GStreamerQuirksManager> sharedInstance;
+    static NeverDestroyed<GStreamerQuirksManager> sharedInstance(false, true);
     return sharedInstance;
 }
 
-GStreamerQuirksManager::GStreamerQuirksManager()
+GStreamerQuirksManager::GStreamerQuirksManager(bool isForTesting, bool loadQuirksFromEnvironment)
+    : m_isForTesting(isForTesting)
 {
-    GST_DEBUG_CATEGORY_INIT(webkit_quirks_debug, "webkitquirks", 0, "WebKit Quirks");
+    static std::once_flag debugRegisteredFlag;
+    std::call_once(debugRegisteredFlag, [] {
+        GST_DEBUG_CATEGORY_INIT(webkit_quirks_debug, "webkitquirks", 0, "WebKit Quirks");
+    });
 
     // For the time being keep this disabled on non-WPE platforms. GTK on desktop shouldn't require
     // quirks, for instance.
 #if !PLATFORM(WPE)
     return;
 #endif
+
+    GST_DEBUG("Quirk manager created%s", m_isForTesting ? " for testing." : ".");
+    if (!loadQuirksFromEnvironment)
+        return;
 
     const char* quirksListFromEnvironment = g_getenv("WEBKIT_GST_QUIRKS");
     StringBuilder quirksListBuilder;
@@ -233,6 +241,14 @@ Vector<String> GStreamerQuirksManager::disallowedWebAudioDecoders() const
         result.appendVector(quirk->disallowedWebAudioDecoders());
 
     return result;
+}
+
+void GStreamerQuirksManager::setHolePunchEnabledForTesting(bool enabled)
+{
+    if (enabled)
+        m_holePunchQuirk = WTF::makeUnique<GStreamerHolePunchQuirkFake>();
+    else
+        m_holePunchQuirk = nullptr;
 }
 
 #undef GST_CAT_DEFAULT
