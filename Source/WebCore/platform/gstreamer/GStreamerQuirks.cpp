@@ -192,6 +192,14 @@ void GStreamerQuirksManager::setHolePunchVideoRectangle(GstElement* videoSink, c
         GST_WARNING("Hole punch video rectangle configuration failed.");
 }
 
+bool GStreamerQuirksManager::sinksRequireClockSynchronization() const
+{
+    if (!m_holePunchQuirk)
+        return true;
+
+    return m_holePunchQuirk->requiresClockSynchronization();
+}
+
 void GStreamerQuirksManager::configureElement(GstElement* element, OptionSet<ElementRuntimeCharacteristics>&& characteristics)
 {
     GST_DEBUG("Configuring element %" GST_PTR_FORMAT, element);

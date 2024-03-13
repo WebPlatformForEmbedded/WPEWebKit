@@ -1038,12 +1038,12 @@ static void setSyncOnClock(GstElement* element, bool sync)
 
 void MediaPlayerPrivateGStreamer::syncOnClock(bool sync)
 {
-#if !USE(WESTEROS_SINK)
+    auto& quirksManager = GStreamerQuirksManager::singleton();
+    if (quirksManager.supportsVideoHolePunchRendering() && !quirksManager.sinksRequireClockSynchronization())
+        return;
+
     setSyncOnClock(videoSink(), sync);
     setSyncOnClock(audioSink(), sync);
-#else
-    UNUSED_PARAM(sync);
-#endif
 }
 
 template <typename TrackPrivateType>

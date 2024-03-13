@@ -32,6 +32,7 @@ public:
 
     GstElement* createHolePunchVideoSink(bool, const MediaPlayer*) final;
     bool setHolePunchVideoRectangle(GstElement*, const IntRect&) final;
+    bool requiresClockSynchronization() const final { return false; }
 };
 
 } // namespace WebCore

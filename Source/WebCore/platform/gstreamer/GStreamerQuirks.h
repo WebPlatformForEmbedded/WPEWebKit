@@ -69,6 +69,7 @@ public:
 
     virtual GstElement* createHolePunchVideoSink(bool, const MediaPlayer*) { return nullptr; }
     virtual bool setHolePunchVideoRectangle(GstElement*, const IntRect&) { return false; }
+    virtual bool requiresClockSynchronization() const { return true; }
 };
 
 class GStreamerQuirksManager : public RefCounted<GStreamerQuirksManager> {
@@ -94,6 +95,7 @@ public:
     bool supportsVideoHolePunchRendering() const;
     GstElement* createHolePunchVideoSink(bool isLegacyPlaybin, const MediaPlayer*);
     void setHolePunchVideoRectangle(GstElement*, const IntRect&);
+    bool sinksRequireClockSynchronization() const;
 
     void setHolePunchEnabledForTesting(bool);
 
