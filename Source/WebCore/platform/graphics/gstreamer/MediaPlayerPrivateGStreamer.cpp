@@ -1375,7 +1375,9 @@ GstClockTime MediaPlayerPrivateGStreamer::gstreamerPositionFromSinks() const
         gint64 videoPosition = GST_CLOCK_TIME_NONE;
         gst_query_parse_position(query.get(), 0, &videoPosition);
         GST_TRACE_OBJECT(pipeline(), "Video position %" GST_TIME_FORMAT, GST_TIME_ARGS(videoPosition));
-        if (GST_CLOCK_TIME_IS_VALID(videoPosition) && (!GST_CLOCK_TIME_IS_VALID(gstreamerPosition) || (m_playbackRate >= 0 && videoPosition > gstreamerPosition) || (m_playbackRate < 0 && videoPosition < gstreamerPosition)))
+        if (GST_CLOCK_TIME_IS_VALID(videoPosition) && (!GST_CLOCK_TIME_IS_VALID(gstreamerPosition)
+            || (m_playbackRate >= 0 && videoPosition > gstreamerPosition)
+            || (m_playbackRate < 0 && videoPosition < gstreamerPosition)))
             gstreamerPosition = videoPosition;
     }
     return static_cast<GstClockTime>(gstreamerPosition);
@@ -3011,8 +3013,7 @@ void MediaPlayerPrivateGStreamer::createGSTPlayBin(const URL& url)
     if (videoSinkPad)
         g_signal_connect(videoSinkPad.get(), "notify::caps", G_CALLBACK(+[](GstPad* videoSinkPad, GParamSpec*, MediaPlayerPrivateGStreamer* player) {
             player->videoSinkCapsChanged(videoSinkPad);
-        }),
-            this);
+        }), this);
 }
 
 void MediaPlayerPrivateGStreamer::configureVideoDecoder(GstElement* decoder)
