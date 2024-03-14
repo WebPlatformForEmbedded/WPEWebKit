@@ -1662,6 +1662,11 @@ void MediaPlayer::simulateAudioInterruption()
 
     m_private->simulateAudioInterruption();
 }
+
+bool MediaPlayer::isGStreamerHolePunchingEnabled()
+{
+    return client().isGStreamerHolePunchingEnabled();
+}
 #endif
 
 void MediaPlayer::beginSimulatedHDCPError()
