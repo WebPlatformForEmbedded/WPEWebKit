@@ -314,7 +314,7 @@ static std::optional<std::pair<RTCSdpType, String>> fetchDescription(GstElement*
         const auto attribute = gst_sdp_message_get_attribute(description->sdp, i);
         if (!g_strcmp0(attribute->key, "end-of-candidates")) {
             gst_sdp_message_remove_attribute(description->sdp, i);
-            i--;
+            break;
         }
     }
 
