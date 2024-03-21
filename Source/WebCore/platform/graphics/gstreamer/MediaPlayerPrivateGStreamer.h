@@ -188,6 +188,8 @@ public:
     bool performTaskAtTime(Function<void()>&&, const MediaTime&) override;
     void isLoopingChanged() final;
 
+    GstElement* pipeline() const { return m_pipeline.get(); }
+
 #if USE(TEXTURE_MAPPER_GL)
     PlatformLayer* platformLayer() const override;
 #if PLATFORM(WIN)
@@ -333,8 +335,6 @@ protected:
     GstElement* videoSink() const { return m_videoSink.get(); }
 
     void setStreamVolumeElement(GstStreamVolume*);
-
-    GstElement* pipeline() const { return m_pipeline.get(); }
 
     void repaint();
     void cancelRepaint(bool destroying = false);
