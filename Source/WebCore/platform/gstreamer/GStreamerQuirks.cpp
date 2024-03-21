@@ -259,6 +259,30 @@ void GStreamerQuirksManager::setHolePunchEnabledForTesting(bool enabled)
         m_holePunchQuirk = nullptr;
 }
 
+unsigned GStreamerQuirksManager::getAdditionalPlaybinFlags() const
+{
+    unsigned flags = 0;
+#if USE(GSTREAMER_NATIVE_VIDEO)
+    flags |= getGstPlayFlag("native-video");
+#else
+    flags |= getGstPlayFlag("soft-colorbalance");
+#endif
+#if USE(GSTREAMER_NATIVE_AUDIO)
+    flags |= getGstPlayFlag("native-audio");
+#endif
+#if USE(GSTREAMER_TEXT_SINK)
+    flags |= getGstPlayFlag("text");
+#endif
+    for (const auto& quirk : m_quirks) {
+        if (auto additionalFlags = quirk->getAdditionalPlaybinFlags()) {
+            GST_DEBUG("Quirk %s requests these playbin flags: %u", quirk->identifier(), additionalFlags);
+            flags |= additionalFlags;
+        }
+    }
+
+    return flags;
+}
+
 #undef GST_CAT_DEFAULT
 
 } // namespace WebCore

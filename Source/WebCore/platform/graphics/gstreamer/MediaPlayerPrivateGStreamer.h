@@ -197,6 +197,8 @@ public:
     void acceleratedRenderingStateChanged() final;
     bool performTaskAtMediaTime(Function<void()>&&, const MediaTime&) override;
 
+    GstElement* pipeline() const { return m_pipeline.get(); }
+
 #if USE(TEXTURE_MAPPER_GL)
     PlatformLayer* platformLayer() const override;
 #if PLATFORM(WIN_CAIRO)
@@ -341,8 +343,6 @@ protected:
     GstElement* videoSink() const { return m_videoSink.get(); }
 
     void setStreamVolumeElement(GstStreamVolume*);
-
-    GstElement* pipeline() const { return m_pipeline.get(); }
 
     void repaint();
     void cancelRepaint(bool destroying = false);
