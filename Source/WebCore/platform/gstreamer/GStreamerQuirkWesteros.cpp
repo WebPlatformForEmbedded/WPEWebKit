@@ -53,15 +53,6 @@ GStreamerQuirkWesteros::GStreamerQuirkWesteros()
 
 bool GStreamerQuirkWesteros::configureElement(GstElement* element, const OptionSet<ElementRuntimeCharacteristics>& characteristics)
 {
-    if (g_str_has_prefix(GST_ELEMENT_NAME(element), "uridecodebin3")) {
-        GRefPtr<GstCaps> defaultCaps;
-        g_object_get(element, "caps", &defaultCaps.outPtr(), nullptr);
-        defaultCaps = adoptGRef(gst_caps_merge(gst_caps_ref(m_sinkCaps.get()), defaultCaps.leakRef()));
-        GST_INFO("Setting stop caps to %" GST_PTR_FORMAT, defaultCaps.get());
-        g_object_set(element, "caps", defaultCaps.get(), nullptr);
-        return true;
-    }
-
     if (!characteristics.contains(ElementRuntimeCharacteristics::IsMediaStream))
         return false;
 
