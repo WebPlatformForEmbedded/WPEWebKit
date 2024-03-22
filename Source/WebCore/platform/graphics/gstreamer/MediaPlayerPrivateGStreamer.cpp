@@ -1391,7 +1391,8 @@ MediaTime MediaPlayerPrivateGStreamer::playbackPosition() const
         return m_cachedPosition;
     }
 
-    GstClockTime gstreamerPosition = gstreamerPositionFromSinks();
+    // We can't trust sinks position when pipeline is flushed (e.g. after MSE samples removal).
+    GstClockTime gstreamerPosition = isPipelineSeeking() ? GST_CLOCK_TIME_NONE : gstreamerPositionFromSinks();
     GST_TRACE_OBJECT(pipeline(), "Position %" GST_TIME_FORMAT ", canFallBackToLastFinishedSeekPosition: %s", GST_TIME_ARGS(gstreamerPosition), boolForPrinting(m_canFallBackToLastFinishedSeekPosition));
 
     // Cached position is marked as non valid here but we might fail to get a new one so initializing to this as "educated guess".
