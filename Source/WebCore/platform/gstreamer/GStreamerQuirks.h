@@ -59,7 +59,8 @@ public:
     virtual std::optional<bool> isHardwareAccelerated(GstElementFactory*) { return std::nullopt; }
     virtual std::optional<GstElementFactoryListType> audioVideoDecoderFactoryListType() const { return std::nullopt; }
     virtual Vector<String> disallowedWebAudioDecoders() const { return { }; }
-    virtual unsigned getAdditionalPlaybinFlags() const { return 0; }
+    virtual unsigned getAdditionalPlaybinFlags() const { return getGstPlayFlag("text") | getGstPlayFlag("soft-colorbalance"); }
+    virtual bool shouldParseIncomingLibWebRTCBitStream() const { return true; }
 };
 
 class GStreamerHolePunchQuirk : public GStreamerQuirkBase {
@@ -101,6 +102,8 @@ public:
     void setHolePunchEnabledForTesting(bool);
 
     unsigned getAdditionalPlaybinFlags() const;
+
+    bool shouldParseIncomingLibWebRTCBitStream() const;
 
 private:
     GStreamerQuirksManager(bool, bool);
