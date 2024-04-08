@@ -294,6 +294,8 @@ String convertEnumerationToString(HTMLMediaElement::TextTrackVisibilityCheckType
     return values[static_cast<size_t>(enumerationValue)];
 }
 
+static JSC::JSValue controllerJSValue(JSC::JSGlobalObject& lexicalGlobalObject, JSDOMGlobalObject&, HTMLMediaElement&);
+
 class TrackDisplayUpdateScope {
 public:
     TrackDisplayUpdateScope(HTMLMediaElement& element)
@@ -444,6 +446,7 @@ HTMLMediaElement::HTMLMediaElement(const QualifiedName& tagName, Document& docum
     , m_parsingInProgress(createdByParser)
     , m_elementIsHidden(document.hidden())
     , m_creatingControls(false)
+    , m_partiallyDeinitialized(false)
     , m_receivedLayoutSizeChanged(false)
     , m_hasEverNotifiedAboutPlaying(false)
     , m_hasEverHadAudio(false)
@@ -876,6 +879,37 @@ void HTMLMediaElement::pauseAfterDetachedTask()
         pause();
     if (m_videoFullscreenMode == VideoFullscreenModeStandard)
         exitFullscreen();
+
+#if ENABLE(MODERN_MEDIA_CONTROLS)
+    if (!m_creatingControls && !m_partiallyDeinitialized && m_mediaControlsHost) {
+        // Call MediaController.deinitialize() to get rid of circular references.
+        m_partiallyDeinitialized = setupAndCallJS([this](JSDOMGlobalObject& globalObject, JSC::JSGlobalObject& lexicalGlobalObject, ScriptController&, DOMWrapperWorld&) {
+            auto& vm = globalObject.vm();
+            auto scope = DECLARE_THROW_SCOPE(vm);
+
+            auto controllerValue = controllerJSValue(lexicalGlobalObject, globalObject, *this);
+            RETURN_IF_EXCEPTION(scope, false);
+            auto* controllerObject = controllerValue.toObject(&lexicalGlobalObject);
+            RETURN_IF_EXCEPTION(scope, false);
+
+            auto functionValue = controllerObject->get(&lexicalGlobalObject, JSC::Identifier::fromString(vm, "deinitialize"_s));
+            if (UNLIKELY(scope.exception()) || functionValue.isUndefinedOrNull())
+                return false;
+
+            auto* function = functionValue.toObject(&lexicalGlobalObject);
+            RETURN_IF_EXCEPTION(scope, false);
+
+            auto callData = JSC::getCallData(function);
+            if (callData.type == JSC::CallData::Type::None)
+                return false;
+
+            auto resultValue = JSC::call(&lexicalGlobalObject, function, callData, controllerObject, JSC::MarkedArgumentBuffer());
+            RETURN_IF_EXCEPTION(scope, false);
+
+            return resultValue.toBoolean(&lexicalGlobalObject);
+        });
+    }
+#endif // ENABLE(MODERN_MEDIA_CONTROLS)
 
     if (!m_player)
         return;
@@ -4644,6 +4678,46 @@ void HTMLMediaElement::ensureMediaControlsShadowRoot()
     if (m_creatingControls)
         return;
 
+    if (m_partiallyDeinitialized) {
+        m_partiallyDeinitialized = !setupAndCallJS([this](JSDOMGlobalObject& globalObject, JSC::JSGlobalObject& lexicalGlobalObject, ScriptController&, DOMWrapperWorld&) {
+            auto& vm = globalObject.vm();
+            auto scope = DECLARE_THROW_SCOPE(vm);
+
+            auto controllerValue = controllerJSValue(lexicalGlobalObject, globalObject, *this);
+            RETURN_IF_EXCEPTION(scope, false);
+            auto* controllerObject = controllerValue.toObject(&lexicalGlobalObject);
+            RETURN_IF_EXCEPTION(scope, false);
+
+            auto functionValue = controllerObject->get(&lexicalGlobalObject, JSC::Identifier::fromString(vm, "reinitialize"_s));
+            if (UNLIKELY(scope.exception()) || functionValue.isUndefinedOrNull())
+                return false;
+
+            if (!m_mediaControlsHost)
+                m_mediaControlsHost = MediaControlsHost::create(*this);
+
+            auto mediaJSWrapper = toJS(&lexicalGlobalObject, &globalObject, *this);
+            auto mediaControlsHostJSWrapper = toJS(&lexicalGlobalObject, &globalObject, *m_mediaControlsHost.copyRef());
+
+            JSC::MarkedArgumentBuffer argList;
+            argList.append(toJS(&lexicalGlobalObject, &globalObject, Ref { ensureUserAgentShadowRoot() }));
+            argList.append(mediaJSWrapper);
+            argList.append(mediaControlsHostJSWrapper);
+            ASSERT(!argList.hasOverflowed());
+
+            auto* function = functionValue.toObject(&lexicalGlobalObject);
+            RETURN_IF_EXCEPTION(scope, false);
+
+            auto callData = JSC::getCallData(function);
+            if (callData.type == JSC::CallData::Type::None)
+                return false;
+
+            auto resultValue = JSC::call(&lexicalGlobalObject, function, callData, controllerObject, argList);
+            RETURN_IF_EXCEPTION(scope, false);
+
+            return resultValue.toBoolean(&lexicalGlobalObject);
+        });
+    }
+
     m_creatingControls = true;
     ensureUserAgentShadowRoot();
     m_creatingControls = false;
@@ -7669,6 +7743,9 @@ bool HTMLMediaElement::ensureMediaControlsInjectedScript()
     auto mediaControlsScripts = RenderTheme::singleton().mediaControlsScripts();
     if (mediaControlsScripts.isEmpty())
         return false;
+
+    if (m_partiallyDeinitialized)
+        return true;
 
     return setupAndCallJS([mediaControlsScripts = WTFMove(mediaControlsScripts)](JSDOMGlobalObject& globalObject, JSC::JSGlobalObject& lexicalGlobalObject, ScriptController& scriptController, DOMWrapperWorld& world) {
         auto& vm = globalObject.vm();
