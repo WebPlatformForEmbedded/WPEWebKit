@@ -159,11 +159,13 @@ void MemoryPressureHandler::setMemoryFootprintPollIntervalForTesting(Seconds pol
 
 void MemoryPressureHandler::setShouldUsePeriodicMemoryMonitor(bool use)
 {
+#if !ENABLE(MALLOC_HEAP_BREAKDOWN)
     if (!isFastMallocEnabled()) {
         // If we're running with FastMalloc disabled, some kind of testing or debugging is probably happening.
         // Let's be nice and not enable the memory kill mechanism.
         return;
     }
+#endif
 
     if (use) {
         m_measurementTimer = makeUnique<RunLoop::Timer>(RunLoop::main(), this, &MemoryPressureHandler::measurementTimerFired);
