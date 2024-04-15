@@ -186,6 +186,7 @@ enum {
     PROP_ALLOW_SCRIPTS_TO_CLOSE_WINDOWS,
     PROP_ALLOW_MOVE_TO_SUSPEND_ON_WINDOW_CLOSE,
     PROP_ENABLE_DIRECTORY_UPLOAD,
+    PROP_ENABLE_SERVICE_WORKER,
     N_PROPERTIES,
 };
 
@@ -432,6 +433,9 @@ ALLOW_DEPRECATED_DECLARATIONS_BEGIN
     case PROP_ENABLE_DIRECTORY_UPLOAD:
         webkit_settings_set_enable_directory_upload(settings, g_value_get_boolean(value));
         break;
+    case PROP_ENABLE_SERVICE_WORKER:
+        webkit_settings_set_enable_service_worker(settings, g_value_get_boolean(value));
+        break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, propId, paramSpec);
         break;
@@ -657,6 +661,9 @@ ALLOW_DEPRECATED_DECLARATIONS_BEGIN
         break;
     case PROP_ENABLE_DIRECTORY_UPLOAD:
         g_value_set_boolean(value, webkit_settings_get_enable_directory_upload(settings));
+        break;
+    case PROP_ENABLE_SERVICE_WORKER:
+        g_value_set_boolean(value, webkit_settings_get_enable_service_worker(settings));
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, propId, paramSpec);
@@ -1756,6 +1763,21 @@ static void webkit_settings_class_init(WebKitSettingsClass* klass)
         "enable-directory-upload",
         _("Enable directory upload"),
         _("Whether directory upload should be enabled."),
+        TRUE,
+        readWriteConstructParamFlags);
+
+    /**
+     * WebKitSettings:enable-service-worker:
+     *
+     * Enable or disable service worker.
+     * This property will only work as intended if the ServiceWorker feature is enabled at build time
+     * with the ENABLE_SERVICE_WORKER flag.
+     *
+     */
+    sObjProperties[PROP_ENABLE_SERVICE_WORKER] = g_param_spec_boolean(
+        "enable-service-worker",
+        _("Enable service worker"),
+        _("Whether service worker support should be enabled."),
         TRUE,
         readWriteConstructParamFlags);
 
@@ -4617,4 +4639,43 @@ void webkit_settings_set_enable_directory_upload(WebKitSettings* settings, gbool
 
     priv->preferences->setDirectoryUploadEnabled(enabled);
     g_object_notify(G_OBJECT(settings), "enable-directory-upload");
+}
+
+/**
+ * webkit_settings_get_enable_service_worker:
+ * @settings: a #WebKitSettings
+ *
+ * Get the #WebKitSettings:enable-service-worker property.
+ *
+ * Returns: %TRUE if Service Worker support is enabled or %FALSE otherwise.
+ *
+ * Since: 2.38
+ */
+gboolean webkit_settings_get_enable_service_worker(WebKitSettings* settings)
+{
+    g_return_val_if_fail(WEBKIT_IS_SETTINGS(settings), FALSE);
+
+    return settings->priv->preferences->serviceWorkersEnabled();
+}
+
+/**
+ * webkit_settings_set_enable_service_worker:
+ * @settings: a #WebKitSettings
+ * @enabled: Value to be set
+ *
+ * Set the #WebKitSettings:enable-service-worker property.
+ *
+ * Since: 2.38
+ */
+void webkit_settings_set_enable_service_worker(WebKitSettings* settings, gboolean enabled)
+{
+    g_return_if_fail(WEBKIT_IS_SETTINGS(settings));
+
+    WebKitSettingsPrivate* priv = settings->priv;
+    bool currentValue = priv->preferences->serviceWorkersEnabled();
+    if (currentValue == enabled)
+        return;
+
+    priv->preferences->setServiceWorkersEnabled(enabled);
+    g_object_notify_by_pspec(G_OBJECT(settings), sObjProperties[PROP_ENABLE_SERVICE_WORKER]);
 }
