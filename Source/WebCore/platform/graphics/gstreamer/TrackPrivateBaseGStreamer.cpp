@@ -286,27 +286,43 @@ void TrackPrivateBaseGStreamer::installUpdateConfigurationHandlers()
 {
     if (m_pad) {
         g_signal_connect_swapped(m_pad.get(), "notify::caps", G_CALLBACK(+[](TrackPrivateBaseGStreamer* track) {
-            track->m_taskQueue.enqueueTask([track]() {
+            if (isMainThread()) {
                 if (!track->m_pad)
                     return;
                 auto caps = adoptGRef(gst_pad_get_current_caps(track->m_pad.get()));
                 if (!caps)
                     return;
                 track->updateConfigurationFromCaps();
-            });
+            } else
+                track->m_taskQueue.enqueueTask([track]() {
+                    if (!track->m_pad)
+                        return;
+                    auto caps = adoptGRef(gst_pad_get_current_caps(track->m_pad.get()));
+                    if (!caps)
+                        return;
+                    track->updateConfigurationFromCaps();
+                });
         }), this);
         g_signal_connect_swapped(m_pad.get(), "notify::tags", G_CALLBACK(+[](TrackPrivateBaseGStreamer* track) {
-            track->m_taskQueue.enqueueTask([track]() {
+            if (isMainThread()) {
                 if (!track->m_pad)
                     return;
                 track->updateConfigurationFromTags();
-            });
+            } else
+                track->m_taskQueue.enqueueTask([track]() {
+                    if (!track->m_pad)
+                        return;
+                    track->updateConfigurationFromTags();
+                });
         }), this);
     } else if (m_stream) {
         g_signal_connect_swapped(m_stream.get(), "notify::caps", G_CALLBACK(+[](TrackPrivateBaseGStreamer* track) {
-            track->m_taskQueue.enqueueTask([track]() {
+            if (isMainThread())
                 track->updateConfigurationFromCaps();
-            });
+            else
+                track->m_taskQueue.enqueueTask([track]() {
+                    track->updateConfigurationFromCaps();
+                });
         }), this);
         g_signal_connect_swapped(m_stream.get(), "notify::tags", G_CALLBACK(+[](TrackPrivateBaseGStreamer* track) {
             if (isMainThread())
