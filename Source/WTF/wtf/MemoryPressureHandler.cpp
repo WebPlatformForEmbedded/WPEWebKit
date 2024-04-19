@@ -275,7 +275,7 @@ void MemoryPressureHandler::setMemoryUsagePolicyBasedOnFootprints(size_t footpri
     if (newPolicy == m_memoryUsagePolicy)
         return;
 
-    RELEASE_LOG(MemoryPressure, "Memory usage policy changed: %s -> %s", toString(m_memoryUsagePolicy), toString(newPolicy));
+    RELEASE_LOG(MemoryPressure, "Memory usage policy changed: %s -> %s, new thresholds: %zu MB, video %zu MB", toString(m_memoryUsagePolicy), toString(newPolicy), thresholdForPolicy(newPolicy, MemoryType::Normal) / MB, thresholdForPolicy(newPolicy, MemoryType::Video) / MB);
     m_memoryUsagePolicy = newPolicy;
     memoryPressureStatusChanged();
 }
@@ -288,7 +288,7 @@ void MemoryPressureHandler::measurementTimerFired()
     static size_t footprintPeak = 0;
     if (footprintPeak < footprint)
         footprintPeak = footprint;
-    RELEASE_LOG(MemoryPressure, "Current memory footprint: %zu MB, peak: %zu MB", footprint / MB, footprintPeak / MB);
+    RELEASE_LOG(MemoryPressure, "Current memory footprint: %zu MB, peak: %zu MB, video footprint: %zu MB", footprint / MB, footprintPeak / MB, footprintVideo / MB);
     auto killThreshold = thresholdForMemoryKill(MemoryType::Normal);
     auto killThresholdVideo = thresholdForMemoryKill(MemoryType::Video);
     if ((killThreshold && footprint >= *killThreshold) || (killThresholdVideo && footprintVideo >= *killThresholdVideo)) {
