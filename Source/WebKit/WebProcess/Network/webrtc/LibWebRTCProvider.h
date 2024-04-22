@@ -78,9 +78,12 @@ private:
 #endif
 };
 
-inline UniqueRef<LibWebRTCProvider> createLibWebRTCProvider(WebPage& page)
+inline UniqueRef<LibWebRTCProviderBase> createLibWebRTCProvider(WebPage& page)
 {
-    return makeUniqueRef<LibWebRTCProvider>(page);
+    // In downstream WPEWebKit WebProcess sandbox is disabled,
+    // so moving LibWebRTC networking out of it doesn't make much sense.
+    // For better performance keep it in WPEWebProcess
+    return makeUniqueRef<LibWebRTCProviderBase>();
 }
 
 #elif USE(GSTREAMER_WEBRTC)
