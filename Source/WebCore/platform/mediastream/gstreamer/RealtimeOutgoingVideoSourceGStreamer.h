@@ -36,6 +36,9 @@ public:
     void teardown() final;
     void flush() final;
 
+    void setParameters(GUniquePtr<GstStructure>&&) final;
+    void fillEncodingParameters(const GUniquePtr<GstStructure>&) final;
+
     const GstStructure* stats() const { return m_stats.get(); }
 
 protected:
@@ -46,7 +49,6 @@ protected:
     bool m_shouldApplyRotation { false };
 
 private:
-    void codecPreferencesChanged(const GRefPtr<GstCaps>&) final;
     RTCRtpCapabilities rtpCapabilities() const final;
 
     void startUpdatingStats();
@@ -58,9 +60,11 @@ private:
 
     void updateStats(GstBuffer*);
 
-    GRefPtr<GstElement> m_fallbackSource;
     GRefPtr<GstElement> m_videoConvert;
     GRefPtr<GstElement> m_videoFlip;
+    GRefPtr<GstElement> m_videoRate;
+    GRefPtr<GstElement> m_frameRateCapsFilter;
+
     GUniquePtr<GstStructure> m_stats;
 
     unsigned long m_statsPadProbeId { 0 };

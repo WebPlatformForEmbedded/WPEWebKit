@@ -43,6 +43,7 @@
 #include <gst/base/gstflowcombiner.h>
 #include <wtf/UUID.h>
 #include <wtf/glib/WTFGType.h>
+#include <wtf/ThreadSafeWeakPtr.h>
 
 using namespace WebCore;
 
@@ -55,7 +56,7 @@ static GstStaticPadTemplate audioSrcTemplate = GST_STATIC_PAD_TEMPLATE("audio_sr
 GST_DEBUG_CATEGORY_STATIC(webkitMediaStreamSrcDebug);
 #define GST_CAT_DEFAULT webkitMediaStreamSrcDebug
 
-GRefPtr<GstTagList> mediaStreamTrackPrivateGetTags(const MediaStreamTrackPrivate& track)
+WARN_UNUSED_RETURN GRefPtr<GstTagList> mediaStreamTrackPrivateGetTags(const MediaStreamTrackPrivate& track)
 {
     auto tagList = adoptGRef(gst_tag_list_new_empty());
 
@@ -63,7 +64,7 @@ GRefPtr<GstTagList> mediaStreamTrackPrivateGetTags(const MediaStreamTrackPrivate
         gst_tag_list_add(tagList.get(), GST_TAG_MERGE_APPEND, GST_TAG_TITLE, track.label().utf8().data(), nullptr);
 
     GST_DEBUG("Track tags: %" GST_PTR_FORMAT, tagList.get());
-    return tagList.leakRef();
+    return tagList;
 }
 
 GstStream* webkitMediaStreamNew(const MediaStreamTrackPrivate& track)
@@ -80,11 +81,19 @@ GstStream* webkitMediaStreamNew(const MediaStreamTrackPrivate& track)
         type = GST_STREAM_TYPE_VIDEO;
     }
 
-    auto* stream = gst_stream_new(track.id().utf8().data(), caps.get(), type, GST_STREAM_FLAG_SELECT);
+    StringBuilder builder;
+    builder.append(track.id());
+    if (!track.enabled())
+        builder.append("-disabled"_s);
+
+    auto trackId = builder.toString();
+    auto* stream = gst_stream_new(trackId.ascii().data(), caps.get(), type, GST_STREAM_FLAG_SELECT);
     auto tags = mediaStreamTrackPrivateGetTags(track);
-    gst_stream_set_tags(stream, tags.leakRef());
+    gst_stream_set_tags(stream, tags.get());
     return stream;
 }
+
+static void webkitMediaStreamSrcCharacteristicsChanged(WebKitMediaStreamSrc*);
 
 class WebKitMediaStreamObserver : public MediaStreamPrivate::Observer {
     WTF_MAKE_FAST_ALLOCATED;
@@ -95,8 +104,10 @@ public:
 
     void characteristicsChanged() final
     {
-        if (m_src)
-            GST_DEBUG_OBJECT(m_src, "renegotiation should happen");
+        if (!m_src)
+            return;
+
+        webkitMediaStreamSrcCharacteristicsChanged(WEBKIT_MEDIA_STREAM_SRC_CAST(m_src));
     }
     void activeStatusChanged() final;
 
@@ -112,7 +123,15 @@ private:
     GstElement* m_src;
 };
 
-static void webkitMediaStreamSrcEnsureStreamCollectionPosted(WebKitMediaStreamSrc*, bool);
+static void webkitMediaStreamSrcEnsureStreamCollectionPosted(WebKitMediaStreamSrc*);
+
+#if USE(GSTREAMER_WEBRTC)
+struct InternalSourcePadProbeData {
+    RealtimeIncomingSourceGStreamer* incomingSource;
+    int clientId;
+};
+WEBKIT_DEFINE_ASYNC_DATA_STRUCT(InternalSourcePadProbeData)
+#endif
 
 class InternalSource final : public MediaStreamTrackPrivate::Observer,
     public RealtimeMediaSource::Observer,
@@ -126,6 +145,8 @@ public:
         , m_padName(padName)
         , m_consumerIsVideoPlayer(consumerIsVideoPlayer)
     {
+        m_isIncomingVideoSource = m_track.source().isIncomingVideoSource();
+
         static uint64_t audioCounter = 0;
         static uint64_t videoCounter = 0;
         String elementName;
@@ -152,52 +173,97 @@ public:
             data->m_enoughData = false;
         }), this);
 
+        createGstStream();
+
+#if GST_CHECK_VERSION(1, 22, 0)
+        auto pad = adoptGRef(gst_element_get_static_pad(m_src.get(), "src"));
+        gst_pad_add_probe(pad.get(), GST_PAD_PROBE_TYPE_QUERY_UPSTREAM, reinterpret_cast<GstPadProbeCallback>(+[](GstPad*, GstPadProbeInfo* info, InternalSource*) -> GstPadProbeReturn {
+            auto* query = GST_PAD_PROBE_INFO_QUERY(info);
+            switch (GST_QUERY_TYPE(query)) {
+            case GST_QUERY_SELECTABLE:
+                gst_query_set_selectable(query, TRUE);
+                return GST_PAD_PROBE_HANDLED;
+            default:
+                break;
+            }
+            return GST_PAD_PROBE_OK;
+        }), nullptr, nullptr);
+#endif
+
+        auto& trackSource = m_track.source();
+        if (!trackSource.isIncomingAudioSource() && !trackSource.isIncomingVideoSource())
+            return;
+
+        connectIncomingTrack();
+    }
+
+    void connectIncomingTrack()
+    {
 #if USE(GSTREAMER_WEBRTC)
         auto& trackSource = m_track.source();
-        if (trackSource.isIncomingAudioSource() || trackSource.isIncomingVideoSource()) {
-
-            if (trackSource.isIncomingAudioSource()) {
-                auto& source = static_cast<RealtimeIncomingAudioSourceGStreamer&>(trackSource);
-                m_webrtcSourceClientId = source.registerClient(GRefPtr<GstElement>(m_src));
-            } else if (trackSource.isIncomingVideoSource()) {
-                auto& source = static_cast<RealtimeIncomingVideoSourceGStreamer&>(trackSource);
-                m_webrtcSourceClientId = source.registerClient(GRefPtr<GstElement>(m_src));
+        std::optional<int> clientId;
+        auto client = GRefPtr<GstElement>(m_src);
+        if (trackSource.isIncomingAudioSource()) {
+            auto& source = static_cast<RealtimeIncomingAudioSourceGStreamer&>(trackSource);
+            if (source.hasClient(client)) {
+                GST_DEBUG_OBJECT(m_src.get(), "Incoming audio track already registered.");
+                return;
             }
-
-            auto pad = adoptGRef(gst_element_get_static_pad(m_src.get(), "src"));
-            gst_pad_add_probe(pad.get(), static_cast<GstPadProbeType>(GST_PAD_PROBE_TYPE_EVENT_UPSTREAM | GST_PAD_PROBE_TYPE_QUERY_UPSTREAM), reinterpret_cast<GstPadProbeCallback>(+[](GstPad*, GstPadProbeInfo* info, InternalSource* internalSource) -> GstPadProbeReturn {
-                auto& trackSource = internalSource->m_track.source();
-                ASSERT(internalSource->m_webrtcSourceClientId.has_value());
-                auto clientId = internalSource->m_webrtcSourceClientId.value();
-
-                if (GST_IS_QUERY(info->data)) {
-                    switch (GST_QUERY_TYPE(GST_PAD_PROBE_INFO_QUERY(info))) {
-                    case GST_QUERY_CAPS:
-                    case GST_QUERY_LATENCY:
-                        return GST_PAD_PROBE_OK;
-                    default:
-                        break;
-                    }
-                    GST_DEBUG_OBJECT(internalSource->m_src.get(), "Proxying query %" GST_PTR_FORMAT " to appsink peer", GST_PAD_PROBE_INFO_QUERY(info));
-                } else
-                    GST_DEBUG_OBJECT(internalSource->m_src.get(), "Proxying event %" GST_PTR_FORMAT " to appsink peer", GST_PAD_PROBE_INFO_EVENT(info));
-
-                if (trackSource.isIncomingAudioSource()) {
-                    auto& source = static_cast<RealtimeIncomingAudioSourceGStreamer&>(trackSource);
-                    if (GST_IS_EVENT(info->data))
-                        source.handleUpstreamEvent(GRefPtr<GstEvent>(GST_PAD_PROBE_INFO_EVENT(info)), clientId);
-                    else if (source.handleUpstreamQuery(GST_PAD_PROBE_INFO_QUERY(info), clientId))
-                        return GST_PAD_PROBE_HANDLED;
-                } else if (trackSource.isIncomingVideoSource()) {
-                    auto& source = static_cast<RealtimeIncomingVideoSourceGStreamer&>(trackSource);
-                    if (GST_IS_EVENT(info->data))
-                        source.handleUpstreamEvent(GRefPtr<GstEvent>(GST_PAD_PROBE_INFO_EVENT(info)), clientId);
-                    else if (source.handleUpstreamQuery(GST_PAD_PROBE_INFO_QUERY(info), clientId))
-                        return GST_PAD_PROBE_HANDLED;
-                }
-                return GST_PAD_PROBE_OK;
-            }), this, nullptr);
+            clientId = source.registerClient(WTFMove(client));
+        } else {
+            RELEASE_ASSERT((trackSource.isIncomingVideoSource()));
+            auto& source = static_cast<RealtimeIncomingVideoSourceGStreamer&>(trackSource);
+            if (source.hasClient(client)) {
+                GST_DEBUG_OBJECT(m_src.get(), "Incoming video track already registered.");
+                return;
+            }
+            clientId = source.registerClient(WTFMove(client));
         }
+
+        if (!clientId) {
+            GST_WARNING_OBJECT(m_src.get(), "Incoming track registration failed, track likely not ready yet.");
+            return;
+        }
+
+        m_webrtcSourceClientId = *clientId;
+
+        auto data = createInternalSourcePadProbeData();
+        data->incomingSource = static_cast<RealtimeIncomingSourceGStreamer*>(&trackSource);
+        data->clientId = *m_webrtcSourceClientId;
+
+        auto srcPad = adoptGRef(gst_element_get_static_pad(m_src.get(), "src"));
+        gst_pad_add_probe(srcPad.get(), static_cast<GstPadProbeType>(GST_PAD_PROBE_TYPE_EVENT_UPSTREAM | GST_PAD_PROBE_TYPE_QUERY_UPSTREAM), reinterpret_cast<GstPadProbeCallback>(+[](GstPad* pad, GstPadProbeInfo* info, gpointer userData) -> GstPadProbeReturn {
+            auto data = static_cast<InternalSourcePadProbeData*>(userData);
+            if (!data->incomingSource)
+                return GST_PAD_PROBE_REMOVE;
+
+            auto src = adoptGRef(gst_pad_get_parent_element(pad));
+            if (GST_IS_QUERY(info->data)) {
+                switch (GST_QUERY_TYPE(GST_PAD_PROBE_INFO_QUERY(info))) {
+                case GST_QUERY_CAPS:
+                    return GST_PAD_PROBE_OK;
+                default:
+                    break;
+                }
+                GST_DEBUG_OBJECT(src.get(), "Proxying query %" GST_PTR_FORMAT " to appsink peer", GST_PAD_PROBE_INFO_QUERY(info));
+            } else
+                GST_DEBUG_OBJECT(src.get(), "Proxying event %" GST_PTR_FORMAT " to appsink peer", GST_PAD_PROBE_INFO_EVENT(info));
+
+            if (data->incomingSource->isIncomingAudioSource()) {
+                auto& source = static_cast<RealtimeIncomingAudioSourceGStreamer&>(*data->incomingSource);
+                if (GST_IS_EVENT(info->data))
+                    source.handleUpstreamEvent(GRefPtr<GstEvent>(GST_PAD_PROBE_INFO_EVENT(info)), data->clientId);
+                else if (source.handleUpstreamQuery(GST_PAD_PROBE_INFO_QUERY(info), data->clientId))
+                    return GST_PAD_PROBE_HANDLED;
+            } else if (data->incomingSource->isIncomingVideoSource()) {
+                auto& source = static_cast<RealtimeIncomingVideoSourceGStreamer&>(*data->incomingSource);
+                if (GST_IS_EVENT(info->data))
+                    source.handleUpstreamEvent(GRefPtr<GstEvent>(GST_PAD_PROBE_INFO_EVENT(info)), data->clientId);
+                else if (source.handleUpstreamQuery(GST_PAD_PROBE_INFO_QUERY(info), data->clientId))
+                    return GST_PAD_PROBE_HANDLED;
+            }
+            return GST_PAD_PROBE_OK;
+        }), data, reinterpret_cast<GDestroyNotify>(destroyInternalSourcePadProbeData));
 #endif
     }
 
@@ -286,8 +352,6 @@ public:
             return;
 
         GST_TRACE_OBJECT(m_src.get(), "%s", logMessage);
-        auto* parent = WEBKIT_MEDIA_STREAM_SRC(m_parent);
-        webkitMediaStreamSrcEnsureStreamCollectionPosted(parent, false);
 
         bool drop = m_enoughData;
         auto* buffer = gst_sample_get_buffer(sample.get());
@@ -325,7 +389,7 @@ public:
         GST_INFO_OBJECT(m_src.get(), "Track ended");
         sourceStopped();
         m_isEnded = true;
-        webkitMediaStreamSrcEnsureStreamCollectionPosted(WEBKIT_MEDIA_STREAM_SRC(m_parent), true);
+        webkitMediaStreamSrcEnsureStreamCollectionPosted(WEBKIT_MEDIA_STREAM_SRC(m_parent));
     }
 
     void sourceStopped() final
@@ -347,7 +411,11 @@ public:
 
     void trackEnabledChanged(MediaStreamTrackPrivate&) final
     {
-        GST_INFO_OBJECT(m_src.get(), "Track enabled: %s", boolForPrinting(m_track.enabled()));
+        GST_INFO_OBJECT(m_src.get(), "Track enabled: %s, resetting stream", boolForPrinting(m_track.enabled()));
+
+        createGstStream();
+        webkitMediaStreamSrcEnsureStreamCollectionPosted(WEBKIT_MEDIA_STREAM_SRC(m_parent));
+
         if (m_track.isVideo()) {
             m_enoughData = false;
             m_needsDiscont = true;
@@ -460,6 +528,7 @@ public:
 
     void updateFirstVideoSampleSeenFlag();
     bool receivedAudioSampleBeforeVideo();
+    GstStream* stream() const { return m_stream.get(); }
 
 private:
     void flush()
@@ -523,6 +592,20 @@ private:
         pushSample(WTFMove(sample), "Pushing audio silence from disabled track");
     }
 
+    void createGstStream()
+    {
+        m_stream = adoptGRef(webkitMediaStreamNew(m_track));
+
+        auto pad = adoptGRef(gst_element_get_static_pad(m_src.get(), "src"));
+        auto event = adoptGRef(gst_pad_get_sticky_event(pad.get(), GST_EVENT_STREAM_START, 0));
+        if (!event)
+            return;
+
+        auto writableEvent = adoptGRef(gst_event_make_writable(event.leakRef()));
+        gst_event_set_stream(writableEvent.get(), m_stream.get());
+        gst_pad_store_sticky_event(pad.get(), writableEvent.get());
+    }
+
     GstElement* m_parent { nullptr };
     MediaStreamTrackPrivate& m_track;
     GRefPtr<GstElement> m_src;
@@ -545,6 +628,8 @@ private:
     bool m_eosPending WTF_GUARDED_BY_LOCK(m_eosLock) { false };
     std::optional<int> m_webrtcSourceClientId;
     bool m_consumerIsVideoPlayer { false };
+    bool m_isIncomingVideoSource { false };
+    GRefPtr<GstStream> m_stream;
 };
 
 struct _WebKitMediaStreamSrcPrivate {
@@ -555,7 +640,6 @@ struct _WebKitMediaStreamSrcPrivate {
     Vector<RefPtr<MediaStreamTrackPrivate>> tracks;
     GUniquePtr<GstFlowCombiner> flowCombiner;
     GRefPtr<GstStreamCollection> streamCollection;
-    Atomic<bool> streamCollectionPosted;
     Atomic<unsigned> audioPadCounter;
     Atomic<unsigned> videoPadCounter;
     bool firstVideoSampleSeen;
@@ -590,9 +674,12 @@ static void webkitMediaStreamSrcPostStreamCollection(WebKitMediaStreamSrc*);
 
 void WebKitMediaStreamObserver::activeStatusChanged()
 {
-    auto* element = WEBKIT_MEDIA_STREAM_SRC_CAST(m_src);
-    if (!element->priv->stream->active())
-        webkitMediaStreamSrcEnsureStreamCollectionPosted(element, true);
+    auto element = WEBKIT_MEDIA_STREAM_SRC_CAST(m_src);
+    auto isActive = element->priv->stream->active();
+    GST_DEBUG_OBJECT(element, "MediaStream active status changed to %s", boolForPrinting(isActive));
+    if (isActive)
+        return;
+    webkitMediaStreamSrcEnsureStreamCollectionPosted(element);
 }
 
 void WebKitMediaStreamObserver::didRemoveTrack(MediaStreamTrackPrivate& track)
@@ -600,8 +687,8 @@ void WebKitMediaStreamObserver::didRemoveTrack(MediaStreamTrackPrivate& track)
     if (!m_src)
         return;
 
-    auto* element = WEBKIT_MEDIA_STREAM_SRC_CAST(m_src);
-    auto* priv = element->priv;
+    auto self = WEBKIT_MEDIA_STREAM_SRC_CAST(m_src);
+    auto priv = self->priv;
 
     // Lookup the corresponding InternalSource and take it from the storage.
     auto index = priv->sources.findIf([&](auto& item) {
@@ -615,11 +702,28 @@ void WebKitMediaStreamObserver::didRemoveTrack(MediaStreamTrackPrivate& track)
         return item->id() == track.id();
     });
 
-    // Make sure that the video.videoWidth is reset to 0.
-    webkitMediaStreamSrcEnsureStreamCollectionPosted(element, true);
-
     // Properly stop data flow. The source stops observing notifications from WebCore.
     source->signalEndOfStream();
+
+    auto element = GST_ELEMENT_CAST(self);
+    {
+        auto locker = GstStateLocker(element);
+        auto* appSrc = source->get();
+        gst_element_set_locked_state(appSrc, true);
+        gst_element_set_state(appSrc, GST_STATE_NULL);
+        gst_bin_remove(GST_BIN_CAST(self), appSrc);
+        gst_element_set_locked_state(appSrc, false);
+    }
+
+    auto pad = adoptGRef(gst_element_get_static_pad(element, source->padName().ascii().data()));
+    if (auto proxyPad = adoptGRef(GST_PAD_CAST(gst_proxy_pad_get_internal(GST_PROXY_PAD(pad.get())))))
+        gst_flow_combiner_remove_pad(priv->flowCombiner.get(), proxyPad.get());
+
+    gst_pad_set_active(pad.get(), FALSE);
+    gst_element_remove_pad(element, pad.get());
+
+    // Make sure that the video.videoWidth is reset to 0.
+    webkitMediaStreamSrcEnsureStreamCollectionPosted(self);
 }
 
 static GstURIType webkitMediaStreamSrcUriGetType(GType)
@@ -796,7 +900,7 @@ static void webkit_media_stream_src_class_init(WebKitMediaStreamSrcClass* klass)
     gobjectClass->get_property = webkitMediaStreamSrcGetProperty;
     gobjectClass->set_property = webkitMediaStreamSrcSetProperty;
 
-    g_object_class_install_property(gobjectClass, PROP_IS_LIVE, g_param_spec_boolean("is-live", "Is Live", "Let playbin3 know we are a live source.",
+    g_object_class_install_property(gobjectClass, PROP_IS_LIVE, g_param_spec_boolean("is-live", nullptr, nullptr,
         TRUE, static_cast<GParamFlags>(G_PARAM_READABLE | G_PARAM_STATIC_STRINGS)));
 
     gstElementClass->change_state = GST_DEBUG_FUNCPTR(webkitMediaStreamSrcChangeState);
@@ -826,7 +930,7 @@ static GstFlowReturn webkitMediaStreamSrcChain(GstPad* pad, GstObject* parent, G
             continue;
 
         // Make sure that the video.videoWidth is reset to 0.
-        webkitMediaStreamSrcEnsureStreamCollectionPosted(self, true);
+        webkitMediaStreamSrcEnsureStreamCollectionPosted(self);
 
         auto tags = mediaStreamTrackPrivateGetTags(source->track());
         gst_pad_push_event(pad, gst_event_new_tag(tags.leakRef()));
@@ -869,20 +973,17 @@ static void webkitMediaStreamSrcPostStreamCollection(WebKitMediaStreamSrc* self)
         for (auto& source : priv->sources) {
             if (source->isEnded())
                 continue;
-            gst_stream_collection_add_stream(priv->streamCollection.get(), webkitMediaStreamNew(source->track()));
+            GRefPtr<GstStream> stream = source->stream();
+            gst_stream_collection_add_stream(priv->streamCollection.get(), stream.leakRef());
         }
     }
 
-    GST_DEBUG_OBJECT(self, "Posting stream collection message");
+    GST_DEBUG_OBJECT(self, "Posting stream collection message containing %u streams", gst_stream_collection_get_size(priv->streamCollection.get()));
     gst_element_post_message(GST_ELEMENT_CAST(self), gst_message_new_stream_collection(GST_OBJECT_CAST(self), priv->streamCollection.get()));
 }
 
-static void webkitMediaStreamSrcEnsureStreamCollectionPosted(WebKitMediaStreamSrc* self, bool force)
+static void webkitMediaStreamSrcEnsureStreamCollectionPosted(WebKitMediaStreamSrc* self)
 {
-    if (self->priv->streamCollectionPosted.load() && !force)
-        return;
-
-    self->priv->streamCollectionPosted.store(true);
     GST_DEBUG_OBJECT(self, "Posting stream collection");
     DisableMallocRestrictionsForCurrentThreadScope disableMallocRestrictions;
     callOnMainThreadAndWait([element = GRefPtr<GstElement>(GST_ELEMENT_CAST(self))] {
@@ -893,7 +994,10 @@ static void webkitMediaStreamSrcEnsureStreamCollectionPosted(WebKitMediaStreamSr
 
 static void webkitMediaStreamSrcAddPad(WebKitMediaStreamSrc* self, GstPad* target, GstStaticPadTemplate* padTemplate, GRefPtr<GstTagList>&& tags, const String& padName)
 {
-    GST_DEBUG_OBJECT(self, "%s Ghosting %" GST_PTR_FORMAT, gst_object_get_path_string(GST_OBJECT_CAST(self)), target);
+#ifndef GST_DISABLE_GST_DEBUG
+    GUniquePtr<char> objectPath(gst_object_get_path_string(GST_OBJECT_CAST(self)));
+    GST_DEBUG_OBJECT(self, "%s Ghosting %" GST_PTR_FORMAT, objectPath.get(), target);
+#endif
 
     auto* ghostPad = webkitGstGhostPadFromStaticTemplate(padTemplate, padName.ascii().data(), target);
     gst_pad_set_active(ghostPad, TRUE);
@@ -1017,6 +1121,18 @@ void webkitMediaStreamSrcSignalEndOfStream(WebKitMediaStreamSrc* self)
     self->priv->sources.clear();
 }
 
+void webkitMediaStreamSrcCharacteristicsChanged(WebKitMediaStreamSrc* self)
+{
+    GST_DEBUG_OBJECT(self, "MediaStream characteristics changed");
+    for (auto& source : self->priv->sources) {
+        auto& trackSource = source->track().source();
+        if (!trackSource.isIncomingAudioSource() && !trackSource.isIncomingVideoSource())
+            continue;
+
+        source->connectIncomingTrack();
+    }
+}
+
 void webkitMediaStreamSrcSetStream(WebKitMediaStreamSrc* self, MediaStreamPrivate* stream, bool isVideoPlayer)
 {
     ASSERT(WEBKIT_IS_MEDIA_STREAM_SRC(self));
@@ -1032,6 +1148,13 @@ void webkitMediaStreamSrcSetStream(WebKitMediaStreamSrc* self, MediaStreamPrivat
             continue;
         webkitMediaStreamSrcAddTrack(self, track.ptr(), onlyTrack, isVideoPlayer);
     }
+
+    // Posting an initial empty stream collection while the element hasn't exposed pads yet triggers
+    // a critical warning in urisourcebin.
+    if (self->priv->sources.isEmpty())
+        return;
+
+    webkitMediaStreamSrcEnsureStreamCollectionPosted(self);
 }
 
 void webkitMediaStreamSrcConfigureAudioTracks(WebKitMediaStreamSrc* self, float volume, bool isMuted, bool isPlaying)
@@ -1046,5 +1169,7 @@ GstElement* webkitMediaStreamSrcNew()
 {
     return GST_ELEMENT_CAST(g_object_new(webkit_media_stream_src_get_type(), nullptr));
 }
+
+#undef GST_CAT_DEFAULT
 
 #endif // ENABLE(VIDEO) && ENABLE(MEDIA_STREAM) && USE(GSTREAMER)

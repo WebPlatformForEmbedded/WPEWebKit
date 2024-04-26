@@ -24,6 +24,7 @@
 
 #include "GStreamerCommon.h"
 #include "GStreamerRegistryScanner.h"
+#include "MediaStreamTrack.h"
 #include "VideoEncoderPrivateGStreamer.h"
 
 #include <wtf/glib/WTFGType.h>
@@ -40,7 +41,7 @@ WEBKIT_DEFINE_ASYNC_DATA_STRUCT(RealtimeOutgoingVideoSourceHolder)
 
 
 RealtimeOutgoingVideoSourceGStreamer::RealtimeOutgoingVideoSourceGStreamer(const RefPtr<UniqueSSRCGenerator>& ssrcGenerator, const String& mediaStreamId, MediaStreamTrack& track)
-    : RealtimeOutgoingMediaSourceGStreamer(ssrcGenerator, mediaStreamId, track)
+    : RealtimeOutgoingMediaSourceGStreamer(RealtimeOutgoingMediaSourceGStreamer::Type::Video, ssrcGenerator, mediaStreamId, track)
 {
     static std::once_flag debugRegisteredFlag;
     std::call_once(debugRegisteredFlag, [] {
@@ -59,8 +60,14 @@ RealtimeOutgoingVideoSourceGStreamer::RealtimeOutgoingVideoSourceGStreamer(const
     m_videoFlip = makeGStreamerElement("videoflip", nullptr);
     gst_util_set_object_arg(G_OBJECT(m_videoFlip.get()), "method", "automatic");
 
+    m_videoRate = makeGStreamerElement("videorate", nullptr);
+    m_frameRateCapsFilter = makeGStreamerElement("capsfilter", nullptr);
+
+    // https://gitlab.freedesktop.org/gstreamer/gst-plugins-base/issues/97#note_56575
+    g_object_set(m_videoRate.get(), "skip-to-first", TRUE, "drop-only", TRUE, "average-period", UINT64_C(1), nullptr);
+
     m_encoder = gst_element_factory_make("webkitvideoencoder", nullptr);
-    gst_bin_add_many(GST_BIN_CAST(m_bin.get()), m_videoFlip.get(), m_videoConvert.get(), m_encoder.get(), nullptr);
+    gst_bin_add_many(GST_BIN_CAST(m_bin.get()), m_videoRate.get(), m_frameRateCapsFilter.get(), m_videoFlip.get(), m_videoConvert.get(), m_encoder.get(), nullptr);
 }
 
 RTCRtpCapabilities RealtimeOutgoingVideoSourceGStreamer::rtpCapabilities() const
@@ -78,7 +85,7 @@ void RealtimeOutgoingVideoSourceGStreamer::updateStats(GstBuffer*)
     if (m_encoder) {
         uint32_t bitrate;
         g_object_get(m_encoder.get(), "bitrate", &bitrate, nullptr);
-        gst_structure_set(m_stats.get(), "bitrate", G_TYPE_DOUBLE, static_cast<double>(bitrate * 1024), nullptr);
+        gst_structure_set(m_stats.get(), "bitrate", G_TYPE_DOUBLE, static_cast<double>(bitrate * 1000), nullptr);
     }
 
     gst_structure_set(m_stats.get(), "frames-sent", G_TYPE_UINT64, framesSent, "frames-encoded", G_TYPE_UINT64, framesSent, nullptr);
@@ -86,14 +93,22 @@ void RealtimeOutgoingVideoSourceGStreamer::updateStats(GstBuffer*)
 
 void RealtimeOutgoingVideoSourceGStreamer::teardown()
 {
+    RealtimeOutgoingMediaSourceGStreamer::teardown();
+    m_videoConvert.clear();
+    m_videoFlip.clear();
+    m_videoRate.clear();
+    m_frameRateCapsFilter.clear();
     stopUpdatingStats();
+    m_stats.reset();
 }
 
 bool RealtimeOutgoingVideoSourceGStreamer::setPayloadType(const GRefPtr<GstCaps>& caps)
 {
     GST_DEBUG_OBJECT(m_bin.get(), "Setting payload caps: %" GST_PTR_FORMAT, caps.get());
-    auto* structure = gst_caps_get_structure(caps.get(), 0);
-    const char* encodingName = gst_structure_get_string(structure, "encoding-name");
+    // FIXME: We use only the first structure of the caps. This not be the right approach specially
+    // we don't have a payloader or encoder for that format.
+    GUniquePtr<GstStructure> structure(gst_structure_copy(gst_caps_get_structure(caps.get(), 0)));
+    const char* encodingName = gst_structure_get_string(structure.get(), "encoding-name");
     if (!encodingName) {
         GST_ERROR_OBJECT(m_bin.get(), "encoding-name not found");
         return false;
@@ -108,32 +123,40 @@ bool RealtimeOutgoingVideoSourceGStreamer::setPayloadType(const GRefPtr<GstCaps>
 
     GRefPtr<GstCaps> encoderCaps;
     if (encoding == "vp8"_s) {
+        if (gstObjectHasProperty(m_payloader.get(), "picture-id-mode"))
+            gst_util_set_object_arg(G_OBJECT(m_payloader.get()), "picture-id-mode", "15-bit");
+
         encoderCaps = adoptGRef(gst_caps_new_empty_simple("video/x-vp8"));
     } else if (encoding == "vp9"_s) {
+        if (gstObjectHasProperty(m_payloader.get(), "picture-id-mode"))
+            gst_util_set_object_arg(G_OBJECT(m_payloader.get()), "picture-id-mode", "15-bit");
+
         encoderCaps = adoptGRef(gst_caps_new_empty_simple("video/x-vp9"));
-        if (const char* vp9Profile = gst_structure_get_string(structure, "vp9-profile-id"))
+        if (const char* vp9Profile = gst_structure_get_string(structure.get(), "vp9-profile-id"))
             gst_caps_set_simple(encoderCaps.get(), "profile", G_TYPE_STRING, vp9Profile, nullptr);
     } else if (encoding == "h264"_s) {
         encoderCaps = adoptGRef(gst_caps_new_empty_simple("video/x-h264"));
-        // FIXME: https://gitlab.freedesktop.org/gstreamer/gst-plugins-good/-/issues/893
-        // gst_util_set_object_arg(G_OBJECT(m_payloader.get()), "aggregate-mode", "zero-latency");
-        // g_object_set(m_payloader.get(), "config-interval", -1, nullptr);
+        gst_util_set_object_arg(G_OBJECT(m_payloader.get()), "aggregate-mode", "zero-latency");
+        g_object_set(m_payloader.get(), "config-interval", -1, nullptr);
 
-        const char* profile = gst_structure_get_string(structure, "profile");
+        const char* profile = gst_structure_get_string(structure.get(), "profile");
         if (!profile)
             profile = "baseline";
         gst_caps_set_simple(encoderCaps.get(), "profile", G_TYPE_STRING, profile, nullptr);
     } else if (encoding == "h265"_s) {
         encoderCaps = adoptGRef(gst_caps_new_empty_simple("video/x-h265"));
+        gst_util_set_object_arg(G_OBJECT(m_payloader.get()), "aggregate-mode", "zero-latency");
+        g_object_set(m_payloader.get(), "config-interval", -1, nullptr);
         // FIXME: profile tier level?
+    } else if (encoding == "av1"_s) {
+        encoderCaps = adoptGRef(gst_caps_new_empty_simple("video/x-av1"));
     } else {
         GST_ERROR_OBJECT(m_bin.get(), "Unsupported outgoing video encoding: %s", encodingName);
         return false;
     }
 
-    // FIXME: Re-enable auto-header-extension. Currently triggers caps negotiation error.
     // Align MTU with libwebrtc implementation, also helping to reduce packet fragmentation.
-    g_object_set(m_payloader.get(), "auto-header-extension", FALSE, "mtu", 1200, nullptr);
+    g_object_set(m_payloader.get(), "auto-header-extension", TRUE, "mtu", 1200, nullptr);
 
     if (!videoEncoderSetFormat(WEBKIT_VIDEO_ENCODER(m_encoder.get()), WTFMove(encoderCaps))) {
         GST_ERROR_OBJECT(m_bin.get(), "Unable to set encoder format");
@@ -141,44 +164,44 @@ bool RealtimeOutgoingVideoSourceGStreamer::setPayloadType(const GRefPtr<GstCaps>
     }
 
     int payloadType;
-    if (gst_structure_get_int(structure, "payload", &payloadType))
+    if (gst_structure_get_int(structure.get(), "payload", &payloadType))
         g_object_set(m_payloader.get(), "pt", payloadType, nullptr);
 
-    g_object_set(m_capsFilter.get(), "caps", caps.get(), nullptr);
+    if (m_payloaderState) {
+        g_object_set(m_payloader.get(), "seqnum-offset", m_payloaderState->seqnum, nullptr);
+        m_payloaderState.reset();
+    }
+
+    auto rtpCaps = adoptGRef(gst_caps_new_empty());
+    gst_caps_append_structure(rtpCaps.get(), structure.release());
+
+    g_object_set(m_capsFilter.get(), "caps", rtpCaps.get(), nullptr);
+    GST_DEBUG_OBJECT(m_bin.get(), "RTP caps: %" GST_PTR_FORMAT, rtpCaps.get());
 
     gst_bin_add(GST_BIN_CAST(m_bin.get()), m_payloader.get());
 
     auto encoderSinkPad = adoptGRef(gst_element_get_static_pad(m_encoder.get(), "sink"));
     if (!gst_pad_is_linked(encoderSinkPad.get())) {
-        if (!gst_element_link_many(m_outgoingSource.get(), m_inputSelector.get(), m_videoFlip.get(), m_videoConvert.get(), m_preEncoderQueue.get(), m_encoder.get(), nullptr)) {
+        if (!gst_element_link_many(m_outgoingSource.get(), m_inputSelector.get(), m_liveSync.get(), m_videoFlip.get(), nullptr)) {
+            GST_ERROR_OBJECT(m_bin.get(), "Unable to link outgoing source to videoflip");
+            return false;
+        }
+
+        GstElement* tail = m_videoFlip.get();
+        if (m_videoRate) {
+            if (!gst_element_link_many(m_videoFlip.get(), m_videoRate.get(), m_frameRateCapsFilter.get(), nullptr)) {
+                GST_ERROR_OBJECT(m_bin.get(), "Unable to link outgoing source to videorate");
+                return false;
+            }
+            tail = m_frameRateCapsFilter.get();
+        }
+        if (!gst_element_link_many(tail, m_videoConvert.get(), m_preEncoderQueue.get(), m_encoder.get(), nullptr)) {
             GST_ERROR_OBJECT(m_bin.get(), "Unable to link outgoing source to encoder");
             return false;
         }
     }
 
     return gst_element_link_many(m_encoder.get(), m_payloader.get(), m_postEncoderQueue.get(), nullptr);
-}
-
-void RealtimeOutgoingVideoSourceGStreamer::codecPreferencesChanged(const GRefPtr<GstCaps>& codecPreferences)
-{
-    gst_element_set_locked_state(m_bin.get(), TRUE);
-    if (m_payloader) {
-        gst_element_set_state(m_payloader.get(), GST_STATE_NULL);
-        gst_element_unlink_many(m_encoder.get(), m_payloader.get(), m_postEncoderQueue.get(), nullptr);
-        gst_bin_remove(GST_BIN_CAST(m_bin.get()), m_payloader.get());
-        m_payloader.clear();
-    }
-    if (!setPayloadType(codecPreferences)) {
-        gst_element_set_locked_state(m_bin.get(), FALSE);
-        GST_ERROR_OBJECT(m_bin.get(), "Unable to link encoder to webrtcbin");
-        return;
-    }
-
-    gst_element_set_locked_state(m_bin.get(), FALSE);
-    gst_bin_sync_children_states(GST_BIN_CAST(m_bin.get()));
-    gst_element_sync_state_with_parent(m_bin.get());
-    GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS(GST_BIN_CAST(m_bin.get()), GST_DEBUG_GRAPH_SHOW_ALL, "outgoing-video-new-codec-prefs");
-    m_isStopped = false;
 }
 
 void RealtimeOutgoingVideoSourceGStreamer::connectFallbackSource()
@@ -275,6 +298,81 @@ void RealtimeOutgoingVideoSourceGStreamer::flush()
     GST_DEBUG_OBJECT(m_bin.get(), "Requesting key-frame");
     gst_element_send_event(m_outgoingSource.get(), gst_video_event_new_downstream_force_key_unit(GST_CLOCK_TIME_NONE, GST_CLOCK_TIME_NONE, GST_CLOCK_TIME_NONE, FALSE, 1));
 }
+
+void RealtimeOutgoingVideoSourceGStreamer::setParameters(GUniquePtr<GstStructure>&& parameters)
+{
+    m_parameters = WTFMove(parameters);
+    GST_DEBUG_OBJECT(m_bin.get(), "New encoding parameters: %" GST_PTR_FORMAT, m_parameters.get());
+
+    auto* encodingsValue = gst_structure_get_value(m_parameters.get(), "encodings");
+    RELEASE_ASSERT(GST_VALUE_HOLDS_LIST(encodingsValue));
+    if (UNLIKELY(!gst_value_list_get_size(encodingsValue))) {
+        GST_WARNING_OBJECT(m_bin.get(), "Encodings list is empty, cancelling configuration");
+        return;
+    }
+
+    auto* firstEncoding = gst_value_list_get_value(encodingsValue, 0);
+    RELEASE_ASSERT(GST_VALUE_HOLDS_STRUCTURE(firstEncoding));
+    auto* structure = gst_value_get_structure(firstEncoding);
+
+    if (gst_structure_has_field(structure, "max-framerate")) {
+        if (!m_videoRate)
+            GST_WARNING_OBJECT(m_bin.get(), "Unable to configure max-framerate");
+        else {
+            unsigned long maxFrameRate;
+            gst_structure_get(structure, "max-framerate", G_TYPE_ULONG, &maxFrameRate, nullptr);
+
+            // Some decoder(s), like FFMpeg don't handle 1 FPS framerate, so set a minimum more likely to be accepted.
+            if (maxFrameRate < 2)
+                maxFrameRate = 2;
+
+            int numerator, denominator;
+            gst_util_double_to_fraction(static_cast<double>(maxFrameRate), &numerator, &denominator);
+
+            auto caps = adoptGRef(gst_caps_new_simple("video/x-raw", "framerate", GST_TYPE_FRACTION, numerator, denominator, nullptr));
+            g_object_set(m_frameRateCapsFilter.get(), "caps", caps.get(), nullptr);
+        }
+    }
+
+    if (UNLIKELY(!m_encoder) || !gst_structure_has_field(structure, "max-bitrate"))
+        return;
+
+    unsigned long maxBitrate;
+    gst_structure_get(structure, "max-bitrate", G_TYPE_ULONG, &maxBitrate, nullptr);
+
+    // maxBitrate is expessed in bits/s but the encoder property is in Kbit/s.
+    if (maxBitrate >= 1000)
+        g_object_set(m_encoder.get(), "bitrate", static_cast<uint32_t>(maxBitrate / 1000), nullptr);
+}
+
+void RealtimeOutgoingVideoSourceGStreamer::fillEncodingParameters(const GUniquePtr<GstStructure>& encodingParameters)
+{
+    if (m_videoRate) {
+        GRefPtr<GstCaps> caps;
+        g_object_get(m_frameRateCapsFilter.get(), "caps", &caps.outPtr(), nullptr);
+        double maxFrameRate = 30.0;
+        if (!gst_caps_is_any(caps.get())) {
+            if (auto* structure = gst_caps_get_structure(caps.get(), 0)) {
+                int numerator, denominator;
+                if (gst_structure_get_fraction(structure, "framerate", &numerator, &denominator))
+                    gst_util_fraction_to_double(numerator, denominator, &maxFrameRate);
+            }
+        }
+
+        gst_structure_set(encodingParameters.get(), "max-framerate", G_TYPE_DOUBLE, maxFrameRate, nullptr);
+    }
+
+    unsigned long maxBitrate = 2048 * 1000;
+    if (m_encoder) {
+        uint32_t bitrate;
+        g_object_get(m_encoder.get(), "bitrate", &bitrate, nullptr);
+        maxBitrate = bitrate * 1000;
+    }
+
+    gst_structure_set(encodingParameters.get(), "max-bitrate", G_TYPE_ULONG, maxBitrate, nullptr);
+}
+
+#undef GST_CAT_DEFAULT
 
 } // namespace WebCore
 

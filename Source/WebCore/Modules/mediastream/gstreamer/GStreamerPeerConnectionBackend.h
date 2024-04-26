@@ -77,7 +77,7 @@ private:
 
     bool isNegotiationNeeded(uint32_t) const final;
 
-    std::optional<bool> canTrickleIceCandidates() const { return true; };
+    std::optional<bool> canTrickleIceCandidates() const final;
 
     friend class GStreamerMediaEndpoint;
     friend class GStreamerRtpSenderBackend;
@@ -94,7 +94,7 @@ private:
     GStreamerRtpSenderBackend::Source createLinkedSourceForTrack(MediaStreamTrack&);
 
     RTCRtpTransceiver* existingTransceiver(WTF::Function<bool(GStreamerRtpTransceiverBackend&)>&&);
-    RTCRtpTransceiver& newRemoteTransceiver(std::unique_ptr<GStreamerRtpTransceiverBackend>&&, RealtimeMediaSource::Type);
+    RTCRtpTransceiver& newRemoteTransceiver(std::unique_ptr<GStreamerRtpTransceiverBackend>&&, RealtimeMediaSource::Type, String&&);
 
     void collectTransceivers() final;
 
@@ -114,12 +114,12 @@ private:
     void setReconfiguring(bool isReconfiguring) { m_isReconfiguring = isReconfiguring; }
     bool isReconfiguring() const { return m_isReconfiguring; }
 
+    void tearDown();
+
     Ref<GStreamerMediaEndpoint> m_endpoint;
     bool m_isLocalDescriptionSet { false };
     bool m_isRemoteDescriptionSet { false };
 
-    Vector<std::unique_ptr<GStreamerIceCandidate>> m_pendingCandidates;
-    Vector<Ref<RTCRtpReceiver>> m_pendingReceivers;
     Vector<PendingTrackEvent> m_pendingTrackEvents;
 
     bool m_isReconfiguring { false };

@@ -38,9 +38,8 @@ RealtimeIncomingAudioSourceGStreamer::RealtimeIncomingAudioSourceGStreamer(AtomS
         GST_DEBUG_CATEGORY_INIT(webkit_webrtc_incoming_audio_debug, "webkitwebrtcincomingaudio", 0, "WebKit WebRTC incoming audio");
     });
     static Atomic<uint64_t> sourceCounter = 0;
-    gst_element_set_name(bin(), makeString("incoming-audio-source-", sourceCounter.exchangeAdd(1)).ascii().data());
-    GST_DEBUG_OBJECT(bin(), "New incoming audio source created");
-    start();
+    gst_element_set_name(bin(), makeString("incoming-audio-source-"_s, sourceCounter.exchangeAdd(1)).ascii().data());
+    GST_DEBUG_OBJECT(bin(), "New incoming audio source created with ID %s", persistentID().ascii().data());
 }
 
 RealtimeIncomingAudioSourceGStreamer::~RealtimeIncomingAudioSourceGStreamer()
@@ -55,12 +54,15 @@ const RealtimeMediaSourceSettings& RealtimeIncomingAudioSourceGStreamer::setting
 
 void RealtimeIncomingAudioSourceGStreamer::dispatchSample(GRefPtr<GstSample>&& sample)
 {
+    ASSERT(isMainThread());
     auto presentationTime = MediaTime(GST_TIME_AS_USECONDS(GST_BUFFER_PTS(gst_sample_get_buffer(sample.get()))), G_USEC_PER_SEC);
     GStreamerAudioStreamDescription description;
     GStreamerAudioData frames(WTFMove(sample), description.getInfo());
     audioSamplesAvailable(presentationTime, frames, description, 0);
 }
 
-}
+#undef GST_CAT_DEFAULT
+
+} // namespace WebCore
 
 #endif // USE(GSTREAMER_WEBRTC)

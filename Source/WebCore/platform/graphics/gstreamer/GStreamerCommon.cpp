@@ -40,10 +40,16 @@
 #include <gst/gst.h>
 #include <mutex>
 #include <wtf/FileSystem.h>
+#include <wtf/HashMap.h>
+#include <wtf/NeverDestroyed.h>
 #include <wtf/PrintStream.h>
+#include <wtf/RecursiveLockAdapter.h>
 #include <wtf/Scope.h>
+#include <wtf/glib/GThreadSafeWeakPtr.h>
 #include <wtf/glib/GUniquePtr.h>
 #include <wtf/glib/RunLoopSourcePriority.h>
+#include <wtf/glib/WTFGType.h>
+#include <wtf/text/StringHash.h>
 
 #if USE(GSTREAMER_MPEGTS)
 #define GST_USE_UNSTABLE_API
@@ -52,10 +58,12 @@
 #endif
 
 #if ENABLE(MEDIA_SOURCE)
+#include "GStreamerRegistryScannerMSE.h"
 #include "WebKitMediaSourceGStreamer.h"
 #endif
 
 #if ENABLE(MEDIA_STREAM)
+#include "GStreamerCaptureDeviceManager.h"
 #include "GStreamerMediaStreamSource.h"
 #endif
 
@@ -65,6 +73,7 @@
 #endif
 
 #if ENABLE(VIDEO)
+#include "ImageDecoderGStreamer.h"
 #include "VideoEncoderPrivateGStreamer.h"
 #include "WebKitWebSourceGStreamer.h"
 #endif
@@ -77,6 +86,8 @@ GST_DEBUG_CATEGORY(webkit_gst_common_debug);
 #define GST_CAT_DEFAULT webkit_gst_common_debug
 
 namespace WebCore {
+
+static GstClockTime s_webkitGstInitTime;
 
 GstPad* webkitGstGhostPadFromStaticTemplate(GstStaticPadTemplate* staticPadTemplate, const gchar* name, GstPad* target)
 {
@@ -92,24 +103,6 @@ GstPad* webkitGstGhostPadFromStaticTemplate(GstStaticPadTemplate* staticPadTempl
 
     return pad;
 }
-
-#if !GST_CHECK_VERSION(1, 18, 0)
-void webkitGstVideoFormatInfoComponent(const GstVideoFormatInfo* info, guint plane, gint components[GST_VIDEO_MAX_COMPONENTS])
-{
-    guint c, i = 0;
-
-    /* Reverse mapping of info->plane. */
-    for (c = 0; c < GST_VIDEO_FORMAT_INFO_N_COMPONENTS(info); c++) {
-        if (GST_VIDEO_FORMAT_INFO_PLANE(info, c) == plane) {
-            components[i] = c;
-            i++;
-        }
-    }
-
-    for (c = i; c < GST_VIDEO_MAX_COMPONENTS; c++)
-        components[c] = -1;
-}
-#endif
 
 #if ENABLE(VIDEO)
 bool getVideoSizeAndFormatFromCaps(const GstCaps* caps, WebCore::IntSize& size, GstVideoFormat& format, int& pixelAspectRatioNumerator, int& pixelAspectRatioDenominator, int& stride)
@@ -269,6 +262,8 @@ Vector<String> extractGStreamerOptionsFromCommandLine()
 
 bool ensureGStreamerInitialized()
 {
+    // WARNING: Please note this function can be called from any thread, for instance when creating
+    // a WebCodec element from a JS Worker.
     RELEASE_ASSERT(isInWebProcess());
     static std::once_flag onceFlag;
     static bool isGStreamerInitialized;
@@ -293,6 +288,7 @@ bool ensureGStreamerInitialized()
 
         GUniqueOutPtr<GError> error;
         isGStreamerInitialized = gst_init_check(&argc, &argv, &error.outPtr());
+        s_webkitGstInitTime = gst_util_get_timestamp();
         ASSERT_WITH_MESSAGE(isGStreamerInitialized, "GStreamer initialization failed: %s", error ? error->message : "unknown error occurred");
         g_strfreev(argv);
         GST_DEBUG_CATEGORY_INIT(webkit_gst_common_debug, "webkitcommon", 0, "WebKit Common utilities");
@@ -314,11 +310,14 @@ bool ensureGStreamerInitialized()
     return isGStreamerInitialized;
 }
 
-static void registerInternalVideoEncoder()
+static bool registerInternalVideoEncoder()
 {
 #if ENABLE(VIDEO)
-    gst_element_register(nullptr, "webkitvideoencoder", GST_RANK_PRIMARY + 100, WEBKIT_TYPE_VIDEO_ENCODER);
+    if (auto factory = adoptGRef(gst_element_factory_find("webkitvideoencoder")))
+        return false;
+    return gst_element_register(nullptr, "webkitvideoencoder", GST_RANK_PRIMARY + 100, WEBKIT_TYPE_VIDEO_ENCODER);
 #endif
+    return false;
 }
 
 void registerWebKitGStreamerElements()
@@ -358,19 +357,20 @@ void registerWebKitGStreamerElements()
         // We don't want autoaudiosink to autoplug our sink.
         gst_element_register(0, "webkitaudiosink", GST_RANK_NONE, WEBKIT_TYPE_AUDIO_SINK);
 
-        // If the FDK-AAC decoder is available, promote it and downrank the
-        // libav AAC decoders, due to their broken LC support, as reported in:
-        // https://ffmpeg.org/pipermail/ffmpeg-devel/2019-July/247063.html
+        // If the FDK-AAC decoder is available, promote it.
         GRefPtr<GstElementFactory> elementFactory = adoptGRef(gst_element_factory_find("fdkaacdec"));
-        if (elementFactory) {
+        if (elementFactory)
             gst_plugin_feature_set_rank(GST_PLUGIN_FEATURE_CAST(elementFactory.get()), GST_RANK_PRIMARY);
+        else
+            g_warning("The GStreamer FDK AAC plugin is missing, AAC playback is unlikely to work.");
 
-            const char* const elementNames[] = {"avdec_aac", "avdec_aac_fixed", "avdec_aac_latm"};
-            for (unsigned i = 0; i < G_N_ELEMENTS(elementNames); i++) {
-                GRefPtr<GstElementFactory> avAACDecoderFactory = adoptGRef(gst_element_factory_find(elementNames[i]));
-                if (avAACDecoderFactory)
-                    gst_plugin_feature_set_rank(GST_PLUGIN_FEATURE_CAST(avAACDecoderFactory.get()), GST_RANK_MARGINAL);
-            }
+        // Downrank the libav AAC decoders, due to their broken LC support, as reported in:
+        // https://ffmpeg.org/pipermail/ffmpeg-devel/2019-July/247063.html
+        const char* const elementNames[] = { "avdec_aac", "avdec_aac_fixed", "avdec_aac_latm" };
+        for (unsigned i = 0; i < G_N_ELEMENTS(elementNames); i++) {
+            GRefPtr<GstElementFactory> avAACDecoderFactory = adoptGRef(gst_element_factory_find(elementNames[i]));
+            if (avAACDecoderFactory)
+                gst_plugin_feature_set_rank(GST_PLUGIN_FEATURE_CAST(avAACDecoderFactory.get()), GST_RANK_MARGINAL);
         }
 
         // Prevent decodebin(3) from auto-plugging hlsdemux if it was disabled. UAs should be able
@@ -418,7 +418,7 @@ void registerWebKitGStreamerElements()
 
     // The GStreamer registry might be updated after the scanner was initialized, so in this situation
     // we need to reset the internal state of the registry scanner.
-    if (registryWasUpdated && !GStreamerRegistryScanner::singletonNeedsInitialization())
+    if (registryWasUpdated && GStreamerRegistryScanner::singletonWasInitialized())
         GStreamerRegistryScanner::singleton().refresh();
 }
 
@@ -427,14 +427,69 @@ void registerWebKitGStreamerVideoEncoder()
     static std::once_flag onceFlag;
     bool registryWasUpdated = false;
     std::call_once(onceFlag, [&registryWasUpdated] {
-        registerInternalVideoEncoder();
-        registryWasUpdated = true;
+        registryWasUpdated = registerInternalVideoEncoder();
     });
 
     // The video encoder might be registered after the scanner was initialized, so in this situation
     // we need to reset the internal state of the registry scanner.
-    if (registryWasUpdated && !GStreamerRegistryScanner::singletonNeedsInitialization())
+    if (registryWasUpdated && GStreamerRegistryScanner::singletonWasInitialized())
         GStreamerRegistryScanner::singleton().refresh();
+}
+
+// We use a recursive lock because the removal of a pipeline can trigger the removal of another one,
+// from the same thread, specially when using chained element harnesses.
+static RecursiveLock s_activePipelinesMapLock;
+static HashMap<String, GRefPtr<GstElement>>& activePipelinesMap()
+{
+    static NeverDestroyed<HashMap<String, GRefPtr<GstElement>>> activePipelines;
+    return activePipelines.get();
+}
+
+void registerActivePipeline(const GRefPtr<GstElement>& pipeline)
+{
+    GUniquePtr<gchar> name(gst_object_get_name(GST_OBJECT_CAST(pipeline.get())));
+    Locker locker { s_activePipelinesMapLock };
+    activePipelinesMap().add(makeString(name.get()), GRefPtr<GstElement>(pipeline));
+}
+
+void unregisterPipeline(const GRefPtr<GstElement>& pipeline)
+{
+    GUniquePtr<gchar> name(gst_object_get_name(GST_OBJECT_CAST(pipeline.get())));
+    Locker locker { s_activePipelinesMapLock };
+    activePipelinesMap().remove(makeString(name.get()));
+}
+
+void deinitializeGStreamer()
+{
+#if ENABLE(MEDIA_SOURCE)
+    teardownGStreamerRegistryScannerMSE();
+#endif
+    teardownGStreamerRegistryScanner();
+
+    bool isLeaksTracerActive = false;
+    auto activeTracers = gst_tracing_get_active_tracers();
+    while (activeTracers) {
+        auto tracer = adoptGRef(GST_TRACER_CAST(activeTracers->data));
+        if (!isLeaksTracerActive && !g_strcmp0(G_OBJECT_TYPE_NAME(G_OBJECT(tracer.get())), "GstLeaksTracer"))
+            isLeaksTracerActive = true;
+        activeTracers = g_list_delete_link(activeTracers, activeTracers);
+    }
+
+    if (!isLeaksTracerActive)
+        return;
+
+    // Make sure there is no active pipeline left. Those might trigger deadlocks during gst_deinit().
+    {
+        Locker locker { s_activePipelinesMapLock };
+        for (auto& pipeline : activePipelinesMap().values()) {
+            GST_DEBUG("Pipeline %" GST_PTR_FORMAT " was left running. Forcing clean-up.", pipeline.get());
+            disconnectSimpleBusMessageCallback(pipeline.get());
+            gst_element_set_state(pipeline.get(), GST_STATE_NULL);
+        }
+        activePipelinesMap().clear();
+    }
+
+    gst_deinit();
 }
 
 unsigned getGstPlayFlag(const char* nick)
@@ -460,42 +515,53 @@ uint64_t toGstUnsigned64Time(const MediaTime& mediaTime)
     return time.timeValue();
 }
 
-void disconnectSimpleBusMessageCallback(GstElement* pipeline)
+static GQuark customMessageHandlerQuark()
 {
-    auto bus = adoptGRef(gst_pipeline_get_bus(GST_PIPELINE(pipeline)));
-    g_signal_handlers_disconnect_by_data(bus.get(), pipeline);
-    gst_bus_remove_signal_watch(bus.get());
+    static GQuark quark = g_quark_from_static_string("pipeline-custom-message-handler");
+    return quark;
 }
 
-struct CustomMessageHandlerHolder {
-    explicit CustomMessageHandlerHolder(Function<void(GstMessage*)>&& handler)
-    {
-        this->handler = WTFMove(handler);
-    }
+void disconnectSimpleBusMessageCallback(GstElement* pipeline)
+{
+    auto handler = GPOINTER_TO_UINT(g_object_get_qdata(G_OBJECT(pipeline), customMessageHandlerQuark()));
+    if (!handler)
+        return;
+
+    auto bus = adoptGRef(gst_pipeline_get_bus(GST_PIPELINE(pipeline)));
+    g_signal_handler_disconnect(bus.get(), handler);
+    gst_bus_remove_signal_watch(bus.get());
+    g_object_set_qdata(G_OBJECT(pipeline), customMessageHandlerQuark(), nullptr);
+}
+
+struct MessageBusData {
+    GThreadSafeWeakPtr<GstElement> pipeline;
     Function<void(GstMessage*)> handler;
 };
+WEBKIT_DEFINE_ASYNC_DATA_STRUCT(MessageBusData)
 
 void connectSimpleBusMessageCallback(GstElement* pipeline, Function<void(GstMessage*)>&& customHandler)
 {
     auto bus = adoptGRef(gst_pipeline_get_bus(GST_PIPELINE(pipeline)));
     gst_bus_add_signal_watch_full(bus.get(), RunLoopSourcePriority::RunLoopDispatcher);
 
-    auto* holder = new CustomMessageHandlerHolder(WTFMove(customHandler));
-    GQuark quark = g_quark_from_static_string("pipeline-custom-message-handler");
-    g_object_set_qdata_full(G_OBJECT(pipeline), quark, holder, [](gpointer data) {
-        delete reinterpret_cast<CustomMessageHandlerHolder*>(data);
-    });
+    auto data = createMessageBusData();
+    data->pipeline.reset(pipeline);
+    data->handler = WTFMove(customHandler);
+    auto handler = g_signal_connect_data(bus.get(), "message", G_CALLBACK(+[](GstBus*, GstMessage* message, gpointer userData) {
+        auto data = reinterpret_cast<MessageBusData*>(userData);
+        auto pipeline = data->pipeline.get();
+        if (!pipeline)
+            return;
 
-    g_signal_connect(bus.get(), "message", G_CALLBACK(+[](GstBus*, GstMessage* message, GstElement* pipeline) {
         switch (GST_MESSAGE_TYPE(message)) {
         case GST_MESSAGE_ERROR: {
-            GST_ERROR_OBJECT(pipeline, "Got message: %" GST_PTR_FORMAT, message);
-            auto dotFileName = makeString(GST_OBJECT_NAME(pipeline), "_error");
-            GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS(GST_BIN_CAST(pipeline), GST_DEBUG_GRAPH_SHOW_ALL, dotFileName.utf8().data());
+            GST_ERROR_OBJECT(pipeline.get(), "Got message: %" GST_PTR_FORMAT, message);
+            auto dotFileName = makeString(GST_OBJECT_NAME(pipeline.get()), "_error"_s);
+            GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS(GST_BIN_CAST(pipeline.get()), GST_DEBUG_GRAPH_SHOW_ALL, dotFileName.utf8().data());
             break;
         }
         case GST_MESSAGE_STATE_CHANGED: {
-            if (GST_MESSAGE_SRC(message) != GST_OBJECT_CAST(pipeline))
+            if (GST_MESSAGE_SRC(message) != GST_OBJECT_CAST(pipeline.get()))
                 break;
 
             GstState oldState;
@@ -503,27 +569,25 @@ void connectSimpleBusMessageCallback(GstElement* pipeline, Function<void(GstMess
             GstState pending;
             gst_message_parse_state_changed(message, &oldState, &newState, &pending);
 
-            GST_INFO_OBJECT(pipeline, "State changed (old: %s, new: %s, pending: %s)", gst_element_state_get_name(oldState),
+            GST_INFO_OBJECT(pipeline.get(), "State changed (old: %s, new: %s, pending: %s)", gst_element_state_get_name(oldState),
                 gst_element_state_get_name(newState), gst_element_state_get_name(pending));
 
-            auto dotFileName = makeString(GST_OBJECT_NAME(pipeline), '_', gst_element_state_get_name(oldState), '_', gst_element_state_get_name(newState));
-            GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS(GST_BIN_CAST(pipeline), GST_DEBUG_GRAPH_SHOW_ALL, dotFileName.utf8().data());
+            auto dotFileName = makeString(GST_OBJECT_NAME(pipeline.get()), '_', gst_element_state_get_name(oldState), '_', gst_element_state_get_name(newState));
+            GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS(GST_BIN_CAST(pipeline.get()), GST_DEBUG_GRAPH_SHOW_ALL, dotFileName.utf8().data());
             break;
         }
         case GST_MESSAGE_LATENCY:
-            gst_bin_recalculate_latency(GST_BIN_CAST(pipeline));
+            gst_bin_recalculate_latency(GST_BIN_CAST(pipeline.get()));
             break;
         default:
             break;
         }
 
-        GQuark quark = g_quark_from_static_string("pipeline-custom-message-handler");
-        auto* holder = reinterpret_cast<CustomMessageHandlerHolder*>(g_object_get_qdata(G_OBJECT(pipeline), quark));
-        if (!holder)
-            return;
-
-        holder->handler(message);
-    }), pipeline);
+        data->handler(message);
+    }), data, reinterpret_cast<GClosureNotify>(+[](gpointer data, GClosure*) {
+        destroyMessageBusData(reinterpret_cast<MessageBusData*>(data));
+    }), static_cast<GConnectFlags>(0));
+    g_object_set_qdata(G_OBJECT(pipeline), customMessageHandlerQuark(), GUINT_TO_POINTER(handler));
 }
 
 template<>
@@ -635,18 +699,28 @@ GstBuffer* gstBufferNewWrappedFast(void* data, size_t length)
 
 GstElement* makeGStreamerElement(const char* factoryName, const char* name)
 {
+    static Lock lock;
+    static Vector<const char*> cache WTF_GUARDED_BY_LOCK(lock);
     auto* element = gst_element_factory_make(factoryName, name);
-    if (!element)
+    Locker locker { lock };
+    if (!element && !cache.contains(factoryName)) {
+        cache.append(factoryName);
         WTFLogAlways("GStreamer element %s not found. Please install it", factoryName);
+    }
     return element;
 }
 
 GstElement* makeGStreamerBin(const char* description, bool ghostUnlinkedPads)
 {
+    static Lock lock;
+    static Vector<const char*> cache WTF_GUARDED_BY_LOCK(lock);
     GUniqueOutPtr<GError> error;
     auto* bin = gst_parse_bin_from_description(description, ghostUnlinkedPads, &error.outPtr());
-    if (!bin)
+    Locker locker { lock };
+    if (!bin && !cache.contains(description)) {
+        cache.append(description);
         WTFLogAlways("Unable to create bin for description: \"%s\". Error: %s", description, error->message);
+    }
     return bin;
 }
 
@@ -662,6 +736,15 @@ static std::optional<RefPtr<JSON::Value>> gstStructureValueToJSON(const GValue* 
         auto array = JSON::Array::create();
         for (unsigned i = 0; i < size; i++) {
             if (auto innerJson = gstStructureValueToJSON(gst_value_array_get_value(value, i)))
+                array->pushValue(innerJson->releaseNonNull());
+        }
+        return array->asArray()->asValue();
+    }
+    if (GST_VALUE_HOLDS_LIST(value)) {
+        unsigned size = gst_value_list_get_size(value);
+        auto array = JSON::Array::create();
+        for (unsigned i = 0; i < size; i++) {
+            if (auto innerJson = gstStructureValueToJSON(gst_value_list_get_value(value, i)))
                 array->pushValue(innerJson->releaseNonNull());
         }
         return array->asArray()->asValue();
@@ -728,35 +811,10 @@ String gstStructureToJSONString(const GstStructure* structure)
     return value->toJSONString();
 }
 
-#if !GST_CHECK_VERSION(1, 18, 0)
-GstClockTime webkitGstElementGetCurrentRunningTime(GstElement* element)
+GstClockTime webkitGstInitTime()
 {
-    g_return_val_if_fail(GST_IS_ELEMENT(element), GST_CLOCK_TIME_NONE);
-
-    auto baseTime = gst_element_get_base_time(element);
-    if (!GST_CLOCK_TIME_IS_VALID(baseTime)) {
-        GST_DEBUG_OBJECT(element, "Could not determine base time");
-        return GST_CLOCK_TIME_NONE;
-    }
-
-    auto clock = adoptGRef(gst_element_get_clock(element));
-    if (!clock) {
-        GST_DEBUG_OBJECT(element, "Element has no clock");
-        return GST_CLOCK_TIME_NONE;
-    }
-
-    auto clockTime = gst_clock_get_time(clock.get());
-    if (!GST_CLOCK_TIME_IS_VALID(clockTime))
-        return GST_CLOCK_TIME_NONE;
-
-    if (clockTime < baseTime) {
-        GST_DEBUG_OBJECT(element, "Got negative current running time");
-        return GST_CLOCK_TIME_NONE;
-    }
-
-    return clockTime - baseTime;
+    return s_webkitGstInitTime;
 }
-#endif
 
 PlatformVideoColorSpace videoColorSpaceFromCaps(const GstCaps* caps)
 {
@@ -769,6 +827,7 @@ PlatformVideoColorSpace videoColorSpaceFromCaps(const GstCaps* caps)
 
 PlatformVideoColorSpace videoColorSpaceFromInfo(const GstVideoInfo& info)
 {
+    ensureGStreamerInitialized();
 #ifndef GST_DISABLE_GST_DEBUG
     GUniquePtr<char> colorimetry(gst_video_colorimetry_to_string(&GST_VIDEO_INFO_COLORIMETRY(&info)));
 #endif
@@ -879,6 +938,56 @@ void fillVideoInfoColorimetryFromColorSpace(GstVideoInfo* info, const PlatformVi
             break;
         }
     }
+}
+
+void configureAudioDecoderForHarnessing(const GRefPtr<GstElement>& element)
+{
+    if (gstObjectHasProperty(element.get(), "max-errors"))
+        g_object_set(element.get(), "max-errors", 0, nullptr);
+}
+
+void configureVideoDecoderForHarnessing(const GRefPtr<GstElement>& element)
+{
+    if (gstObjectHasProperty(element.get(), "max-threads"))
+        g_object_set(element.get(), "max-threads", 1, nullptr);
+
+    if (gstObjectHasProperty(element.get(), "max-errors"))
+        g_object_set(element.get(), "max-errors", 0, nullptr);
+
+    // avdec-specific:
+    if (gstObjectHasProperty(element.get(), "std-compliance"))
+        gst_util_set_object_arg(G_OBJECT(element.get()), "std-compliance", "strict");
+
+    if (gstObjectHasProperty(element.get(), "output-corrupt"))
+        g_object_set(element.get(), "output-corrupt", FALSE, nullptr);
+
+    // dav1ddec-specific:
+    if (gstObjectHasProperty(element.get(), "n-threads"))
+        g_object_set(element.get(), "n-threads", 1, nullptr);
+}
+
+void configureMediaStreamVideoDecoder(GstElement* element)
+{
+    if (gstObjectHasProperty(element, "automatic-request-sync-points"))
+        g_object_set(element, "automatic-request-sync-points", TRUE, nullptr);
+
+    if (gstObjectHasProperty(element, "discard-corrupted-frames"))
+        g_object_set(element, "discard-corrupted-frames", TRUE, nullptr);
+
+    if (gstObjectHasProperty(element, "output-corrupt"))
+        g_object_set(element, "output-corrupt", FALSE, nullptr);
+
+    if (gstObjectHasProperty(element, "max-errors"))
+        g_object_set(element, "max-errors", -1, nullptr);
+}
+
+void configureVideoRTPDepayloader(GstElement* element)
+{
+    if (gstObjectHasProperty(element, "request-keyframe"))
+        g_object_set(element, "request-keyframe", TRUE, nullptr);
+
+    if (gstObjectHasProperty(element, "wait-for-keyframe"))
+        g_object_set(element, "wait-for-keyframe", TRUE, nullptr);
 }
 
 static bool gstObjectHasProperty(GstObject* gstObject, const char* name)

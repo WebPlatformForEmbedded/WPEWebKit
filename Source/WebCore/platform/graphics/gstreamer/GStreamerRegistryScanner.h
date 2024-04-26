@@ -28,17 +28,25 @@
 #include <wtf/Forward.h>
 #include <wtf/HashMap.h>
 #include <wtf/HashSet.h>
+#include <wtf/Noncopyable.h>
 #include <wtf/OptionSet.h>
 #include <wtf/text/AtomString.h>
 #include <wtf/text/AtomStringHash.h>
 #include <wtf/text/StringHash.h>
 
+#if USE(GSTREAMER_WEBRTC)
+#include <gst/rtp/rtp.h>
+#endif
+
 namespace WebCore {
 class ContentType;
 
+void teardownGStreamerRegistryScanner();
+
 class GStreamerRegistryScanner {
+    WTF_MAKE_NONCOPYABLE(GStreamerRegistryScanner)
 public:
-    static bool singletonNeedsInitialization();
+    static bool singletonWasInitialized();
     static GStreamerRegistryScanner& singleton();
     static void getSupportedDecodingTypes(HashSet<String, ASCIICaseInsensitiveHash>&);
 
@@ -46,6 +54,7 @@ public:
     ~GStreamerRegistryScanner() = default;
 
     void refresh();
+    void teardown();
 
     enum Configuration {
         Decoding = 0,
@@ -102,7 +111,7 @@ public:
     MediaPlayerEnums::SupportsType isContentTypeSupported(Configuration, const ContentType&, const Vector<ContentType>& contentTypesRequiringHardwareSupport) const;
     bool areAllCodecsSupported(Configuration, const Vector<String>& codecs, bool shouldCheckForHardwareUse = false) const;
 
-    CodecLookupResult areCapsSupported(Configuration, const GRefPtr<GstCaps>&, bool shouldCheckForHardwareUse);
+    CodecLookupResult areCapsSupported(Configuration, const GRefPtr<GstCaps>&, bool shouldCheckForHardwareUse) const;
 
 #if USE(GSTREAMER_WEBRTC)
     RTCRtpCapabilities audioRtpCapabilities(Configuration);
@@ -164,9 +173,10 @@ protected:
     };
     void fillMimeTypeSetFromCapsMapping(const ElementFactories&, const Vector<GstCapsWebKitMapping>&);
 
-    CodecLookupResult isAVC1CodecSupported(Configuration, const String& codec, bool shouldCheckForHardwareUse) const;
-
 private:
+    CodecLookupResult isAVC1CodecSupported(Configuration, const String& codec, bool shouldCheckForHardwareUse) const;
+    CodecLookupResult isHEVCCodecSupported(Configuration, const String& codec, bool shouldCheckForHardwareUse) const;
+
     const char* configurationNameForLogging(Configuration) const;
     bool supportsFeatures(const String& features) const;
 
@@ -174,22 +184,24 @@ private:
     void fillAudioRtpCapabilities(Configuration, RTCRtpCapabilities&);
     void fillVideoRtpCapabilities(Configuration, RTCRtpCapabilities&);
 
-    Vector<const char*> m_allAudioRtpExtensions { "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01",
+    Vector<const char*> m_commonRtpExtensions {
+        "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01",
         "http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time",
-        "urn:ietf:params:rtp-hdrext:sdes:mid",
-        "urn:ietf:params:rtp-hdrext:ssrc-audio-level"
+        GST_RTP_HDREXT_BASE "sdes:mid",
+        GST_RTP_HDREXT_BASE "sdes:repaired-rtp-stream-id",
+        GST_RTP_HDREXT_BASE "sdes:rtp-stream-id",
+        GST_RTP_HDREXT_BASE "toffset"
     };
-    Vector<const char*> m_allVideoRtpExtensions { "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01",
-        "http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time",
+    Vector<const char*> m_allAudioRtpExtensions {
+        // This extension triggers caps negotiation issues. See https://bugs.webkit.org/show_bug.cgi?id=271519.
+        // "urn:ietf:params:rtp-hdrext:ssrc-audio-level"
+    };
+    Vector<const char*> m_allVideoRtpExtensions {
         "http://www.webrtc.org/experiments/rtp-hdrext/color-space",
         "http://www.webrtc.org/experiments/rtp-hdrext/playout-delay",
         "http://www.webrtc.org/experiments/rtp-hdrext/video-content-type",
         "http://www.webrtc.org/experiments/rtp-hdrext/video-timing",
-        "urn:3gpp:video-orientation",
-        "urn:ietf:params:rtp-hdrext:sdes:mid",
-        "urn:ietf:params:rtp-hdrext:sdes:repaired-rtp-stream-id",
-        "urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id",
-        "urn:ietf:params:rtp-hdrext:toffset",
+        "urn:3gpp:video-orientation"
     };
 
     std::optional<Vector<RTCRtpCapabilities::HeaderExtensionCapability>> m_audioRtpExtensions;

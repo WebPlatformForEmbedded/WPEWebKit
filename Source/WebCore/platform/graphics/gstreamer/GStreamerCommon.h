@@ -56,15 +56,6 @@ inline bool webkitGstCheckVersion(guint major, guint minor, guint micro)
     return true;
 }
 
-// gst_video_format_info_component() is GStreamer 1.18 API, so for older versions we use a local
-// vendored copy of the function.
-#if !GST_CHECK_VERSION(1, 18, 0)
-#define GST_VIDEO_MAX_COMPONENTS 4
-void webkitGstVideoFormatInfoComponent(const GstVideoFormatInfo*, guint, gint components[GST_VIDEO_MAX_COMPONENTS]);
-
-#define gst_video_format_info_component webkitGstVideoFormatInfoComponent
-#endif
-
 #define GST_VIDEO_CAPS_TYPE_PREFIX  "video/"
 #define GST_AUDIO_CAPS_TYPE_PREFIX  "audio/"
 #define GST_TEXT_CAPS_TYPE_PREFIX   "text/"
@@ -83,15 +74,13 @@ void setGStreamerOptionsFromUIProcess(Vector<String>&&);
 bool ensureGStreamerInitialized();
 void registerWebKitGStreamerElements();
 void registerWebKitGStreamerVideoEncoder();
+void deinitializeGStreamer();
+
 unsigned getGstPlayFlag(const char* nick);
 uint64_t toGstUnsigned64Time(const MediaTime&);
 
 inline GstClockTime toGstClockTime(const MediaTime& mediaTime)
 {
-    if (mediaTime.isInvalid())
-        return GST_CLOCK_TIME_NONE;
-    if (mediaTime < MediaTime::zeroTime())
-        return 0;
     return static_cast<GstClockTime>(toGstUnsigned64Time(mediaTime));
 }
 
@@ -231,6 +220,7 @@ private:
 };
 
 class GstMappedFrame {
+    WTF_MAKE_FAST_ALLOCATED;
     WTF_MAKE_NONCOPYABLE(GstMappedFrame);
 public:
 
@@ -255,13 +245,13 @@ public:
         return &m_frame;
     }
 
-    uint8_t* ComponentData(int comp)
+    uint8_t* ComponentData(int comp) const
     {
         RELEASE_ASSERT(m_isValid);
         return GST_VIDEO_FRAME_COMP_DATA(&m_frame, comp);
     }
 
-    int ComponentStride(int stride)
+    int ComponentStride(int stride) const
     {
         RELEASE_ASSERT(m_isValid);
         return GST_VIDEO_FRAME_COMP_STRIDE(&m_frame, stride);
@@ -273,19 +263,19 @@ public:
         return &m_frame.info;
     }
 
-    int width()
+    int width() const
     {
         RELEASE_ASSERT(m_isValid);
         return GST_VIDEO_FRAME_WIDTH(&m_frame);
     }
 
-    int height()
+    int height() const
     {
         RELEASE_ASSERT(m_isValid);
         return GST_VIDEO_FRAME_HEIGHT(&m_frame);
     }
 
-    int format()
+    int format() const
     {
         RELEASE_ASSERT(m_isValid);
         return GST_VIDEO_FRAME_FORMAT(&m_frame);
@@ -319,6 +309,63 @@ private:
     bool m_isValid { false };
 };
 
+class GstMappedAudioBuffer {
+    WTF_MAKE_NONCOPYABLE(GstMappedAudioBuffer);
+public:
+
+    GstMappedAudioBuffer(GstBuffer* buffer, GstAudioInfo info, GstMapFlags flags)
+    {
+        m_isValid = gst_audio_buffer_map(&m_buffer, &info, buffer, flags);
+    }
+
+    GstMappedAudioBuffer(GRefPtr<GstSample> sample, GstMapFlags flags)
+    {
+        GstAudioInfo info;
+
+        if (!gst_audio_info_from_caps(&info, gst_sample_get_caps(sample.get()))) {
+            m_isValid = false;
+            return;
+        }
+
+        m_isValid = gst_audio_buffer_map(&m_buffer, &info, gst_sample_get_buffer(sample.get()), flags);
+    }
+
+    GstAudioBuffer* get()
+    {
+        if (!m_isValid) {
+            GST_INFO("Invalid buffer, returning NULL");
+
+            return nullptr;
+        }
+
+        return &m_buffer;
+    }
+
+    GstAudioInfo* info()
+    {
+        if (!m_isValid) {
+            GST_INFO("Invalid frame, returning NULL");
+
+            return nullptr;
+        }
+
+        return &m_buffer.info;
+    }
+
+    ~GstMappedAudioBuffer()
+    {
+        if (m_isValid)
+            gst_audio_buffer_unmap(&m_buffer);
+        m_isValid = false;
+    }
+
+    explicit operator bool() const { return m_isValid; }
+
+private:
+    GstAudioBuffer m_buffer;
+    bool m_isValid { false };
+};
+
 
 void connectSimpleBusMessageCallback(GstElement*, Function<void(GstMessage*)>&& = [](GstMessage*) { });
 void disconnectSimpleBusMessageCallback(GstElement*);
@@ -343,19 +390,23 @@ GstElement* makeGStreamerBin(const char* description, bool ghostUnlinkedPads);
 
 String gstStructureToJSONString(const GstStructure*);
 
-// gst_element_get_current_running_time() is GStreamer 1.18 API, so for older versions we use a local
-// vendored copy of the function.
-#if !GST_CHECK_VERSION(1, 18, 0)
-GstClockTime webkitGstElementGetCurrentRunningTime(GstElement*);
-#define gst_element_get_current_running_time webkitGstElementGetCurrentRunningTime
-#endif
+GstClockTime webkitGstInitTime();
 
 PlatformVideoColorSpace videoColorSpaceFromCaps(const GstCaps*);
 PlatformVideoColorSpace videoColorSpaceFromInfo(const GstVideoInfo&);
 void fillVideoInfoColorimetryFromColorSpace(GstVideoInfo*, const PlatformVideoColorSpace&);
 
+void configureAudioDecoderForHarnessing(const GRefPtr<GstElement>&);
+void configureVideoDecoderForHarnessing(const GRefPtr<GstElement>&);
+
+void configureMediaStreamVideoDecoder(GstElement*);
+void configureVideoRTPDepayloader(GstElement*);
+
 bool gstObjectHasProperty(GstElement*, const char* name);
 bool gstObjectHasProperty(GstPad*, const char* name);
+
+void registerActivePipeline(const GRefPtr<GstElement>&);
+void unregisterPipeline(const GRefPtr<GstElement>&);
 
 } // namespace WebCore
 

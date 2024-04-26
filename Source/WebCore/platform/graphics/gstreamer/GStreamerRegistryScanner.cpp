@@ -28,6 +28,7 @@
 #include "RuntimeApplicationChecks.h"
 #include <fnmatch.h>
 #include <gst/pbutils/codec-utils.h>
+#include <wtf/NeverDestroyed.h>
 #include <wtf/PrintStream.h>
 #include <wtf/WeakPtr.h>
 #include <wtf/text/StringToIntegerConversion.h>
@@ -56,7 +57,7 @@ GST_DEBUG_CATEGORY_STATIC(webkit_media_gst_registry_scanner_debug);
 
 static bool singletonInitialized = false;
 
-bool GStreamerRegistryScanner::singletonNeedsInitialization()
+bool GStreamerRegistryScanner::singletonWasInitialized()
 {
     return singletonInitialized;
 }
@@ -66,6 +67,15 @@ GStreamerRegistryScanner& GStreamerRegistryScanner::singleton()
     static NeverDestroyed<GStreamerRegistryScanner> sharedInstance;
     singletonInitialized = true;
     return sharedInstance;
+}
+
+void teardownGStreamerRegistryScanner()
+{
+    if (!GStreamerRegistryScanner::singletonWasInitialized())
+        return;
+
+    auto& scanner = GStreamerRegistryScanner::singleton();
+    scanner.teardown();
 }
 
 void GStreamerRegistryScanner::getSupportedDecodingTypes(HashSet<String, ASCIICaseInsensitiveHash>& types)
@@ -297,6 +307,12 @@ void GStreamerRegistryScanner::refresh()
 #endif
 }
 
+void GStreamerRegistryScanner::teardown()
+{
+    m_decoderCodecMap.clear();
+    m_encoderCodecMap.clear();
+}
+
 const HashSet<String, ASCIICaseInsensitiveHash>& GStreamerRegistryScanner::mimeTypeSet(Configuration configuration) const
 {
     switch (configuration) {
@@ -434,7 +450,7 @@ void GStreamerRegistryScanner::initializeDecoders(const GStreamerRegistryScanner
     Vector<GstCapsWebKitMapping> mseCompatibleMapping = {
         { ElementFactories::Type::AudioDecoder, "audio/x-ac3", { }, { "x-ac3"_s, "ac-3"_s, "ac3"_s } },
         { ElementFactories::Type::AudioDecoder, "audio/x-eac3", { "audio/x-ac3"_s },  { "x-eac3"_s, "ec3"_s, "ec-3"_s, "eac3"_s } },
-        { ElementFactories::Type::AudioDecoder, "audio/x-flac", { "audio/x-flac"_s, "audio/flac"_s }, {"x-flac"_s, "flac"_s } },
+        { ElementFactories::Type::AudioDecoder, "audio/x-flac", { "audio/x-flac"_s, "audio/flac"_s }, {"x-flac"_s, "flac"_s, "fLaC"_s } },
     };
     fillMimeTypeSetFromCapsMapping(factories, mseCompatibleMapping);
 
@@ -448,6 +464,8 @@ void GStreamerRegistryScanner::initializeDecoders(const GStreamerRegistryScanner
         { ElementFactories::Type::AudioDecoder, "audio/x-dts", { }, { } },
         { ElementFactories::Type::AudioDecoder, "audio/x-sbc", { }, { } },
         { ElementFactories::Type::AudioDecoder, "audio/x-sid", { }, { } },
+        { ElementFactories::Type::AudioDecoder, "audio/x-alaw", { }, { "alaw"_s } },
+        { ElementFactories::Type::AudioDecoder, "audio/x-mulaw", { }, { "ulaw"_s } },
         { ElementFactories::Type::AudioDecoder, "audio/x-speex", { "audio/speex"_s, "audio/x-speex"_s }, { } },
         { ElementFactories::Type::AudioDecoder, "audio/x-wavpack", { "audio/x-wavpack"_s }, { } },
         { ElementFactories::Type::VideoDecoder, "video/mpeg, mpegversion=(int){1,2}, systemstream=(boolean)false", { "video/mpeg"_s }, { "mpeg"_s } },
@@ -541,6 +559,18 @@ void GStreamerRegistryScanner::initializeEncoders(const GStreamerRegistryScanner
         m_encoderCodecMap.add(AtomString("mp4a*"_s), result);
     }
 
+    if (auto alawSupported = factories.hasElementForMediaType(ElementFactories::Type::AudioEncoder, "audio/x-alaw"))
+        m_encoderCodecMap.add(AtomString("alaw"_s), alawSupported);
+
+    if (auto ulawSupported = factories.hasElementForMediaType(ElementFactories::Type::AudioEncoder, "audio/x-mulaw"))
+        m_encoderCodecMap.add(AtomString("ulaw"_s), ulawSupported);
+
+    if (auto flacSupported = factories.hasElementForMediaType(ElementFactories::Type::AudioEncoder, "audio/x-flac"))
+        m_encoderCodecMap.add(AtomString("flac"_s), flacSupported);
+
+    if (auto mp3Supported = factories.hasElementForMediaType(ElementFactories::Type::AudioEncoder, "audio/mpeg, mpegversion=(int)1, layer=(int)3"))
+        m_encoderCodecMap.add(AtomString("mp3"_s), mp3Supported);
+
     auto opusSupported = factories.hasElementForMediaType(ElementFactories::Type::AudioEncoder, "audio/x-opus");
     if (opusSupported) {
         m_encoderCodecMap.add(AtomString("opus"_s), opusSupported);
@@ -596,6 +626,12 @@ void GStreamerRegistryScanner::initializeEncoders(const GStreamerRegistryScanner
         m_encoderCodecMap.add(AtomString("mp4v*"_s), h264EncoderAvailable);
     }
 
+    auto h265EncoderAvailable = factories.hasElementForMediaType(ElementFactories::Type::VideoEncoder, "video/x-h265, profile=(string){ main, high }", ElementFactories::CheckHardwareClassifier::Yes);
+    if (h265EncoderAvailable) {
+        m_encoderCodecMap.add(AtomString("hev1*"_s), h265EncoderAvailable);
+        m_encoderCodecMap.add(AtomString("hvc1*"_s), h265EncoderAvailable);
+    }
+
     if (factories.hasElementForMediaType(ElementFactories::Type::Muxer, "video/quicktime")) {
         if (opusSupported)
             m_encoderMimeTypeSet.add(AtomString("audio/opus"_s));
@@ -611,6 +647,22 @@ void GStreamerRegistryScanner::initializeEncoders(const GStreamerRegistryScanner
     }
 }
 
+GStreamerRegistryScanner::CodecLookupResult GStreamerRegistryScanner::isHEVCCodecSupported(Configuration configuration, const String& codec, bool shouldCheckForHardwareUse) const
+{
+    auto h265Caps = adoptGRef(gst_caps_new_empty_simple("video/x-h265"));
+    if (codec.find('.') == notFound) {
+        GST_DEBUG("Codec has no profile/level, falling back to unconstrained caps");
+        return areCapsSupported(configuration, h265Caps, shouldCheckForHardwareUse);
+    }
+
+    if (!GStreamerCodecUtilities::parseHEVCProfile(codec)) {
+        GST_ERROR("HEVC codec string is invalid: %s", codec.utf8().data());
+        return { false, nullptr };
+    }
+
+    return areCapsSupported(configuration, h265Caps, shouldCheckForHardwareUse);
+}
+
 GStreamerRegistryScanner::CodecLookupResult GStreamerRegistryScanner::isCodecSupported(Configuration configuration, const String& codec, bool shouldCheckForHardwareUse) const
 {
     // If the codec is named like a mimetype (eg: video/avc) remove the "video/" part.
@@ -620,6 +672,8 @@ GStreamerRegistryScanner::CodecLookupResult GStreamerRegistryScanner::isCodecSup
     CodecLookupResult result;
     if (codecName.startsWith("avc1"_s))
         result = isAVC1CodecSupported(configuration, codecName, shouldCheckForHardwareUse);
+    else if (codecName.startsWith("hev1"_s) || codecName.startsWith("hvc1"_s))
+        result = isHEVCCodecSupported(configuration, codecName, shouldCheckForHardwareUse);
     else {
         auto& codecMap = configuration == Configuration::Decoding ? m_decoderCodecMap : m_encoderCodecMap;
         for (const auto& [codecId, lookupResult] : codecMap) {
@@ -738,7 +792,7 @@ bool GStreamerRegistryScanner::areAllCodecsSupported(Configuration configuration
     return true;
 }
 
-GStreamerRegistryScanner::CodecLookupResult GStreamerRegistryScanner::areCapsSupported(Configuration configuration, const GRefPtr<GstCaps>& caps, bool shouldCheckForHardwareUse)
+GStreamerRegistryScanner::CodecLookupResult GStreamerRegistryScanner::areCapsSupported(Configuration configuration, const GRefPtr<GstCaps>& caps, bool shouldCheckForHardwareUse) const
 {
     OptionSet<ElementFactories::Type> factoryTypes;
     switch (configuration) {
@@ -750,7 +804,7 @@ GStreamerRegistryScanner::CodecLookupResult GStreamerRegistryScanner::areCapsSup
         break;
     }
     auto lookupResult = ElementFactories(factoryTypes).hasElementForCaps(factoryTypes.toSingleValue().value(), caps, ElementFactories::CheckHardwareClassifier::Yes);
-    bool supported = lookupResult && shouldCheckForHardwareUse ? lookupResult.isUsingHardware : true;
+    bool supported = lookupResult && (shouldCheckForHardwareUse ? lookupResult.isUsingHardware : true);
     GST_DEBUG("%s decoding supported for caps %" GST_PTR_FORMAT ": %s", shouldCheckForHardwareUse ? "Hardware" : "Software", caps.get(), boolForPrinting(supported));
     return { supported, supported ? lookupResult.factory : nullptr };
 }
@@ -890,8 +944,11 @@ static inline Vector<RTCRtpCapabilities::HeaderExtensionCapability> probeRtpExte
 
 void GStreamerRegistryScanner::fillAudioRtpCapabilities(Configuration configuration, RTCRtpCapabilities& capabilities)
 {
-    if (!m_audioRtpExtensions)
-        m_audioRtpExtensions = probeRtpExtensions(m_allAudioRtpExtensions);
+    if (!m_audioRtpExtensions) {
+        auto extensions = m_commonRtpExtensions;
+        extensions.appendVector(m_allAudioRtpExtensions);
+        m_audioRtpExtensions = probeRtpExtensions(extensions);
+    }
     if (m_audioRtpExtensions)
         capabilities.headerExtensions = copyToVector(*m_audioRtpExtensions);
 
@@ -906,11 +963,6 @@ void GStreamerRegistryScanner::fillAudioRtpCapabilities(Configuration configurat
     if (factories.hasElementForMediaType(codecElement, "audio/x-opus") && factories.hasElementForMediaType(rtpElement, "audio/x-opus"))
         capabilities.codecs.append({ .mimeType = "audio/opus"_s, .clockRate = 48000, .channels = 2, .sdpFmtpLine = "minptime=10;useinbandfec=1"_s });
 
-    if (factories.hasElementForMediaType(codecElement, "audio/isac") && factories.hasElementForMediaType(rtpElement, "audio/isac")) {
-        capabilities.codecs.append({ .mimeType = "audio/ISAC"_s, .clockRate = 16000, .channels = 1, .sdpFmtpLine = emptyString() });
-        capabilities.codecs.append({ .mimeType = "audio/ISAC"_s, .clockRate = 32000, .channels = 1, .sdpFmtpLine = emptyString() });
-    }
-
     if (factories.hasElementForMediaType(codecElement, "audio/G722") && factories.hasElementForMediaType(rtpElement, "audio/G722"))
         capabilities.codecs.append({ .mimeType = "audio/G722"_s, .clockRate = 8000, .channels = 1, .sdpFmtpLine = emptyString() });
 
@@ -923,8 +975,11 @@ void GStreamerRegistryScanner::fillAudioRtpCapabilities(Configuration configurat
 
 void GStreamerRegistryScanner::fillVideoRtpCapabilities(Configuration configuration, RTCRtpCapabilities& capabilities)
 {
-    if (!m_videoRtpExtensions)
-        m_videoRtpExtensions = probeRtpExtensions(m_allVideoRtpExtensions);
+    if (!m_videoRtpExtensions) {
+        auto extensions = m_commonRtpExtensions;
+        extensions.appendVector(m_allVideoRtpExtensions);
+        m_videoRtpExtensions = probeRtpExtensions(extensions);
+    }
     if (m_videoRtpExtensions)
         capabilities.headerExtensions = copyToVector(*m_videoRtpExtensions);
 
@@ -979,7 +1034,8 @@ void GStreamerRegistryScanner::fillVideoRtpCapabilities(Configuration configurat
         capabilities.codecs.append({ .mimeType = "video/H265"_s, .clockRate = 90000, .channels = { }, .sdpFmtpLine = { } });
     }
 
-    // FIXME: Probe for video/AV1 capabilities.
+    if (factories.hasElementForMediaType(codecElement, "video/x-av1") && factories.hasElementForMediaType(rtpElement, "video/x-av1"))
+        capabilities.codecs.append({ .mimeType = "video/AV1"_s, .clockRate = 90000, .channels = { }, .sdpFmtpLine = { } });
 
     if (factories.hasElementForMediaType(codecElement, "video/x-vp8") && factories.hasElementForMediaType(rtpElement, "video/x-vp8"))
         capabilities.codecs.append({ .mimeType = "video/VP8"_s, .clockRate = 90000, .channels = { }, .sdpFmtpLine = { } });
@@ -1008,5 +1064,8 @@ Vector<RTCRtpCapabilities::HeaderExtensionCapability> GStreamerRegistryScanner::
 
 #endif // USE(GSTREAMER_WEBRTC)
 
-}
-#endif
+#undef GST_CAT_DEFAULT
+
+} // namespace WebCore
+
+#endif // USE(GSTREAMER)

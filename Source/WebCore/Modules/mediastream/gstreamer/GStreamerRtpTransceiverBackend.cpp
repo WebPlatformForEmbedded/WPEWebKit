@@ -94,7 +94,7 @@ String GStreamerRtpTransceiverBackend::mid()
 {
     GUniqueOutPtr<char> mid;
     g_object_get(m_rtcTransceiver.get(), "mid", &mid.outPtr(), nullptr);
-    return String::fromLatin1(mid.get());
+    return String::fromUTF8(mid.get());
 }
 
 void GStreamerRtpTransceiverBackend::stop()
@@ -112,7 +112,7 @@ bool GStreamerRtpTransceiverBackend::stopped() const
 static inline WARN_UNUSED_RETURN ExceptionOr<GstCaps*> toRtpCodecCapability(const RTCRtpCodecCapability& codec, int& dynamicPayloadType)
 {
     if (!codec.mimeType.startsWith("video/"_s) && !codec.mimeType.startsWith("audio/"_s))
-        return Exception { InvalidModificationError, "RTCRtpCodecCapability bad mimeType"_s };
+        return Exception { ExceptionCode::InvalidModificationError, "RTCRtpCodecCapability bad mimeType"_s };
 
     auto components = codec.mimeType.split('/');
     const auto mediaType = components[0];
@@ -152,6 +152,13 @@ ExceptionOr<void> GStreamerRtpTransceiverBackend::setCodecPreferences(const Vect
     g_object_set(m_rtcTransceiver.get(), "codec-preferences", gstCodecs.get(), nullptr);
     return { };
 }
+
+void GStreamerRtpTransceiverBackend::tearDown()
+{
+    m_rtcTransceiver.clear();
+}
+
+#undef GST_CAT_DEFAULT
 
 } // namespace WebCore
 

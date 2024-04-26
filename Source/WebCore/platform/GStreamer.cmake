@@ -97,6 +97,7 @@ if (ENABLE_VIDEO OR ENABLE_WEB_AUDIO)
         platform/mediastream/gstreamer/GStreamerCapturer.cpp
         platform/mediastream/gstreamer/GStreamerDTMFSenderBackend.cpp
         platform/mediastream/gstreamer/GStreamerDisplayCaptureDeviceManager.cpp
+        platform/mediastream/gstreamer/GStreamerIncomingTrackProcessor.cpp
         platform/mediastream/gstreamer/GStreamerMediaStreamSource.cpp
         platform/mediastream/gstreamer/GStreamerVideoCaptureSource.cpp
         platform/mediastream/gstreamer/GStreamerVideoCapturer.cpp

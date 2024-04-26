@@ -329,6 +329,7 @@ set(WTF_PUBLIC_HEADERS
     WeakHashSet.h
     WeakPtr.h
     WeakRandom.h
+    WeakRandomNumber.h
     WindowsExtras.h
     WordLock.h
     WorkQueue.h
@@ -345,6 +346,8 @@ set(WTF_PUBLIC_HEADERS
     dtoa/ieee.h
     dtoa/strtod.h
     dtoa/utils.h
+
+    glib/GThreadSafeWeakPtr.h
 
     persistence/PersistentCoder.h
     persistence/PersistentCoders.h
@@ -498,6 +501,7 @@ set(WTF_SOURCES
     WTFAssertions.cpp
     WTFConfig.cpp
     WallTime.cpp
+    WeakRandomNumber.cpp
     WordLock.cpp
     WorkQueue.cpp
     WorkerPool.cpp
