@@ -81,6 +81,8 @@ GStreamerMediaEndpoint::GStreamerMediaEndpoint(GStreamerPeerConnectionBackend& p
     std::call_once(debugRegisteredFlag, [] {
         GST_DEBUG_CATEGORY_INIT(webkit_webrtc_endpoint_debug, "webkitwebrtcendpoint", 0, "WebKit WebRTC end-point");
     });
+
+    initializePipeline();
 }
 
 GStreamerMediaEndpoint::~GStreamerMediaEndpoint()
@@ -245,12 +247,6 @@ void GStreamerMediaEndpoint::disposeElementChain(GstElement* element)
 
 bool GStreamerMediaEndpoint::setConfiguration(MediaEndpointConfiguration& configuration)
 {
-    if (m_pipeline)
-        teardownPipeline();
-
-    if (!initializePipeline())
-        return false;
-
     auto bundlePolicy = bundlePolicyFromConfiguration(configuration);
     auto iceTransportPolicy = iceTransportPolicyFromConfiguration(configuration);
     g_object_set(m_webrtcBin.get(), "bundle-policy", bundlePolicy, "ice-transport-policy", iceTransportPolicy, nullptr);
