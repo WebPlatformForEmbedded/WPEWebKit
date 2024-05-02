@@ -510,7 +510,7 @@ void CDMInstanceSessionClearKey::updateLicense(const String& sessionId, LicenseT
     if (parseLicenseReleaseAcknowledgementFormat(*root)) {
         LOG(EME, "EME - ClearKey - session %s release acknowledged, clearing all known keys", sessionId.utf8().data());
         parentInstance().unrefAllKeysFrom(m_keyStore);
-        m_keyStore.unrefAllKeys();
+        m_keyStore.clear();
         dispatchCallback(true, std::nullopt, SuccessValue::Succeeded);
         return;
     }
@@ -567,7 +567,7 @@ void CDMInstanceSessionClearKey::removeSessionData(const String& sessionId, Lice
         auto rootObject = JSON::Object::create();
         {
             auto array = JSON::Array::create();
-            for (const auto& key : m_keyStore) {
+            for (const auto& key : m_keyStore.values()) {
                 ASSERT(key->id().size() <= std::numeric_limits<unsigned>::max());
                 array->pushString(base64URLEncodeToString(key->id().data(), key->id().size()));
             }
@@ -580,7 +580,7 @@ void CDMInstanceSessionClearKey::removeSessionData(const String& sessionId, Lice
         message = SharedBuffer::create(messageCString.data(), messageCString.length());
     }
 
-    m_keyStore.unrefAllKeys();
+    m_keyStore.clear();
     dispatchCallback(WTFMove(keyStatusVector), Ref<SharedBuffer>(*message), SuccessValue::Succeeded);
 }
 
