@@ -27,6 +27,7 @@
 #include "config.h"
 #include "WorkerNavigator.h"
 
+#include "Page.h"
 namespace WebCore {
 
 WorkerNavigator::WorkerNavigator(ScriptExecutionContext& context, const String& userAgent, bool isOnline)
