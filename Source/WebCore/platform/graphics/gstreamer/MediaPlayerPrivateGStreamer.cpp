@@ -2942,12 +2942,20 @@ void MediaPlayerPrivateGStreamer::createGSTPlayBin(const URL& url)
         auto registry = gst_registry_get();
         GRefPtr<GstPluginFeature> brcmaudfilter = gst_registry_lookup_feature(registry, "brcmaudfilter");
         GRefPtr<GstPluginFeature> mpegaudioparse = gst_registry_lookup_feature(registry, "mpegaudioparse");
+        GRefPtr<GstPluginFeature> ac3parse = gst_registry_lookup_feature(registry, "ac3parse");
 
         if (brcmaudfilter && mpegaudioparse) {
             GST_INFO("overriding mpegaudioparse rank with brcmaudfilter rank + 1");
             gst_plugin_feature_set_rank(
                 mpegaudioparse.get(),
                 gst_plugin_feature_get_rank(brcmaudfilter.get()) + 1);
+        }
+
+        //Making ac3parser lowest rank so as to not get it included in pipeline, else will cause packet drop
+        //for ac3 encrypted content - ONEM-33163
+        if (ac3parse) {
+            GST_DEBUG_OBJECT(pipeline(),"Making ac3pasre lowest rank to not get it included in pipeline");
+            gst_plugin_feature_set_rank(ac3parse.get(), 0);
         }
     }
 #endif
