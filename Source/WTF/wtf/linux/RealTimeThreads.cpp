@@ -200,7 +200,7 @@ void RealTimeThreads::realTimeKitMakeThreadRealTime(uint64_t processID, uint64_t
     if (getrlimit(RLIMIT_RTTIME, &rl) >= 0) {
         auto rttimeMax = realTimeKitGetProperty(m_realTimeKitProxy->get(), "RTTimeUSecMax", &error.outPtr());
         if (error) {
-            LOG_ERROR("Failed to get RTTimeUSecMax from RealtimeKit: %s", error->message);
+            LOG_ERROR_NO_ODH("Failed to get RTTimeUSecMax from RealtimeKit: %s", error->message);
             if (!g_error_matches(error.get(), G_DBUS_ERROR, G_DBUS_ERROR_UNKNOWN_INTERFACE))
                 m_realTimeKitProxy = nullptr;
 
