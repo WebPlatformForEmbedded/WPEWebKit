@@ -663,7 +663,7 @@ constexpr bool assertionFailureDueToUnreachableCode = false;
 #define RELEASE_LOG(channel, ...) LOG(channel, __VA_ARGS__)
 #define RELEASE_LOG_ERROR(channel, ...) LOG_ERROR(__VA_ARGS__)
 #define RELEASE_LOG_ERROR_NO_ODH(channel, ...) LOG_ERROR_NO_ODH(__VA_ARGS__)
-#define RELEASE_LOG_FAULT(channel, ...) FATAL(__VA_ARGS__)
+#define RELEASE_LOG_FAULT(channel, ...) LOG_ERROR(__VA_ARGS__)
 #define RELEASE_LOG_INFO(channel, ...) LOG_WITH_LEVEL(channel, 3, __VA_ARGS__)
 
 #define RELEASE_LOG_WITH_LEVEL(channel, logLevel, ...)  LOG_WITH_LEVEL(channel, logLevel, ...)
