@@ -519,6 +519,11 @@ constexpr bool assertionFailureDueToUnreachableCode = false;
     RDK_LOG(RDK_LOG_ERROR, RDK_LOG_DEFAULT_CHANNEL, __VA_ARGS__); \
     Telemetry::reportError(__FILE__, __LINE__, WTF_PRETTY_FUNCTION, __VA_ARGS__); \
 } while (0)
+#define LOG_ERROR_NO_ODH(...) do { \
+    RDK_LOG_VERBOSE(RDK_LOG_ERROR, RDK_LOG_DEFAULT_CHANNEL); \
+    RDK_LOG(RDK_LOG_ERROR, RDK_LOG_DEFAULT_CHANNEL, __VA_ARGS__); \
+} while (0)
+
 #else
 #define LOG_ERROR(...) WTFReportError(__FILE__, __LINE__, WTF_PRETTY_FUNCTION, __VA_ARGS__)
 #endif
@@ -657,6 +662,7 @@ constexpr bool assertionFailureDueToUnreachableCode = false;
 #define PRIVATE_LOG_STRING "s"
 #define RELEASE_LOG(channel, ...) LOG(channel, __VA_ARGS__)
 #define RELEASE_LOG_ERROR(channel, ...) LOG_ERROR(__VA_ARGS__)
+#define RELEASE_LOG_ERROR_NO_ODH(channel, ...) LOG_ERROR_NO_ODH(__VA_ARGS__)
 #define RELEASE_LOG_FAULT(channel, ...) LOG_ERROR(__VA_ARGS__)
 #define RELEASE_LOG_INFO(channel, ...) LOG_WITH_LEVEL(channel, 3, __VA_ARGS__)
 
