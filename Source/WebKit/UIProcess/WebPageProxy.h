@@ -679,6 +679,7 @@ public:
     void closePage();
 
     void addPlatformLoadParameters(WebProcessProxy&, LoadParameters&);
+    RefPtr<API::Navigation> loadRequestAndCert(WebCore::ResourceRequest&&, API::Object* userData );
     RefPtr<API::Navigation> loadRequest(WebCore::ResourceRequest&&, WebCore::ShouldOpenExternalURLsPolicy = WebCore::ShouldOpenExternalURLsPolicy::ShouldAllowExternalSchemesButNotAppLinks, API::Object* userData = nullptr);
     RefPtr<API::Navigation> loadFile(const String& fileURL, const String& resourceDirectoryURL, bool isAppInitiated = true, API::Object* userData = nullptr);
     RefPtr<API::Navigation> loadData(const IPC::DataReference&, const String& MIMEType, const String& encoding, const String& baseURL, API::Object* userData = nullptr, WebCore::ShouldOpenExternalURLsPolicy = WebCore::ShouldOpenExternalURLsPolicy::ShouldNotAllow);
@@ -1995,6 +1996,7 @@ public:
 
     WebPopupMenuProxy* activePopupMenu() const { return m_activePopupMenu.get(); }
 
+    void preconnectToWithCert(const URL&, const String&, const String&);
     void preconnectTo(const URL&, const String& userAgent);
 
     bool canUseCredentialStorage() { return m_canUseCredentialStorage; }

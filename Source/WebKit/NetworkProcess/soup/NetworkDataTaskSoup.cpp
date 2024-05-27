@@ -70,6 +70,10 @@ std::map<std::string, GRefPtr<GTlsCertificate>>& clientAuthCertificates()
     return certificates;
 }
 
+static constexpr char ENV_WPE_CLIENT_CERTIFICATES_URLS[] = "WPE_CLIENT_CERTIFICATES_URLS";
+static constexpr char ENV_URL_LIST_DELIMITER[] ="|"; // not allowed in URI
+static unsigned clientAuthCertificatesHash;
+
 typedef struct _WebKitGTlsInteraction WebKitGTlsInteraction;
 typedef struct _WebKitGTlsInteractionClass WebKitGTlsInteractionClass;
 
@@ -134,9 +138,10 @@ void trimLeadingAndTrailingWs(std::string* s) {
 }
 
 std::vector<std::string> tokenize(const std::string& s, const char* delimiters) {
-    auto lastPos = 0u;
+    auto lastPos = std::string::npos;
     std::vector<std::string> result;
-    auto pos = 0u;
+    auto pos = std::string::npos;
+    lastPos = 0u;
     do {
         pos = s.find_first_of(delimiters, lastPos);
         if (pos != std::string::npos) {
@@ -156,14 +161,59 @@ std::vector<std::string> tokenize(const std::string& s, const char* delimiters) 
     return result;
 }
 
-void maybeSetUpClientAuthCertificates() {
-    if (!clientAuthCertificates().empty())
-        return;
+void maybeUpdateClientAuthCertificates(String& listURLs)
+{
+    if (!listURLs.isEmpty()) {
+        std::string urlsList(listURLs.utf8().data());
+        auto urls = tokenize(urlsList, ENV_URL_LIST_DELIMITER);
+        for (const auto& url : urls) {
+            String checkUrl = String::fromUTF8(url.c_str());
+            URL connectionURL(checkUrl);
+            auto foundCert = std::find_if(
+                clientAuthCertificates().begin(), clientAuthCertificates().end(),
+                [&connectionURL](const std::pair<std::string, GRefPtr<GTlsCertificate>>& p) {
+                    URL certURL({}, makeString(p.first.c_str()));
+                    return protocolHostAndPortAreEqual(certURL, connectionURL);
+                });
 
-    auto* certsUrls = getenv("WPE_CLIENT_CERTIFICATES_URLS");
+            if (foundCert == clientAuthCertificates().end()) {
+                LOG(Network, "%s:%d Append new certificate for host %s\n", __func__, __LINE__, url.c_str());
+
+                auto* dataForUrl = getenv(url.c_str());
+                if (dataForUrl && *dataForUrl) {
+                    GUniqueOutPtr<GError> error;
+                    auto certificate = adoptGRef(
+                        g_tls_certificate_new_from_pem(dataForUrl,
+                            strlen(dataForUrl),
+                            &error.outPtr()));
+                    if (certificate) {
+                        clientAuthCertificates().insert(
+                            std::make_pair(url.c_str(), certificate));
+                    } else if (error) {
+                        WTFLogAlways("Error '%s' when trying to add client "
+                                     "certificate for %s\n",
+                            error->message, url.c_str());
+                    }
+                }
+            }
+        }
+    }
+}
+
+void maybeSetUpClientAuthCertificates() {
+    auto* certsUrls = getenv(ENV_WPE_CLIENT_CERTIFICATES_URLS);
     if (certsUrls && *certsUrls) {
+        if (!clientAuthCertificates().empty()) {
+            String checkUrlsList = String::fromUTF8(certsUrls);
+            if(clientAuthCertificatesHash != checkUrlsList.hash()) {
+                maybeUpdateClientAuthCertificates(checkUrlsList);
+            } else {
+                return;
+            }
+        }
+
         std::string urlsList(certsUrls);
-        auto urls = tokenize(urlsList, "|");
+        auto urls = tokenize(urlsList, ENV_URL_LIST_DELIMITER);
         for (const auto& url : urls) {
             auto* dataForUrl = getenv(url.c_str());
             if (dataForUrl && *dataForUrl) {
@@ -182,6 +232,7 @@ void maybeSetUpClientAuthCertificates() {
                 }
             }
         }
+        clientAuthCertificatesHash = (String::fromUTF8(certsUrls)).hash();
     }
 }
 

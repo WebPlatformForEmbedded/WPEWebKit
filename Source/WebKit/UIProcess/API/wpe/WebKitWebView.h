@@ -348,6 +348,11 @@ webkit_web_view_load_uri                             (WebKitWebView             
                                                       const gchar               *uri);
 
 WEBKIT_API void
+webkit_web_view_load_uri_and_cert                    (WebKitWebView             *webView,
+                                                      const gchar               *uri,
+                                                      const gchar               *cert_contents);
+
+WEBKIT_API void
 webkit_web_view_load_html                            (WebKitWebView             *web_view,
                                                       const gchar               *content,
                                                       const gchar               *base_uri);
