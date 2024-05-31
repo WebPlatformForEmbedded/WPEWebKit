@@ -3203,7 +3203,28 @@ void webkit_web_view_load_uri(WebKitWebView* webView, const gchar* uri)
 }
 
 /**
- * webkit_web_view_load_html:
+ * webkit_web_view_load_uri_and_cert:
+ * @web_view: a #WebKitWebView
+ * @uri: an URI string
+ * @cert_contents: an certificate data as string
+ *
+ * Requests loading of the specified URI string including new certificate data
+ *
+ * You can monitor the load operation by connecting to
+ * #WebKitWebView::load-changed signal.
+ */
+void webkit_web_view_load_uri_and_cert(WebKitWebView* webView, const gchar* uri, const gchar* cert_contents)
+{
+    g_return_if_fail(WEBKIT_IS_WEB_VIEW(webView));
+    g_return_if_fail(uri);
+    g_return_if_fail(cert_contents);
+
+    auto userCertConf = API::String::create(String::fromUTF8(cert_contents));
+    getPage(webView).loadRequestAndCert(URL({ }, String::fromUTF8(uri)) , userCertConf.ptr());
+}
+
+/**
+ * webkit_web_view_load_html:,
  * @web_view: a #WebKitWebView
  * @content: The HTML string to load
  * @base_uri: (allow-none): The base URI for relative locations or %NULL

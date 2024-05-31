@@ -1329,6 +1329,43 @@ void NetworkProcess::setPrivateClickMeasurementDebugMode(PAL::SessionID sessionI
         session->setPrivateClickMeasurementDebugMode(enabled);
 }
 
+void NetworkProcess::preconnectToWithCert(PAL::SessionID sessionID, WebPageProxyIdentifier webPageProxyID, WebCore::PageIdentifier webPageID, const URL& url, const String& userAgent, const String& userCertConf, WebCore::StoredCredentialsPolicy storedCredentialsPolicy, std::optional<NavigatingToAppBoundDomain> isNavigatingToAppBoundDomain, LastNavigationWasAppInitiated lastNavigationWasAppInitiated)
+{
+    LOG(Network, "(NetworkProcess) Preconnecting with certificate for URL %s (data size %d)", url.string().utf8().data(), userCertConf.length());
+    const ASCIILiteral ENV_WPE_CLIENT_CERTIFICATES_URLS = "WPE_CLIENT_CERTIFICATES_URLS"_s;
+    const ASCIILiteral MSG_CLIENT_CERT_DELIMITER = "\r\n"_s;
+    if (userCertConf.length() > ENV_WPE_CLIENT_CERTIFICATES_URLS.length()) {
+        auto _next_item = WTF::notFound;
+        auto _pos_item = WTF::notFound;
+        _pos_item = userCertConf.find(MSG_CLIENT_CERT_DELIMITER);
+        if (_pos_item != WTF::notFound) { // expected 'WPE_CLIENT_CERTIFICATES_URLS'
+            auto env_wpe_certificate_url = userCertConf.substring(0, _pos_item);
+            if (ENV_WPE_CLIENT_CERTIFICATES_URLS == env_wpe_certificate_url) {
+                _next_item = _pos_item + MSG_CLIENT_CERT_DELIMITER.length();
+                _pos_item = userCertConf.find(MSG_CLIENT_CERT_DELIMITER, _next_item);
+                if (_pos_item != WTF::notFound) { // expected new value for 'WPE_CLIENT_CERTIFICATES_URLS'
+                    auto wpe_certificates_urls_data = userCertConf.substring(_next_item, (_pos_item - _next_item));
+                    _next_item = _pos_item + MSG_CLIENT_CERT_DELIMITER.length();
+                    _pos_item = userCertConf.find(MSG_CLIENT_CERT_DELIMITER, _next_item);
+
+                    if (_pos_item != WTF::notFound) { // expected new enviroment variable to store the certificate
+                        auto env_certificate_host = userCertConf.substring(_next_item, (_pos_item - _next_item));
+                        _next_item = _pos_item + MSG_CLIENT_CERT_DELIMITER.length();
+                        auto certificate_host_data = userCertConf.substring(_next_item, userCertConf.length() - _next_item); // get the new certificate data
+                        LOG(Network, "(NetworkProcess) Update environment %s (data size %d)", env_certificate_host.utf8().data(), certificate_host_data.length());
+                        setenv(env_wpe_certificate_url.utf8().data(), wpe_certificates_urls_data.utf8().data(), 1);
+                        setenv(env_certificate_host.utf8().data(), certificate_host_data.utf8().data(), 1);
+                    }
+                }
+            }
+        } else {
+            RELEASE_LOG(Network, "(NetworkProcess) invalid user data for %s", url.string().utf8().data());
+        }
+    }
+
+    preconnectTo(sessionID, webPageProxyID, webPageID, url, userAgent, storedCredentialsPolicy, isNavigatingToAppBoundDomain, lastNavigationWasAppInitiated);
+}
+
 void NetworkProcess::preconnectTo(PAL::SessionID sessionID, WebPageProxyIdentifier webPageProxyID, WebCore::PageIdentifier webPageID, const URL& url, const String& userAgent, WebCore::StoredCredentialsPolicy storedCredentialsPolicy, std::optional<NavigatingToAppBoundDomain> isNavigatingToAppBoundDomain, LastNavigationWasAppInitiated lastNavigationWasAppInitiated)
 {
     LOG(Network, "(NetworkProcess) Preconnecting to URL %s (storedCredentialsPolicy %i)", url.string().utf8().data(), (int)storedCredentialsPolicy);

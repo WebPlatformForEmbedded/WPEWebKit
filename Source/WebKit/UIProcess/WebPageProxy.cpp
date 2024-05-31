@@ -1407,6 +1407,31 @@ WebProcessProxy& WebPageProxy::ensureRunningProcess()
     return m_process;
 }
 
+// this implementation is based on:
+//   RefPtr<API::Navigation> WebPageProxy::loadRequest(ResourceRequest&& request, ShouldOpenExternalURLsPolicy shouldOpenExternalURLsPolicy, API::Object* userData)
+RefPtr<API::Navigation> WebPageProxy::loadRequestAndCert(ResourceRequest&& request, API::Object* userData)
+{
+    if (m_isClosed)
+        return nullptr;
+
+    WEBPAGEPROXY_RELEASE_LOG(Loading, "loadRequestAndCert:");
+
+    if (!hasRunningProcess())
+        launchProcess(RegistrableDomain { request.url() }, ProcessLaunchReason::InitialProcess);
+
+    auto navigation = m_navigationState->createLoadRequestNavigation(ResourceRequest(request), m_backForwardList->currentItem());
+
+    if (shouldForceForegroundPriorityForClientNavigation())
+        navigation->setClientNavigationActivity(process().throttler().foregroundActivity("Client navigation"_s));
+
+#if PLATFORM(COCOA)
+    setLastNavigationWasAppInitiated(request);
+#endif
+
+    loadRequestWithNavigationShared(m_process.copyRef(), m_webPageID, navigation.get(), WTFMove(request), WebCore::ShouldOpenExternalURLsPolicy::ShouldAllowExternalSchemesButNotAppLinks, userData, ShouldTreatAsContinuingLoad::No, isNavigatingToAppBoundDomain());
+    return navigation;
+}
+
 RefPtr<API::Navigation> WebPageProxy::loadRequest(ResourceRequest&& request, ShouldOpenExternalURLsPolicy shouldOpenExternalURLsPolicy, API::Object* userData)
 {
     if (m_isClosed)
@@ -1439,6 +1464,8 @@ void WebPageProxy::loadRequestWithNavigationShared(Ref<WebProcessProxy>&& proces
     auto transaction = m_pageLoadState.transaction();
 
     auto url = request.url();
+    bool foundCertConf = false;
+
     if (shouldTreatAsContinuingLoad == ShouldTreatAsContinuingLoad::No)
         m_pageLoadState.setPendingAPIRequest(transaction, { navigation.navigationID(), url.string() });
 
@@ -1446,7 +1473,18 @@ void WebPageProxy::loadRequestWithNavigationShared(Ref<WebProcessProxy>&& proces
     loadParameters.navigationID = navigation.navigationID();
     loadParameters.request = WTFMove(request);
     loadParameters.shouldOpenExternalURLsPolicy = shouldOpenExternalURLsPolicy;
-    loadParameters.userData = UserData(process->transformObjectsToHandles(userData).get());
+    if (userData && (userData->type() == API::Object::Type::String)) {
+        const ASCIILiteral ENV_WPE_CLIENT_CERTIFICATES_URLS = "WPE_CLIENT_CERTIFICATES_URLS"_s;
+        auto userCertConf = static_cast<API::String*>(userData)->string();
+
+        if (userCertConf.startsWith(ENV_WPE_CLIENT_CERTIFICATES_URLS)) {
+            foundCertConf = true;
+        } else {
+            loadParameters.userData = UserData(process->transformObjectsToHandles(userData).get());
+        }
+    } else {
+        loadParameters.userData = UserData(process->transformObjectsToHandles(userData).get());
+    }
     loadParameters.shouldTreatAsContinuingLoad = shouldTreatAsContinuingLoad;
     loadParameters.websitePolicies = WTFMove(websitePolicies);
     loadParameters.lockHistory = navigation.lockHistory();
@@ -1462,8 +1500,14 @@ void WebPageProxy::loadRequestWithNavigationShared(Ref<WebProcessProxy>&& proces
 
     addPlatformLoadParameters(process, loadParameters);
 
-    if (shouldTreatAsContinuingLoad == ShouldTreatAsContinuingLoad::No)
-        preconnectTo(url, predictedUserAgentForRequest(loadParameters.request));
+    if (shouldTreatAsContinuingLoad == ShouldTreatAsContinuingLoad::No) {
+        if (foundCertConf) {
+            auto userCertConf = static_cast<API::String*>(userData)->string();
+            preconnectToWithCert(url, predictedUserAgentForRequest(loadParameters.request), userCertConf);
+        } else {
+            preconnectTo(url, predictedUserAgentForRequest(loadParameters.request));
+        }
+    }
 
     navigation.setIsLoadedWithNavigationShared(true);
 
@@ -4796,6 +4840,14 @@ void WebPageProxy::setNetworkRequestsInProgress(bool networkRequestsInProgress)
 {
     auto transaction = m_pageLoadState.transaction();
     m_pageLoadState.setNetworkRequestsInProgress(transaction, networkRequestsInProgress);
+}
+
+void WebPageProxy::preconnectToWithCert(const URL& url, const String& userAgent, const String& userCertConf)
+{
+    if (!m_websiteDataStore->configuration().allowsServerPreconnect())
+        return;
+    auto storedCredentialsPolicy = m_canUseCredentialStorage ? WebCore::StoredCredentialsPolicy::Use : WebCore::StoredCredentialsPolicy::DoNotUse;
+    websiteDataStore().networkProcess().preconnectToWithCert(sessionID(), identifier(), webPageID(), url, userAgent, userCertConf, storedCredentialsPolicy, isNavigatingToAppBoundDomain(), m_lastNavigationWasAppInitiated ? LastNavigationWasAppInitiated::Yes : LastNavigationWasAppInitiated::No);
 }
 
 void WebPageProxy::preconnectTo(const URL& url, const String& userAgent)
