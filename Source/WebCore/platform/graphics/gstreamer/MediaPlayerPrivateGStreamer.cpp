@@ -4347,7 +4347,7 @@ bool MediaPlayerPrivateGStreamer::waitForCDMAttachment()
     bool didCDMAttach = false;
     {
         Locker cdmAttachmentLocker { m_cdmAttachmentLock };
-        didCDMAttach = m_cdmAttachmentCondition.waitFor(m_cdmAttachmentLock, 4_s, [this]() {
+        didCDMAttach = m_cdmAttachmentCondition.waitFor(m_cdmAttachmentLock, 500_ms, [this]() {
             assertIsHeld(m_cdmAttachmentLock);
             return isCDMAttached();
         });
