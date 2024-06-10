@@ -4679,3 +4679,15 @@ void webkit_settings_set_enable_service_worker(WebKitSettings* settings, gboolea
     priv->preferences->setServiceWorkersEnabled(enabled);
     g_object_notify_by_pspec(G_OBJECT(settings), sObjProperties[PROP_ENABLE_SERVICE_WORKER]);
 }
+
+gboolean webkit_settings_get_enable_non_composited_webgl(WebKitSettings* settings)
+{
+    g_return_val_if_fail(WEBKIT_IS_SETTINGS(settings), FALSE);
+
+    return FALSE;
+}
+
+void webkit_settings_set_enable_non_composited_webgl(WebKitSettings* settings, gboolean enabled)
+{
+    g_return_if_fail(WEBKIT_IS_SETTINGS(settings));
+}
