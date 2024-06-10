@@ -5680,3 +5680,31 @@ void webkit_web_view_send_memory_pressure_event(WebKitWebView *webView, gboolean
 
     getPage(webView).sendMemoryPressureEvent(critical);
 }
+
+void webkit_web_view_suspend(WebKitWebView *webView)
+{
+    g_return_if_fail(WEBKIT_IS_WEB_VIEW(webView));
+
+}
+
+void webkit_web_view_resume(WebKitWebView *webView)
+{
+    g_return_if_fail(WEBKIT_IS_WEB_VIEW(webView));
+}
+
+gboolean webkit_web_view_is_suspended(WebKitWebView *webView)
+{
+    g_return_val_if_fail(WEBKIT_IS_WEB_VIEW(webView), FALSE);
+
+    return FALSE;
+}
+
+void webkit_web_view_hide(WebKitWebView *webView)
+{
+    g_return_if_fail(WEBKIT_IS_WEB_VIEW(webView));
+}
+
+void webkit_web_view_show(WebKitWebView *webView)
+{
+    g_return_if_fail(WEBKIT_IS_WEB_VIEW(webView));
+}

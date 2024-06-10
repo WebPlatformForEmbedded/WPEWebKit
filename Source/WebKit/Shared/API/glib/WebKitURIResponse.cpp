@@ -298,3 +298,8 @@ const WebCore::ResourceResponse& webkitURIResponseGetResourceResponse(WebKitURIR
     return uriResponse->priv->resourceResponse;
 }
 
+gboolean webkit_uri_response_is_main_frame(WebKitURIResponse* response)
+{
+    g_return_val_if_fail(WEBKIT_IS_URI_RESPONSE(response), false);
+    return FALSE;
+}
