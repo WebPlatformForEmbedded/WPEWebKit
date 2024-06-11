@@ -57,7 +57,7 @@ static const int s_memoryPresurePercentageThresholdCritical = 95;
 #endif
 // cgroups.7: The usual place for such mounts is under a tmpfs(5)
 // filesystem mounted at /sys/fs/cgroup.
-static const char* s_cgroupMemoryPath = "/sys/fs/cgroup/%s/%s/%s";
+static const char* s_cgroupMemoryPath = "/cgroup/%s/%s/%s";
 
 // /proc filesystems are directly maintained by the kernel.
 // On open the kernel will provide the process a static copy of the data if the
