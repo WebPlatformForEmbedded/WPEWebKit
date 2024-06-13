@@ -141,6 +141,8 @@ public:
     static WebKit::WebPageProxy* platformWebPageProxyForGamepadInput();
 #endif
 
+    void setViewState(OptionSet<WebCore::ActivityState>);
+
 #if ENABLE(WPE_PLATFORM)
     void updateAcceleratedSurface(uint64_t);
     WebKit::RendererBufferFormat renderBufferFormat() const;
@@ -158,7 +160,6 @@ private:
 #endif
 
     void setSize(const WebCore::IntSize&);
-    void setViewState(OptionSet<WebCore::ActivityState>);
     void handleKeyboardEvent(struct wpe_input_keyboard_event*);
 
 #if ENABLE(WPE_PLATFORM)

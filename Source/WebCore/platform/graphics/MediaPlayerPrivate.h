@@ -120,6 +120,7 @@ public:
     virtual bool hasAudio() const = 0;
 
     virtual void setPageIsVisible(bool, String&& sceneIdentifier = ""_s) = 0;
+    virtual void setPageIsSuspended(bool) { }
     virtual void setVisibleForCanvas(bool visible) { setPageIsVisible(visible); }
     virtual void setVisibleInViewport(bool) { }
 

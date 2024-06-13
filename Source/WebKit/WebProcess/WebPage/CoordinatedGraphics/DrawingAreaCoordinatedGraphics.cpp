@@ -64,6 +64,14 @@ DrawingAreaCoordinatedGraphics::DrawingAreaCoordinatedGraphics(WebPage& webPage,
 #if USE(GLIB_EVENT_LOOP) && !PLATFORM(WPE)
     m_displayTimer.setPriority(RunLoopSourcePriority::NonAcceleratedDrawingTimer);
 #endif
+
+    // If ActivityState::IsInWindow is not on we need to trigger suspend immediately.
+    if (!(parameters.activityState & ActivityState::IsInWindow)) {
+        suspendPainting();
+        m_webPage->corePage()->suspendAllMediaPlayback();
+        m_webPage->corePage()->suspendActiveDOMObjectsAndAnimations();
+        m_isViewSuspended = true;
+    }
 }
 
 DrawingAreaCoordinatedGraphics::~DrawingAreaCoordinatedGraphics() = default;
@@ -356,12 +364,37 @@ RefPtr<DisplayRefreshMonitor> DrawingAreaCoordinatedGraphics::createDisplayRefre
 
 void DrawingAreaCoordinatedGraphics::activityStateDidChange(OptionSet<ActivityState> changed, ActivityStateChangeID, CompletionHandler<void()>&& completionHandler)
 {
-    if (changed & ActivityState::IsVisible) {
-        if (m_webPage->isVisible())
-            resumePainting();
-        else
+    // We use calls to suspendPainting() and resumePainting() to stop the compositor loop and paint the content transparent
+    // so nothing gets rendered. There are 2 exceptions to this that need to be handled separately:
+    // - WebGL in nonCompositedWebGL: we're not using the compositor in this case. WebGLRenderingContextBase will observe the activity
+    //   state changes and paint the content transparent when the view is suspended or hidden.
+    // - MediaPlayer videoSink window when using the GStreamer holepunch: HTMLMediaElement will perform calls to the MediaPlayer
+    //   to set an empty rectangle when it detects that the view has become hidden or suspended.
+
+    // Handle hide/show functionality.
+    if (changed & ActivityState::IsVisible && !m_isViewSuspended) {
+        if (m_webPage->corePage()->isVisible())
+             resumePainting();
+         else
+             suspendPainting();
+     }
+
+    // Handle suspend/resume functionality. Besides stopping the rendering, we stop active DOM objects and media playback.
+    if (changed & ActivityState::IsInWindow) {
+        if (m_isViewSuspended) {
+            m_webPage->corePage()->resumeActiveDOMObjectsAndAnimations();
+            m_webPage->corePage()->resumeAllMediaPlayback();
+            if (m_webPage->corePage()->isVisible())
+                resumePainting();
+            m_isViewSuspended = false;
+        } else {
             suspendPainting();
+            m_webPage->corePage()->suspendAllMediaPlayback();
+            m_webPage->corePage()->suspendActiveDOMObjectsAndAnimations();
+            m_isViewSuspended = true;
+        }
     }
+
     completionHandler();
 }
 
@@ -482,7 +515,8 @@ void DrawingAreaCoordinatedGraphics::exitAcceleratedCompositingModeSoon()
 
 void DrawingAreaCoordinatedGraphics::suspendPainting()
 {
-    ASSERT(!m_isPaintingSuspended);
+    if (m_isPaintingSuspended)
+        return;
 
     if (m_layerTreeHost)
         m_layerTreeHost->pauseRendering();

@@ -9569,6 +9569,7 @@ void WebPage::setDefaultSpatialTrackingLabel(const String& label)
 
 void WebPage::startObservingNowPlayingMetadata()
 {
+#if ENABLE(VIDEO) || ENABLE(WEB_AUDIO)
     if (m_nowPlayingMetadataObserver)
         return;
 
@@ -9578,15 +9579,18 @@ void WebPage::startObservingNowPlayingMetadata()
     });
 
     WebCore::PlatformMediaSessionManager::sharedManager().addNowPlayingMetadataObserver(*m_nowPlayingMetadataObserver);
+#endif
 }
 
 void WebPage::stopObservingNowPlayingMetadata()
 {
+#if ENABLE(VIDEO) || ENABLE(WEB_AUDIO)
     auto nowPlayingMetadataObserver = std::exchange(m_nowPlayingMetadataObserver, nullptr);
     if (!nowPlayingMetadataObserver)
         return;
 
     WebCore::PlatformMediaSessionManager::sharedManager().removeNowPlayingMetadataObserver(*nowPlayingMetadataObserver);
+#endif
 }
 
 void WebPage::didAdjustVisibilityWithSelectors(Vector<String>&& selectors)

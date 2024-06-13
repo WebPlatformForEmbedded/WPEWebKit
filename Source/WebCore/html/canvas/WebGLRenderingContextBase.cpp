@@ -614,13 +614,13 @@ void WebGLRenderingContextBase::addCompressedTextureFormat(GCGLenum format)
 
 void WebGLRenderingContextBase::addActivityStateChangeObserverIfNecessary()
 {
-    // We are only interested in visibility changes for contexts
-    // that are using the high-performance GPU.
-    if (m_attributes.powerPreference != WebGLPowerPreference::HighPerformance)
-        return;
-
     auto* canvas = htmlCanvas();
     if (!canvas)
+        return;
+
+    //m_nonCompositedWebGLEnabled = canvas->document().frame()->settings().nonCompositedWebGLEnabled();
+    m_nonCompositedWebGLEnabled = false;
+    if (m_attributes.powerPreference != WebGLPowerPreference::HighPerformance && !m_nonCompositedWebGLEnabled)
         return;
 
     RefPtr page = canvas->document().page();
@@ -632,6 +632,22 @@ void WebGLRenderingContextBase::addActivityStateChangeObserverIfNecessary()
     // We won't get a state change right away, so
     // make sure the context knows if it visible or not.
     protectedGraphicsContextGL()->setContextVisibility(page->isVisible());
+
+#if 0
+    if (m_nonCompositedWebGLEnabled) {
+        if (((changed & ActivityState::IsInWindow) && !(newActivityState & ActivityState::IsInWindow)) ||
+            ((changed & ActivityState::IsVisible) && !(newActivityState & ActivityState::IsVisible))) {
+            if (m_scissorEnabled)
+                m_context->disable(GraphicsContextGL::SCISSOR_TEST);
+            m_context->clearColor(0, 0, 0, 0);
+            m_context->clear(GraphicsContextGL::COLOR_BUFFER_BIT);
+            m_context->markContextChanged();
+            m_context->prepareForDisplay();
+            if (m_scissorEnabled)
+                m_context->enable(GraphicsContextGL::SCISSOR_TEST);
+        }
+    }
+#endif
 }
 
 void WebGLRenderingContextBase::removeActivityStateChangeObserver()

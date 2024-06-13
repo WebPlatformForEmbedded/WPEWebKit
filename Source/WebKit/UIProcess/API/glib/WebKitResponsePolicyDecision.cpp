@@ -141,8 +141,10 @@ WebKitURIRequest* webkit_response_policy_decision_get_request(WebKitResponsePoli
 WebKitURIResponse* webkit_response_policy_decision_get_response(WebKitResponsePolicyDecision* decision)
 {
     g_return_val_if_fail(WEBKIT_IS_RESPONSE_POLICY_DECISION(decision), nullptr);
-    if (!decision->priv->response)
+    if (!decision->priv->response) {
         decision->priv->response = adoptGRef(webkitURIResponseCreateForResourceResponse(decision->priv->navigationResponse->response()));
+        webkitURIResponseSetIsMainFrame(decision->priv->response.get(), decision->priv->navigationResponse->frame().isMainFrame());
+    }
     return decision->priv->response.get();
 }
 

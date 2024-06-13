@@ -5646,6 +5646,49 @@ webkit_web_view_get_default_content_security_policy(WebKitWebView* webView)
     return webView->priv->defaultContentSecurityPolicy.data();
 }
 
+void webkit_web_view_suspend(WebKitWebView *webView)
+{
+    g_return_if_fail(WEBKIT_IS_WEB_VIEW(webView));
+
+    auto viewStateFlags = webView->priv->view->viewState();
+    viewStateFlags.remove(WebCore::ActivityState::IsInWindow);
+    webView->priv->view->setViewState(viewStateFlags);
+}
+
+void webkit_web_view_resume(WebKitWebView *webView)
+{
+    g_return_if_fail(WEBKIT_IS_WEB_VIEW(webView));
+
+    auto viewStateFlags = webView->priv->view->viewState();
+    viewStateFlags.add(WebCore::ActivityState::IsInWindow);
+    webView->priv->view->setViewState(viewStateFlags);
+}
+
+gboolean webkit_web_view_is_suspended(WebKitWebView *webView)
+{
+    g_return_val_if_fail(WEBKIT_IS_WEB_VIEW(webView), FALSE);
+
+    return !webView->priv->view->viewState().contains(WebCore::ActivityState::IsInWindow);
+}
+
+void webkit_web_view_hide(WebKitWebView *webView)
+{
+    g_return_if_fail(WEBKIT_IS_WEB_VIEW(webView));
+
+    auto viewStateFlags = webView->priv->view->viewState();
+    viewStateFlags.remove(WebCore::ActivityState::IsVisible);
+    webView->priv->view->setViewState(viewStateFlags);
+}
+
+void webkit_web_view_show(WebKitWebView *webView)
+{
+    g_return_if_fail(WEBKIT_IS_WEB_VIEW(webView));
+
+    auto viewStateFlags = webView->priv->view->viewState();
+    viewStateFlags.add(WebCore::ActivityState::IsVisible);
+    webView->priv->view->setViewState(viewStateFlags);
+}
+
 void webkit_web_view_is_web_process_responsive_async(WebKitWebView *webView, GCancellable* cancellable, GAsyncReadyCallback callback, gpointer userData)
 {
     g_return_if_fail(WEBKIT_IS_WEB_VIEW(webView));

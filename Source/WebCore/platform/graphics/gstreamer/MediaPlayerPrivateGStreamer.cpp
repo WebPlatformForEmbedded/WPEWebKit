@@ -200,6 +200,11 @@ MediaPlayerPrivateGStreamer::~MediaPlayerPrivateGStreamer()
     GST_DEBUG_OBJECT(pipeline(), "Disposing player");
     m_isPlayerShuttingDown.store(true);
 
+#if USE(GSTREAMER_HOLEPUNCH)
+    if (m_gstreamerHolePunchHost)
+        m_gstreamerHolePunchHost->playerPrivateWillBeDestroyed();
+#endif
+
     m_sinkTaskQueue.startAborting();
 
     for (auto& track : m_audioTracks.values())
@@ -4121,27 +4126,10 @@ GstElement* MediaPlayerPrivateGStreamer::createVideoSinkGL()
 
 class GStreamerHolePunchClient : public TextureMapperPlatformLayerBuffer::HolePunchClient {
 public:
-    GStreamerHolePunchClient(GRefPtr<GstElement>&& videoSink, RefPtr<GStreamerQuirksManager>&& quirksManagerForTesting)
-        : m_videoSink(WTFMove(videoSink))
-        , m_quirksManagerForTesting(WTFMove(quirksManagerForTesting))
-    { };
-    void setVideoRectangle(const IntRect& rect) final
-    {
-        if (!m_videoSink)
-            return;
-
-        if (m_quirksManagerForTesting) {
-            m_quirksManagerForTesting->setHolePunchVideoRectangle(m_videoSink.get(), rect);
-            return;
-        }
-
-        auto& quirksManager = GStreamerQuirksManager::singleton();
-        quirksManager.setHolePunchVideoRectangle(m_videoSink.get(), rect);
-    }
-
+    GStreamerHolePunchClient(RefPtr<MediaPlayerPrivateGStreamer::GStreamerHolePunchHost>&& host) : m_host(WTFMove(host)) { };
+    void setVideoRectangle(const IntRect& rect) final { m_host->setVideoRectangle(rect); }
 private:
-    GRefPtr<GstElement> m_videoSink;
-    RefPtr<GStreamerQuirksManager> m_quirksManagerForTesting;
+    RefPtr<MediaPlayerPrivateGStreamer::GStreamerHolePunchHost> m_host;
 };
 
 bool MediaPlayerPrivateGStreamer::isHolePunchRenderingEnabled() const
@@ -4176,12 +4164,15 @@ GstElement* MediaPlayerPrivateGStreamer::createHolePunchVideoSink()
 
 void MediaPlayerPrivateGStreamer::pushNextHolePunchBuffer()
 {
+    if (!m_gstreamerHolePunchHost)
+        m_gstreamerHolePunchHost = GStreamerHolePunchHost::create(*this);
+
     auto proxyOperation =
         [this](TextureMapperPlatformLayerProxyGL& proxy)
         {
             Locker locker { proxy.lock() };
             std::unique_ptr<TextureMapperPlatformLayerBuffer> layerBuffer = makeUnique<TextureMapperPlatformLayerBuffer>(0, m_size, TextureMapperFlags::ShouldNotBlend, GL_DONT_CARE);
-            std::unique_ptr<GStreamerHolePunchClient> holePunchClient = makeUnique<GStreamerHolePunchClient>(m_videoSink.get(), RefPtr { m_quirksManagerForTesting });
+            std::unique_ptr<GStreamerHolePunchClient> holePunchClient = makeUnique<GStreamerHolePunchClient>(m_gstreamerHolePunchHost.copyRef());
             layerBuffer->setHolePunchClient(WTFMove(holePunchClient));
             proxy.pushNextBuffer(WTFMove(layerBuffer));
         };
@@ -4194,6 +4185,22 @@ void MediaPlayerPrivateGStreamer::pushNextHolePunchBuffer()
 #else
     proxyOperation(*m_platformLayerProxy);
 #endif
+}
+
+void MediaPlayerPrivateGStreamer::setVideoRectangle(const IntRect& rect)
+{
+    Locker locker { m_holePunchLock };
+
+    if (!m_visible || m_suspended || !m_videoSink)
+        return;
+
+    if (m_quirksManagerForTesting) {
+        m_quirksManagerForTesting->setHolePunchVideoRectangle(m_videoSink.get(), rect);
+        return;
+    }
+
+    auto& quirksManager = GStreamerQuirksManager::singleton();
+    quirksManager.setHolePunchVideoRectangle(m_videoSink.get(), rect);
 }
 
 bool MediaPlayerPrivateGStreamer::shouldIgnoreIntrinsicSize()
@@ -4587,6 +4594,37 @@ String MediaPlayerPrivateGStreamer::codecForStreamId(const String& streamId)
         return emptyString();
 
     return m_codecs.get(streamId);
+}
+
+void MediaPlayerPrivateGStreamer::setPageIsVisible(bool visible, String &&)
+{
+
+    if (m_visible != visible) {
+#if USE(GSTREAMER_HOLEPUNCH)
+        Locker locker { m_holePunchLock };
+#endif
+        m_visible = visible;
+
+#if USE(GSTREAMER_HOLEPUNCH)
+        //if (!m_visible)
+         //   setRectangleToVideoSink(m_videoSink.get(), IntRect());
+#endif
+    }
+}
+
+void MediaPlayerPrivateGStreamer::setPageIsSuspended(bool suspended)
+{
+    if (m_suspended != suspended) {
+#if USE(GSTREAMER_HOLEPUNCH)
+        Locker locker { m_holePunchLock };
+#endif
+        m_suspended = suspended;
+
+#if USE(GSTREAMER_HOLEPUNCH)
+        //if (m_suspended)
+        //    setRectangleToVideoSink(m_videoSink.get(), IntRect());
+#endif
+    }
 }
 
 #undef GST_CAT_DEFAULT

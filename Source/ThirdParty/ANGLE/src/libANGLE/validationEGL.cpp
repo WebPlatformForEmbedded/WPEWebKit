@@ -3525,7 +3525,7 @@ bool ValidateCreateImage(const ValidationContext *val,
 
             case EGL_WIDTH:
             case EGL_HEIGHT:
-                if (target != EGL_LINUX_DMA_BUF_EXT)
+                if (target != EGL_LINUX_DMA_BUF_EXT && target != EGL_NATIVE_PIXMAP_KHR)
                 {
                     val->setError(
                         EGL_BAD_PARAMETER,
@@ -4079,6 +4079,25 @@ bool ValidateCreateImage(const ValidationContext *val,
                 val->eglThread,
                 display->validateImageClientBuffer(context, target, buffer, attributes),
                 val->entryPoint, val->labeledObject, false);
+            break;
+        case EGL_NATIVE_PIXMAP_KHR:
+            if (!displayExtensions.imagePixmap)
+            {
+                val->setError(EGL_BAD_PARAMETER, "EGL_KHR_image_pixmap not supported.");
+                return false;
+            }
+
+            if (context != nullptr)
+            {
+                val->setError(EGL_BAD_PARAMETER, "ctx must be EGL_NO_CONTEXT.");
+                return false;
+            }
+
+            if (buffer == nullptr)
+            {
+                val->setError(EGL_BAD_PARAMETER, "buffer must not be NULL.");
+                return false;
+            }
             break;
         default:
             val->setError(EGL_BAD_PARAMETER, "invalid target: 0x%X", target);

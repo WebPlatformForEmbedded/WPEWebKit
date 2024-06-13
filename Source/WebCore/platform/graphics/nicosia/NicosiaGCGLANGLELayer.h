@@ -38,6 +38,9 @@ class GraphicsContextGLTextureMapperANGLE;
 #if USE(ANGLE_GBM)
 class GraphicsContextGLGBM;
 #endif
+#if USE(NEXUS)
+class GraphicsContextGLNexus;
+#endif
 }
 
 namespace Nicosia {
@@ -48,6 +51,9 @@ public:
     GCGLANGLELayer(WebCore::GraphicsContextGLTextureMapperANGLE&);
 #if USE(ANGLE_GBM)
     GCGLANGLELayer(WebCore::GraphicsContextGLGBM&);
+#endif
+#if USE(NEXUS)
+    GCGLANGLELayer(WebCore::GraphicsContextGLNexus&);
 #endif
 
     virtual ~GCGLANGLELayer();

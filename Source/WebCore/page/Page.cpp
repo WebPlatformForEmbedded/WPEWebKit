@@ -2721,6 +2721,7 @@ void Page::setMuted(MediaProducerMutedStateFlags muted)
 bool Page::shouldBlockLayerTreeFreezingForVideo()
 {
     bool shouldBlockLayerTreeFreezingForVideo = false;
+#if ENABLE(VIDEO)
     forEachMediaElement([&shouldBlockLayerTreeFreezingForVideo] (HTMLMediaElement& element) {
         // FIXME: Consider only returning true when `element.readyState >=
         // HTMLMediaElementEnums::HAVE_METADATA` and forcing an update to the layer tree
@@ -2729,6 +2730,7 @@ bool Page::shouldBlockLayerTreeFreezingForVideo()
         if (element.isVideo())
             shouldBlockLayerTreeFreezingForVideo = true;
     });
+#endif
     return shouldBlockLayerTreeFreezingForVideo;
 }
 

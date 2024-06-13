@@ -30,6 +30,7 @@
 #include <WebCore/ResourceResponse.h>
 
 WebKitURIResponse* webkitURIResponseCreateForResourceResponse(const WebCore::ResourceResponse&);
+void webkitURIResponseSetIsMainFrame(WebKitURIResponse* response, gboolean isMainFrame);
 const WebCore::ResourceResponse& webkitURIResponseGetResourceResponse(WebKitURIResponse*);
 
 #endif // WebKitURIResponsePrivate_h

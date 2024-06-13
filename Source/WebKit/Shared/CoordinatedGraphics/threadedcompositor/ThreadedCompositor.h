@@ -86,6 +86,7 @@ public:
     void frameComplete();
 
     void suspend();
+    void suspendToTransparent();
     void resume();
 
     RunLoop& compositingRunLoop() const { return m_compositingRunLoop->runLoop(); }
@@ -139,6 +140,13 @@ private:
 
     Ref<ThreadedDisplayRefreshMonitor> m_displayRefreshMonitor;
 #endif
+
+    enum class SuspendToTransparentState {
+        None,
+        Requested,
+        WaitingForFrameComplete
+    };
+    SuspendToTransparentState m_suspendToTransparentState { SuspendToTransparentState::None };
 };
 
 } // namespace WebKit

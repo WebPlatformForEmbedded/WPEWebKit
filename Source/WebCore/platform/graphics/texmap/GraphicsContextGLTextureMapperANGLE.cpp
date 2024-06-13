@@ -54,6 +54,10 @@
 #include "GraphicsContextGLGBMTextureMapper.h"
 #endif
 
+#if USE(NEXUS)
+#include "GraphicsContextGLNexus.h"
+#endif
+
 #if PLATFORM(GTK) || PLATFORM(WPE)
 #include "GLFence.h"
 #endif
@@ -131,7 +135,11 @@ RefPtr<GraphicsContextGL> createWebProcessGraphicsContextGL(const GraphicsContex
     if (eglExtensions.KHR_image_base && eglExtensions.EXT_image_dma_buf_import)
         return GraphicsContextGLGBMTextureMapper::create(GraphicsContextGLAttributes { attributes });
 #endif
+#if USE(NEXUS)
+    return GraphicsContextGLNexus::create(GraphicsContextGLAttributes(attributes));
+#else
     return GraphicsContextGLTextureMapperANGLE::create(GraphicsContextGLAttributes { attributes });
+#endif
 }
 
 RefPtr<GraphicsContextGLTextureMapperANGLE> GraphicsContextGLTextureMapperANGLE::create(GraphicsContextGLAttributes&& attributes)

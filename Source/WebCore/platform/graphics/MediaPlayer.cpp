@@ -1098,6 +1098,11 @@ void MediaPlayer::setPageIsVisible(bool visible, String&& sceneIdentifier)
     m_private->setPageIsVisible(visible, WTFMove(sceneIdentifier));
 }
 
+void MediaPlayer::setPageIsSuspended(bool suspended)
+{
+    m_private->setPageIsSuspended(suspended);
+}
+
 void MediaPlayer::setVisibleForCanvas(bool visible)
 {
     if (visible == m_visibleForCanvas)

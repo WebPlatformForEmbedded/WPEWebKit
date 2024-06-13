@@ -69,6 +69,12 @@ if (USE_COORDINATED_GRAPHICS)
         platform/graphics/texmap/coordinated/TiledBackingStoreClient.h
     )
 
+    if (USE_NEXUS)
+        list(APPEND WebCore_SOURCES
+            platform/graphics/texmap/TextureMapperPlatformLayerProxyNexus.cpp
+        )
+    endif ()
+
     if (USE_CAIRO)
         list(APPEND WebCore_SOURCES
             platform/graphics/texmap/coordinated/CoordinatedGraphicsLayerCairo.cpp

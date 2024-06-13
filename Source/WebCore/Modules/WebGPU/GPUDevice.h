@@ -139,7 +139,9 @@ public:
     using RefCounted::ref;
     using RefCounted::deref;
 
+#if ENABLE(VIDEO)
     WeakPtr<GPUExternalTexture> takeExternalTextureForVideoElement(const HTMLVideoElement&);
+#endif
 
 private:
     GPUDevice(ScriptExecutionContext*, Ref<WebGPU::Device>&&);

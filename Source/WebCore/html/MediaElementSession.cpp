@@ -272,6 +272,7 @@ void MediaElementSession::visibilityChanged()
     else if (m_element.isVisibleInViewport())
         m_elementIsHiddenUntilVisibleInViewport = false;
 
+#if !PLATFORM(WPE)
     bool isPlayingAudio = m_element.isPlaying() && m_element.hasAudio() && !m_element.muted() && m_element.volume();
     if (!isPlayingAudio) {
         if (elementIsHidden) {
@@ -283,6 +284,7 @@ void MediaElementSession::visibilityChanged()
         }
         return;
     }
+#endif
 
     if (hasBehaviorRestriction(RequirePageVisibilityToPlayAudio)) {
         if (elementIsHidden) {

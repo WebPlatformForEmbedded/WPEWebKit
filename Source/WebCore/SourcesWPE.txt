@@ -75,6 +75,9 @@ platform/graphics/gbm/PlatformDisplayGBM.cpp @no-unify
 
 platform/graphics/libwpe/PlatformDisplayLibWPE.cpp
 
+platform/graphics/nexus/GraphicsContextGLNexus.cpp @no-unify
+platform/graphics/nexus/NexusSurface.cpp @no-unify
+
 platform/graphics/opentype/OpenTypeVerticalData.cpp
 
 platform/libwpe/PasteboardLibWPE.cpp

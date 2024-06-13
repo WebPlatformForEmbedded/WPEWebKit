@@ -46,7 +46,8 @@ enum {
     PROP_CONTENT_LENGTH,
     PROP_MIME_TYPE,
     PROP_SUGGESTED_FILENAME,
-    PROP_HTTP_HEADERS
+    PROP_HTTP_HEADERS,
+    PROP_IS_MAIN_FRAME
 };
 
 struct _WebKitURIResponsePrivate {
@@ -55,6 +56,7 @@ struct _WebKitURIResponsePrivate {
     CString mimeType;
     CString suggestedFilename;
     GUniquePtr<SoupMessageHeaders> httpHeaders;
+    gboolean isMainFrame;
 };
 
 WEBKIT_DEFINE_FINAL_TYPE(WebKitURIResponse, webkit_uri_response, G_TYPE_OBJECT, GObject)
@@ -81,6 +83,9 @@ static void webkitURIResponseGetProperty(GObject* object, guint propId, GValue* 
         break;
     case PROP_HTTP_HEADERS:
         g_value_set_boxed(value, webkit_uri_response_get_http_headers(response));
+        break;
+    case PROP_IS_MAIN_FRAME:
+        g_value_set_boolean(value, webkit_uri_response_is_main_frame(response));
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, propId, paramSpec);
@@ -165,6 +170,22 @@ static void webkit_uri_response_class_init(WebKitURIResponseClass* responseClass
             "http-headers",
             nullptr, nullptr,
             SOUP_TYPE_MESSAGE_HEADERS,
+            WEBKIT_PARAM_READABLE));
+
+    /**
+     * WebKitURIResponse:is-main-frame:
+     *
+     * Indication of the origin of the response, TRUE if the response is for main frame, FALSE otherwise
+     *
+     */
+    g_object_class_install_property(
+        objectClass,
+        PROP_IS_MAIN_FRAME,
+        g_param_spec_boolean(
+            "is-main-frame",
+            _("Is main frame response"),
+            _("Whether the response is for the main frame"),
+            FALSE,
             WEBKIT_PARAM_READABLE));
 }
 
@@ -286,11 +307,29 @@ SoupMessageHeaders* webkit_uri_response_get_http_headers(WebKitURIResponse* resp
     return response->priv->httpHeaders.get();
 }
 
+/**
+ * webkit_uri_response_is_main_frame:
+ * @response: a #WebKitURIResponse
+ *
+ * Returns: (transfer none): TRUE if the response is for a request from main frame or FALSE
+ */
+gboolean webkit_uri_response_is_main_frame(WebKitURIResponse* response)
+{
+    g_return_val_if_fail(WEBKIT_IS_URI_RESPONSE(response), false);
+    return response->priv->isMainFrame;
+}
+
 WebKitURIResponse* webkitURIResponseCreateForResourceResponse(const WebCore::ResourceResponse& resourceResponse)
 {
     WebKitURIResponse* uriResponse = WEBKIT_URI_RESPONSE(g_object_new(WEBKIT_TYPE_URI_RESPONSE, NULL));
     uriResponse->priv->resourceResponse = resourceResponse;
     return uriResponse;
+}
+
+void webkitURIResponseSetIsMainFrame(WebKitURIResponse* response, gboolean isMainFrame)
+{
+    g_return_if_fail(WEBKIT_IS_URI_RESPONSE(response));
+    response->priv->isMainFrame = isMainFrame;
 }
 
 const WebCore::ResourceResponse& webkitURIResponseGetResourceResponse(WebKitURIResponse* uriResponse)

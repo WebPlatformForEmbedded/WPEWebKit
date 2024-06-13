@@ -42,6 +42,11 @@
 #include "TextureMapperPlatformLayerProxyDMABuf.h"
 #endif
 
+#if USE(NEXUS)
+#include "GraphicsContextGLNexus.h"
+#include "TextureMapperPlatformLayerProxyNexus.h"
+#endif
+
 namespace Nicosia {
 
 using namespace WebCore;
@@ -72,6 +77,24 @@ void GCGLANGLELayer::swapBuffersIfNeeded()
     ASSERT(is<TextureMapperPlatformLayerProxyGL>(proxy));
 #endif
 
+#if USE(NEXUS)
+    if (is<TextureMapperPlatformLayerProxyNexus>(proxy)) {
+        auto& context = static_cast<GraphicsContextGLNexus&>(m_context);
+        auto size = context.getInternalFramebufferSize();
+
+        {
+            Locker locker { proxy.lock() };
+
+            OptionSet<TextureMapperFlags> flags = TextureMapperFlags::ShouldFlipTexture;
+            if (m_context.contextAttributes().alpha)
+                flags.add(TextureMapperFlags::ShouldBlend);
+
+            downcast<TextureMapperPlatformLayerProxyNexus>(proxy).presentSurface(context.nexusSurface().copyRef(), flags);
+        }
+        return;
+    }
+#endif
+
     OptionSet<TextureMapperFlags> flags = TextureMapperFlags::ShouldFlipTexture;
     GLint colorFormat;
     if (m_context.contextAttributes().alpha) {
@@ -99,6 +122,14 @@ GCGLANGLELayer::GCGLANGLELayer(GraphicsContextGLTextureMapperANGLE& context)
 GCGLANGLELayer::GCGLANGLELayer(GraphicsContextGLGBM& context)
     : m_context(context)
     , m_contentLayer(Nicosia::ContentLayer::create(*this, adoptRef(*new TextureMapperPlatformLayerProxyDMABuf(TextureMapperPlatformLayerProxy::ContentType::WebGL))))
+{
+}
+#endif
+
+#if USE(NEXUS)
+GCGLANGLELayer::GCGLANGLELayer(GraphicsContextGLNexus& context)
+    : m_context(context)
+    , m_contentLayer(Nicosia::ContentLayer::create(*this, adoptRef(*new TextureMapperPlatformLayerProxyNexus(TextureMapperPlatformLayerProxy::ContentType::WebGL))))
 {
 }
 #endif

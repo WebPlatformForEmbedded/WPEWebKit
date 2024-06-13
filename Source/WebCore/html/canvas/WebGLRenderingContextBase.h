@@ -1073,6 +1073,7 @@ private:
 #endif
 
     bool m_isSuspended { false };
+    bool m_nonCompositedWebGLEnabled { false };
 
     // The ordinal number of when the context was last active (drew, read pixels).
     uint64_t m_activeOrdinal { 0 };

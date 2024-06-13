@@ -35,6 +35,7 @@ list(APPEND WebCore_PRIVATE_INCLUDE_DIRECTORIES
     "${WEBCORE_DIR}/platform/graphics/opengl"
     "${WEBCORE_DIR}/platform/graphics/opentype"
     "${WEBCORE_DIR}/platform/graphics/libwpe"
+    "${WEBCORE_DIR}/platform/graphics/nexus"
     "${WEBCORE_DIR}/platform/graphics/wayland"
     "${WEBCORE_DIR}/platform/mock/mediasource"
     "${WEBCORE_DIR}/platform/mediacapabilities"
@@ -75,6 +76,10 @@ list(APPEND WebCore_LIBRARIES
     ${LIBTASN1_LIBRARIES}
     ${UPOWERGLIB_LIBRARIES}
 )
+
+if (USE_NEXUS)
+    list(APPEND WebCore_LIBRARIES nexus)
+endif ()
 
 list(APPEND WebCore_SYSTEM_INCLUDE_DIRECTORIES
     ${GIO_UNIX_INCLUDE_DIRS}

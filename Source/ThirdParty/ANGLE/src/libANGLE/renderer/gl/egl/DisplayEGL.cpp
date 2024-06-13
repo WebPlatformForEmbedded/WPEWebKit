@@ -842,8 +842,7 @@ void DisplayEGL::generateExtensions(egl::DisplayExtensions *outExtensions) const
 
     outExtensions->image     = mEGL->hasExtension("EGL_KHR_image");
     outExtensions->imageBase = mEGL->hasExtension("EGL_KHR_image_base");
-    // Pixmaps are not supported in ANGLE's EGL implementation.
-    // outExtensions->imagePixmap = mEGL->hasExtension("EGL_KHR_image_pixmap");
+    outExtensions->imagePixmap           = mEGL->hasExtension("EGL_KHR_image_pixmap");
     outExtensions->glTexture2DImage      = mEGL->hasExtension("EGL_KHR_gl_texture_2D_image");
     outExtensions->glTextureCubemapImage = mEGL->hasExtension("EGL_KHR_gl_texture_cubemap_image");
     outExtensions->glTexture3DImage      = mEGL->hasExtension("EGL_KHR_gl_texture_3D_image");
@@ -1022,6 +1021,9 @@ ExternalImageSiblingImpl *DisplayEGL::createExternalImageSibling(const gl::Conte
             ASSERT(context == nullptr);
             ASSERT(buffer == nullptr);
             return new DmaBufImageSiblingEGL(attribs);
+
+        case EGL_NATIVE_PIXMAP_KHR:
+            return new PixmapImageSiblingEGL(buffer, attribs);
 
         default:
             return DisplayGL::createExternalImageSibling(context, target, buffer, attribs);

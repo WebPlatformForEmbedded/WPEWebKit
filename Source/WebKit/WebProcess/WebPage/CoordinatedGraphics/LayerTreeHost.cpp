@@ -254,7 +254,7 @@ void LayerTreeHost::pauseRendering()
 {
     m_isSuspended = true;
     m_surface->visibilityDidChange(false);
-    m_compositor->suspend();
+    m_compositor->suspendToTransparent();
 }
 
 void LayerTreeHost::resumeRendering()
