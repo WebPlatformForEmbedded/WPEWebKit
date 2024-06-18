@@ -1403,7 +1403,11 @@ static void webkit_settings_class_init(WebKitSettingsClass* klass)
             "enable-media-stream",
             _("Enable MediaStream"),
             _("Whether MediaStream content should be handled"),
+#if ENABLE(MEDIA_STREAM)
             FEATURE_DEFAULT(MediaStreamEnabled),
+#else
+            FALSE,
+#endif
             readWriteConstructParamFlags);
 
     /**
@@ -1419,7 +1423,11 @@ static void webkit_settings_class_init(WebKitSettingsClass* klass)
         g_param_spec_boolean("enable-mock-capture-devices",
             _("Enable mock capture devices"),
             _("Whether we expose mock capture devices or not"),
+#if ENABLE(MEDIA_STREAM)
             FEATURE_DEFAULT(MockCaptureDevicesEnabled),
+#else
+            FALSE,
+#endif
             readWriteConstructParamFlags);
 
    /**
