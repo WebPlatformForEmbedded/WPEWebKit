@@ -98,9 +98,6 @@ private:
 
     void collectTransceivers() final;
 
-    void addPendingTrackEvent(PendingTrackEvent&&);
-    void dispatchPendingTrackEvents(MediaStream&);
-
     bool isLocalDescriptionSet() const final { return m_isLocalDescriptionSet; }
 
     template<typename T>
@@ -119,8 +116,6 @@ private:
     Ref<GStreamerMediaEndpoint> m_endpoint;
     bool m_isLocalDescriptionSet { false };
     bool m_isRemoteDescriptionSet { false };
-
-    Vector<PendingTrackEvent> m_pendingTrackEvents;
 
     bool m_isReconfiguring { false };
 };

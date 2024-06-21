@@ -323,24 +323,6 @@ void GStreamerPeerConnectionBackend::collectTransceivers()
     m_endpoint->collectTransceivers();
 }
 
-void GStreamerPeerConnectionBackend::addPendingTrackEvent(PendingTrackEvent&& event)
-{
-    m_pendingTrackEvents.append(WTFMove(event));
-}
-
-void GStreamerPeerConnectionBackend::dispatchPendingTrackEvents(MediaStream& mediaStream)
-{
-    auto events = WTFMove(m_pendingTrackEvents);
-    for (auto& event : events) {
-        Vector<RefPtr<MediaStream>> pendingStreams;
-        pendingStreams.reserveInitialCapacity(1);
-        pendingStreams.uncheckedAppend(&mediaStream);
-        event.streams = WTFMove(pendingStreams);
-
-        dispatchTrackEvent(event);
-    }
-}
-
 void GStreamerPeerConnectionBackend::removeTrack(RTCRtpSender& sender)
 {
     m_endpoint->removeTrack(backendFromRTPSender(sender));

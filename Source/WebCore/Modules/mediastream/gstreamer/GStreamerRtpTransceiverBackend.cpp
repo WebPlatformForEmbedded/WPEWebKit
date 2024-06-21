@@ -90,10 +90,22 @@ void GStreamerRtpTransceiverBackend::setDirection(RTCRtpTransceiverDirection dir
     g_object_set(m_rtcTransceiver.get(), "direction", gstDirection, nullptr);
 }
 
+void GStreamerRtpTransceiverBackend::setMidFromSDP(String&& midFromSDP)
+{
+    m_midFromSDP = WTFMove(midFromSDP);
+}
+
 String GStreamerRtpTransceiverBackend::mid()
 {
     GUniqueOutPtr<char> mid;
     g_object_get(m_rtcTransceiver.get(), "mid", &mid.outPtr(), nullptr);
+    // As of GStreamer 1.24.4, webrtcbin's transceivers only have the "mid" property set after the signaling state is
+    // STABLE. However, we need to use the transceiver mid property when signaling is still HAVE_REMOTE_OFFER. For that,
+    // we set the mid from the SDP directly as an alternative for using it in this early stage.
+    // FIXME: make this version-dependent when it's fixed in a released version of GStreamer.
+    if (!mid)
+        return m_midFromSDP;
+
     return String::fromUTF8(mid.get());
 }
 

@@ -287,6 +287,13 @@ void MediaStreamTrackPrivate::audioUnitWillStart()
         PlatformMediaSessionManager::sharedManager().sessionCanProduceAudioChanged();
 }
 
+void MediaStreamTrackPrivate::dataFlowStarted()
+{
+    forEachObserver([this](auto& observer) {
+        observer.dataFlowStarted(*this);
+    });
+}
+
 #if !RELEASE_LOG_DISABLED
 WTFLogChannel& MediaStreamTrackPrivate::logChannel() const
 {

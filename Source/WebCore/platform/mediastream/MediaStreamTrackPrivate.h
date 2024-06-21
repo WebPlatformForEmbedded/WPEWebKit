@@ -59,6 +59,7 @@ public:
         virtual void trackSettingsChanged(MediaStreamTrackPrivate&) = 0;
         virtual void trackEnabledChanged(MediaStreamTrackPrivate&) = 0;
         virtual void readyStateChanged(MediaStreamTrackPrivate&) { };
+        virtual void dataFlowStarted(MediaStreamTrackPrivate&) { };
     };
 
     static Ref<MediaStreamTrackPrivate> create(Ref<const Logger>&&, Ref<RealtimeMediaSource>&&);
@@ -80,6 +81,8 @@ public:
     void startProducingData() { m_source->start(); }
     void stopProducingData() { m_source->stop(); }
     bool isProducingData() { return m_source->isProducingData(); }
+
+    void dataFlowStarted();
 
     bool muted() const;
     void setMuted(bool muted) { m_source->setMuted(muted); }
