@@ -1349,6 +1349,23 @@ void FrameLoader::loadURL(FrameLoadRequest&& frameLoadRequest, const String& ref
     if (m_inStopAllLoaders || m_inClearProvisionalLoadForPolicyCheck)
         return;
 
+    static bool keepNavigationOnFragmentLoad = false;
+    static bool keepNavigationOnFragmentLoadInitialized = false;
+
+    if (!keepNavigationOnFragmentLoadInitialized) {
+        keepNavigationOnFragmentLoad = !!getenv("WPE_KEEP_NAVIGATION_ON_FRAGMENT_LOAD");
+        keepNavigationOnFragmentLoadInitialized = true;
+    }
+
+    // If we have a policy or provisional request for a different document, a fragment scroll should be cancelled.
+    if (keepNavigationOnFragmentLoad && (m_policyDocumentLoader && !equalIgnoringFragmentIdentifier(m_policyDocumentLoader->request().url(), frameLoadRequest.resourceRequest().url()) ||
+                                         m_provisionalDocumentLoader && !equalIgnoringFragmentIdentifier(m_provisionalDocumentLoader->request().url(), frameLoadRequest.resourceRequest().url()))) {
+        const auto fragmentNavigationURL = frameLoadRequest.resourceRequest().url();
+        const auto navigationURL = m_policyDocumentLoader ? m_policyDocumentLoader->request().url(): m_provisionalDocumentLoader->request().url();
+        FRAMELOADER_RELEASE_LOG(ResourceLoading, "loadURL: fragment navigation: %s is cancelled because of ongoing navigation change to url: %s", fragmentNavigationURL.string().utf8().data(), navigationURL.string().utf8().data());
+        return;
+    }
+
     Ref<Frame> protect(m_frame);
 
     // Anchor target is ignored when the download attribute is set since it will download the hyperlink rather than follow it.
