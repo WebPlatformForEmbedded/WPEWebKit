@@ -293,23 +293,14 @@ bool MediaPlayerPrivateGStreamerMSE::doSeek(const MediaTime& position, float rat
         if (!audioSinkPerformsAsyncStateChanges) {
             // If audio-only pipeline's sink is not performing async state changes
             // we must simulate preroll right away as otherwise nothing will trigger it.
-
-            // Post this on HTML media element queue so it will be executed
-            // synchonously with media events (e.g. seeking). This will ensure
-            // that HTML element attributes (like HTMLmedia.seeking) are not reseted
-            // before app receives "seeking" event
-            m_player->queueTaskOnEventLoop([weakThis = WeakPtr { *this }, this] {
-                if (!weakThis)
-                    return;
-                bool mustPreventPositionReset = m_isWaitingForPreroll && m_isSeeking;
-                if (mustPreventPositionReset)
-                    m_cachedPosition = currentMediaTime();
-                didPreroll();
-                if (mustPreventPositionReset) {
-                    propagateReadyStateToPlayer();
-                    invalidateCachedPosition();
-                }
-            });
+            bool mustPreventPositionReset = m_isWaitingForPreroll && m_isSeeking;
+            if (mustPreventPositionReset)
+                m_cachedPosition = currentMediaTime();
+            didPreroll();
+            if (mustPreventPositionReset) {
+                propagateReadyStateToPlayer();
+                invalidateCachedPosition();
+            }
         }
     }
 
@@ -389,7 +380,15 @@ void MediaPlayerPrivateGStreamerMSE::didPreroll()
         invalidateCachedPosition();
         GST_DEBUG("Seek complete because of preroll. currentMediaTime = %s", currentMediaTime().toString().utf8().data());
         // By calling timeChanged(), m_isSeeking will be checked an a "seeked" event will be emitted.
-        m_player->timeChanged();
+        // Post this on HTML media element queue so it will be executed
+        // synchonously with media events (e.g. seeking). This will ensure
+        // that HTML element attributes (like HTMLmedia.seeking) are not reseted
+        // before app receives "seeking" event
+        m_player->queueTaskOnEventLoop([weakThis = WeakPtr { *this }, this] {
+            if (!weakThis)
+                return;
+            m_player->timeChanged();
+        });
     }
 
     propagateReadyStateToPlayer();
