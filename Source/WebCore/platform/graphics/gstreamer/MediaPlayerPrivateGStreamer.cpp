@@ -438,7 +438,8 @@ void MediaPlayerPrivateGStreamer::play()
     }
 
     if (!m_playbackRate) {
-        if (m_playbackRatePausedState == PlaybackRatePausedState::ManuallyPaused)
+        if (m_playbackRatePausedState == PlaybackRatePausedState::InitiallyPaused
+            || m_playbackRatePausedState == PlaybackRatePausedState::ManuallyPaused)
             m_playbackRatePausedState = PlaybackRatePausedState::RatePaused;
         return;
     }
@@ -556,8 +557,8 @@ bool MediaPlayerPrivateGStreamer::doSeek(const MediaTime& position, float rate, 
     }
 
     // Stream mode. Seek will automatically deplete buffer level, so we always want to pause the pipeline and wait until the
-    // buffer is replenished.
-    if (!m_downloadBuffer) {
+    // buffer is replenished. But we don't want this behaviour on immediate seeks that only change the playback rate.
+    if (!m_downloadBuffer && !m_isChangingRate) {
         GST_DEBUG_OBJECT(pipeline(), "[Buffering] Pausing pipeline, resetting buffering level to 0 and forcing m_isBuffering true before seeking on stream mode");
 
 #ifdef (PLATFORM(BCM_NEXUS) || PLATFORM(BROADCOM))
@@ -2791,7 +2792,7 @@ void MediaPlayerPrivateGStreamer::updateStates()
                 m_areVolumeAndMuteInitialized = true;
             }
 
-            if ((m_wasBuffering && !m_isBuffering && !m_isPaused && m_playbackRate)
+            if ((m_wasBuffering && !m_isBuffering && !m_isPaused && m_playbackRatePausedState != PlaybackRatePausedState::ManuallyPaused && m_playbackRate)
                 || m_playbackRatePausedState == PlaybackRatePausedState::ShouldMoveToPlaying) {
                 m_playbackRatePausedState = PlaybackRatePausedState::Playing;
                 GST_INFO_OBJECT(pipeline(), "[Buffering] Restarting playback (because of buffering or resuming from zero playback rate)");
