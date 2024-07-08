@@ -120,7 +120,7 @@ void PageConsoleClient::unmute()
 
 void PageConsoleClient::addMessage(std::unique_ptr<Inspector::ConsoleMessage>&& consoleMessage)
 {
-    if (!m_page.usesEphemeralSession()) {
+    if (!m_page.usesEphemeralSession() || m_page.isControlledByAutomation()) {
         String message;
         Span<const String> additionalArguments;
         Vector<String> messageArgumentsVector;
@@ -198,8 +198,9 @@ void PageConsoleClient::messageWithTypeAndLevel(MessageType type, MessageLevel l
 
     InspectorInstrumentation::addMessageToConsole(m_page, WTFMove(message));
 
-    if (m_page.usesEphemeralSession())
+    if (m_page.usesEphemeralSession() && !m_page.isControlledByAutomation()) {
         return;
+    }
 
     if (!messageArgumentsVector.isEmpty()) {
         m_page.chrome().client().addMessageToConsole(MessageSource::ConsoleAPI, level, messageText, lineNumber, columnNumber, url);
