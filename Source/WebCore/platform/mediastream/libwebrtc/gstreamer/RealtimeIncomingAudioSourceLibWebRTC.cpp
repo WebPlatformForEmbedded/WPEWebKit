@@ -53,6 +53,14 @@ RealtimeIncomingAudioSourceLibWebRTC::RealtimeIncomingAudioSourceLibWebRTC(rtc::
 {
 }
 
+void* convertMonoToStereo(const void* audioData, size_t numberOfSamples) {
+    uint16_t* result = ((uint16_t*)g_malloc(numberOfSamples * 4));
+    for (size_t i = 0; i < numberOfSamples; i++) {
+        result[i*2] = result[i*2+1] = ((uint16_t*)audioData)[i]; // same value for left and right channel
+    }
+    return result;
+}
+
 void RealtimeIncomingAudioSourceLibWebRTC::OnData(const void* audioData, int, int sampleRate, size_t numberOfChannels, size_t numberOfFrames)
 {
     GstAudioInfo info;
@@ -62,10 +70,19 @@ void RealtimeIncomingAudioSourceLibWebRTC::OnData(const void* audioData, int, in
         LibWebRTCAudioFormat::sampleSize,
         LibWebRTCAudioFormat::sampleSize);
 
+    GRefPtr<GstBuffer> buffer;
+    if (numberOfChannels == 1 && LibWebRTCAudioFormat::sampleSize == 16) {
+        numberOfChannels = 2;
+        audioData = convertMonoToStereo(audioData, numberOfFrames);
+        //audioData will be g_freed when the pipeline is done with the buffer
+        buffer = adoptGRef(gst_buffer_new_wrapped(const_cast<gpointer>(audioData), numberOfFrames * 4));
+    }
     gst_audio_info_set_format(&info, format, sampleRate, numberOfChannels, NULL);
 
-    auto bufferSize = GST_AUDIO_INFO_BPF(&info) * numberOfFrames;
-    auto buffer = adoptGRef(gst_buffer_new_wrapped_full(GST_MEMORY_FLAG_READONLY, const_cast<gpointer>(audioData), bufferSize, 0, bufferSize, nullptr, nullptr));
+    if (!buffer) {
+        auto bufferSize = GST_AUDIO_INFO_BPF(&info) * numberOfFrames;
+        buffer = adoptGRef(gst_buffer_new_wrapped_full(GST_MEMORY_FLAG_READONLY, const_cast<gpointer>(audioData), bufferSize, 0, bufferSize, nullptr, nullptr));
+    }
     auto caps = adoptGRef(gst_audio_info_to_caps(&info));
     auto sample = adoptGRef(gst_sample_new(buffer.get(), caps.get(), nullptr, nullptr));
     GStreamerAudioData data(WTFMove(sample), info);

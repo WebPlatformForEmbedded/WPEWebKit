@@ -64,7 +64,7 @@ void AudioDecoderOpus::AppendSupportedDecoders(
   opus_info.allow_comfort_noise = false;
   opus_info.supports_network_adaption = true;
   SdpAudioFormat opus_format(
-      {"opus", 48000, 2, {{"minptime", "10"}, {"useinbandfec", "1"}}});
+      {"opus", 48000, 2, {{"minptime", "10"}, {"useinbandfec", "1"}, {"stereo", "1"}}});
   specs->push_back({std::move(opus_format), opus_info});
 }
 
