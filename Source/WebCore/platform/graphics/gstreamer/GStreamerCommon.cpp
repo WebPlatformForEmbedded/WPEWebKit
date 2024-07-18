@@ -1005,6 +1005,18 @@ bool gstObjectHasProperty(GstPad* pad, const char* name)
     return gstObjectHasProperty(GST_OBJECT_CAST(pad), name);
 }
 
+std::optional<unsigned> gstGetAutoplugSelectResult(ASCIILiteral nick)
+{
+    static auto enumClass = static_cast<GEnumClass*>(g_type_class_ref(g_type_from_name("GstAutoplugSelectResult")));
+    ASSERT(enumClass);
+    auto enumValue = g_enum_get_value_by_nick(enumClass, nick.characters());
+    if (!enumValue)
+        return std::nullopt;
+    return enumValue->value;
+}
+
+#undef GST_CAT_DEFAULT
+
 } // namespace WebCore
 
 #if !GST_CHECK_VERSION(1, 20, 0)

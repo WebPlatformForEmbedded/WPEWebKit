@@ -409,6 +409,9 @@ void configureVideoRTPDepayloader(GstElement*);
 bool gstObjectHasProperty(GstElement*, const char* name);
 bool gstObjectHasProperty(GstPad*, const char* name);
 
+
+std::optional<unsigned> gstGetAutoplugSelectResult(ASCIILiteral);
+
 void registerActivePipeline(const GRefPtr<GstElement>&);
 void unregisterPipeline(const GRefPtr<GstElement>&);
 

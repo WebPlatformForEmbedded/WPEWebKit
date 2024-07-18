@@ -22,6 +22,7 @@
 #if USE(GSTREAMER_WEBRTC)
 
 #include "GStreamerCommon.h"
+#include "GStreamerQuirks.h"
 #include "GStreamerRegistryScanner.h"
 
 GST_DEBUG_CATEGORY(webkit_webrtc_incoming_track_processor_debug);
@@ -243,6 +244,22 @@ GRefPtr<GstElement> GStreamerIncomingTrackProcessor::createParser()
 
         configureVideoRTPDepayloader(element);
     }), nullptr);
+
+    auto& quirksManager = GStreamerQuirksManager::singleton();
+    if (quirksManager.isEnabled()) {
+        // Prevent auto-plugging of hardware-accelerated elements. Those will be used in the playback pipeline.
+        g_signal_connect(parsebin.get(), "autoplug-select", G_CALLBACK(+[](GstElement*, GstPad*, GstCaps*, GstElementFactory* factory, gpointer) -> unsigned {
+            static auto skipAutoPlug = gstGetAutoplugSelectResult("skip"_s);
+            static auto tryAutoPlug = gstGetAutoplugSelectResult("try"_s);
+            RELEASE_ASSERT(skipAutoPlug);
+            RELEASE_ASSERT(tryAutoPlug);
+            auto& quirksManager = GStreamerQuirksManager::singleton();
+            auto isHardwareAccelerated = quirksManager.isHardwareAccelerated(factory).value_or(false);
+            if (isHardwareAccelerated)
+                return *skipAutoPlug;
+            return *tryAutoPlug;
+        }), nullptr);
+    }
 
     g_signal_connect_swapped(parsebin.get(), "pad-added", G_CALLBACK(+[](GStreamerIncomingTrackProcessor* self, GstPad* pad) {
         auto queue = adoptGRef(gst_bin_get_by_name(GST_BIN_CAST(self->m_bin.get()), "queue"));
