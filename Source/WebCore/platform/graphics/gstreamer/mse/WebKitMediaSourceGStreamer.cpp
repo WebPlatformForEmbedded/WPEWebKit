@@ -820,7 +820,8 @@ static void webKitMediaSrcStreamFlush(Stream* stream, bool isSeekingFlush, GstCl
                     GST_DEBUG_OBJECT(stream->source, "Resetting segment to current pipeline running time (%" GST_TIME_FORMAT " and stream time (%" GST_TIME_FORMAT " = %s)",
                         GST_TIME_ARGS(pipelineRunningTime), GST_TIME_ARGS(pipelineStreamTime), streamTime.toString().ascii().data());
                     streamingMembers->segment.base = pipelineRunningTime;
-                    streamingMembers->segment.start = streamingMembers->segment.time = static_cast<GstClockTime>(pipelineStreamTime);
+                    streamingMembers->segment.rate = stream->source->priv->rate;
+                    streamingMembers->segment.position = streamingMembers->segment.start = streamingMembers->segment.time = static_cast<GstClockTime>(pipelineStreamTime);
                 }
             }
         }
@@ -951,6 +952,19 @@ static gboolean webKitMediaSrcSendEvent(GstElement* element, GstEvent* event)
         GST_DEBUG_OBJECT(element, "Handling seek event: %" GST_PTR_FORMAT, event);
         webKitMediaSrcSeek(WEBKIT_MEDIA_SRC(element), start, rate);
         return true;
+    }
+    case GST_EVENT_CUSTOM_DOWNSTREAM_OOB: {
+        WebKitMediaSrc* source = WEBKIT_MEDIA_SRC(element);
+        gboolean result = !source->priv->streams.isEmpty();
+        for (const RefPtr<Stream>& stream : source->priv->streams.values())
+            result &= gst_pad_push_event(stream->pad.get(), gst_event_ref(event));
+        if (gst_event_has_name(event, "custom-instant-rate-change")) {
+            gdouble rate = 1.0;
+            if (gst_structure_get_double(gst_event_get_structure(event), "rate", &rate))
+                source->priv->rate = rate;
+        }
+        gst_event_unref(event);
+        return result;
     }
     default:
         return GST_ELEMENT_CLASS(webkit_media_src_parent_class)->send_event(element, event);

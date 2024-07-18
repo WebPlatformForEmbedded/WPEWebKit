@@ -107,6 +107,7 @@ WEBKIT_OPTION_DEFINE(USE_GSTREAMER_HOLEPUNCH "Whether to enable GStreamer holepu
 WEBKIT_OPTION_DEFINE(USE_EXTERNAL_HOLEPUNCH "Whether to enable external holepunch" PRIVATE OFF)
 WEBKIT_OPTION_DEFINE(ENABLE_ACCELERATED_2D_CANVAS "Whether to enable accelerated 2D canvas" PRIVATE OFF)
 WEBKIT_OPTION_DEFINE(ENABLE_OIPF_VK "Whether to enable OIPF keys for DAE applications" PRIVATE OFF)
+WEBKIT_OPTION_DEFINE(ENABLE_INSTANT_RATE_CHANGE "Whether to enable instant rate change" PRIVATE OFF)
 
 # Supported platforms.
 WEBKIT_OPTION_DEFINE(USE_WPEWEBKIT_PLATFORM_WESTEROS "Whether to enable support for the Westeros platform" PUBLIC OFF)

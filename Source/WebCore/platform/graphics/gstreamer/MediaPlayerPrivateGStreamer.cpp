@@ -565,6 +565,20 @@ void MediaPlayerPrivateGStreamer::updatePlaybackRate()
     GST_INFO_OBJECT(pipeline(), mute ? "Need to mute audio" : "Do not need to mute audio");
 
     if (m_lastPlaybackRate != m_playbackRate) {
+#if ENABLE(INSTANT_RATE_CHANGE)
+        bool didInstantRateChange = false;
+        if (!paused()) {
+            GstStructure* s = gst_structure_new("custom-instant-rate-change",
+                "rate", G_TYPE_DOUBLE, m_playbackRate, nullptr);
+            didInstantRateChange = gst_element_send_event(
+                pipeline(), gst_event_new_custom(GST_EVENT_CUSTOM_DOWNSTREAM_OOB, s));
+        }
+        if (didInstantRateChange) {
+            g_object_set(m_pipeline.get(), "mute", mute, nullptr);
+            m_lastPlaybackRate = m_playbackRate;
+        }
+        else
+#endif
         if (doSeek(playbackPosition(), m_playbackRate, static_cast<GstSeekFlags>(GST_SEEK_FLAG_FLUSH))) {
             g_object_set(m_pipeline.get(), "mute", mute, nullptr);
             m_lastPlaybackRate = m_playbackRate;
