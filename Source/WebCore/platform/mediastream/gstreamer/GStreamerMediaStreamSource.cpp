@@ -124,14 +124,6 @@ private:
 
 static void webkitMediaStreamSrcEnsureStreamCollectionPosted(WebKitMediaStreamSrc*);
 
-#if USE(GSTREAMER_WEBRTC)
-struct InternalSourcePadProbeData {
-    RealtimeIncomingSourceGStreamer* incomingSource;
-    int clientId;
-};
-WEBKIT_DEFINE_ASYNC_DATA_STRUCT(InternalSourcePadProbeData)
-#endif
-
 class InternalSource final : public MediaStreamTrackPrivate::Observer,
     public RealtimeMediaSource::Observer,
     public RealtimeMediaSource::AudioSampleObserver,
@@ -194,7 +186,7 @@ public:
     {
 #if USE(GSTREAMER_WEBRTC)
         auto& trackSource = m_track.source();
-        std::optional<int> clientId;
+        int clientId;
         auto client = GRefPtr<GstElement>(m_src);
         if (trackSource.isIncomingAudioSource()) {
             auto& source = static_cast<RealtimeIncomingAudioSourceGStreamer&>(trackSource);
@@ -213,23 +205,15 @@ public:
             clientId = source.registerClient(WTFMove(client));
         }
 
-        if (!clientId) {
-            GST_WARNING_OBJECT(m_src.get(), "Incoming track registration failed, track likely not ready yet.");
-            return;
-        }
+        m_webrtcSourceClientId = clientId;
 
-        m_webrtcSourceClientId = *clientId;
-
-        auto data = createInternalSourcePadProbeData();
-        data->incomingSource = static_cast<RealtimeIncomingSourceGStreamer*>(&trackSource);
-        data->clientId = *m_webrtcSourceClientId;
-
+        auto incomingSource = static_cast<RealtimeIncomingSourceGStreamer*>(&trackSource);
         auto srcPad = adoptGRef(gst_element_get_static_pad(m_src.get(), "src"));
         gst_pad_add_probe(srcPad.get(), static_cast<GstPadProbeType>(GST_PAD_PROBE_TYPE_EVENT_UPSTREAM | GST_PAD_PROBE_TYPE_QUERY_UPSTREAM), reinterpret_cast<GstPadProbeCallback>(+[](GstPad* pad, GstPadProbeInfo* info, gpointer userData) -> GstPadProbeReturn {
-            auto data = static_cast<InternalSourcePadProbeData*>(userData);
-            if (!data->incomingSource)
+            auto weakSource = static_cast<WeakPtr<RealtimeIncomingSourceGStreamer>*>(userData);
+            if (!weakSource)
                 return GST_PAD_PROBE_REMOVE;
-
+            auto incomingSource = weakSource->get();
             auto src = adoptGRef(gst_pad_get_parent_element(pad));
             if (GST_IS_QUERY(info->data)) {
                 switch (GST_QUERY_TYPE(GST_PAD_PROBE_INFO_QUERY(info))) {
@@ -242,21 +226,23 @@ public:
             } else
                 GST_DEBUG_OBJECT(src.get(), "Proxying event %" GST_PTR_FORMAT " to appsink peer", GST_PAD_PROBE_INFO_EVENT(info));
 
-            if (data->incomingSource->isIncomingAudioSource()) {
-                auto& source = static_cast<RealtimeIncomingAudioSourceGStreamer&>(*data->incomingSource);
+            if (incomingSource->isIncomingAudioSource()) {
+                auto& source = static_cast<RealtimeIncomingAudioSourceGStreamer&>(*incomingSource);
                 if (GST_IS_EVENT(info->data))
-                    source.handleUpstreamEvent(GRefPtr<GstEvent>(GST_PAD_PROBE_INFO_EVENT(info)), data->clientId);
-                else if (source.handleUpstreamQuery(GST_PAD_PROBE_INFO_QUERY(info), data->clientId))
+                    source.handleUpstreamEvent(GRefPtr<GstEvent>(GST_PAD_PROBE_INFO_EVENT(info)));
+                else if (source.handleUpstreamQuery(GST_PAD_PROBE_INFO_QUERY(info)))
                     return GST_PAD_PROBE_HANDLED;
-            } else if (data->incomingSource->isIncomingVideoSource()) {
-                auto& source = static_cast<RealtimeIncomingVideoSourceGStreamer&>(*data->incomingSource);
+            } else if (incomingSource->isIncomingVideoSource()) {
+                auto& source = static_cast<RealtimeIncomingVideoSourceGStreamer&>(*incomingSource);
                 if (GST_IS_EVENT(info->data))
-                    source.handleUpstreamEvent(GRefPtr<GstEvent>(GST_PAD_PROBE_INFO_EVENT(info)), data->clientId);
-                else if (source.handleUpstreamQuery(GST_PAD_PROBE_INFO_QUERY(info), data->clientId))
+                    source.handleUpstreamEvent(GRefPtr<GstEvent>(GST_PAD_PROBE_INFO_EVENT(info)));
+                else if (source.handleUpstreamQuery(GST_PAD_PROBE_INFO_QUERY(info)))
                     return GST_PAD_PROBE_HANDLED;
             }
             return GST_PAD_PROBE_OK;
-        }), data, reinterpret_cast<GDestroyNotify>(destroyInternalSourcePadProbeData));
+        }), new WeakPtr { incomingSource }, reinterpret_cast<GDestroyNotify>(+[](gpointer data) {
+            delete static_cast<WeakPtr<RealtimeIncomingSourceGStreamer>*>(data);
+        }));
 #endif
     }
 

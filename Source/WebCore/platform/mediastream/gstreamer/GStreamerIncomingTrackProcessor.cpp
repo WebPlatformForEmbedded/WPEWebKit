@@ -23,7 +23,6 @@
 
 #include "GStreamerCommon.h"
 #include "GStreamerRegistryScanner.h"
-// #include <gst/playback/gstplay-enum.h>
 
 GST_DEBUG_CATEGORY(webkit_webrtc_incoming_track_processor_debug);
 #define GST_CAT_DEFAULT webkit_webrtc_incoming_track_processor_debug
@@ -48,16 +47,24 @@ void GStreamerIncomingTrackProcessor::configure(GStreamerMediaEndpoint* endPoint
 {
     m_endPoint = endPoint;
     m_pad = WTFMove(pad);
-    m_data.mediaStreamBinName = makeString(GST_OBJECT_NAME(m_pad.get()));
-    m_bin = gst_bin_new(m_data.mediaStreamBinName.ascii().data());
 
     auto caps = adoptGRef(gst_pad_get_current_caps(m_pad.get()));
     if (!caps)
         caps = adoptGRef(gst_pad_query_caps(m_pad.get(), nullptr));
 
-    GST_DEBUG_OBJECT(m_bin.get(), "Processing track with caps %" GST_PTR_FORMAT, caps.get());
-    m_data.type = doCapsHaveType(caps.get(), "audio") ? RealtimeMediaSource::Type::Audio : RealtimeMediaSource::Type::Video;
+    ASCIILiteral typeName;
+    if (doCapsHaveType(caps.get(), "audio")) {
+        typeName = "audio"_s;
+        m_data.type = RealtimeMediaSource::Type::Audio;
+    } else {
+        typeName = "video"_s;
+        m_data.type = RealtimeMediaSource::Type::Video;
+    }
     m_data.caps = WTFMove(caps);
+
+    m_data.mediaStreamBinName = makeString("incoming-"_s, typeName, "-track-"_s, GST_OBJECT_NAME(m_pad.get()));
+    m_bin = gst_bin_new(m_data.mediaStreamBinName.ascii().data());
+    GST_DEBUG_OBJECT(m_bin.get(), "Processing track with caps %" GST_PTR_FORMAT, m_data.caps.get());
 
     g_object_get(m_pad.get(), "transceiver", &m_data.transceiver.outPtr(), nullptr);
 
@@ -79,13 +86,16 @@ void GStreamerIncomingTrackProcessor::configure(GStreamerMediaEndpoint* endPoint
     if (!m_sdpMsIdAndTrackId.second.isEmpty())
         m_data.trackId = m_sdpMsIdAndTrackId.second;
 
-    m_tee = gst_element_factory_make("tee", "tee");
-    g_object_set(m_tee.get(), "allow-not-linked", TRUE, nullptr);
+    auto fakeSink = gst_element_factory_make("fakesink", "sink");
+    g_object_set(fakeSink, "sync", TRUE, nullptr);
+    auto queue = gst_element_factory_make("queue", "queue");
 
     auto trackProcessor = incomingTrackProcessor();
     m_data.isUpstreamDecoding = m_isDecoding;
 
-    gst_bin_add_many(GST_BIN_CAST(m_bin.get()), m_tee.get(), trackProcessor.get(), nullptr);
+    gst_bin_add_many(GST_BIN_CAST(m_bin.get()), trackProcessor.get(), queue, fakeSink, nullptr);
+    gst_element_link(queue, fakeSink);
+
     auto sinkPad = adoptGRef(gst_element_get_static_pad(trackProcessor.get(), "sink"));
     gst_element_add_pad(m_bin.get(), gst_ghost_pad_new("sink", sinkPad.get()));
 }
@@ -214,13 +224,9 @@ GRefPtr<GstElement> GStreamerIncomingTrackProcessor::incomingTrackProcessor()
     }), this);
 
     g_signal_connect_swapped(decodebin.get(), "pad-added", G_CALLBACK(+[](GStreamerIncomingTrackProcessor* self, GstPad* pad) {
-        auto sinkPad = adoptGRef(gst_element_get_static_pad(self->m_tee.get(), "sink"));
+        auto queue = adoptGRef(gst_bin_get_by_name(GST_BIN_CAST(self->m_bin.get()), "queue"));
+        auto sinkPad = adoptGRef(gst_element_get_static_pad(queue.get(), "sink"));
         gst_pad_link(pad, sinkPad.get());
-
-        gst_element_link(self->m_tee.get(), self->m_queue.get());
-        gst_element_sync_state_with_parent(self->m_tee.get());
-        gst_element_sync_state_with_parent(self->m_queue.get());
-        gst_element_sync_state_with_parent(self->m_fakeVideoSink.get());
         self->trackReady();
     }), this);
     return decodebin;
@@ -231,7 +237,6 @@ GRefPtr<GstElement> GStreamerIncomingTrackProcessor::createParser()
     GRefPtr<GstElement> parsebin = makeGStreamerElement("parsebin", nullptr);
     g_signal_connect(parsebin.get(), "element-added", G_CALLBACK(+[](GstBin*, GstElement* element, gpointer) {
         auto elementClass = makeString(gst_element_get_metadata(element, GST_ELEMENT_METADATA_KLASS));
-        GST_DEBUG("parsebin added element %s", GST_OBJECT_NAME(element));
         auto classifiers = elementClass.split('/');
         if (!classifiers.contains("Depayloader"_s))
             return;
@@ -240,29 +245,11 @@ GRefPtr<GstElement> GStreamerIncomingTrackProcessor::createParser()
     }), nullptr);
 
     g_signal_connect_swapped(parsebin.get(), "pad-added", G_CALLBACK(+[](GStreamerIncomingTrackProcessor* self, GstPad* pad) {
-        auto sinkPad = adoptGRef(gst_element_get_static_pad(self->m_tee.get(), "sink"));
+        auto queue = adoptGRef(gst_bin_get_by_name(GST_BIN_CAST(self->m_bin.get()), "queue"));
+        auto sinkPad = adoptGRef(gst_element_get_static_pad(queue.get(), "sink"));
         gst_pad_link(pad, sinkPad.get());
-        GST_DEBUG("parsebin added pad %s of element %s", GST_OBJECT_NAME(pad), GST_OBJECT_PARENT(pad) ? GST_OBJECT_NAME(GST_OBJECT_PARENT(pad)) : "null");
-        gst_element_sync_state_with_parent(self->m_tee.get());
         self->trackReady();
     }), this);
-
-    g_signal_connect(parsebin.get(), "autoplug-select", G_CALLBACK(+[](GstElement*, GstPad*, GstCaps*, GstElementFactory* factory, gpointer) {
-        GUniquePtr<char> factoryName(gst_object_get_name(GST_OBJECT(factory)));
-        // StringView factoryNameView = StringView::fromLatin1(factoryName.get());
-        // if (factoryNameView.startsWith("brcm"_s)) {
-        //     GST_DEBUG("parsebin skipping %s", factoryName.get());
-        //     return GST_AUTOPLUG_SELECT_SKIP;
-        // } else
-            GST_DEBUG("parsebin autoplug-select for %s", factoryName.get());
-        return GST_AUTOPLUG_SELECT_TRY;
-    }), nullptr);
-
-    g_signal_connect(parsebin.get(), "unknown-type", G_CALLBACK(+[](GstElement*, GstPad* pad, GstCaps* caps, gpointer) {
-        GST_WARNING("parsebin unknown-type for pad %s with caps %" GST_PTR_FORMAT, GST_OBJECT_NAME(pad), caps);
-    }), nullptr);
-
-    // g_object_set(parsebin.get(), "expose-all-streams", TRUE, nullptr);
     return parsebin;
 }
 

@@ -61,7 +61,6 @@ private:
     GStreamerMediaEndpoint* m_endPoint { nullptr };
     GRefPtr<GstPad> m_pad;
     GRefPtr<GstElement> m_bin;
-    GRefPtr<GstElement> m_tee;
     WebRTCTrackData m_data;
 
     std::pair<String, String> m_sdpMsIdAndTrackId;
