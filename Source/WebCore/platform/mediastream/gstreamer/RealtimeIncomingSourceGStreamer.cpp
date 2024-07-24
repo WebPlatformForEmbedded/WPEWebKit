@@ -77,9 +77,6 @@ bool RealtimeIncomingSourceGStreamer::setBin(const GRefPtr<GstElement>& bin)
         }
 
         auto query = GST_PAD_PROBE_INFO_QUERY(info);
-        if (self->isIncomingVideoSource() && self->m_isUpstreamDecoding && GST_QUERY_TYPE(query) == GST_QUERY_ALLOCATION)
-            gst_query_add_allocation_meta(query, GST_VIDEO_META_API_TYPE, NULL);
-
         self->forEachClient([&](auto* appsrc) {
             auto srcSrcPad = adoptGRef(gst_element_get_static_pad(appsrc, "src"));
             gst_pad_peer_query(srcSrcPad.get(), query);
@@ -176,7 +173,6 @@ void RealtimeIncomingSourceGStreamer::handleDownstreamEvent(GstElement* sink, GR
         gst_pad_push_event(pad.get(), eventCopy.leakRef());
     });
 }
-
 
 void RealtimeIncomingSourceGStreamer::tearDown()
 {

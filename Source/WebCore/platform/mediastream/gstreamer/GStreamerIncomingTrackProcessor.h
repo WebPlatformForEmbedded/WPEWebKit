@@ -68,8 +68,7 @@ private:
     bool m_isDecoding { false };
     FloatSize m_videoSize;
     uint64_t m_decodedVideoFrames { 0 };
-    GRefPtr<GstElement> m_queue;
-    GRefPtr<GstElement> m_fakeVideoSink;
+    GRefPtr<GstElement> m_sink;
     GUniquePtr<GstStructure> m_stats;
     bool m_isReady { false };
 };

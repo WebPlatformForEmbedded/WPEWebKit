@@ -41,8 +41,6 @@ public:
 
     void tearDown();
 
-    void setIsUpstreamDecoding(bool isUpstreamDecoding) { m_isUpstreamDecoding = isUpstreamDecoding; };
-
 protected:
     RealtimeIncomingSourceGStreamer(Type, AtomString&& name);
 
@@ -60,7 +58,6 @@ private:
     GRefPtr<GstElement> m_sink;
     Lock m_clientLock;
     HashMap<int, GRefPtr<GstElement>> m_clients WTF_GUARDED_BY_LOCK(m_clientLock);
-    bool m_isUpstreamDecoding { false };
 };
 
 } // namespace WebCore

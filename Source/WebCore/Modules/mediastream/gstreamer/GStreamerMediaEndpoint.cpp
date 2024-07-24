@@ -1153,12 +1153,10 @@ void GStreamerMediaEndpoint::connectIncomingTrack(WebRTCTrackData& data)
         auto& audioSource = static_cast<RealtimeIncomingAudioSourceGStreamer&>(source);
         if (!audioSource.setBin(mediaStreamBin))
             return;
-        audioSource.setIsUpstreamDecoding(data.isUpstreamDecoding);
     } else if (source.isIncomingVideoSource()) {
         auto& videoSource = static_cast<RealtimeIncomingVideoSourceGStreamer&>(source);
         if (!videoSource.setBin(mediaStreamBin))
             return;
-        videoSource.setIsUpstreamDecoding(data.isUpstreamDecoding);
     }
 
     m_pendingIncomingMediaStreamIDs.append(data.mediaStreamId);
