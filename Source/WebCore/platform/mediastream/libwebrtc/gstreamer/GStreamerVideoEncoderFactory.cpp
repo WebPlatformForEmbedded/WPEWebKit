@@ -407,6 +407,12 @@ struct NoopEncoder : public webrtc::VideoEncoder
                 { cricket::kH264FmtpPacketizationMode, "1" } });
         supportedFormats->push_back(h264Format);
     }
+
+    EncoderInfo GetEncoderInfo() const final {
+        EncoderInfo info;
+        info.is_hardware_accelerated = true;
+        return info;
+    }
 };
 
 static bool useNoopEncoder() {  return true; }
