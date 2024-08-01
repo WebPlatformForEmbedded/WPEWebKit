@@ -65,7 +65,13 @@ void RealtimeIncomingAudioSourceLibWebRTC::OnData(const void* audioData, int, in
     gst_audio_info_set_format(&info, format, sampleRate, numberOfChannels, NULL);
 
     auto bufferSize = GST_AUDIO_INFO_BPF(&info) * numberOfFrames;
-    auto buffer = adoptGRef(gst_buffer_new_memdup(const_cast<gpointer>(audioData), bufferSize));
+    void* dataCopy = g_malloc(bufferSize);
+    if (!dataCopy) {
+        WTFLogAlways("Failed to allocate memory for WebRTC audio buffer!");
+        return;
+    }
+    memcpy(dataCopy, audioData, bufferSize);
+    auto buffer = adoptGRef(gst_buffer_new_wrapped(static_cast<guint8*>(dataCopy), bufferSize));
     gst_buffer_add_audio_meta(buffer.get(), &info, numberOfFrames, nullptr);
     auto caps = adoptGRef(gst_audio_info_to_caps(&info));
     auto sample = adoptGRef(gst_sample_new(buffer.get(), caps.get(), nullptr, nullptr));
