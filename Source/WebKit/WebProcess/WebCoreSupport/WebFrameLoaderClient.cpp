@@ -1022,7 +1022,9 @@ void WebFrameLoaderClient::dispatchDecidePolicyForNavigationAction(const Navigat
         // the provisional load's DocumentLoader needs to receive navigation policy decisions. We need a better model for this state.
         documentLoader = static_cast<WebDocumentLoader*>(coreFrame->loader().provisionalDocumentLoader());
     }
-    if (!documentLoader)
+    // PolicyDecisionMode::Synchronous means that it is a FragmentNavigation and in that case we should use documentLoader,
+    // because there can be ongoing (in policy or provisional state) navigation.
+    if (!documentLoader || policyDecisionMode == PolicyDecisionMode::Synchronous)
         documentLoader = static_cast<WebDocumentLoader*>(coreFrame->loader().documentLoader());
 
     navigationActionData.clientRedirectSourceForHistory = documentLoader->clientRedirectSourceForHistory();
