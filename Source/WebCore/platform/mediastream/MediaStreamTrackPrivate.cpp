@@ -110,7 +110,7 @@ void MediaStreamTrackPrivate::setContentHint(HintValue hintValue)
 {
     m_contentHint = hintValue;
 }
-    
+
 bool MediaStreamTrackPrivate::muted() const
 {
     return m_source->muted();
@@ -119,6 +119,13 @@ bool MediaStreamTrackPrivate::muted() const
 bool MediaStreamTrackPrivate::isCaptureTrack() const
 {
     return m_source->isCaptureSource();
+}
+
+void MediaStreamTrackPrivate::dataFlowStarted()
+{
+    forEachObserver([this](auto& observer) {
+        observer.dataFlowStarted(*this);
+    });
 }
 
 void MediaStreamTrackPrivate::setEnabled(bool enabled)
