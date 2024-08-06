@@ -162,6 +162,8 @@ private:
 
     std::optional<bool> isIceGatheringComplete(const String& currentLocalDescription);
 
+    void setTransceiverCodecPreferences(const GstSDPMedia&, guint transceiverIdx);
+
 #if !RELEASE_LOG_DISABLED
     void gatherStatsForLogging();
     void startLoggingStats();
@@ -206,6 +208,7 @@ private:
     HashMap<GRefPtr<GstWebRTCRTPTransceiver>, RefPtr<GStreamerIncomingTrackProcessor>> m_trackProcessors;
 
     bool m_shouldIgnoreNegotiationNeededSignal { false };
+    Vector<String> m_pendingIncomingMediaStreamIDs;
 };
 
 } // namespace WebCore

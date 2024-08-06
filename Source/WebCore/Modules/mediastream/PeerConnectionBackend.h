@@ -229,16 +229,6 @@ protected:
 
     void validateSDP(const String&) const;
 
-    struct PendingTrackEvent {
-        Ref<RTCRtpReceiver> receiver;
-        Ref<MediaStreamTrack> track;
-        Vector<RefPtr<MediaStream>> streams;
-        RefPtr<RTCRtpTransceiver> transceiver;
-    };
-    void addPendingTrackEvent(PendingTrackEvent&&);
-
-    void dispatchTrackEvent(PendingTrackEvent&);
-
 private:
     virtual void doCreateOffer(RTCOfferOptions&&) = 0;
     virtual void doCreateAnswer(RTCAnswerOptions&&) = 0;
@@ -255,8 +245,6 @@ private:
     Function<void(ExceptionOr<void>&&)> m_setDescriptionCallback;
 
     bool m_shouldFilterICECandidates { true };
-
-    Vector<PendingTrackEvent> m_pendingTrackEvents;
 
 #if !RELEASE_LOG_DISABLED
     Ref<const Logger> m_logger;
