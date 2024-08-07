@@ -54,6 +54,11 @@ inline bool operator==(const RTCSctpTransportBackend& a, const RTCSctpTransportB
     return a.backend() == b.backend();
 }
 
+inline bool operator!=(const RTCSctpTransportBackend& a, const RTCSctpTransportBackend& b)
+{
+    return !(a == b);
+}
+
 } // namespace WebCore
 
 #endif // ENABLE(WEB_RTC)
