@@ -35,7 +35,7 @@ namespace test {
 
 // The RtpReplayer is a utility for fuzzing the RTP/RTCP receiver stack in
 // WebRTC. It achieves this by accepting a set of Receiver configurations and
-// an RtpDump (consisting of both RTP and RTCP packets). The |rtp_dump| is
+// an RtpDump (consisting of both RTP and RTCP packets). The `rtp_dump` is
 // passed in as a buffer to allow simple mutation fuzzing directly on the dump.
 class RtpReplayer final {
  public:
@@ -44,7 +44,7 @@ class RtpReplayer final {
   struct StreamState {
     test::NullTransport transport;
     std::vector<std::unique_ptr<rtc::VideoSinkInterface<VideoFrame>>> sinks;
-    std::vector<VideoReceiveStream*> receive_streams;
+    std::vector<VideoReceiveStreamInterface*> receive_streams;
     std::unique_ptr<VideoDecoderFactory> decoder_factory;
   };
 
@@ -53,23 +53,24 @@ class RtpReplayer final {
                      const uint8_t* rtp_dump_data,
                      size_t rtp_dump_size);
 
-  // Construct an RtpReplayer from  a set of VideoReceiveStream::Configs. Note
-  // the stream_state.transport must be set for each receiver stream.
+  // Construct an RtpReplayer from  a set of
+  // VideoReceiveStreamInterface::Configs. Note the stream_state.transport must
+  // be set for each receiver stream.
   static void Replay(
       std::unique_ptr<StreamState> stream_state,
-      std::vector<VideoReceiveStream::Config> receive_stream_config,
+      std::vector<VideoReceiveStreamInterface::Config> receive_stream_config,
       const uint8_t* rtp_dump_data,
       size_t rtp_dump_size);
 
  private:
   // Reads the replay configuration from Json.
-  static std::vector<VideoReceiveStream::Config> ReadConfigFromFile(
+  static std::vector<VideoReceiveStreamInterface::Config> ReadConfigFromFile(
       const std::string& replay_config,
       Transport* transport);
 
   // Configures the stream state based on the receiver configurations.
   static void SetupVideoStreams(
-      std::vector<VideoReceiveStream::Config>* receive_stream_configs,
+      std::vector<VideoReceiveStreamInterface::Config>* receive_stream_configs,
       StreamState* stream_state,
       Call* call);
 
@@ -81,7 +82,8 @@ class RtpReplayer final {
   // Replays each packet to from the RtpDump.
   static void ReplayPackets(rtc::FakeClock* clock,
                             Call* call,
-                            test::RtpFileReader* rtp_reader);
+                            test::RtpFileReader* rtp_reader,
+                            const RtpHeaderExtensionMap& extensions);
 };  // class RtpReplayer
 
 }  // namespace test

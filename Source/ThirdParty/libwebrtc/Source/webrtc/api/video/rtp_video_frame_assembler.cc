@@ -19,6 +19,7 @@
 
 #include "absl/container/inlined_vector.h"
 #include "absl/types/optional.h"
+#include "modules/rtp_rtcp/source/frame_object.h"
 #include "modules/rtp_rtcp/source/rtp_dependency_descriptor_extension.h"
 #include "modules/rtp_rtcp/source/rtp_generic_frame_descriptor_extension.h"
 #include "modules/rtp_rtcp/source/rtp_packet_received.h"
@@ -28,10 +29,10 @@
 #include "modules/rtp_rtcp/source/video_rtp_depacketizer_raw.h"
 #include "modules/rtp_rtcp/source/video_rtp_depacketizer_vp8.h"
 #include "modules/rtp_rtcp/source/video_rtp_depacketizer_vp9.h"
-#include "modules/video_coding/frame_object.h"
 #include "modules/video_coding/packet_buffer.h"
 #include "modules/video_coding/rtp_frame_reference_finder.h"
 #include "rtc_base/logging.h"
+#include "rtc_base/numerics/sequence_number_unwrapper.h"
 
 namespace webrtc {
 namespace {
@@ -50,8 +51,12 @@ std::unique_ptr<VideoRtpDepacketizer> CreateDepacketizer(
       return std::make_unique<VideoRtpDepacketizerAv1>();
     case RtpVideoFrameAssembler::kGeneric:
       return std::make_unique<VideoRtpDepacketizerGeneric>();
+    case RtpVideoFrameAssembler::kH265:
+      // TODO(bugs.webrtc.org/13485): Implement VideoRtpDepacketizerH265
+      RTC_DCHECK_NOTREACHED();
+      return nullptr;
   }
-  RTC_NOTREACHED();
+  RTC_DCHECK_NOTREACHED();
   return nullptr;
 }
 }  // namespace
@@ -92,16 +97,16 @@ RtpVideoFrameAssembler::Impl::Impl(
 
 RtpVideoFrameAssembler::FrameVector RtpVideoFrameAssembler::Impl::InsertPacket(
     const RtpPacketReceived& rtp_packet) {
+  if (rtp_packet.payload_size() == 0) {
+    ClearOldData(rtp_packet.SequenceNumber());
+    return UpdateWithPadding(rtp_packet.SequenceNumber());
+  }
+
   absl::optional<VideoRtpDepacketizer::ParsedRtpPayload> parsed_payload =
       depacketizer_->Parse(rtp_packet.PayloadBuffer());
 
   if (parsed_payload == absl::nullopt) {
     return {};
-  }
-
-  if (parsed_payload->video_payload.size() == 0) {
-    ClearOldData(rtp_packet.SequenceNumber());
-    return UpdateWithPadding(rtp_packet.SequenceNumber());
   }
 
   if (rtp_packet.HasExtension<RtpDependencyDescriptorExtension>()) {
@@ -187,7 +192,10 @@ RtpVideoFrameAssembler::Impl::FindReferences(RtpFrameVector frames) {
   for (auto& frame : frames) {
     auto complete_frames = reference_finder_.ManageFrame(std::move(frame));
     for (std::unique_ptr<RtpFrameObject>& complete_frame : complete_frames) {
-      res.push_back(std::move(complete_frame));
+      uint16_t rtp_seq_num_start = complete_frame->first_seq_num();
+      uint16_t rtp_seq_num_end = complete_frame->last_seq_num();
+      res.emplace_back(rtp_seq_num_start, rtp_seq_num_end,
+                       std::move(complete_frame));
     }
   }
   return res;
@@ -199,8 +207,12 @@ RtpVideoFrameAssembler::Impl::UpdateWithPadding(uint16_t seq_num) {
       FindReferences(AssembleFrames(packet_buffer_.InsertPadding(seq_num)));
   auto ref_finder_update = reference_finder_.PaddingReceived(seq_num);
 
-  res.insert(res.end(), std::make_move_iterator(ref_finder_update.begin()),
-             std::make_move_iterator(ref_finder_update.end()));
+  for (std::unique_ptr<RtpFrameObject>& complete_frame : ref_finder_update) {
+    uint16_t rtp_seq_num_start = complete_frame->first_seq_num();
+    uint16_t rtp_seq_num_end = complete_frame->last_seq_num();
+    res.emplace_back(rtp_seq_num_start, rtp_seq_num_end,
+                     std::move(complete_frame));
+  }
 
   return res;
 }

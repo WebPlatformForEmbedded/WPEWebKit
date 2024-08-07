@@ -15,11 +15,14 @@
 #include <map>
 #include <vector>
 
+#include "absl/types/optional.h"
+#include "api/make_ref_counted.h"
+#include "api/ref_counted_base.h"
+#include "api/scoped_refptr.h"
+#include "api/task_queue/task_queue_base.h"
 #include "rtc_base/checks.h"
-#include "rtc_base/constructor_magic.h"
 #include "rtc_base/event.h"
 #include "rtc_base/fake_clock.h"
-#include "rtc_base/message_handler.h"
 #include "rtc_base/socket_server.h"
 #include "rtc_base/synchronization/mutex.h"
 
@@ -29,11 +32,9 @@ class Packet;
 class VirtualSocketServer;
 class SocketAddressPair;
 
-// Implements the socket interface using the virtual network.  Packets are
-// passed as messages using the message queue of the socket server.
-class VirtualSocket : public Socket,
-                      public MessageHandler,
-                      public sigslot::has_slots<> {
+// Implements the socket interface using the virtual network. Packets are
+// passed in tasks using the thread of the socket server.
+class VirtualSocket : public Socket, public sigslot::has_slots<> {
  public:
   VirtualSocket(VirtualSocketServer* server, int family, int type);
   ~VirtualSocket() override;
@@ -59,7 +60,6 @@ class VirtualSocket : public Socket,
   ConnState GetState() const override;
   int GetOption(Option opt, int* value) override;
   int SetOption(Option opt, int value) override;
-  void OnMessage(Message* pmsg) override;
 
   size_t recv_buffer_size() const { return recv_buffer_size_; }
   size_t send_buffer_size() const { return send_buffer_.size(); }
@@ -86,16 +86,82 @@ class VirtualSocket : public Socket,
   // Removes stale packets from the network. Returns current size.
   size_t PurgeNetworkPackets(int64_t cur_time);
 
+  void PostPacket(webrtc::TimeDelta delay, std::unique_ptr<Packet> packet);
+  void PostConnect(webrtc::TimeDelta delay, const SocketAddress& remote_addr);
+  void PostDisconnect(webrtc::TimeDelta delay);
+
  private:
+  // Struct shared with pending tasks that may outlive VirtualSocket.
+  class SafetyBlock : public RefCountedNonVirtual<SafetyBlock> {
+   public:
+    explicit SafetyBlock(VirtualSocket* socket);
+    SafetyBlock(const SafetyBlock&) = delete;
+    SafetyBlock& operator=(const SafetyBlock&) = delete;
+    ~SafetyBlock();
+
+    // Prohibits posted delayed task to access owning VirtualSocket and
+    // cleanups members protected by the `mutex`.
+    void SetNotAlive();
+    bool IsAlive();
+
+    // Copies up to `size` bytes into buffer from the next received packet
+    // and fills `addr` with remote address of that received packet.
+    // Returns number of bytes copied or negative value on failure.
+    int RecvFrom(void* buffer, size_t size, SocketAddress& addr);
+
+    void Listen();
+
+    struct AcceptResult {
+      int error = 0;
+      std::unique_ptr<VirtualSocket> socket;
+      SocketAddress remote_addr;
+    };
+    AcceptResult Accept();
+
+    bool AddPacket(std::unique_ptr<Packet> packet);
+    void PostConnect(webrtc::TimeDelta delay, const SocketAddress& remote_addr);
+
+   private:
+    enum class Signal { kNone, kReadEvent, kConnectEvent };
+    // `PostConnect` rely on the fact that std::list iterators are not
+    // invalidated on any changes to other elements in the container.
+    using PostedConnects = std::list<SocketAddress>;
+
+    void PostSignalReadEvent() RTC_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+    void MaybeSignalReadEvent();
+    Signal Connect(PostedConnects::iterator remote_addr_it);
+
+    webrtc::Mutex mutex_;
+    VirtualSocket& socket_;
+    bool alive_ RTC_GUARDED_BY(mutex_) = true;
+    // Flag indicating if async Task to signal SignalReadEvent is posted.
+    // To avoid posting multiple such tasks.
+    bool pending_read_signal_event_ RTC_GUARDED_BY(mutex_) = false;
+
+    // Members below do not need to outlive VirtualSocket, but are used by the
+    // posted tasks. Keeping them in the VirtualSocket confuses thread
+    // annotations because they can't detect that locked mutex is the same mutex
+    // this members are guarded by.
+
+    // Addresses of the sockets for potential connect. For each address there
+    // is a posted task that should finilze the connect.
+    PostedConnects posted_connects_ RTC_GUARDED_BY(mutex_);
+
+    // Data which has been received from the network
+    std::list<std::unique_ptr<Packet>> recv_buffer_ RTC_GUARDED_BY(mutex_);
+
+    // Pending sockets which can be Accepted
+    absl::optional<std::deque<SocketAddress>> listen_queue_
+        RTC_GUARDED_BY(mutex_);
+  };
+
   struct NetworkEntry {
     size_t size;
     int64_t done_time;
   };
 
-  typedef std::deque<SocketAddress> ListenQueue;
   typedef std::deque<NetworkEntry> NetworkQueue;
   typedef std::vector<char> SendBuffer;
-  typedef std::list<Packet*> RecvBuffer;
   typedef std::map<Option, int> OptionsMap;
 
   int InitiateConnect(const SocketAddress& addr, bool use_delay);
@@ -112,18 +178,14 @@ class VirtualSocket : public Socket,
   SocketAddress local_addr_;
   SocketAddress remote_addr_;
 
-  // Pending sockets which can be Accepted
-  std::unique_ptr<ListenQueue> listen_queue_ RTC_GUARDED_BY(mutex_)
-      RTC_PT_GUARDED_BY(mutex_);
+  const scoped_refptr<SafetyBlock> safety_ =
+      make_ref_counted<SafetyBlock>(this);
 
   // Data which tcp has buffered for sending
   SendBuffer send_buffer_;
   // Set to false if the last attempt to send resulted in EWOULDBLOCK.
   // Set back to true when the socket can send again.
   bool ready_to_send_ = true;
-
-  // Mutex to protect the recv_buffer and listen_queue_
-  webrtc::Mutex mutex_;
 
   // Network model that enforces bandwidth and capacity constraints
   NetworkQueue network_;
@@ -132,8 +194,6 @@ class VirtualSocket : public Socket,
   // It is used to ensure ordered delivery of packets sent on this socket.
   int64_t last_delivery_time_ = 0;
 
-  // Data which has been received from the network
-  RecvBuffer recv_buffer_ RTC_GUARDED_BY(mutex_);
   // The amount of data which is in flight or in recv_buffer_
   size_t recv_buffer_size_;
 
@@ -163,6 +223,9 @@ class VirtualSocketServer : public SocketServer {
   explicit VirtualSocketServer(ThreadProcessingFakeClock* fake_clock);
   ~VirtualSocketServer() override;
 
+  VirtualSocketServer(const VirtualSocketServer&) = delete;
+  VirtualSocketServer& operator=(const VirtualSocketServer&) = delete;
+
   // The default source address specifies which local address to use when a
   // socket is bound to the 'any' address, e.g. 0.0.0.0. (If not set, the 'any'
   // address is used as the source address on outgoing virtual packets, exposed
@@ -172,60 +235,39 @@ class VirtualSocketServer : public SocketServer {
 
   // Limits the network bandwidth (maximum bytes per second).  Zero means that
   // all sends occur instantly.  Defaults to 0.
-  uint32_t bandwidth() const { return bandwidth_; }
-  void set_bandwidth(uint32_t bandwidth) { bandwidth_ = bandwidth; }
+  void set_bandwidth(uint32_t bandwidth) RTC_LOCKS_EXCLUDED(mutex_);
 
   // Limits the amount of data which can be in flight on the network without
   // packet loss (on a per sender basis).  Defaults to 64 KB.
-  uint32_t network_capacity() const { return network_capacity_; }
-  void set_network_capacity(uint32_t capacity) { network_capacity_ = capacity; }
+  void set_network_capacity(uint32_t capacity) RTC_LOCKS_EXCLUDED(mutex_);
 
   // The amount of data which can be buffered by tcp on the sender's side
-  uint32_t send_buffer_capacity() const { return send_buffer_capacity_; }
-  void set_send_buffer_capacity(uint32_t capacity) {
-    send_buffer_capacity_ = capacity;
-  }
+  uint32_t send_buffer_capacity() const RTC_LOCKS_EXCLUDED(mutex_);
+  void set_send_buffer_capacity(uint32_t capacity) RTC_LOCKS_EXCLUDED(mutex_);
 
   // The amount of data which can be buffered by tcp on the receiver's side
-  uint32_t recv_buffer_capacity() const { return recv_buffer_capacity_; }
-  void set_recv_buffer_capacity(uint32_t capacity) {
-    recv_buffer_capacity_ = capacity;
-  }
+  uint32_t recv_buffer_capacity() const RTC_LOCKS_EXCLUDED(mutex_);
+  void set_recv_buffer_capacity(uint32_t capacity) RTC_LOCKS_EXCLUDED(mutex_);
 
   // Controls the (transit) delay for packets sent in the network.  This does
   // not inclue the time required to sit in the send queue.  Both of these
   // values are measured in milliseconds.  Defaults to no delay.
-  uint32_t delay_mean() const { return delay_mean_; }
-  uint32_t delay_stddev() const { return delay_stddev_; }
-  uint32_t delay_samples() const { return delay_samples_; }
-  void set_delay_mean(uint32_t delay_mean) { delay_mean_ = delay_mean; }
-  void set_delay_stddev(uint32_t delay_stddev) { delay_stddev_ = delay_stddev; }
-  void set_delay_samples(uint32_t delay_samples) {
-    delay_samples_ = delay_samples;
-  }
+  void set_delay_mean(uint32_t delay_mean) RTC_LOCKS_EXCLUDED(mutex_);
+  void set_delay_stddev(uint32_t delay_stddev) RTC_LOCKS_EXCLUDED(mutex_);
+  void set_delay_samples(uint32_t delay_samples) RTC_LOCKS_EXCLUDED(mutex_);
 
   // If the (transit) delay parameters are modified, this method should be
   // called to recompute the new distribution.
-  void UpdateDelayDistribution();
+  void UpdateDelayDistribution() RTC_LOCKS_EXCLUDED(mutex_);
 
   // Controls the (uniform) probability that any sent packet is dropped.  This
   // is separate from calculations to drop based on queue size.
-  double drop_probability() { return drop_prob_; }
-  void set_drop_probability(double drop_prob) {
-    RTC_DCHECK_GE(drop_prob, 0.0);
-    RTC_DCHECK_LE(drop_prob, 1.0);
-    drop_prob_ = drop_prob;
-  }
+  void set_drop_probability(double drop_prob) RTC_LOCKS_EXCLUDED(mutex_);
 
   // Controls the maximum UDP payload for the networks simulated
   // by this server. Any UDP payload sent that is larger than this will
   // be dropped.
-  size_t max_udp_payload() { return max_udp_payload_; }
-  void set_max_udp_payload(size_t payload_size) {
-    max_udp_payload_ = payload_size;
-  }
-
-  size_t largest_seen_udp_payload() { return largest_seen_udp_payload_; }
+  void set_max_udp_payload(size_t payload_size) RTC_LOCKS_EXCLUDED(mutex_);
 
   // If `blocked` is true, subsequent attempts to send will result in -1 being
   // returned, with the socket error set to EWOULDBLOCK.
@@ -235,14 +277,14 @@ class VirtualSocketServer : public SocketServer {
   //
   // This can be used to simulate the send buffer on a network interface being
   // full, and test functionality related to EWOULDBLOCK/SignalWriteEvent.
-  void SetSendingBlocked(bool blocked);
+  void SetSendingBlocked(bool blocked) RTC_LOCKS_EXCLUDED(mutex_);
 
   // SocketFactory:
   VirtualSocket* CreateSocket(int family, int type) override;
 
   // SocketServer:
   void SetMessageQueue(Thread* queue) override;
-  bool Wait(int cms, bool process_io) override;
+  bool Wait(webrtc::TimeDelta max_wait_duration, bool process_io) override;
   void WakeUp() override;
 
   void SetDelayOnAddress(const rtc::SocketAddress& address, int delay_ms) {
@@ -281,7 +323,7 @@ class VirtualSocketServer : public SocketServer {
 
   // Number of packets that clients have attempted to send through this virtual
   // socket server. Intended to be used for test assertions.
-  uint32_t sent_packets() const { return sent_packets_; }
+  uint32_t sent_packets() const RTC_LOCKS_EXCLUDED(mutex_);
 
   // Assign IP and Port if application's address is unspecified. Also apply
   // `alternative_address_mapping_`.
@@ -319,21 +361,13 @@ class VirtualSocketServer : public SocketServer {
               const SocketAddress& remote_addr);
 
   // Moves as much data as possible from the sender's buffer to the network
-  void SendTcp(VirtualSocket* socket);
+  void SendTcp(VirtualSocket* socket) RTC_LOCKS_EXCLUDED(mutex_);
 
   // Like above, but lookup sender by address.
-  void SendTcp(const SocketAddress& addr);
+  void SendTcp(const SocketAddress& addr) RTC_LOCKS_EXCLUDED(mutex_);
 
   // Computes the number of milliseconds required to send a packet of this size.
-  uint32_t SendDelay(uint32_t size);
-
-  // Cancel attempts to connect to a socket that is being closed.
-  void CancelConnects(VirtualSocket* socket);
-
-  // Clear incoming messages for a socket that is being closed.
-  void Clear(VirtualSocket* socket);
-
-  void PostSignalReadEvent(VirtualSocket* socket);
+  uint32_t SendDelay(uint32_t size) RTC_LOCKS_EXCLUDED(mutex_);
 
   // Sending was previously blocked, but now isn't.
   sigslot::signal0<> SignalReadyToSend;
@@ -346,6 +380,7 @@ class VirtualSocketServer : public SocketServer {
   VirtualSocket* LookupBinding(const SocketAddress& addr);
 
  private:
+  friend VirtualSocket;
   uint16_t GetNextPort();
 
   // Find the socket pair corresponding to this server address.
@@ -416,31 +451,30 @@ class VirtualSocketServer : public SocketServer {
   IPAddress default_source_address_v4_;
   IPAddress default_source_address_v6_;
 
-  uint32_t bandwidth_;
-  uint32_t network_capacity_;
-  uint32_t send_buffer_capacity_;
-  uint32_t recv_buffer_capacity_;
-  uint32_t delay_mean_;
-  uint32_t delay_stddev_;
-  uint32_t delay_samples_;
+  mutable webrtc::Mutex mutex_;
+
+  uint32_t bandwidth_ RTC_GUARDED_BY(mutex_);
+  uint32_t network_capacity_ RTC_GUARDED_BY(mutex_);
+  uint32_t send_buffer_capacity_ RTC_GUARDED_BY(mutex_);
+  uint32_t recv_buffer_capacity_ RTC_GUARDED_BY(mutex_);
+  uint32_t delay_mean_ RTC_GUARDED_BY(mutex_);
+  uint32_t delay_stddev_ RTC_GUARDED_BY(mutex_);
+  uint32_t delay_samples_ RTC_GUARDED_BY(mutex_);
 
   // Used for testing.
-  uint32_t sent_packets_ = 0;
+  uint32_t sent_packets_ RTC_GUARDED_BY(mutex_) = 0;
 
   std::map<rtc::IPAddress, int> delay_by_ip_;
   std::map<rtc::IPAddress, rtc::IPAddress> alternative_address_mapping_;
   std::unique_ptr<Function> delay_dist_;
 
-  double drop_prob_;
+  double drop_prob_ RTC_GUARDED_BY(mutex_);
   // The largest UDP payload permitted on this virtual socket server.
   // The default is the max size of IPv4 fragmented UDP packet payload:
   // 65535 bytes - 8 bytes UDP header - 20 bytes IP header.
-  size_t max_udp_payload_ = 65507;
-  // The largest UDP payload seen so far.
-  size_t largest_seen_udp_payload_ = 0;
+  size_t max_udp_payload_ RTC_GUARDED_BY(mutex_) = 65507;
 
-  bool sending_blocked_ = false;
-  RTC_DISALLOW_COPY_AND_ASSIGN(VirtualSocketServer);
+  bool sending_blocked_ RTC_GUARDED_BY(mutex_) = false;
 };
 
 }  // namespace rtc

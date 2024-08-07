@@ -14,72 +14,78 @@
 
 #include "api/scoped_refptr.h"
 #include "api/video/i420_buffer.h"
+#include "common_video/libyuv/include/webrtc_libyuv.h"
+#include "rtc_base/logging.h"
+#include "rtc_base/strings/string_builder.h"
 #include "test/testsupport/file_utils.h"
 #include "test/testsupport/frame_reader.h"
 
 namespace webrtc {
 namespace test {
 namespace {
-
-// Size of header: "YUV4MPEG2 W50 H20 F30:1 C420\n"
-const size_t kFileHeaderSize = 29;
-// Size of header: "FRAME\n"
-const size_t kFrameHeaderSize = 6;
-
+constexpr int kFrameHeaderSize = 6;  // "FRAME\n"
 }  // namespace
 
-Y4mFrameReaderImpl::Y4mFrameReaderImpl(std::string input_filename,
-                                       int width,
-                                       int height)
-    : YuvFrameReaderImpl(input_filename, width, height) {
-  frame_length_in_bytes_ += kFrameHeaderSize;
-  buffer_ = new uint8_t[kFileHeaderSize];
-}
-Y4mFrameReaderImpl::~Y4mFrameReaderImpl() {
-  delete[] buffer_;
+void ParseY4mHeader(std::string filepath,
+                    Resolution* resolution,
+                    int* header_size) {
+  FILE* file = fopen(filepath.c_str(), "r");
+  RTC_CHECK(file != NULL) << "Cannot open " << filepath;
+
+  // Length of Y4M header is technically unlimited due to the comment tag 'X'.
+  char h[1024];
+  RTC_CHECK(fgets(h, sizeof(h), file) != NULL)
+      << "File " << filepath << " is too small";
+  fclose(file);
+
+  RTC_CHECK(sscanf(h, "YUV4MPEG2 W%d H%d", &resolution->width,
+                   &resolution->height) == 2)
+      << filepath << " is not a valid Y4M file";
+
+  RTC_CHECK_GT(resolution->width, 0) << "Width must be positive";
+  RTC_CHECK_GT(resolution->height, 0) << "Height must be positive";
+
+  *header_size = strcspn(h, "\n") + 1;
+  RTC_CHECK(static_cast<unsigned>(*header_size) < sizeof(h))
+      << filepath << " has unexpectedly large header";
 }
 
-bool Y4mFrameReaderImpl::Init() {
-  if (input_width_ <= 0 || input_height_ <= 0) {
-    fprintf(stderr, "Frame width and height must be >0, was %d x %d\n",
-            input_width_, input_height_);
-    return false;
-  }
-  input_file_ = fopen(input_filename_.c_str(), "rb");
-  if (input_file_ == nullptr) {
-    fprintf(stderr, "Couldn't open input file for reading: %s\n",
-            input_filename_.c_str());
-    return false;
-  }
-  size_t source_file_size = GetFileSize(input_filename_);
-  if (source_file_size <= 0u) {
-    fprintf(stderr, "Found empty file: %s\n", input_filename_.c_str());
-    return false;
-  }
-  if (fread(buffer_, 1, kFileHeaderSize, input_file_) < kFileHeaderSize) {
-    fprintf(stderr, "Failed to read file header from input file: %s\n",
-            input_filename_.c_str());
-    return false;
-  }
-  // Calculate total number of frames.
-  number_of_frames_ = static_cast<int>((source_file_size - kFileHeaderSize) /
-                                       frame_length_in_bytes_);
-  return true;
+Y4mFrameReaderImpl::Y4mFrameReaderImpl(std::string filepath,
+                                       RepeatMode repeat_mode)
+    : YuvFrameReaderImpl(filepath, Resolution(), repeat_mode) {}
+
+void Y4mFrameReaderImpl::Init() {
+  file_ = fopen(filepath_.c_str(), "rb");
+  RTC_CHECK(file_ != nullptr) << "Cannot open " << filepath_;
+
+  ParseY4mHeader(filepath_, &resolution_, &header_size_bytes_);
+  frame_size_bytes_ =
+      CalcBufferSize(VideoType::kI420, resolution_.width, resolution_.height);
+  frame_size_bytes_ += kFrameHeaderSize;
+
+  size_t file_size_bytes = GetFileSize(filepath_);
+  RTC_CHECK_GT(file_size_bytes, 0u) << "File " << filepath_ << " is empty";
+  RTC_CHECK_GT(file_size_bytes, header_size_bytes_)
+      << "File " << filepath_ << " is too small";
+
+  num_frames_ = static_cast<int>((file_size_bytes - header_size_bytes_) /
+                                 frame_size_bytes_);
+  RTC_CHECK_GT(num_frames_, 0u) << "File " << filepath_ << " is too small";
+  header_size_bytes_ += kFrameHeaderSize;
 }
 
-rtc::scoped_refptr<I420Buffer> Y4mFrameReaderImpl::ReadFrame() {
-  if (input_file_ == nullptr) {
-    fprintf(stderr,
-            "Y4mFrameReaderImpl is not initialized (input file is NULL)\n");
-    return nullptr;
-  }
-  if (fread(buffer_, 1, kFrameHeaderSize, input_file_) < kFrameHeaderSize &&
-      ferror(input_file_)) {
-    fprintf(stderr, "Failed to read frame header from input file: %s\n",
-            input_filename_.c_str());
-    return nullptr;
-  }
-  return YuvFrameReaderImpl::ReadFrame();
+std::unique_ptr<FrameReader> CreateY4mFrameReader(std::string filepath) {
+  return CreateY4mFrameReader(filepath,
+                              YuvFrameReaderImpl::RepeatMode::kSingle);
+}
+
+std::unique_ptr<FrameReader> CreateY4mFrameReader(
+    std::string filepath,
+    YuvFrameReaderImpl::RepeatMode repeat_mode) {
+  Y4mFrameReaderImpl* frame_reader =
+      new Y4mFrameReaderImpl(filepath, repeat_mode);
+  frame_reader->Init();
+  return std::unique_ptr<FrameReader>(frame_reader);
 }
 
 }  // namespace test

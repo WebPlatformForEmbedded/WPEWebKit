@@ -18,7 +18,7 @@
 
 #include "api/audio_codecs/audio_decoder_factory.h"
 #include "api/scoped_refptr.h"
-#include "rtc_base/constructor_magic.h"
+#include "modules/audio_coding/acm2/acm_receiver.h"
 #include "system_wrappers/include/clock.h"
 
 namespace webrtc {
@@ -45,6 +45,9 @@ class AcmReceiveTestOldApi {
                        rtc::scoped_refptr<AudioDecoderFactory> decoder_factory);
   virtual ~AcmReceiveTestOldApi();
 
+  AcmReceiveTestOldApi(const AcmReceiveTestOldApi&) = delete;
+  AcmReceiveTestOldApi& operator=(const AcmReceiveTestOldApi&) = delete;
+
   // Registers the codecs with default parameters from ACM.
   void RegisterDefaultCodecs();
 
@@ -55,20 +58,16 @@ class AcmReceiveTestOldApi {
   // Runs the test and returns true if successful.
   void Run();
 
-  AudioCodingModule* get_acm() { return acm_.get(); }
-
  protected:
   // Method is called after each block of output audio is received from ACM.
   virtual void AfterGetAudio() {}
 
   SimulatedClock clock_;
-  std::unique_ptr<AudioCodingModule> acm_;
+  std::unique_ptr<acm2::AcmReceiver> acm_receiver_;
   PacketSource* packet_source_;
   AudioSink* audio_sink_;
   int output_freq_hz_;
   NumOutputChannels exptected_output_channels_;
-
-  RTC_DISALLOW_COPY_AND_ASSIGN(AcmReceiveTestOldApi);
 };
 
 // This test toggles the output frequency every `toggle_period_ms`. The test

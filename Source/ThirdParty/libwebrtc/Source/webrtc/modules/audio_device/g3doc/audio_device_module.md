@@ -1,12 +1,12 @@
-# Audio Device Module (ADM)
+<!-- go/cmark -->
+<!--* freshness: {owner: 'henrika' reviewed: '2021-04-12'} *-->
 
-<?% config.freshness.owner = 'henrika' %?>
-<?% config.freshness.reviewed = '2021-04-12' %?>
+# Audio Device Module (ADM)
 
 ## Overview
 
-The ADM is responsible for driving input (microphone) and output (speaker) audio
-in WebRTC and the API is defined in [audio_device.h][19].
+The ADM(AudioDeviceModule) is responsible for driving input (microphone) and
+output (speaker) audio in WebRTC and the API is defined in [audio_device.h][19].
 
 Main functions of the ADM are:
 

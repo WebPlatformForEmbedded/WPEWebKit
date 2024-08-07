@@ -117,7 +117,7 @@ absl::optional<SpsParser::SpsState> SpsParser::ParseSpsUpToVui(
   // BitstreamReader::ReadBits, which can read at most 64 bits at a time. We
   // also have to avoid overflow when adding 4 to the on-wire golomb value,
   // e.g., for evil input data, ReadExponentialGolomb might return 0xfffc.
-  const uint32_t kMaxLog2Minus4 = 32 - 4;
+  const uint32_t kMaxLog2Minus4 = 12;
 
   // log2_max_frame_num_minus4: ue(v)
   uint32_t log2_max_frame_num_minus4 = reader.ReadExponentialGolomb();
@@ -164,9 +164,17 @@ absl::optional<SpsParser::SpsState> SpsParser::ParseSpsUpToVui(
   // to signify resolutions that aren't multiples of 16.
   //
   // pic_width_in_mbs_minus1: ue(v)
+#if WEBRTC_WEBKIT_BUILD
+  sps.pic_width_in_mbs_minus1 = reader.ReadExponentialGolomb();
+  sps.width = 16 * (sps.pic_width_in_mbs_minus1 + 1);
+#else
   sps.width = 16 * (reader.ReadExponentialGolomb() + 1);
+#endif
   // pic_height_in_map_units_minus1: ue(v)
   uint32_t pic_height_in_map_units_minus1 = reader.ReadExponentialGolomb();
+#if WEBRTC_WEBKIT_BUILD
+  sps.pic_height_in_map_units_minus1 = pic_height_in_map_units_minus1;
+#endif
   // frame_mbs_only_flag: u(1)
   sps.frame_mbs_only_flag = reader.ReadBit();
   if (!sps.frame_mbs_only_flag) {

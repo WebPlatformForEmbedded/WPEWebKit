@@ -17,9 +17,11 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
+#include "absl/functional/any_invocable.h"
 #include "absl/types/optional.h"
 #include "api/async_dns_resolver.h"
 #include "api/candidate.h"
@@ -45,7 +47,6 @@
 #include "p2p/base/port_allocator.h"
 #include "p2p/base/transport_description.h"
 #include "p2p/base/transport_info.h"
-#include "pc/channel.h"
 #include "pc/dtls_srtp_transport.h"
 #include "pc/dtls_transport.h"
 #include "pc/jsep_transport.h"
@@ -58,10 +59,8 @@
 #include "pc/transport_stats.h"
 #include "rtc_base/callback_list.h"
 #include "rtc_base/checks.h"
-#include "rtc_base/constructor_magic.h"
 #include "rtc_base/copy_on_write_buffer.h"
 #include "rtc_base/helpers.h"
-#include "rtc_base/ref_counted_object.h"
 #include "rtc_base/rtc_certificate.h"
 #include "rtc_base/ssl_certificate.h"
 #include "rtc_base/ssl_stream_adapter.h"
@@ -126,9 +125,11 @@ class JsepTransportController : public sigslot::has_slots<> {
     Observer* transport_observer = nullptr;
     // Must be provided and valid for the lifetime of the
     // JsepTransportController instance.
-    std::function<void(const rtc::CopyOnWriteBuffer& packet,
-                       int64_t packet_time_us)>
+    absl::AnyInvocable<void(const rtc::CopyOnWriteBuffer& packet,
+                            int64_t packet_time_us) const>
         rtcp_handler;
+    absl::AnyInvocable<void(const RtpPacketReceived& parsed_packet) const>
+        un_demuxable_packet_handler;
     // Initial value for whether DtlsTransport reset causes a reset
     // of SRTP parameters.
     bool active_reset_srtp_params = false;
@@ -136,7 +137,10 @@ class JsepTransportController : public sigslot::has_slots<> {
 
     // Factory for SCTP transports.
     SctpTransportFactoryInterface* sctp_factory = nullptr;
-    std::function<void(const rtc::SSLHandshakeError)> on_dtls_handshake_error_;
+    std::function<void(rtc::SSLHandshakeError)> on_dtls_handshake_error_;
+
+    // Field trials.
+    const webrtc::FieldTrialsView* field_trials;
   };
 
   // The ICE related events are fired on the `network_thread`.
@@ -150,6 +154,9 @@ class JsepTransportController : public sigslot::has_slots<> {
       Config config);
   virtual ~JsepTransportController();
 
+  JsepTransportController(const JsepTransportController&) = delete;
+  JsepTransportController& operator=(const JsepTransportController&) = delete;
+
   // The main method to be called; applies a description at the transport
   // level, creating/destroying transport objects as needed and updating their
   // properties. This includes RTP, DTLS, and ICE (but not SCTP). At least not
@@ -162,7 +169,7 @@ class JsepTransportController : public sigslot::has_slots<> {
 
   // Get transports to be used for the provided `mid`. If bundling is enabled,
   // calling GetRtpTransport for multiple MIDs may yield the same object.
-  RtpTransportInternal* GetRtpTransport(const std::string& mid) const;
+  RtpTransportInternal* GetRtpTransport(absl::string_view mid) const;
   cricket::DtlsTransportInternal* GetDtlsTransport(const std::string& mid);
   const cricket::DtlsTransportInternal* GetRtcpDtlsTransport(
       const std::string& mid) const;
@@ -357,6 +364,10 @@ class JsepTransportController : public sigslot::has_slots<> {
       const std::string& mid) const RTC_RUN_ON(network_thread_);
   cricket::JsepTransport* GetJsepTransportForMid(const std::string& mid)
       RTC_RUN_ON(network_thread_);
+  const cricket::JsepTransport* GetJsepTransportForMid(
+      absl::string_view mid) const RTC_RUN_ON(network_thread_);
+  cricket::JsepTransport* GetJsepTransportForMid(absl::string_view mid)
+      RTC_RUN_ON(network_thread_);
 
   // Get the JsepTransport without considering the BUNDLE group. Return nullptr
   // if the JsepTransport is destroyed.
@@ -442,6 +453,8 @@ class JsepTransportController : public sigslot::has_slots<> {
   void OnRtcpPacketReceived_n(rtc::CopyOnWriteBuffer* packet,
                               int64_t packet_time_us)
       RTC_RUN_ON(network_thread_);
+  void OnUnDemuxableRtpPacketReceived_n(const webrtc::RtpPacketReceived& packet)
+      RTC_RUN_ON(network_thread_);
 
   void OnDtlsHandshakeError(rtc::SSLHandshakeError error);
 
@@ -478,8 +491,6 @@ class JsepTransportController : public sigslot::has_slots<> {
   rtc::scoped_refptr<rtc::RTCCertificate> certificate_;
 
   BundleManager bundles_;
-
-  RTC_DISALLOW_COPY_AND_ASSIGN(JsepTransportController);
 };
 
 }  // namespace webrtc

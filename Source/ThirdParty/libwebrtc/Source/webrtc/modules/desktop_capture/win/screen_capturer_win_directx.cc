@@ -104,6 +104,12 @@ int ScreenCapturerWinDirectx::GetIndexFromScreenId(
 ScreenCapturerWinDirectx::ScreenCapturerWinDirectx()
     : controller_(DxgiDuplicatorController::Instance()) {}
 
+ScreenCapturerWinDirectx::ScreenCapturerWinDirectx(
+    const DesktopCaptureOptions& options)
+    : ScreenCapturerWinDirectx() {
+  options_ = options;
+}
+
 ScreenCapturerWinDirectx::~ScreenCapturerWinDirectx() = default;
 
 void ScreenCapturerWinDirectx::Start(Callback* callback) {
@@ -125,17 +131,23 @@ void ScreenCapturerWinDirectx::CaptureFrame() {
 
   int64_t capture_start_time_nanos = rtc::TimeNanos();
 
-  frames_.MoveToNextFrame();
-  if (!frames_.current_frame()) {
-    frames_.ReplaceCurrentFrame(
+  // Note that the [] operator will create the ScreenCaptureFrameQueue if it
+  // doesn't exist, so this is safe.
+  ScreenCaptureFrameQueue<DxgiFrame>& frames =
+      frame_queue_map_[current_screen_id_];
+
+  frames.MoveToNextFrame();
+
+  if (!frames.current_frame()) {
+    frames.ReplaceCurrentFrame(
         std::make_unique<DxgiFrame>(shared_memory_factory_.get()));
   }
 
   DxgiDuplicatorController::Result result;
   if (current_screen_id_ == kFullDesktopScreenId) {
-    result = controller_->Duplicate(frames_.current_frame());
+    result = controller_->Duplicate(frames.current_frame());
   } else {
-    result = controller_->DuplicateMonitor(frames_.current_frame(),
+    result = controller_->DuplicateMonitor(frames.current_frame(),
                                            current_screen_id_);
   }
 
@@ -145,6 +157,10 @@ void ScreenCapturerWinDirectx::CaptureFrame() {
                          "error code "
                       << DxgiDuplicatorController::ResultName(result);
   }
+  RTC_HISTOGRAM_ENUMERATION(
+      "WebRTC.DesktopCapture.Win.DirectXCapturerResult",
+      static_cast<int>(result),
+      static_cast<int>(DxgiDuplicatorController::Result::MAX_VALUE));
   switch (result) {
     case DuplicateResult::UNSUPPORTED_SESSION: {
       RTC_LOG(LS_ERROR)
@@ -172,7 +188,7 @@ void ScreenCapturerWinDirectx::CaptureFrame() {
     }
     case DuplicateResult::SUCCEEDED: {
       std::unique_ptr<DesktopFrame> frame =
-          frames_.current_frame()->frame()->Share();
+          frames.current_frame()->frame()->Share();
 
       int capture_time_ms = (rtc::TimeNanos() - capture_start_time_nanos) /
                             rtc::kNumNanosecsPerMillisec;
@@ -181,6 +197,12 @@ void ScreenCapturerWinDirectx::CaptureFrame() {
           capture_time_ms);
       frame->set_capture_time_ms(capture_time_ms);
       frame->set_capturer_id(DesktopCapturerId::kScreenCapturerWinDirectx);
+      // The DXGI Output Duplicator supports embedding the cursor but it is
+      // only supported on very few display adapters. This switch allows us
+      // to exclude an integrated cursor for all captured frames.
+      if (!options_.prefer_cursor_embedded()) {
+        frame->set_may_contain_cursor(false);
+      }
 
       // TODO(julien.isorce): http://crbug.com/945468. Set the icc profile on
       // the frame, see WindowCapturerMac::CaptureFrame.

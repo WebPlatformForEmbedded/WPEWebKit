@@ -38,7 +38,7 @@ absl_cc_test(
     absl::bits
     absl::core_headers
     absl::random_random
-    gmock_main
+    GTest::gmock_main
 )
 
 absl_cc_library(
@@ -70,10 +70,10 @@ absl_cc_test(
   DEPS
     absl::int128
     absl::base
-    absl::core_headers
     absl::hash_testing
     absl::type_traits
-    gmock_main
+    absl::strings
+    GTest::gmock_main
 )
 
 # component target

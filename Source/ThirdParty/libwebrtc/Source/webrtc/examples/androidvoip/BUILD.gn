@@ -9,12 +9,13 @@
 import("//webrtc.gni")
 
 if (is_android) {
+  import("//third_party/jni_zero/jni_zero.gni")
   rtc_android_apk("androidvoip") {
     testonly = true
     apk_name = "androidvoip"
     android_manifest = "AndroidManifest.xml"
     min_sdk_version = 21
-    target_sdk_version = 27
+    target_sdk_version = 31
 
     sources = [
       "java/org/webrtc/examples/androidvoip/MainActivity.java",
@@ -24,7 +25,6 @@ if (is_android) {
 
     deps = [
       ":resources",
-      "//modules/audio_device:audio_device_java",
       "//rtc_base:base_java",
       "//sdk/android:base_java",
       "//sdk/android:java_audio_device_module_java",
@@ -56,8 +56,13 @@ if (is_android) {
 
     deps = [
       ":generated_jni",
+      "../../rtc_base:async_packet_socket",
+      "../../rtc_base:async_udp_socket",
+      "../../rtc_base:logging",
+      "../../rtc_base:network",
       "../../rtc_base:socket_address",
       "../../rtc_base:socket_server",
+      "../../rtc_base:ssl",
       "../../rtc_base:threading",
       "//api:transport_api",
       "//api/audio_codecs:audio_codecs_api",
@@ -66,8 +71,6 @@ if (is_android) {
       "//api/task_queue:default_task_queue_factory",
       "//api/voip:voip_api",
       "//api/voip:voip_engine_factory",
-      "//modules/utility:utility",
-      "//rtc_base",
       "//rtc_base/third_party/sigslot:sigslot",
       "//sdk/android:native_api_audio_device_module",
       "//sdk/android:native_api_base",

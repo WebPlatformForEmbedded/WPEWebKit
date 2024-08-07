@@ -7,17 +7,18 @@
  *  in the file PATENTS.  All contributing project authors may
  *  be found in the AUTHORS file in the root of the source tree.
  */
+#include "rtc_base/callback_list.h"
+
 #include <string>
 #include <type_traits>
 
 #include "api/function_view.h"
-#include "rtc_base/callback_list.h"
 #include "test/gtest.h"
 
 namespace webrtc {
 namespace {
 
-TEST(CallbackList, NoRecieverSingleMessageTest) {
+TEST(CallbackList, NoReceiverSingleMessageTest) {
   CallbackList<std::string> c;
 
   c.Send("message");
@@ -25,7 +26,7 @@ TEST(CallbackList, NoRecieverSingleMessageTest) {
 
 TEST(CallbackList, MultipleParameterMessageTest) {
   CallbackList<const std::string&, std::string, std::string&&, int, int*,
-             std::string&>
+               std::string&>
       c;
   std::string str = "messege";
   int i = 10;
@@ -250,6 +251,19 @@ TEST(CallbackList, RemoveManyReceivers) {
   c.RemoveReceivers(&removal_tag);
   c.Send();
   EXPECT_EQ(accumulator, 1212);
+}
+
+TEST(CallbackList, RemoveFromSend) {
+  int removal_tag = 0;
+  CallbackList<> c;
+  c.AddReceiver(&removal_tag, [&] {
+    c.RemoveReceivers(&removal_tag);
+    // Do after RemoveReceivers to make sure the lambda is still valid.
+    ++removal_tag;
+  });
+  c.Send();
+  c.Send();
+  EXPECT_EQ(removal_tag, 1);
 }
 
 }  // namespace

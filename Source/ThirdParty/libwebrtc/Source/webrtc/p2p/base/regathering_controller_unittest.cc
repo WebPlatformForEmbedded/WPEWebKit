@@ -22,10 +22,10 @@
 #include "p2p/base/port.h"
 #include "p2p/base/stun_server.h"
 #include "rtc_base/gunit.h"
-#include "rtc_base/ref_counted_object.h"
 #include "rtc_base/socket_address.h"
 #include "rtc_base/thread.h"
 #include "rtc_base/virtual_socket_server.h"
+#include "test/scoped_key_value_config.h"
 
 namespace {
 
@@ -40,6 +40,7 @@ const rtc::SocketAddress kTurnUdpIntAddr("99.99.99.3",
 const cricket::RelayCredentials kRelayCredentials("test", "test");
 const char kIceUfrag[] = "UF00";
 const char kIcePwd[] = "TESTICEPWD00000000000000";
+constexpr uint64_t kTiebreakerDefault = 44444;
 
 }  // namespace
 
@@ -49,11 +50,16 @@ class RegatheringControllerTest : public ::testing::Test,
                                   public sigslot::has_slots<> {
  public:
   RegatheringControllerTest()
-      : vss_(new rtc::VirtualSocketServer()),
+      : vss_(std::make_unique<rtc::VirtualSocketServer>()),
         thread_(vss_.get()),
-        ice_transport_(new cricket::MockIceTransport()),
-        allocator_(
-            new cricket::FakePortAllocator(rtc::Thread::Current(), nullptr)) {
+        ice_transport_(std::make_unique<cricket::MockIceTransport>()),
+        packet_socket_factory_(
+            std::make_unique<rtc::BasicPacketSocketFactory>(vss_.get())),
+        allocator_(std::make_unique<cricket::FakePortAllocator>(
+            rtc::Thread::Current(),
+            packet_socket_factory_.get(),
+            &field_trials_)) {
+    allocator_->SetIceTiebreaker(kTiebreakerDefault);
     BasicRegatheringController::Config regathering_config;
     regathering_config.regather_on_failed_networks_interval = 0;
     regathering_controller_.reset(new BasicRegatheringController(
@@ -105,10 +111,12 @@ class RegatheringControllerTest : public ::testing::Test,
   }
 
  private:
+  webrtc::test::ScopedKeyValueConfig field_trials_;
   std::unique_ptr<rtc::VirtualSocketServer> vss_;
   rtc::AutoSocketServerThread thread_;
   std::unique_ptr<cricket::IceTransportInternal> ice_transport_;
   std::unique_ptr<BasicRegatheringController> regathering_controller_;
+  std::unique_ptr<rtc::PacketSocketFactory> packet_socket_factory_;
   std::unique_ptr<cricket::PortAllocator> allocator_;
   std::unique_ptr<cricket::PortAllocatorSession> allocator_session_;
   std::map<cricket::IceRegatheringReason, int> count_;

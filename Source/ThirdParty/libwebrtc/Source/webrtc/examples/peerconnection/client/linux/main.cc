@@ -19,7 +19,6 @@
 #include "examples/peerconnection/client/linux/main_wnd.h"
 #include "examples/peerconnection/client/peer_connection_client.h"
 #include "rtc_base/physical_socket_server.h"
-#include "rtc_base/ref_counted_object.h"
 #include "rtc_base/ssl_adapter.h"
 #include "rtc_base/thread.h"
 #include "system_wrappers/include/field_trial.h"
@@ -37,7 +36,8 @@ class CustomSocketServer : public rtc::PhysicalSocketServer {
   void set_conductor(Conductor* conductor) { conductor_ = conductor; }
 
   // Override so that we can also pump the GTK message loop.
-  bool Wait(int cms, bool process_io) override {
+  // This function never waits.
+  bool Wait(webrtc::TimeDelta max_wait_duration, bool process_io) override {
     // Pump GTK events.
     // TODO(henrike): We really should move either the socket server or UI to a
     // different thread.  Alternatively we could look at merging the two loops
@@ -50,7 +50,7 @@ class CustomSocketServer : public rtc::PhysicalSocketServer {
         client_ != NULL && !client_->is_connected()) {
       message_queue_->Quit();
     }
-    return rtc::PhysicalSocketServer::Wait(0 /*cms == -1 ? 1 : cms*/,
+    return rtc::PhysicalSocketServer::Wait(webrtc::TimeDelta::Zero(),
                                            process_io);
   }
 
@@ -101,10 +101,9 @@ int main(int argc, char* argv[]) {
   rtc::InitializeSSL();
   // Must be constructed after we set the socketserver.
   PeerConnectionClient client;
-  rtc::scoped_refptr<Conductor> conductor(
-      new rtc::RefCountedObject<Conductor>(&client, &wnd));
+  auto conductor = rtc::make_ref_counted<Conductor>(&client, &wnd);
   socket_server.set_client(&client);
-  socket_server.set_conductor(conductor);
+  socket_server.set_conductor(conductor.get());
 
   thread.Run();
 

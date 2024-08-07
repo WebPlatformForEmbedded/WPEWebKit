@@ -21,12 +21,14 @@
 
 namespace webrtc {
 
-// Common base interface for MediaReceiveStream based classes and
+// Common base interface for MediaReceiveStreamInterface based classes and
 // FlexfecReceiveStream.
-class ReceiveStream {
+class ReceiveStreamInterface {
  public:
   // Receive-stream specific RTP settings.
-  struct RtpConfig {
+  // TODO(tommi): This struct isn't needed at this level anymore. Move it closer
+  // to where it's used.
+  struct ReceiveStreamRtpConfig {
     // Synchronization source (stream identifier) to be received.
     // This member will not change mid-stream and can be assumed to be const
     // post initialization.
@@ -36,37 +38,14 @@ class ReceiveStream {
     // This value may change mid-stream and must be done on the same thread
     // that the value is read on (i.e. packet delivery).
     uint32_t local_ssrc = 0;
-
-    // Enable feedback for send side bandwidth estimation.
-    // See
-    // https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions
-    // for details.
-    // This value may change mid-stream and must be done on the same thread
-    // that the value is read on (i.e. packet delivery).
-    bool transport_cc = false;
-
-    // RTP header extensions used for the received stream.
-    // This value may change mid-stream and must be done on the same thread
-    // that the value is read on (i.e. packet delivery).
-    std::vector<RtpExtension> extensions;
   };
 
-  // Set/change the rtp header extensions. Must be called on the packet
-  // delivery thread.
-  virtual void SetRtpExtensions(std::vector<RtpExtension> extensions) = 0;
-
-  // Called on the packet delivery thread since some members of the config may
-  // change mid-stream (e.g. the local ssrc). All mutation must also happen on
-  // the packet delivery thread. Return value can be assumed to
-  // only be used in the calling context (on the stack basically).
-  virtual const RtpConfig& rtp_config() const = 0;
-
  protected:
-  virtual ~ReceiveStream() {}
+  virtual ~ReceiveStreamInterface() {}
 };
 
 // Either an audio or video receive stream.
-class MediaReceiveStream : public ReceiveStream {
+class MediaReceiveStreamInterface : public ReceiveStreamInterface {
  public:
   // Starts stream activity.
   // When a stream is active, it can receive, process and deliver packets.

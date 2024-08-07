@@ -15,7 +15,6 @@
 
 #include "absl/algorithm/container.h"
 #include "api/call/transport.h"
-#include "api/transport/field_trial_based_config.h"
 #include "call/rtp_stream_receiver_controller.h"
 #include "call/rtx_receive_stream.h"
 #include "modules/rtp_rtcp/include/receive_statistics.h"
@@ -24,6 +23,8 @@
 #include "modules/rtp_rtcp/source/rtp_rtcp_impl2.h"
 #include "modules/rtp_rtcp/source/rtp_sender_video.h"
 #include "rtc_base/rate_limiter.h"
+#include "rtc_base/thread.h"
+#include "test/explicit_key_value_config.h"
 #include "test/gtest.h"
 
 namespace webrtc {
@@ -75,12 +76,11 @@ class RtxLoopBackTransport : public webrtc::Transport {
     packet_loss_ = 0;
   }
 
-  bool SendRtp(const uint8_t* data,
-               size_t len,
+  bool SendRtp(rtc::ArrayView<const uint8_t> data,
                const PacketOptions& options) override {
     count_++;
     RtpPacketReceived packet;
-    if (!packet.Parse(data, len))
+    if (!packet.Parse(data))
       return false;
     if (packet.Ssrc() == rtx_ssrc_) {
       count_rtx_ssrc_++;
@@ -101,8 +101,8 @@ class RtxLoopBackTransport : public webrtc::Transport {
     return true;
   }
 
-  bool SendRtcp(const uint8_t* data, size_t len) override {
-    module_->IncomingRtcpPacket((const uint8_t*)data, len);
+  bool SendRtcp(rtc::ArrayView<const uint8_t> data) override {
+    module_->IncomingRtcpPacket(data);
     return true;
   }
   int count_;
@@ -137,7 +137,7 @@ class RtpRtcpRtxNackTest : public ::testing::Test {
     configuration.local_media_ssrc = kTestSsrc;
     configuration.rtx_send_ssrc = kTestRtxSsrc;
     rtp_rtcp_module_ = ModuleRtpRtcpImpl2::Create(configuration);
-    FieldTrialBasedConfig field_trials;
+    test::ExplicitKeyValueConfig field_trials("");
     RTPSenderVideo::Config video_config;
     video_config.clock = &fake_clock;
     video_config.rtp_sender = rtp_rtcp_module_->RtpSender();
@@ -150,8 +150,6 @@ class RtpRtcpRtxNackTest : public ::testing::Test {
     rtp_rtcp_module_->SetStartTimestamp(111111);
 
     // Used for NACK processing.
-    // TODO(nisse): Unclear on which side? It's confusing to use a
-    // single rtp_rtcp module for both send and receive side.
     rtp_rtcp_module_->SetRemoteSSRC(kTestSsrc);
 
     rtp_rtcp_module_->SetRtxSendPayloadType(kRtxPayloadType, kPayloadType);
@@ -211,7 +209,8 @@ class RtpRtcpRtxNackTest : public ::testing::Test {
       video_header.frame_type = VideoFrameType::kVideoFrameDelta;
       EXPECT_TRUE(rtp_sender_video_->SendVideo(
           kPayloadType, VideoCodecType::kVideoCodecGeneric, timestamp,
-          timestamp / 90, payload_data, video_header, 0));
+          /*capture_time=*/Timestamp::Millis(timestamp / 90), payload_data,
+          sizeof(payload_data), video_header, TimeDelta::Zero(), {}));
       // Min required delay until retransmit = 5 + RTT ms (RTT = 0).
       fake_clock.AdvanceTimeMilliseconds(5);
       int length = BuildNackList(nack_list);
@@ -224,6 +223,7 @@ class RtpRtcpRtxNackTest : public ::testing::Test {
     media_stream_.sequence_numbers_.sort();
   }
 
+  rtc::AutoThread main_thread_;
   std::unique_ptr<ReceiveStatistics> receive_statistics_;
   std::unique_ptr<ModuleRtpRtcpImpl2> rtp_rtcp_module_;
   std::unique_ptr<RTPSenderVideo> rtp_sender_video_;
@@ -260,7 +260,8 @@ TEST_F(RtpRtcpRtxNackTest, LongNackList) {
     video_header.frame_type = VideoFrameType::kVideoFrameDelta;
     EXPECT_TRUE(rtp_sender_video_->SendVideo(
         kPayloadType, VideoCodecType::kVideoCodecGeneric, timestamp,
-        timestamp / 90, payload_data, video_header, 0));
+        Timestamp::Millis(timestamp / 90), payload_data, sizeof(payload_data),
+        video_header, TimeDelta::Zero(), {}));
     // Prepare next frame.
     timestamp += 3000;
     fake_clock.AdvanceTimeMilliseconds(33);

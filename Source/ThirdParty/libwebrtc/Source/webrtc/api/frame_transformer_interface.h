@@ -12,6 +12,7 @@
 #define API_FRAME_TRANSFORMER_INTERFACE_H_
 
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "api/scoped_refptr.h"
@@ -36,6 +37,13 @@ class TransformableFrameInterface {
   virtual uint8_t GetPayloadType() const = 0;
   virtual uint32_t GetSsrc() const = 0;
   virtual uint32_t GetTimestamp() const = 0;
+  virtual void SetRTPTimestamp(uint32_t timestamp) = 0;
+
+  // TODO(https://bugs.webrtc.org/14878): Change this to pure virtual after it
+  // is implemented everywhere.
+  virtual absl::optional<Timestamp> GetCaptureTimeIdentifier() const {
+    return absl::nullopt;
+  }
 
   enum class Direction {
     kUnknown,
@@ -46,6 +54,11 @@ class TransformableFrameInterface {
   // sender frames to allow received frames to be directly re-transmitted on
   // other PeerConnectionss.
   virtual Direction GetDirection() const { return Direction::kUnknown; }
+  virtual std::string GetMimeType() const {
+    // TODO(bugs.webrtc.org/15579): Change this to pure virtual after it
+    // is implemented everywhere.
+    return "unknown/unknown";
+  }
 };
 
 class TransformableVideoFrameInterface : public TransformableFrameInterface {
@@ -53,15 +66,9 @@ class TransformableVideoFrameInterface : public TransformableFrameInterface {
   virtual ~TransformableVideoFrameInterface() = default;
   virtual bool IsKeyFrame() const = 0;
 
-  // Returns data needed in the frame transformation logic; for example,
-  // when the transformation applied to the frame is encryption/decryption, the
-  // additional data holds the serialized generic frame descriptor extension
-  // calculated in webrtc::RtpDescriptorAuthentication.
-  // TODO(bugs.webrtc.org/11380) remove from interface once
-  // webrtc::RtpDescriptorAuthentication is exposed in api/.
-  virtual std::vector<uint8_t> GetAdditionalData() const = 0;
+  virtual VideoFrameMetadata Metadata() const = 0;
 
-  virtual const VideoFrameMetadata& GetMetadata() const = 0;
+  virtual void SetMetadata(const VideoFrameMetadata&) = 0;
 };
 
 // Extends the TransformableFrameInterface to expose audio-specific information.
@@ -69,10 +76,21 @@ class TransformableAudioFrameInterface : public TransformableFrameInterface {
  public:
   virtual ~TransformableAudioFrameInterface() = default;
 
-  // Exposes the frame header, enabling the interface clients to use the
-  // information in the header as needed, for example to compile the list of
-  // csrcs.
-  virtual const RTPHeader& GetHeader() const = 0;
+  virtual rtc::ArrayView<const uint32_t> GetContributingSources() const = 0;
+
+  // TODO(crbug.com/1453226): Change this to pure virtual after it
+  // is implemented everywhere.
+  virtual const absl::optional<uint16_t> SequenceNumber() const {
+    return absl::nullopt;
+  }
+
+  virtual absl::optional<uint64_t> AbsoluteCaptureTimestamp() const = 0;
+
+  enum class FrameType { kEmptyFrame, kAudioFrameSpeech, kAudioFrameCN };
+
+  // TODO(crbug.com/1456628): Change this to pure virtual after it
+  // is implemented everywhere.
+  virtual FrameType Type() const { return FrameType::kEmptyFrame; }
 };
 
 // Objects implement this interface to be notified with the transformed frame.

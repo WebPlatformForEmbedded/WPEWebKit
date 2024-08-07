@@ -12,24 +12,30 @@
 #define PC_TEST_MOCK_DATA_CHANNEL_H_
 
 #include <string>
+#include <utility>
 
 #include "pc/sctp_data_channel.h"
 #include "test/gmock.h"
 
 namespace webrtc {
 
-class MockSctpDataChannel : public rtc::RefCountedObject<SctpDataChannel> {
+class MockSctpDataChannel : public SctpDataChannel {
  public:
-  MockSctpDataChannel(int id, DataState state)
-      : MockSctpDataChannel(id,
+  MockSctpDataChannel(
+      rtc::WeakPtr<SctpDataChannelControllerInterface> controller,
+      int id,
+      DataState state)
+      : MockSctpDataChannel(std::move(controller),
+                            id,
                             "MockSctpDataChannel",
                             state,
-                            "udp",
+                            "someProtocol",
                             0,
                             0,
                             0,
                             0) {}
   MockSctpDataChannel(
+      rtc::WeakPtr<SctpDataChannelControllerInterface> controller,
       int id,
       const std::string& label,
       DataState state,
@@ -41,11 +47,12 @@ class MockSctpDataChannel : public rtc::RefCountedObject<SctpDataChannel> {
       const InternalDataChannelInit& config = InternalDataChannelInit(),
       rtc::Thread* signaling_thread = rtc::Thread::Current(),
       rtc::Thread* network_thread = rtc::Thread::Current())
-      : rtc::RefCountedObject<SctpDataChannel>(config,
-                                               nullptr,
-                                               label,
-                                               signaling_thread,
-                                               network_thread) {
+      : SctpDataChannel(config,
+                        std::move(controller),
+                        label,
+                        false,
+                        signaling_thread,
+                        network_thread) {
     EXPECT_CALL(*this, id()).WillRepeatedly(::testing::Return(id));
     EXPECT_CALL(*this, state()).WillRepeatedly(::testing::Return(state));
     EXPECT_CALL(*this, protocol()).WillRepeatedly(::testing::Return(protocol));

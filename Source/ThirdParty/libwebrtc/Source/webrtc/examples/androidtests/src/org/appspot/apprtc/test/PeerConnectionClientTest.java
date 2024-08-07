@@ -14,10 +14,10 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import android.os.Build;
-import android.support.test.InstrumentationRegistry;
-import android.support.test.runner.AndroidJUnit4;
 import android.util.Log;
+import androidx.test.InstrumentationRegistry;
 import androidx.test.filters.SmallTest;
+import androidx.test.runner.AndroidJUnit4;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -453,10 +453,6 @@ public class PeerConnectionClientTest implements PeerConnectionEvents {
   @Test
   @SmallTest
   public void testLoopbackVp8DecodeToTexture() throws InterruptedException {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.KITKAT) {
-      Log.i(TAG, "Decode to textures is not supported, requires SDK version 19.");
-      return;
-    }
     doLoopbackTest(createParametersForVideoCall(VIDEO_CODEC_VP8),
         createCameraCapturer(false /* captureToTexture */), true /* decodeToTexture */);
   }
@@ -464,10 +460,6 @@ public class PeerConnectionClientTest implements PeerConnectionEvents {
   @Test
   @SmallTest
   public void testLoopbackVp9DecodeToTexture() throws InterruptedException {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.KITKAT) {
-      Log.i(TAG, "Decode to textures is not supported, requires SDK version 19.");
-      return;
-    }
     doLoopbackTest(createParametersForVideoCall(VIDEO_CODEC_VP9),
         createCameraCapturer(false /* captureToTexture */), true /* decodeToTexture */);
   }
@@ -475,10 +467,6 @@ public class PeerConnectionClientTest implements PeerConnectionEvents {
   @Test
   @SmallTest
   public void testLoopbackH264DecodeToTexture() throws InterruptedException {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.KITKAT) {
-      Log.i(TAG, "Decode to textures is not supported, requires SDK version 19.");
-      return;
-    }
     doLoopbackTest(createParametersForVideoCall(VIDEO_CODEC_H264),
         createCameraCapturer(false /* captureToTexture */), true /* decodeToTexture */);
   }
@@ -486,10 +474,6 @@ public class PeerConnectionClientTest implements PeerConnectionEvents {
   @Test
   @SmallTest
   public void testLoopbackVp8CaptureToTexture() throws InterruptedException {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.KITKAT) {
-      Log.i(TAG, "Encode to textures is not supported. Requires SDK version 19");
-      return;
-    }
     doLoopbackTest(createParametersForVideoCall(VIDEO_CODEC_VP8),
         createCameraCapturer(true /* captureToTexture */), true /* decodeToTexture */);
   }
@@ -497,10 +481,6 @@ public class PeerConnectionClientTest implements PeerConnectionEvents {
   @Test
   @SmallTest
   public void testLoopbackH264CaptureToTexture() throws InterruptedException {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.KITKAT) {
-      Log.i(TAG, "Encode to textures is not supported. Requires KITKAT");
-      return;
-    }
     doLoopbackTest(createParametersForVideoCall(VIDEO_CODEC_H264),
         createCameraCapturer(true /* captureToTexture */), true /* decodeToTexture */);
   }

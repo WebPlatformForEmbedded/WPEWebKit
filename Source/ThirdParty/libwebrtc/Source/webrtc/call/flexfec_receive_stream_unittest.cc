@@ -26,6 +26,7 @@
 #include "modules/rtp_rtcp/source/byte_io.h"
 #include "modules/rtp_rtcp/source/rtp_header_extensions.h"
 #include "modules/rtp_rtcp/source/rtp_packet_received.h"
+#include "rtc_base/thread.h"
 #include "test/gmock.h"
 #include "test/gtest.h"
 #include "test/mock_transport.h"
@@ -35,6 +36,8 @@ namespace webrtc {
 namespace {
 
 using ::testing::_;
+using ::testing::Eq;
+using ::testing::Property;
 
 constexpr uint8_t kFlexfecPlType = 118;
 constexpr uint8_t kFlexfecSsrc[] = {0x00, 0x00, 0x00, 0x01};
@@ -65,8 +68,6 @@ TEST(FlexfecReceiveStreamConfigTest, IsCompleteAndEnabled) {
 
   config.rtp.local_ssrc = 18374743;
   config.rtcp_mode = RtcpMode::kCompound;
-  config.rtp.transport_cc = true;
-  config.rtp.extensions.emplace_back(TransportSequenceNumber::Uri(), 7);
   EXPECT_FALSE(config.IsCompleteAndEnabled());
 
   config.payload_type = 123;
@@ -92,10 +93,9 @@ class FlexfecReceiveStreamTest : public ::testing::Test {
     receive_stream_->RegisterWithTransport(&rtp_stream_receiver_controller_);
   }
 
-  ~FlexfecReceiveStreamTest() {
-    receive_stream_->UnregisterFromTransport();
-  }
+  ~FlexfecReceiveStreamTest() { receive_stream_->UnregisterFromTransport(); }
 
+  rtc::AutoThread main_thread_;
   MockTransport rtcp_send_transport_;
   FlexfecReceiveStream::Config config_;
   MockRecoveredPacketReceiver recovered_packet_receiver_;
@@ -141,19 +141,14 @@ TEST_F(FlexfecReceiveStreamTest, RecoversPacket) {
       kPayloadBits,    kPayloadBits,    kPayloadBits,       kPayloadBits};
   // clang-format on
 
-  ::testing::StrictMock<MockRecoveredPacketReceiver> recovered_packet_receiver;
-  FlexfecReceiveStreamImpl receive_stream(Clock::GetRealTimeClock(), config_,
-                                          &recovered_packet_receiver,
-                                          &rtt_stats_);
-  receive_stream.RegisterWithTransport(&rtp_stream_receiver_controller_);
+  EXPECT_CALL(recovered_packet_receiver_,
+              OnRecoveredPacket(Property(&RtpPacketReceived::payload_size,
+                                         Eq(kPayloadLength[1]))));
 
-  EXPECT_CALL(recovered_packet_receiver,
-              OnRecoveredPacket(_, kRtpHeaderSize + kPayloadLength[1]));
-
-  receive_stream.OnRtpPacket(ParsePacket(kFlexfecPacket));
+  receive_stream_->OnRtpPacket(ParsePacket(kFlexfecPacket));
 
   // Tear-down
-  receive_stream.UnregisterFromTransport();
+  receive_stream_->UnregisterFromTransport();
 }
 
 }  // namespace webrtc

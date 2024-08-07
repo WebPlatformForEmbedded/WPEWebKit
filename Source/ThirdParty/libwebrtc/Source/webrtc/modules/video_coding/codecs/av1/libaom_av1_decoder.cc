@@ -152,7 +152,7 @@ int32_t LibaomAv1Decoder::Decode(const EncodedImage& encoded_image,
         decoded_image->d_w, decoded_image->d_h);
     VideoFrame decoded_frame = VideoFrame::Builder()
                                    .set_video_frame_buffer(buffer)
-                                   .set_timestamp_rtp(encoded_image.Timestamp())
+                                   .set_timestamp_rtp(encoded_image.RtpTimestamp())
                                    .set_ntp_time_ms(encoded_image.ntp_time_ms_)
                                    .set_color_space(encoded_image.ColorSpace())
                                    .build();
@@ -191,7 +191,7 @@ const char* LibaomAv1Decoder::ImplementationName() const {
 
 }  // namespace
 
-const bool kIsLibaomAv1DecoderSupported = true;
+ABSL_CONST_INIT const bool kIsLibaomAv1DecoderSupported = true;
 
 std::unique_ptr<VideoDecoder> CreateLibaomAv1Decoder() {
   return std::make_unique<LibaomAv1Decoder>();

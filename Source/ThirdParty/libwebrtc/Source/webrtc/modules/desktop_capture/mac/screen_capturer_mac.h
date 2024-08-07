@@ -36,11 +36,13 @@ class DisplayStreamManager;
 // A class to perform video frame capturing for mac.
 class ScreenCapturerMac final : public DesktopCapturer {
  public:
-  ScreenCapturerMac(
-      rtc::scoped_refptr<DesktopConfigurationMonitor> desktop_config_monitor,
-      bool detect_updated_region,
-      bool allow_iosurface);
+  ScreenCapturerMac(rtc::scoped_refptr<DesktopConfigurationMonitor> desktop_config_monitor,
+                    bool detect_updated_region,
+                    bool allow_iosurface);
   ~ScreenCapturerMac() override;
+
+  ScreenCapturerMac(const ScreenCapturerMac&) = delete;
+  ScreenCapturerMac& operator=(const ScreenCapturerMac&) = delete;
 
   // TODO(julien.isorce): Remove Init() or make it private.
   bool Init();
@@ -111,8 +113,6 @@ class ScreenCapturerMac final : public DesktopCapturer {
 
   // Start, CaptureFrame and destructor have to called in the same thread.
   SequenceChecker thread_checker_;
-
-  RTC_DISALLOW_COPY_AND_ASSIGN(ScreenCapturerMac);
 };
 
 }  // namespace webrtc

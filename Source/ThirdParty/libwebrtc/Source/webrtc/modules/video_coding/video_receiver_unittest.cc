@@ -11,10 +11,11 @@
 #include "api/test/mock_video_decoder.h"
 #include "api/video_codecs/video_decoder.h"
 #include "modules/video_coding/include/video_coding.h"
-#include "modules/video_coding/timing.h"
+#include "modules/video_coding/timing/timing.h"
 #include "modules/video_coding/video_coding_impl.h"
 #include "system_wrappers/include/clock.h"
 #include "test/gtest.h"
+#include "test/scoped_key_value_config.h"
 
 using ::testing::_;
 using ::testing::AnyNumber;
@@ -39,10 +40,17 @@ class MockVCMReceiveCallback : public VCMReceiveCallback {
 
   MOCK_METHOD(int32_t,
               FrameToRender,
-              (VideoFrame&, absl::optional<uint8_t>, int32_t, VideoContentType),
+              (VideoFrame&,
+               absl::optional<uint8_t>,
+               TimeDelta,
+               VideoContentType,
+               VideoFrameType),
               (override));
   MOCK_METHOD(void, OnIncomingPayloadType, (int), (override));
-  MOCK_METHOD(void, OnDecoderImplementationName, (const char*), (override));
+  MOCK_METHOD(void,
+              OnDecoderInfoChanged,
+              (const VideoDecoder::DecoderInfo&),
+              (override));
 };
 
 class TestVideoReceiver : public ::testing::Test {
@@ -51,7 +59,9 @@ class TestVideoReceiver : public ::testing::Test {
   static const uint16_t kMaxWaitTimeMs = 100;
 
   TestVideoReceiver()
-      : clock_(0), timing_(&clock_), receiver_(&clock_, &timing_) {}
+      : clock_(0),
+        timing_(&clock_, field_trials_),
+        receiver_(&clock_, &timing_, field_trials_) {}
 
   virtual void SetUp() {
     // Register decoder.
@@ -70,8 +80,7 @@ class TestVideoReceiver : public ::testing::Test {
     // Since we call Decode, we need to provide a valid receive callback.
     // However, for the purposes of these tests, we ignore the callbacks.
     EXPECT_CALL(receive_callback_, OnIncomingPayloadType(_)).Times(AnyNumber());
-    EXPECT_CALL(receive_callback_, OnDecoderImplementationName(_))
-        .Times(AnyNumber());
+    EXPECT_CALL(receive_callback_, OnDecoderInfoChanged).Times(AnyNumber());
     receiver_.RegisterReceiveCallback(&receive_callback_);
   }
 
@@ -100,7 +109,7 @@ class TestVideoReceiver : public ::testing::Test {
       ++header->sequenceNumber;
     }
     receiver_.Process();
-    EXPECT_CALL(decoder_, Decode(_, _, _)).Times(0);
+    EXPECT_CALL(decoder_, Decode(_, _)).Times(0);
     EXPECT_EQ(VCM_FRAME_NOT_READY, receiver_.Decode(kMaxWaitTimeMs));
   }
 
@@ -114,10 +123,11 @@ class TestVideoReceiver : public ::testing::Test {
     EXPECT_CALL(packet_request_callback_, ResendPackets(_, _)).Times(0);
 
     receiver_.Process();
-    EXPECT_CALL(decoder_, Decode(_, _, _)).Times(1);
+    EXPECT_CALL(decoder_, Decode(_, _)).Times(1);
     EXPECT_EQ(0, receiver_.Decode(kMaxWaitTimeMs));
   }
 
+  test::ScopedKeyValueConfig field_trials_;
   SimulatedClock clock_;
   NiceMock<MockVideoDecoder> decoder_;
   NiceMock<MockPacketRequestCallback> packet_request_callback_;

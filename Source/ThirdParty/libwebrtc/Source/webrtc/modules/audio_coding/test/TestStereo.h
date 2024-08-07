@@ -15,6 +15,7 @@
 
 #include <memory>
 
+#include "modules/audio_coding/acm2/acm_receiver.h"
 #include "modules/audio_coding/include/audio_coding_module.h"
 #include "modules/audio_coding/test/PCMFile.h"
 
@@ -29,13 +30,13 @@ class TestPackStereo : public AudioPacketizationCallback {
   TestPackStereo();
   ~TestPackStereo();
 
-  void RegisterReceiverACM(AudioCodingModule* acm);
+  void RegisterReceiverACM(acm2::AcmReceiver* acm_receiver);
 
-  int32_t SendData(const AudioFrameType frame_type,
-                   const uint8_t payload_type,
-                   const uint32_t timestamp,
+  int32_t SendData(AudioFrameType frame_type,
+                   uint8_t payload_type,
+                   uint32_t timestamp,
                    const uint8_t* payload_data,
-                   const size_t payload_size,
+                   size_t payload_size,
                    int64_t absolute_capture_timestamp_ms) override;
 
   uint16_t payload_size();
@@ -45,7 +46,7 @@ class TestPackStereo : public AudioPacketizationCallback {
   void set_lost_packet(bool lost);
 
  private:
-  AudioCodingModule* receiver_acm_;
+  acm2::AcmReceiver* receiver_acm_;
   int16_t seq_no_;
   uint32_t timestamp_diff_;
   uint32_t last_in_timestamp_;
@@ -81,7 +82,7 @@ class TestStereo {
   void OpenOutFile(int16_t test_number);
 
   std::unique_ptr<AudioCodingModule> acm_a_;
-  std::unique_ptr<AudioCodingModule> acm_b_;
+  std::unique_ptr<acm2::AcmReceiver> acm_b_;
 
   TestPackStereo* channel_a2b_;
 

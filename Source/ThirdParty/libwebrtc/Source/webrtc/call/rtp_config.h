@@ -104,7 +104,7 @@ struct RtpConfig {
   // changing codec without recreating the VideoSendStream. Then these
   // fields must be removed, and association between payload type and codec
   // must move above the per-stream level. Ownership could be with
-  // RtpTransportControllerSend, with a reference from PayloadRouter, where
+  // RtpTransportControllerSend, with a reference from RtpVideoSender, where
   // the latter would be responsible for mapping the codec type of encoded
   // images to the right payload type.
   std::string payload_name;
@@ -158,6 +158,9 @@ struct RtpConfig {
 
   // RTCP CNAME, see RFC 3550.
   std::string c_name;
+
+  // Enables send packet batching from the egress RTP sender.
+  bool enable_send_packet_batching = false;
 
   bool IsMediaSsrc(uint32_t ssrc) const;
   bool IsRtxSsrc(uint32_t ssrc) const;

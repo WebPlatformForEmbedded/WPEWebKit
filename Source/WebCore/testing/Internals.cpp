@@ -304,6 +304,10 @@
 #include "RTCPeerConnection.h"
 #endif
 
+#if USE(LIBWEBRTC)
+#include "LibWebRTCProvider.h"
+#endif
+
 #if ENABLE(MEDIA_SOURCE)
 #include "MockMediaPlayerMediaSource.h"
 #endif

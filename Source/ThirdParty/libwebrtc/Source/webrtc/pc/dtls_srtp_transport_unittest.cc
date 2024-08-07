@@ -14,7 +14,6 @@
 
 #include <cstdint>
 #include <memory>
-#include <set>
 
 #include "call/rtp_demuxer.h"
 #include "media/base/fake_rtp.h"
@@ -26,10 +25,13 @@
 #include "pc/test/rtp_transport_test_util.h"
 #include "rtc_base/async_packet_socket.h"
 #include "rtc_base/byte_order.h"
+#include "rtc_base/containers/flat_set.h"
 #include "rtc_base/copy_on_write_buffer.h"
 #include "rtc_base/rtc_certificate.h"
 #include "rtc_base/ssl_identity.h"
+#include "rtc_base/third_party/sigslot/sigslot.h"
 #include "test/gtest.h"
+#include "test/scoped_key_value_config.h"
 
 using cricket::FakeDtlsTransport;
 using cricket::FakeIceTransport;
@@ -58,7 +60,7 @@ class DtlsSrtpTransportTest : public ::testing::Test,
       FakeDtlsTransport* rtcp_dtls,
       bool rtcp_mux_enabled) {
     auto dtls_srtp_transport =
-        std::make_unique<DtlsSrtpTransport>(rtcp_mux_enabled);
+        std::make_unique<DtlsSrtpTransport>(rtcp_mux_enabled, field_trials_);
 
     dtls_srtp_transport->SetDtlsTransports(rtp_dtls, rtcp_dtls);
 
@@ -75,20 +77,26 @@ class DtlsSrtpTransportTest : public ::testing::Test,
     dtls_srtp_transport2_ =
         MakeDtlsSrtpTransport(rtp_dtls2, rtcp_dtls2, rtcp_mux_enabled);
 
-    dtls_srtp_transport1_->SignalRtcpPacketReceived.connect(
+    dtls_srtp_transport1_->SubscribeRtcpPacketReceived(
         &transport_observer1_,
-        &webrtc::TransportObserver::OnRtcpPacketReceived);
-    dtls_srtp_transport1_->SignalReadyToSend.connect(
-        &transport_observer1_, &webrtc::TransportObserver::OnReadyToSend);
+        [this](rtc::CopyOnWriteBuffer* buffer, int64_t packet_time_ms) {
+          transport_observer1_.OnRtcpPacketReceived(buffer, packet_time_ms);
+        });
+    dtls_srtp_transport1_->SubscribeReadyToSend(
+        &transport_observer1_,
+        [this](bool ready) { transport_observer1_.OnReadyToSend(ready); });
 
-    dtls_srtp_transport2_->SignalRtcpPacketReceived.connect(
+    dtls_srtp_transport2_->SubscribeRtcpPacketReceived(
         &transport_observer2_,
-        &webrtc::TransportObserver::OnRtcpPacketReceived);
-    dtls_srtp_transport2_->SignalReadyToSend.connect(
-        &transport_observer2_, &webrtc::TransportObserver::OnReadyToSend);
+        [this](rtc::CopyOnWriteBuffer* buffer, int64_t packet_time_ms) {
+          transport_observer2_.OnRtcpPacketReceived(buffer, packet_time_ms);
+        });
+    dtls_srtp_transport2_->SubscribeReadyToSend(
+        &transport_observer2_,
+        [this](bool ready) { transport_observer2_.OnReadyToSend(ready); });
     webrtc::RtpDemuxerCriteria demuxer_criteria;
     // 0x00 is the payload type used in kPcmuFrame.
-    demuxer_criteria.payload_types = {0x00};
+    demuxer_criteria.payload_types() = {0x00};
     dtls_srtp_transport1_->RegisterRtpDemuxerSink(demuxer_criteria,
                                                   &transport_observer1_);
     dtls_srtp_transport2_->RegisterRtpDemuxerSink(demuxer_criteria,
@@ -249,12 +257,14 @@ class DtlsSrtpTransportTest : public ::testing::Test,
     SendRecvRtcpPackets();
   }
 
+  rtc::AutoThread main_thread_;
   std::unique_ptr<DtlsSrtpTransport> dtls_srtp_transport1_;
   std::unique_ptr<DtlsSrtpTransport> dtls_srtp_transport2_;
   webrtc::TransportObserver transport_observer1_;
   webrtc::TransportObserver transport_observer2_;
 
   int sequence_number_ = 0;
+  webrtc::test::ScopedKeyValueConfig field_trials_;
 };
 
 // Tests that if RTCP muxing is enabled and transports are set after RTP

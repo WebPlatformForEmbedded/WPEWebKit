@@ -19,10 +19,12 @@
 #include "rtc_base/ip_address.h"
 #include "rtc_base/logging.h"
 #include "rtc_base/net_helpers.h"
+#include "rtc_base/net_test_helpers.h"
 #include "rtc_base/network_monitor.h"
 #include "rtc_base/socket_unittest.h"
 #include "rtc_base/test_utils.h"
 #include "rtc_base/thread.h"
+#include "test/field_trial.h"
 #include "test/gtest.h"
 
 namespace rtc {
@@ -460,14 +462,24 @@ TEST_F(PhysicalSocketTest, TestGetSetOptionsIPv6) {
 
 #if defined(WEBRTC_POSIX)
 
-// We don't get recv timestamps on Mac.
-#if !defined(WEBRTC_MAC)
 TEST_F(PhysicalSocketTest, TestSocketRecvTimestampIPv4) {
   MAYBE_SKIP_IPV4;
   SocketTest::TestSocketRecvTimestampIPv4();
 }
 
 TEST_F(PhysicalSocketTest, TestSocketRecvTimestampIPv6) {
+  SocketTest::TestSocketRecvTimestampIPv6();
+}
+
+#if !defined(WEBRTC_MAC)
+TEST_F(PhysicalSocketTest, TestSocketRecvTimestampIPv4ScmExperimentDisabled) {
+  MAYBE_SKIP_IPV4;
+  webrtc::test::ScopedFieldTrials trial("WebRTC-SCM-Timestamp/Disabled/");
+  SocketTest::TestSocketRecvTimestampIPv4();
+}
+
+TEST_F(PhysicalSocketTest, TestSocketRecvTimestampIPv6ScmExperimentDisabled) {
+  webrtc::test::ScopedFieldTrials trial("WebRTC-SCM-Timestamp/Disabled/");
   SocketTest::TestSocketRecvTimestampIPv6();
 }
 #endif
@@ -510,5 +522,14 @@ TEST_F(PhysicalSocketTest,
 }
 
 #endif
+
+TEST_F(PhysicalSocketTest, UdpSocketRecvTimestampUseRtcEpochIPv4) {
+  MAYBE_SKIP_IPV4;
+  SocketTest::TestUdpSocketRecvTimestampUseRtcEpochIPv4();
+}
+
+TEST_F(PhysicalSocketTest, UdpSocketRecvTimestampUseRtcEpochIPv6) {
+  SocketTest::TestUdpSocketRecvTimestampUseRtcEpochIPv6();
+}
 
 }  // namespace rtc

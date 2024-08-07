@@ -73,7 +73,7 @@ TEST_F(ConfigEndToEndTest, VerifyDefaultSendConfigParameters) {
 }
 
 TEST_F(ConfigEndToEndTest, VerifyDefaultVideoReceiveConfigParameters) {
-  VideoReceiveStream::Config default_receive_config(nullptr);
+  VideoReceiveStreamInterface::Config default_receive_config(nullptr);
   EXPECT_EQ(RtcpMode::kCompound, default_receive_config.rtp.rtcp_mode)
       << "Reduced-size RTCP require rtcp-rsize to be negotiated.";
   EXPECT_FALSE(default_receive_config.rtp.lntf.enabled)
@@ -85,8 +85,6 @@ TEST_F(ConfigEndToEndTest, VerifyDefaultVideoReceiveConfigParameters) {
       << "Enabling RTX requires ssrc-group: FID negotiation";
   EXPECT_TRUE(default_receive_config.rtp.rtx_associated_payload_types.empty())
       << "Enabling RTX requires rtpmap: rtx negotiation.";
-  EXPECT_TRUE(default_receive_config.rtp.extensions.empty())
-      << "Enabling RTP extensions require negotiation.";
   VerifyEmptyNackConfig(default_receive_config.rtp.nack);
   EXPECT_EQ(-1, default_receive_config.rtp.ulpfec_payload_type)
       << "Enabling ULPFEC requires rtpmap: ulpfec negotiation.";

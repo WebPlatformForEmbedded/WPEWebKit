@@ -17,20 +17,22 @@
 #include <utility>
 
 #include "api/packet_socket_factory.h"
+#include "api/task_queue/pending_task_safety_flag.h"
 #include "api/transport/stun.h"
+#include "api/units/time_delta.h"
 #include "rtc_base/async_packet_socket.h"
 #include "rtc_base/async_resolver_interface.h"
 #include "rtc_base/checks.h"
-#include "rtc_base/constructor_magic.h"
 #include "rtc_base/helpers.h"
 #include "rtc_base/logging.h"
-#include "rtc_base/task_utils/to_queued_task.h"
 #include "rtc_base/thread.h"
 #include "rtc_base/time_utils.h"
 
 namespace stunprober {
 
 namespace {
+using ::webrtc::SafeTask;
+using ::webrtc::TimeDelta;
 
 const int THREAD_WAKE_UP_INTERVAL_MS = 5;
 
@@ -69,6 +71,9 @@ class StunProber::Requester : public sigslot::has_slots<> {
             const std::vector<rtc::SocketAddress>& server_ips);
   ~Requester() override;
 
+  Requester(const Requester&) = delete;
+  Requester& operator=(const Requester&) = delete;
+
   // There is no callback for SendStunRequest as the underneath socket send is
   // expected to be completed immediately. Otherwise, it'll skip this request
   // and move to the next one.
@@ -105,8 +110,6 @@ class StunProber::Requester : public sigslot::has_slots<> {
   int16_t num_response_received_ = 0;
 
   webrtc::SequenceChecker& thread_checker_;
-
-  RTC_DISALLOW_COPY_AND_ASSIGN(Requester);
 };
 
 StunProber::Requester::Requester(
@@ -137,12 +140,8 @@ void StunProber::Requester::SendStunRequest() {
   RTC_DCHECK(thread_checker_.IsCurrent());
   requests_.push_back(new Request());
   Request& request = *(requests_.back());
-  cricket::StunMessage message;
-
   // Random transaction ID, STUN_BINDING_REQUEST
-  message.SetTransactionID(
-      rtc::CreateRandomString(cricket::kStunTransactionIdLength));
-  message.SetType(cricket::STUN_BINDING_REQUEST);
+  cricket::StunMessage message(cricket::STUN_BINDING_REQUEST);
 
   std::unique_ptr<rtc::ByteBufferWriter> request_packet(
       new rtc::ByteBufferWriter(nullptr, kMaxUdpBufferSize));
@@ -255,11 +254,11 @@ void StunProber::ObserverAdapter::OnFinished(StunProber* stunprober,
 
 StunProber::StunProber(rtc::PacketSocketFactory* socket_factory,
                        rtc::Thread* thread,
-                       const rtc::NetworkManager::NetworkList& networks)
+                       std::vector<const rtc::Network*> networks)
     : interval_ms_(0),
       socket_factory_(socket_factory),
       thread_(thread),
-      networks_(networks) {}
+      networks_(std::move(networks)) {}
 
 StunProber::~StunProber() {
   RTC_DCHECK(thread_checker_.IsCurrent());
@@ -330,13 +329,12 @@ bool StunProber::Start(StunProber::Observer* observer) {
 }
 
 bool StunProber::ResolveServerName(const rtc::SocketAddress& addr) {
-  rtc::AsyncResolverInterface* resolver =
-      socket_factory_->CreateAsyncResolver();
-  if (!resolver) {
+  RTC_DCHECK(!resolver_);
+  resolver_ = socket_factory_->CreateAsyncDnsResolver();
+  if (!resolver_) {
     return false;
   }
-  resolver->SignalDone.connect(this, &StunProber::OnServerResolved);
-  resolver->Start(addr);
+  resolver_->Start(addr, [this] { OnServerResolved(resolver_->result()); });
   return true;
 }
 
@@ -348,21 +346,17 @@ void StunProber::OnSocketReady(rtc::AsyncPacketSocket* socket,
   }
 }
 
-void StunProber::OnServerResolved(rtc::AsyncResolverInterface* resolver) {
+void StunProber::OnServerResolved(
+    const webrtc::AsyncDnsResolverResult& result) {
   RTC_DCHECK(thread_checker_.IsCurrent());
-
-  if (resolver->GetError() == 0) {
-    rtc::SocketAddress addr(resolver->address().ipaddr(),
-                            resolver->address().port());
+  rtc::SocketAddress received_address;
+  if (result.GetResolvedAddress(AF_INET, &received_address)) {
+    // Construct an address without the name in it.
+    rtc::SocketAddress addr(received_address.ipaddr(), received_address.port());
     all_servers_addrs_.push_back(addr);
   }
-
-  // Deletion of AsyncResolverInterface can't be done in OnResolveResult which
-  // handles SignalDone.
-  thread_->PostTask(
-      webrtc::ToQueuedTask([resolver] { resolver->Destroy(false); }));
+  resolver_.reset();
   servers_.pop_back();
-
   if (servers_.size()) {
     if (!ResolveServerName(servers_.back())) {
       ReportOnPrepared(RESOLVE_FAILED);
@@ -458,9 +452,8 @@ void StunProber::MaybeScheduleStunRequests() {
 
   if (Done()) {
     thread_->PostDelayedTask(
-        webrtc::ToQueuedTask(task_safety_.flag(),
-                             [this] { ReportOnFinished(SUCCESS); }),
-        timeout_ms_);
+        SafeTask(task_safety_.flag(), [this] { ReportOnFinished(SUCCESS); }),
+        TimeDelta::Millis(timeout_ms_));
     return;
   }
   if (should_send_next_request(now)) {
@@ -471,9 +464,8 @@ void StunProber::MaybeScheduleStunRequests() {
     next_request_time_ms_ = now + interval_ms_;
   }
   thread_->PostDelayedTask(
-      webrtc::ToQueuedTask(task_safety_.flag(),
-                           [this] { MaybeScheduleStunRequests(); }),
-      get_wake_up_interval_ms());
+      SafeTask(task_safety_.flag(), [this] { MaybeScheduleStunRequests(); }),
+      TimeDelta::Millis(get_wake_up_interval_ms()));
 }
 
 bool StunProber::GetStats(StunProber::Stats* prob_stats) const {

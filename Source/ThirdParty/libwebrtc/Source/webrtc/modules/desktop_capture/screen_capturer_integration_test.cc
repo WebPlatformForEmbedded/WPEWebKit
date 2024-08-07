@@ -25,7 +25,6 @@
 #include "modules/desktop_capture/rgba_color.h"
 #include "modules/desktop_capture/screen_drawer.h"
 #include "rtc_base/checks.h"
-#include "rtc_base/constructor_magic.h"
 #include "rtc_base/logging.h"
 #include "rtc_base/third_party/base64/base64.h"
 #include "test/gmock.h"
@@ -171,12 +170,6 @@ class ScreenCapturerIntegrationTest : public ::testing::Test {
 
     MaybeCreateDirectxCapturer();
     return true;
-  }
-
-  void CreateMagnifierCapturer() {
-    DesktopCaptureOptions options(DesktopCaptureOptions::CreateDefault());
-    options.set_allow_use_magnification_api(true);
-    capturer_ = DesktopCapturer::CreateScreenCapturer(options);
   }
 #endif  // defined(WEBRTC_WIN)
 
@@ -328,35 +321,6 @@ TEST_F(ScreenCapturerIntegrationTest, DISABLED_TwoDirectxCapturers) {
 
   std::unique_ptr<DesktopCapturer> capturer2 = std::move(capturer_);
   RTC_CHECK(CreateDirectxCapturer());
-  TestCaptureUpdatedRegion({capturer_.get(), capturer2.get()});
-}
-
-TEST_F(ScreenCapturerIntegrationTest,
-       DISABLED_CaptureUpdatedRegionWithMagnifierCapturer) {
-  // On Windows 8 or later, magnifier APIs return a frame with a border on test
-  // environment, so disable these tests.
-  // Bug https://bugs.chromium.org/p/webrtc/issues/detail?id=6844
-  // TODO(zijiehe): Find the root cause of the border and failure, which cannot
-  // reproduce on my dev machine.
-  if (rtc::rtc_win::GetVersion() >= rtc::rtc_win::Version::VERSION_WIN8) {
-    return;
-  }
-  CreateMagnifierCapturer();
-  TestCaptureUpdatedRegion();
-}
-
-TEST_F(ScreenCapturerIntegrationTest, DISABLED_TwoMagnifierCapturers) {
-  // On Windows 8 or later, magnifier APIs return a frame with a border on test
-  // environment, so disable these tests.
-  // Bug https://bugs.chromium.org/p/webrtc/issues/detail?id=6844
-  // TODO(zijiehe): Find the root cause of the border and failure, which cannot
-  // reproduce on my dev machine.
-  if (rtc::rtc_win::GetVersion() >= rtc::rtc_win::Version::VERSION_WIN8) {
-    return;
-  }
-  CreateMagnifierCapturer();
-  std::unique_ptr<DesktopCapturer> capturer2 = std::move(capturer_);
-  CreateMagnifierCapturer();
   TestCaptureUpdatedRegion({capturer_.get(), capturer2.get()});
 }
 

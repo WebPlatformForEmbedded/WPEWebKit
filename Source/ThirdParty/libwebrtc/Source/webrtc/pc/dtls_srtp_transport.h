@@ -11,6 +11,7 @@
 #ifndef PC_DTLS_SRTP_TRANSPORT_H_
 #define PC_DTLS_SRTP_TRANSPORT_H_
 
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -22,7 +23,6 @@
 #include "p2p/base/packet_transport_internal.h"
 #include "pc/srtp_transport.h"
 #include "rtc_base/buffer.h"
-#include "rtc_base/third_party/sigslot/sigslot.h"
 
 namespace webrtc {
 
@@ -31,7 +31,7 @@ namespace webrtc {
 // configures the SrtpSessions in the base class.
 class DtlsSrtpTransport : public SrtpTransport {
  public:
-  explicit DtlsSrtpTransport(bool rtcp_mux_enabled);
+  DtlsSrtpTransport(bool rtcp_mux_enabled, const FieldTrialsView& field_trials);
 
   // Set P2P layer RTP/RTCP DtlsTransports. When using RTCP-muxing,
   // `rtcp_dtls_transport` is null.

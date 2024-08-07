@@ -14,26 +14,28 @@
 
 #include "absl/strings/str_split.h"
 
+#include <cstddef>
+#include <cstdint>
 #include <deque>
 #include <initializer_list>
 #include <list>
 #include <map>
 #include <memory>
+#include <set>
 #include <string>
-#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "absl/base/dynamic_annotations.h"
 #include "absl/base/macros.h"
 #include "absl/container/btree_map.h"
 #include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/node_hash_map.h"
-#include "absl/strings/numbers.h"
+#include "absl/strings/string_view.h"
 
 namespace {
 
@@ -369,7 +371,7 @@ TEST(SplitIterator, EqualityAsEndCondition) {
 TEST(Splitter, RangeIterators) {
   auto splitter = absl::StrSplit("a,b,c", ',');
   std::vector<absl::string_view> output;
-  for (const absl::string_view& p : splitter) {
+  for (absl::string_view p : splitter) {
     output.push_back(p);
   }
   EXPECT_THAT(output, ElementsAre("a", "b", "c"));
@@ -943,8 +945,14 @@ TEST(Delimiter, ByLength) {
 }
 
 TEST(Split, WorksWithLargeStrings) {
+#if defined(ABSL_HAVE_ADDRESS_SANITIZER) || \
+    defined(ABSL_HAVE_MEMORY_SANITIZER) || defined(ABSL_HAVE_THREAD_SANITIZER)
+  constexpr size_t kSize = (uint32_t{1} << 26) + 1;  // 64M + 1 byte
+#else
+  constexpr size_t kSize = (uint32_t{1} << 31) + 1;  // 2G + 1 byte
+#endif
   if (sizeof(size_t) > 4) {
-    std::string s((uint32_t{1} << 31) + 1, 'x');  // 2G + 1 byte
+    std::string s(kSize, 'x');
     s.back() = '-';
     std::vector<absl::string_view> v = absl::StrSplit(s, '-');
     EXPECT_EQ(2, v.size());

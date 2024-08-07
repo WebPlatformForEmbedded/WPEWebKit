@@ -12,6 +12,7 @@
 #ifndef MEDIA_ENGINE_SIMULCAST_ENCODER_ADAPTER_H_
 #define MEDIA_ENGINE_SIMULCAST_ENCODER_ADAPTER_H_
 
+#include <atomic>
 #include <list>
 #include <memory>
 #include <stack>
@@ -21,13 +22,13 @@
 
 #include "absl/types/optional.h"
 #include "api/fec_controller_override.h"
+#include "api/field_trials_view.h"
 #include "api/sequence_checker.h"
 #include "api/video_codecs/sdp_video_format.h"
 #include "api/video_codecs/video_encoder.h"
 #include "api/video_codecs/video_encoder_factory.h"
 #include "common_video/framerate_controller.h"
 #include "modules/video_coding/include/video_codec_interface.h"
-#include "rtc_base/atomic_ops.h"
 #include "rtc_base/experiments/encoder_info_settings.h"
 #include "rtc_base/system/no_unique_address.h"
 #include "rtc_base/system/rtc_export.h"
@@ -48,7 +49,8 @@ class RTC_EXPORT SimulcastEncoderAdapter : public VideoEncoder {
   // will be used if InitEncode() fails for the primary encoder.
   SimulcastEncoderAdapter(VideoEncoderFactory* primary_factory,
                           VideoEncoderFactory* fallback_factory,
-                          const SdpVideoFormat& format);
+                          const SdpVideoFormat& format,
+                          const FieldTrialsView& field_trials);
   ~SimulcastEncoderAdapter() override;
 
   // Implements VideoEncoder.
@@ -167,7 +169,7 @@ class RTC_EXPORT SimulcastEncoderAdapter : public VideoEncoder {
 
   void OverrideFromFieldTrial(VideoEncoder::EncoderInfo* info) const;
 
-  volatile int inited_;  // Accessed atomically.
+  std::atomic<int> inited_;
   VideoEncoderFactory* const primary_encoder_factory_;
   VideoEncoderFactory* const fallback_encoder_factory_;
   const SdpVideoFormat video_format_;

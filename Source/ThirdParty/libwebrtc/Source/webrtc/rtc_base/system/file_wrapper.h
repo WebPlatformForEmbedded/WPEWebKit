@@ -12,9 +12,12 @@
 #define RTC_BASE_SYSTEM_FILE_WRAPPER_H_
 
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 
 #include <string>
+
+#include "absl/strings/string_view.h"
 
 // Implementation that can read (exclusive) or write from/to a file.
 
@@ -34,11 +37,8 @@ class FileWrapper final {
   // returned object to check if the open operation was successful. On failure,
   // and if `error` is non-null, the system errno value is stored at |*error|.
   // The file is closed by the destructor.
-  static FileWrapper OpenReadOnly(const char* file_name_utf8);
-  static FileWrapper OpenReadOnly(const std::string& file_name_utf8);
-  static FileWrapper OpenWriteOnly(const char* file_name_utf8,
-                                   int* error = nullptr);
-  static FileWrapper OpenWriteOnly(const std::string& file_name_utf8,
+  static FileWrapper OpenReadOnly(absl::string_view file_name_utf8);
+  static FileWrapper OpenWriteOnly(absl::string_view file_name_utf8,
                                    int* error = nullptr);
 
   FileWrapper() = default;

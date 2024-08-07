@@ -14,10 +14,11 @@
 #include <utility>
 #include <vector>
 
+#include "absl/functional/any_invocable.h"
+#include "absl/strings/string_view.h"
+#include "api/task_queue/task_queue_base.h"
 #include "api/test/time_controller.h"
-#include "rtc_base/constructor_magic.h"
 #include "rtc_base/fake_clock.h"
-#include "rtc_base/task_queue.h"
 #include "rtc_base/task_utils/repeating_task.h"
 #include "test/gtest.h"
 #include "test/logging/log_writer.h"
@@ -43,12 +44,16 @@ class Scenario {
  public:
   Scenario();
   explicit Scenario(const testing::TestInfo* test_info);
-  explicit Scenario(std::string file_name);
-  Scenario(std::string file_name, bool real_time);
+  explicit Scenario(absl::string_view file_name);
+  Scenario(absl::string_view file_name, bool real_time);
   Scenario(std::unique_ptr<LogWriterFactoryInterface> log_writer_manager,
            bool real_time);
-  RTC_DISALLOW_COPY_AND_ASSIGN(Scenario);
+
   ~Scenario();
+
+  Scenario(const Scenario&) = delete;
+  Scenario& operator=(const Scenario&) = delete;
+
   NetworkEmulationManagerImpl* net() { return &network_manager_; }
 
   EmulatedNetworkNode* CreateSimulationNode(NetworkSimulationConfig config);
@@ -59,9 +64,9 @@ class Scenario {
   SimulationNode* CreateMutableSimulationNode(
       std::function<void(NetworkSimulationConfig*)> config_modifier);
 
-  CallClient* CreateClient(std::string name, CallClientConfig config);
+  CallClient* CreateClient(absl::string_view name, CallClientConfig config);
   CallClient* CreateClient(
-      std::string name,
+      absl::string_view name,
       std::function<void(CallClientConfig*)> config_modifier);
 
   CallClientPair* CreateRoutes(CallClient* first,
@@ -98,30 +103,30 @@ class Scenario {
       AudioStreamConfig config);
 
   // Runs the provided function with a fixed interval. For real time tests,
-  // |function| starts being called after |interval| from the call to Every().
-  void Every(TimeDelta interval, std::function<void(TimeDelta)> function);
-  void Every(TimeDelta interval, std::function<void()> function);
+  // `function` starts being called after `interval` from the call to Every().
+  void Every(TimeDelta interval, absl::AnyInvocable<void(TimeDelta)> function);
+  void Every(TimeDelta interval, absl::AnyInvocable<void()> function);
 
   // Runs the provided function on the internal task queue. This ensure that
   // it's run on the main thread for simulated time tests.
-  void Post(std::function<void()> function);
+  void Post(absl::AnyInvocable<void() &&> function);
 
   // Runs the provided function after given duration has passed. For real time
-  // tests, |function| is called after |target_time_since_start| from the call
+  // tests, `function` is called after `target_time_since_start` from the call
   // to Every().
-  void At(TimeDelta offset, std::function<void()> function);
+  void At(TimeDelta offset, absl::AnyInvocable<void() &&> function);
 
-  // Sends a packet over the nodes and runs |action| when it has been delivered.
+  // Sends a packet over the nodes and runs `action` when it has been delivered.
   void NetworkDelayedAction(std::vector<EmulatedNetworkNode*> over_nodes,
                             size_t packet_size,
                             std::function<void()> action);
 
   // Runs the scenario for the given time.
   void RunFor(TimeDelta duration);
-  // Runs the scenario until |target_time_since_start|.
+  // Runs the scenario until `target_time_since_start`.
   void RunUntil(TimeDelta target_time_since_start);
-  // Runs the scenario until |target_time_since_start| or |exit_function|
-  // returns true. |exit_function| is polled after each |check_interval| has
+  // Runs the scenario until `target_time_since_start` or `exit_function`
+  // returns true. `exit_function` is polled after each `check_interval` has
   // passed.
   void RunUntil(TimeDelta target_time_since_start,
                 TimeDelta check_interval,
@@ -135,7 +140,7 @@ class Scenario {
                           size_t packet_size);
 
   ColumnPrinter TimePrinter();
-  StatesPrinter* CreatePrinter(std::string name,
+  StatesPrinter* CreatePrinter(absl::string_view name,
                                TimeDelta interval,
                                std::vector<ColumnPrinter> printers);
 
@@ -144,13 +149,13 @@ class Scenario {
   // Return the duration of the current session so far.
   TimeDelta TimeSinceStart();
 
-  std::unique_ptr<RtcEventLogOutput> GetLogWriter(std::string name) {
+  std::unique_ptr<RtcEventLogOutput> GetLogWriter(absl::string_view name) {
     if (!log_writer_factory_ || name.empty())
       return nullptr;
     return log_writer_factory_->Create(name);
   }
   std::unique_ptr<LogWriterFactoryInterface> GetLogWriterFactory(
-      std::string name) {
+      absl::string_view name) {
     if (!log_writer_factory_ || name.empty())
       return nullptr;
     return std::make_unique<LogWriterFactoryAddPrefix>(
@@ -176,7 +181,7 @@ class Scenario {
 
   Timestamp start_time_ = Timestamp::PlusInfinity();
   // Defined last so it's destroyed first.
-  rtc::TaskQueue task_queue_;
+  std::unique_ptr<TaskQueueBase, TaskQueueDeleter> task_queue_;
 };
 }  // namespace test
 }  // namespace webrtc

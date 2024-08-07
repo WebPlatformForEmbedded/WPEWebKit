@@ -39,8 +39,15 @@ LayerFilteringTransport::LayerFilteringTransport(
     int selected_sl,
     const std::map<uint8_t, MediaType>& payload_type_map,
     uint32_t ssrc_to_filter_min,
-    uint32_t ssrc_to_filter_max)
-    : DirectTransport(task_queue, std::move(pipe), send_call, payload_type_map),
+    uint32_t ssrc_to_filter_max,
+    rtc::ArrayView<const RtpExtension> audio_extensions,
+    rtc::ArrayView<const RtpExtension> video_extensions)
+    : DirectTransport(task_queue,
+                      std::move(pipe),
+                      send_call,
+                      payload_type_map,
+                      audio_extensions,
+                      video_extensions),
       vp8_video_payload_type_(vp8_video_payload_type),
       vp9_video_payload_type_(vp9_video_payload_type),
       vp8_depacketizer_(CreateVideoRtpDepacketizer(kVideoCodecVP8)),
@@ -59,7 +66,9 @@ LayerFilteringTransport::LayerFilteringTransport(
     uint8_t vp9_video_payload_type,
     int selected_tl,
     int selected_sl,
-    const std::map<uint8_t, MediaType>& payload_type_map)
+    const std::map<uint8_t, MediaType>& payload_type_map,
+    rtc::ArrayView<const RtpExtension> audio_extensions,
+    rtc::ArrayView<const RtpExtension> video_extensions)
     : LayerFilteringTransport(task_queue,
                               std::move(pipe),
                               send_call,
@@ -69,27 +78,28 @@ LayerFilteringTransport::LayerFilteringTransport(
                               selected_sl,
                               payload_type_map,
                               /*ssrc_to_filter_min=*/0,
-                              /*ssrc_to_filter_max=*/0xFFFFFFFF) {}
+                              /*ssrc_to_filter_max=*/0xFFFFFFFF,
+                              audio_extensions,
+                              video_extensions) {}
 
 bool LayerFilteringTransport::DiscardedLastPacket() const {
   return discarded_last_packet_;
 }
 
-bool LayerFilteringTransport::SendRtp(const uint8_t* packet,
-                                      size_t length,
+bool LayerFilteringTransport::SendRtp(rtc::ArrayView<const uint8_t> packet,
                                       const PacketOptions& options) {
   if (selected_tl_ == -1 && selected_sl_ == -1) {
     // Nothing to change, forward the packet immediately.
-    return test::DirectTransport::SendRtp(packet, length, options);
+    return test::DirectTransport::SendRtp(packet, options);
   }
 
   RtpPacket rtp_packet;
-  rtp_packet.Parse(packet, length);
+  rtp_packet.Parse(packet);
 
   if (rtp_packet.Ssrc() < ssrc_to_filter_min_ ||
       rtp_packet.Ssrc() > ssrc_to_filter_max_) {
     // Nothing to change, forward the packet immediately.
-    return test::DirectTransport::SendRtp(packet, length, options);
+    return test::DirectTransport::SendRtp(packet, options);
   }
 
   if (rtp_packet.PayloadType() == vp8_video_payload_type_ ||
@@ -163,12 +173,11 @@ bool LayerFilteringTransport::SendRtp(const uint8_t* packet,
         }
       }
     } else {
-      RTC_NOTREACHED() << "Parse error";
+      RTC_DCHECK_NOTREACHED() << "Parse error";
     }
   }
 
-  return test::DirectTransport::SendRtp(rtp_packet.data(), rtp_packet.size(),
-                                        options);
+  return test::DirectTransport::SendRtp(rtp_packet, options);
 }
 
 }  // namespace test

@@ -35,6 +35,7 @@ struct RTC_EXPORT VideoSinkWants {
   VideoSinkWants();
   VideoSinkWants(const VideoSinkWants&);
   ~VideoSinkWants();
+
   // Tells the source whether the sink wants frames with rotation applied.
   // By default, any rotation must be applied by the sink.
   bool rotation_applied = false;
@@ -80,11 +81,38 @@ struct RTC_EXPORT VideoSinkWants {
   // Note that the `resolutions` can change while frames are in flight and
   // should only be used as a hint when constructing the webrtc::VideoFrame.
   std::vector<FrameSize> resolutions;
+
+  // This is the resolution requested by the user using RtpEncodingParameters.
+  absl::optional<FrameSize> requested_resolution;
+
+  // `is_active` : Is this VideoSinkWants from an encoder that is encoding any
+  // layer. IF YES, it will affect how the VideoAdapter will choose to
+  // prioritize the OnOutputFormatRequest vs. requested_resolution. IF NO,
+  // VideoAdapter consider this VideoSinkWants as a passive listener (e.g a
+  // VideoRenderer or a VideoEncoder that is not currently actively encoding).
+  bool is_active = false;
+
+  // This sub-struct contains information computed by VideoBroadcaster
+  // that aggregates several VideoSinkWants (and sends them to
+  // AdaptedVideoTrackSource).
+  struct Aggregates {
+    // `active_without_requested_resolution` is set by VideoBroadcaster
+    // when aggregating sink wants if there exists any sink (encoder) that is
+    // active but has not set the `requested_resolution`, i.e is relying on
+    // OnOutputFormatRequest to handle encode resolution.
+    bool any_active_without_requested_resolution = false;
+  };
+  absl::optional<Aggregates> aggregates;
 };
 
 inline bool operator==(const VideoSinkWants::FrameSize& a,
                        const VideoSinkWants::FrameSize& b) {
   return a.width == b.width && a.height == b.height;
+}
+
+inline bool operator!=(const VideoSinkWants::FrameSize& a,
+                       const VideoSinkWants::FrameSize& b) {
+  return !(a == b);
 }
 
 template <typename VideoFrameT>
@@ -97,6 +125,10 @@ class VideoSourceInterface {
   // RemoveSink must guarantee that at the time the method returns,
   // there is no current and no future calls to VideoSinkInterface::OnFrame.
   virtual void RemoveSink(VideoSinkInterface<VideoFrameT>* sink) = 0;
+
+  // Request underlying source to capture a new frame.
+  // TODO(crbug/1255737): make pure virtual once downstream projects adapt.
+  virtual void RequestRefreshFrame() {}
 };
 
 }  // namespace rtc

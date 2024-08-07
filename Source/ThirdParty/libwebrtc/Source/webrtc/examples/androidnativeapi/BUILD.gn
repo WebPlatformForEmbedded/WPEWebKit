@@ -1,12 +1,13 @@
 import("//webrtc.gni")
 
 if (is_android) {
+  import("//third_party/jni_zero/jni_zero.gni")
   rtc_android_apk("androidnativeapi") {
     testonly = true
     apk_name = "androidnativeapi"
     android_manifest = "AndroidManifest.xml"
     min_sdk_version = 21
-    target_sdk_version = 27
+    target_sdk_version = 31
 
     sources = [
       "java/org/webrtc/examples/androidnativeapi/CallClient.java",
@@ -15,7 +16,6 @@ if (is_android) {
 
     deps = [
       ":resources",
-      "//modules/audio_device:audio_device_java",
       "//rtc_base:base_java",
       "//sdk/android:camera_java",
       "//sdk/android:surfaceviewrenderer_java",
@@ -48,6 +48,8 @@ if (is_android) {
     deps = [
       ":generated_jni",
       "../../api:scoped_refptr",
+      "../../api:sequence_checker",
+      "../../rtc_base:ssl",
       "../../rtc_base/synchronization:mutex",
       "//api:libjingle_peerconnection_api",
       "//api/rtc_event_log:rtc_event_log_factory",
@@ -57,8 +59,6 @@ if (is_android) {
       "//media:rtc_media_engine_defaults",
       "//modules/utility",
       "//pc:libjingle_peerconnection",
-      "//rtc_base",
-      "//rtc_base:rtc_base_approved",
       "//sdk/android:native_api_base",
       "//sdk/android:native_api_jni",
       "//sdk/android:native_api_video",

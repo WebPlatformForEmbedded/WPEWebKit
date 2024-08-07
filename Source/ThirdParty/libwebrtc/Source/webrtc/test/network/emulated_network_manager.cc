@@ -14,6 +14,7 @@
 #include <utility>
 
 #include "absl/memory/memory.h"
+#include "p2p/base/basic_packet_socket_factory.h"
 #include "test/network/fake_network_socket_server.h"
 
 namespace webrtc {
@@ -25,16 +26,22 @@ EmulatedNetworkManager::EmulatedNetworkManager(
     EndpointsContainer* endpoints_container)
     : task_queue_(task_queue),
       endpoints_container_(endpoints_container),
-      network_thread_(time_controller->CreateThread(
-          "net_thread",
-          std::make_unique<FakeNetworkSocketServer>(endpoints_container))),
       sent_first_update_(false),
-      start_count_(0) {}
+      start_count_(0) {
+  auto socket_server =
+      std::make_unique<FakeNetworkSocketServer>(endpoints_container);
+  packet_socket_factory_ =
+      std::make_unique<rtc::BasicPacketSocketFactory>(socket_server.get());
+  // Since we pass ownership of the socket server to `network_thread_`, we must
+  // arrange that it outlives `packet_socket_factory_` which refers to it.
+  network_thread_ =
+      time_controller->CreateThread("net_thread", std::move(socket_server));
+}
 
 void EmulatedNetworkManager::EnableEndpoint(EmulatedEndpointImpl* endpoint) {
   RTC_CHECK(endpoints_container_->HasEndpoint(endpoint))
       << "No such interface: " << endpoint->GetPeerLocalAddress().ToString();
-  network_thread_->PostTask(RTC_FROM_HERE, [this, endpoint]() {
+  network_thread_->PostTask([this, endpoint]() {
     endpoint->Enable();
     UpdateNetworksOnce();
   });
@@ -43,7 +50,7 @@ void EmulatedNetworkManager::EnableEndpoint(EmulatedEndpointImpl* endpoint) {
 void EmulatedNetworkManager::DisableEndpoint(EmulatedEndpointImpl* endpoint) {
   RTC_CHECK(endpoints_container_->HasEndpoint(endpoint))
       << "No such interface: " << endpoint->GetPeerLocalAddress().ToString();
-  network_thread_->PostTask(RTC_FROM_HERE, [this, endpoint]() {
+  network_thread_->PostTask([this, endpoint]() {
     endpoint->Disable();
     UpdateNetworksOnce();
   });
@@ -59,11 +66,9 @@ void EmulatedNetworkManager::StartUpdating() {
     // we should trigger network signal immediately for the new clients
     // to start allocating ports.
     if (sent_first_update_)
-      network_thread_->PostTask(RTC_FROM_HERE,
-                                [this]() { MaybeSignalNetworksChanged(); });
+      network_thread_->PostTask([this]() { MaybeSignalNetworksChanged(); });
   } else {
-    network_thread_->PostTask(RTC_FROM_HERE,
-                              [this]() { UpdateNetworksOnce(); });
+    network_thread_->PostTask([this]() { UpdateNetworksOnce(); });
   }
   ++start_count_;
 }
@@ -80,8 +85,7 @@ void EmulatedNetworkManager::StopUpdating() {
 }
 
 void EmulatedNetworkManager::GetStats(
-    std::function<void(std::unique_ptr<EmulatedNetworkStats>)> stats_callback)
-    const {
+    std::function<void(EmulatedNetworkStats)> stats_callback) const {
   task_queue_->PostTask([stats_callback, this]() {
     stats_callback(endpoints_container_->GetStats());
   });
@@ -90,15 +94,15 @@ void EmulatedNetworkManager::GetStats(
 void EmulatedNetworkManager::UpdateNetworksOnce() {
   RTC_DCHECK_RUN_ON(network_thread_.get());
 
-  std::vector<rtc::Network*> networks;
+  std::vector<std::unique_ptr<rtc::Network>> networks;
   for (std::unique_ptr<rtc::Network>& net :
        endpoints_container_->GetEnabledNetworks()) {
     net->set_default_local_address_provider(this);
-    networks.push_back(net.release());
+    networks.push_back(std::move(net));
   }
 
   bool changed;
-  MergeNetworkList(networks, &changed);
+  MergeNetworkList(std::move(networks), &changed);
   if (changed || !sent_first_update_) {
     MaybeSignalNetworksChanged();
     sent_first_update_ = true;

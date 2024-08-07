@@ -16,11 +16,11 @@
 
 #include <memory>
 
+#include "absl/strings/string_view.h"
 #include "api/video/encoded_image.h"
 #include "api/video/video_codec_type.h"
-#include "rtc_base/constructor_magic.h"
+#include "rtc_base/numerics/sequence_number_unwrapper.h"
 #include "rtc_base/system/file_wrapper.h"
-#include "rtc_base/time_utils.h"
 
 namespace webrtc {
 
@@ -32,7 +32,12 @@ class IvfFileWriter {
   // will fail. A `byte_limit` of 0 is equivalent to no limit.
   static std::unique_ptr<IvfFileWriter> Wrap(FileWrapper file,
                                              size_t byte_limit);
+  static std::unique_ptr<IvfFileWriter> Wrap(absl::string_view filename,
+                                             size_t byte_limit);
   ~IvfFileWriter();
+
+  IvfFileWriter(const IvfFileWriter&) = delete;
+  IvfFileWriter& operator=(const IvfFileWriter&) = delete;
 
   bool WriteFrame(const EncodedImage& encoded_image, VideoCodecType codec_type);
   bool Close();
@@ -55,10 +60,8 @@ class IvfFileWriter {
   uint16_t height_;
   int64_t last_timestamp_;
   bool using_capture_timestamps_;
-  rtc::TimestampWrapAroundHandler wrap_handler_;
+  RtpTimestampUnwrapper wrap_handler_;
   FileWrapper file_;
-
-  RTC_DISALLOW_COPY_AND_ASSIGN(IvfFileWriter);
 };
 
 }  // namespace webrtc

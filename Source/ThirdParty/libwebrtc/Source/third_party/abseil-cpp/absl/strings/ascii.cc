@@ -14,6 +14,12 @@
 
 #include "absl/strings/ascii.h"
 
+#include <climits>
+#include <cstring>
+#include <string>
+
+#include "absl/base/config.h"
+
 namespace absl {
 ABSL_NAMESPACE_BEGIN
 namespace ascii_internal {
@@ -153,18 +159,70 @@ ABSL_DLL const char kToUpper[256] = {
 };
 // clang-format on
 
-}  // namespace ascii_internal
+// Returns whether `c` is in the a-z/A-Z range (w.r.t. `ToUpper`).
+// Implemented by:
+//  1. Pushing the a-z/A-Z range to [SCHAR_MIN, SCHAR_MIN + 26).
+//  2. Comparing to SCHAR_MIN + 26.
+template <bool ToUpper>
+constexpr bool AsciiInAZRange(unsigned char c) {
+  constexpr unsigned char sub = (ToUpper ? 'a' : 'A') - SCHAR_MIN;
+  constexpr signed char threshold = SCHAR_MIN + 26;  // 26 = alphabet size.
+  // Using unsigned arithmetic as overflows/underflows are well defined.
+  unsigned char u = c - sub;
+  // Using signed cmp, as SIMD unsigned cmp isn't available in many platforms.
+  return static_cast<signed char>(u) < threshold;
+}
 
-void AsciiStrToLower(std::string* s) {
-  for (auto& ch : *s) {
-    ch = absl::ascii_tolower(ch);
+template <bool ToUpper>
+constexpr void AsciiStrCaseFold(char* p, char* end) {
+  // The upper- and lowercase versions of ASCII characters differ by only 1 bit.
+  // When we need to flip the case, we can xor with this bit to achieve the
+  // desired result. Note that the choice of 'a' and 'A' here is arbitrary. We
+  // could have chosen 'z' and 'Z', or any other pair of characters as they all
+  // have the same single bit difference.
+  constexpr unsigned char kAsciiCaseBitFlip = 'a' ^ 'A';
+
+  for (; p < end; ++p) {
+    unsigned char v = static_cast<unsigned char>(*p);
+    v ^= AsciiInAZRange<ToUpper>(v) ? kAsciiCaseBitFlip : 0;
+    *p = static_cast<char>(v);
   }
 }
 
-void AsciiStrToUpper(std::string* s) {
-  for (auto& ch : *s) {
-    ch = absl::ascii_toupper(ch);
+static constexpr size_t ValidateAsciiCasefold() {
+  constexpr size_t num_chars = 1 + CHAR_MAX - CHAR_MIN;
+  size_t incorrect_index = 0;
+  char lowered[num_chars] = {};
+  char uppered[num_chars] = {};
+  for (unsigned int i = 0; i < num_chars; ++i) {
+    uppered[i] = lowered[i] = static_cast<char>(i);
   }
+  AsciiStrCaseFold<false>(&lowered[0], &lowered[num_chars]);
+  AsciiStrCaseFold<true>(&uppered[0], &uppered[num_chars]);
+  for (size_t i = 0; i < num_chars; ++i) {
+    const char ch = static_cast<char>(i),
+               ch_upper = ('a' <= ch && ch <= 'z' ? 'A' + (ch - 'a') : ch),
+               ch_lower = ('A' <= ch && ch <= 'Z' ? 'a' + (ch - 'A') : ch);
+    if (uppered[i] != ch_upper || lowered[i] != ch_lower) {
+      incorrect_index = i > 0 ? i : num_chars;
+      break;
+    }
+  }
+  return incorrect_index;
+}
+
+static_assert(ValidateAsciiCasefold() == 0, "error in case conversion");
+
+}  // namespace ascii_internal
+
+void AsciiStrToLower(std::string* s) {
+  char* p = &(*s)[0];  // Guaranteed to be valid for empty strings
+  return ascii_internal::AsciiStrCaseFold<false>(p, p + s->size());
+}
+
+void AsciiStrToUpper(std::string* s) {
+  char* p = &(*s)[0];  // Guaranteed to be valid for empty strings
+  return ascii_internal::AsciiStrCaseFold<true>(p, p + s->size());
 }
 
 void RemoveExtraAsciiWhitespace(std::string* str) {
@@ -183,17 +241,17 @@ void RemoveExtraAsciiWhitespace(std::string* str) {
   for (; input_it < input_end; ++input_it) {
     if (is_ws) {
       // Consecutive whitespace?  Keep only the last.
-      is_ws = absl::ascii_isspace(*input_it);
+      is_ws = absl::ascii_isspace(static_cast<unsigned char>(*input_it));
       if (is_ws) --output_it;
     } else {
-      is_ws = absl::ascii_isspace(*input_it);
+      is_ws = absl::ascii_isspace(static_cast<unsigned char>(*input_it));
     }
 
     *output_it = *input_it;
     ++output_it;
   }
 
-  str->erase(output_it - &(*str)[0]);
+  str->erase(static_cast<size_t>(output_it - &(*str)[0]));
 }
 
 ABSL_NAMESPACE_END

@@ -25,11 +25,11 @@ namespace webrtc {
 namespace test {
 
 namespace {
-const std::string kInputFileContents = "bazouk";
+using Ratio = FrameReader::Ratio;
+using RepeatMode = YuvFrameReaderImpl::RepeatMode;
 
-const size_t kFrameWidth = 2;
-const size_t kFrameHeight = 2;
-const size_t kFrameLength = 3 * kFrameWidth * kFrameHeight / 2;  // I420.
+constexpr Resolution kResolution({.width = 1, .height = 1});
+constexpr int kDefaultNumFrames = 3;
 }  // namespace
 
 class YuvFrameReaderTest : public ::testing::Test {
@@ -38,50 +38,114 @@ class YuvFrameReaderTest : public ::testing::Test {
   ~YuvFrameReaderTest() override = default;
 
   void SetUp() override {
-    temp_filename_ = webrtc::test::TempFilename(webrtc::test::OutputPath(),
-                                                "yuv_frame_reader_unittest");
-    FILE* dummy = fopen(temp_filename_.c_str(), "wb");
-    fprintf(dummy, "%s", kInputFileContents.c_str());
-    fclose(dummy);
-
-    frame_reader_.reset(
-        new YuvFrameReaderImpl(temp_filename_, kFrameWidth, kFrameHeight));
-    ASSERT_TRUE(frame_reader_->Init());
+    filepath_ = webrtc::test::TempFilename(webrtc::test::OutputPath(),
+                                           "yuv_frame_reader_unittest");
+    CreateYuvFileAndReader(/*num_frames=*/3, RepeatMode::kSingle);
   }
 
-  void TearDown() override { remove(temp_filename_.c_str()); }
+  void TearDown() override { remove(filepath_.c_str()); }
 
-  std::unique_ptr<FrameReader> frame_reader_;
-  std::string temp_filename_;
+  void CreateYuvFileAndReader(int num_frames, RepeatMode repeat_mode) {
+    FILE* file = fopen(filepath_.c_str(), "wb");
+    for (int i = 0; i < num_frames; ++i) {
+      uint8_t y = static_cast<uint8_t>(i & 255);
+      uint8_t u = static_cast<uint8_t>((i + 1) & 255);
+      uint8_t v = static_cast<uint8_t>((i + 2) & 255);
+      fwrite(&y, 1, 1, file);
+      fwrite(&u, 1, 1, file);
+      fwrite(&v, 1, 1, file);
+    }
+    fclose(file);
+
+    reader_ = CreateYuvFrameReader(filepath_, kResolution, repeat_mode);
+  }
+
+  std::string filepath_;
+  std::unique_ptr<FrameReader> reader_;
 };
 
-TEST_F(YuvFrameReaderTest, InitSuccess) {}
-
-TEST_F(YuvFrameReaderTest, FrameLength) {
-  EXPECT_EQ(kFrameLength, frame_reader_->FrameLength());
+TEST_F(YuvFrameReaderTest, num_frames) {
+  EXPECT_EQ(kDefaultNumFrames, reader_->num_frames());
 }
 
-TEST_F(YuvFrameReaderTest, NumberOfFrames) {
-  EXPECT_EQ(1, frame_reader_->NumberOfFrames());
+TEST_F(YuvFrameReaderTest, PullFrame_frameContent) {
+  rtc::scoped_refptr<I420BufferInterface> buffer = reader_->PullFrame();
+  EXPECT_EQ(0u, *buffer->DataY());
+  EXPECT_EQ(1u, *buffer->DataU());
+  EXPECT_EQ(2u, *buffer->DataV());
 }
 
-TEST_F(YuvFrameReaderTest, ReadFrame) {
-  rtc::scoped_refptr<I420BufferInterface> buffer = frame_reader_->ReadFrame();
-  ASSERT_TRUE(buffer);
-  // Expect I420 packed as YUV.
-  EXPECT_EQ(kInputFileContents[0], buffer->DataY()[0]);
-  EXPECT_EQ(kInputFileContents[1], buffer->DataY()[1]);
-  EXPECT_EQ(kInputFileContents[2], buffer->DataY()[2]);
-  EXPECT_EQ(kInputFileContents[3], buffer->DataY()[3]);
-  EXPECT_EQ(kInputFileContents[4], buffer->DataU()[0]);
-  EXPECT_EQ(kInputFileContents[5], buffer->DataV()[0]);
-  EXPECT_FALSE(frame_reader_->ReadFrame());  // End of file.
+TEST_F(YuvFrameReaderTest, ReadFrame_randomOrder) {
+  rtc::scoped_refptr<I420BufferInterface> buffer = reader_->ReadFrame(2);
+  EXPECT_EQ(2u, *buffer->DataY());
+  buffer = reader_->ReadFrame(0);
+  EXPECT_EQ(0u, *buffer->DataY());
+  buffer = reader_->ReadFrame(1);
+  EXPECT_EQ(1u, *buffer->DataY());
 }
 
-TEST_F(YuvFrameReaderTest, ReadFrameUninitialized) {
-  YuvFrameReaderImpl file_reader(temp_filename_, kFrameWidth, kFrameHeight);
-  EXPECT_FALSE(file_reader.ReadFrame());
+TEST_F(YuvFrameReaderTest, PullFrame_scale) {
+  rtc::scoped_refptr<I420BufferInterface> buffer = reader_->PullFrame(
+      /*pulled_frame_num=*/nullptr, Resolution({.width = 2, .height = 2}),
+      FrameReader::kNoScale);
+  EXPECT_EQ(2, buffer->width());
+  EXPECT_EQ(2, buffer->height());
 }
+
+class YuvFrameReaderRepeatModeTest
+    : public YuvFrameReaderTest,
+      public ::testing::WithParamInterface<
+          std::tuple<int, RepeatMode, std::vector<uint8_t>>> {};
+
+TEST_P(YuvFrameReaderRepeatModeTest, PullFrame) {
+  auto [num_frames, repeat_mode, expected_frames] = GetParam();
+  CreateYuvFileAndReader(num_frames, repeat_mode);
+  for (auto expected_frame : expected_frames) {
+    rtc::scoped_refptr<I420BufferInterface> buffer = reader_->PullFrame();
+    EXPECT_EQ(expected_frame, *buffer->DataY());
+  }
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    YuvFrameReaderTest,
+    YuvFrameReaderRepeatModeTest,
+    ::testing::ValuesIn(
+        {std::make_tuple(3, RepeatMode::kSingle, std::vector<uint8_t>{0, 1, 2}),
+         std::make_tuple(3,
+                         RepeatMode::kRepeat,
+                         std::vector<uint8_t>{0, 1, 2, 0, 1, 2}),
+         std::make_tuple(3,
+                         RepeatMode::kPingPong,
+                         std::vector<uint8_t>{0, 1, 2, 1, 0, 1, 2}),
+         std::make_tuple(1,
+                         RepeatMode::kPingPong,
+                         std::vector<uint8_t>{0, 0})}));
+
+class YuvFrameReaderFramerateScaleTest
+    : public YuvFrameReaderTest,
+      public ::testing::WithParamInterface<
+          std::tuple<Ratio, std::vector<int>>> {};
+
+TEST_P(YuvFrameReaderFramerateScaleTest, PullFrame) {
+  auto [framerate_scale, expected_frames] = GetParam();
+  for (auto expected_frame : expected_frames) {
+    int pulled_frame;
+    rtc::scoped_refptr<I420BufferInterface> buffer =
+        reader_->PullFrame(&pulled_frame, kResolution, framerate_scale);
+    EXPECT_EQ(pulled_frame, expected_frame);
+  }
+}
+
+INSTANTIATE_TEST_SUITE_P(YuvFrameReaderTest,
+                         YuvFrameReaderFramerateScaleTest,
+                         ::testing::ValuesIn({
+                             std::make_tuple(Ratio({.num = 1, .den = 2}),
+                                             std::vector<int>{0, 2, 4}),
+                             std::make_tuple(Ratio({.num = 2, .den = 3}),
+                                             std::vector<int>{0, 1, 3, 4, 6}),
+                             std::make_tuple(Ratio({.num = 2, .den = 1}),
+                                             std::vector<int>{0, 0, 1, 1}),
+                         }));
 
 }  // namespace test
 }  // namespace webrtc

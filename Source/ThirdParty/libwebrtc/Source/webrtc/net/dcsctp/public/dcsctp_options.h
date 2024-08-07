@@ -71,6 +71,11 @@ struct DcSctpOptions {
   // `max_receiver_window_buffer_size`).
   size_t max_message_size = 256 * 1024;
 
+  // The default stream priority, if not overridden by
+  // `SctpSocket::SetStreamPriority`. The default value is selected to be
+  // compatible with https://www.w3.org/TR/webrtc-priority/, section 4.2-4.3.
+  StreamPriority default_stream_priority = StreamPriority(256);
+
   // Maximum received window buffer size. This should be a bit larger than the
   // largest sized message you want to be able to receive. This essentially
   // limits the memory usage on the receive side. Note that memory is allocated
@@ -188,8 +193,17 @@ struct DcSctpOptions {
   // If RTO should be added to heartbeat_interval
   bool heartbeat_interval_include_rtt = true;
 
-  // Disables SCTP packet crc32 verification. Useful when running with fuzzers.
+  // Disables SCTP packet crc32 verification. For fuzzers only!
   bool disable_checksum_verification = false;
+
+  // Controls the acceptance of zero checksum, as defined in
+  // https://datatracker.ietf.org/doc/draft-tuexen-tsvwg-sctp-zero-checksum/
+  // This should only be enabled if the packet integrity can be ensured by lower
+  // layers, which DTLS will do in WebRTC, as defined by RFC8261.
+  //
+  // This will also enable sending packets without a checksum value (set to 0)
+  // once both peers have negotiated this feature.
+  bool enable_zero_checksum = false;
 };
 }  // namespace dcsctp
 

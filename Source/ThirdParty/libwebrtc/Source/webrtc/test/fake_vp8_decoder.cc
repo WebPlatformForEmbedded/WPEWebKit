@@ -39,13 +39,11 @@ void ParseFakeVp8(const unsigned char* data, int* width, int* height) {
 
 FakeVp8Decoder::FakeVp8Decoder() : callback_(nullptr), width_(0), height_(0) {}
 
-int32_t FakeVp8Decoder::InitDecode(const VideoCodec* config,
-                                   int32_t number_of_cores) {
-  return WEBRTC_VIDEO_CODEC_OK;
+bool FakeVp8Decoder::Configure(const Settings& settings) {
+  return true;
 }
 
 int32_t FakeVp8Decoder::Decode(const EncodedImage& input,
-                               bool missing_frames,
                                int64_t render_time_ms) {
   constexpr size_t kMinPayLoadHeaderLength = 10;
   if (input.size() < kMinPayLoadHeaderLength) {
@@ -59,7 +57,7 @@ int32_t FakeVp8Decoder::Decode(const EncodedImage& input,
           .set_rotation(webrtc::kVideoRotation_0)
           .set_timestamp_ms(render_time_ms)
           .build();
-  frame.set_timestamp(input.Timestamp());
+  frame.set_timestamp(input.RtpTimestamp());
   frame.set_ntp_time_ms(input.ntp_time_ms_);
 
   callback_->Decoded(frame, /*decode_time_ms=*/absl::nullopt,
@@ -78,7 +76,6 @@ int32_t FakeVp8Decoder::Release() {
   return WEBRTC_VIDEO_CODEC_OK;
 }
 
-const char* FakeVp8Decoder::kImplementationName = "fake_vp8_decoder";
 VideoDecoder::DecoderInfo FakeVp8Decoder::GetDecoderInfo() const {
   DecoderInfo info;
   info.implementation_name = kImplementationName;

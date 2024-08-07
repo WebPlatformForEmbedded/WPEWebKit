@@ -35,6 +35,10 @@ if (is_mac) {
   import("//build/config/mac/rules.gni")
 }
 
+if (is_fuchsia) {
+  import("//build/config/fuchsia/config.gni")
+}
+
 # This declare_args is separated from the next one because args declared
 # in this one, can be read from the next one (args defined in the same
 # declare_args cannot be referenced in that scope).
@@ -45,6 +49,19 @@ declare_args() {
 }
 
 declare_args() {
+  # If set to true, C++ code will refer to the new JNI Generator symbols.
+  # If set to false the old ones will be used (to provide a nice update path).
+  rtc_jni_generator_legacy_symbols = false
+
+  # Setting this to true, will make RTC_DLOG() expand to log statements instead
+  # of being removed by the preprocessor.
+  # This is useful for example to be able to get RTC_DLOGs on a release build.
+  rtc_dlog_always_on = false
+
+  # Enables additional build targets that rely on
+  # //third_party/google_benchmarks.
+  rtc_enable_google_benchmarks = true
+
   # Setting this to true will make RTC_OBJC_EXPORT expand to code that will
   # manage symbols visibility. By default, Obj-C/Obj-C++ symbols are exported
   # if C++ symbols are but setting this arg to true while keeping
@@ -60,7 +77,7 @@ declare_args() {
     # When WebRTC is built as part of Chromium it should exclude the default
     # implementation of field_trial unless it is building for NACL or
     # Chromecast.
-    rtc_exclude_field_trial_default = !is_nacl && !is_chromecast
+    rtc_exclude_field_trial_default = !is_nacl && !is_castos && !is_cast_android
   } else {
     rtc_exclude_field_trial_default = false
   }
@@ -172,6 +189,9 @@ declare_args() {
   rtc_use_h264 =
       proprietary_codecs && !is_android && !is_ios && !(is_win && !is_clang)
 
+  # Enable to use H265
+  rtc_use_h265 = proprietary_codecs
+
   # Enable this flag to make webrtc::Mutex be implemented by absl::Mutex.
   rtc_use_absl_mutex = false
 
@@ -191,21 +211,14 @@ declare_args() {
     rtc_apprtcmobile_broadcast_extension = false
   }
 
-  # Determines whether OpenGL is available on iOS/macOS.
-  rtc_ios_macos_use_opengl_rendering =
-      !(is_ios && target_environment == "catalyst")
+  # Determines whether OpenGL is available on iOS.
+  rtc_ios_use_opengl_rendering = is_ios && target_environment != "catalyst"
 
   # When set to false, builtin audio encoder/decoder factories and all the
   # audio codecs they depend on will not be included in libwebrtc.{a|lib}
   # (they will still be included in libjingle_peerconnection_so.so and
   # WebRTC.framework)
   rtc_include_builtin_audio_codecs = true
-
-  # When set to false, builtin video encoder/decoder factories and all the
-  # video codecs they depends on will not be included in libwebrtc.{a|lib}
-  # (they will still be included in libjingle_peerconnection_so.so and
-  # WebRTC.framework)
-  rtc_include_builtin_video_codecs = true
 
   # When set to true and in a standalone build, it will undefine UNICODE and
   # _UNICODE (which are always defined globally by the Chromium Windows
@@ -219,6 +232,34 @@ declare_args() {
   # Windows.Graphics.Capture APIs will be available for use. This introduces a
   # dependency on the Win 10 SDK v10.0.17763.0.
   rtc_enable_win_wgc = is_win
+
+  # Includes the dav1d decoder in the internal decoder factory when set to true.
+  rtc_include_dav1d_in_internal_decoder_factory = true
+
+  # When enabled, a run-time check will make sure that all field trial keys have
+  # been registered in accordance with the field trial policy, see
+  # g3doc/field-trials.md. The value can be set to the following:
+  #
+  #  "dcheck": RTC_DCHECKs that the field trial has been registered. RTC_DCHECK
+  #            must be enabled separately.
+  #
+  #  "warn": RTC_LOGs a message with LS_WARNING severity if the field trial
+  #          hasn't been registered.
+  rtc_strict_field_trials = ""
+
+  # If different from "", symbols exported with RTC_OBJC_EXPORT will be prefixed
+  # with this string.
+  # See the definition of RTC_OBJC_TYPE_PREFIX in the code.
+  rtc_objc_prefix = ""
+
+  # Embedders can define dependencies needed by WebRTC. Dependencies can be
+  # configs or targets. This can be defined in their `.gn` file.
+  #
+  # In practise, this is use by Chromium: Targets from
+  # `//third_party/webrtc_overrides` are depending on Chrome's `//base`, but
+  # WebRTC does not declare its public dependencies. See webrtc:8603. Instead
+  # WebRTC is using a global common dependencies.
+  rtc_common_public_deps = []  # no-presubmit-check TODO(webrtc:8603)
 }
 
 if (!build_with_mozilla) {
@@ -298,8 +339,8 @@ declare_args() {
   # Enable the dcsctp backend for DataChannels and related unittests
   rtc_build_dcsctp = !build_with_mozilla && rtc_enable_sctp
 
-  # Enable the usrsctp backend for DataChannels and related unittests
-  rtc_build_usrsctp = !build_with_mozilla && rtc_enable_sctp
+  # Enable gRPC used for negotiation in multiprocess tests
+  rtc_enable_grpc = rtc_enable_protobuf && (is_linux || is_mac)
 }
 
 # Make it possible to provide custom locations for some libraries (move these
@@ -331,7 +372,10 @@ webrtc_root = get_path_info(".", "abspath")
 rtc_common_configs = [ webrtc_root + ":common_config" ]
 
 if (is_mac || is_ios) {
-  rtc_common_configs += [ "//build/config/compiler:enable_arc" ]
+  if (filter_include(default_compiler_configs,
+                     [ "//build/config/compiler:enable_arc" ]) == []) {
+    rtc_common_configs += [ "//build/config/compiler:enable_arc" ]
+  }
 }
 
 # Global public configuration that should be applied to all WebRTC targets. You
@@ -352,34 +396,40 @@ rtc_library_impl_config = [ webrtc_root + ":library_impl_config" ]
 
 set_defaults("rtc_test") {
   configs = rtc_add_configs
+  public_deps = rtc_common_public_deps  # no-presubmit-check TODO(webrtc:8603)
   suppressed_configs = []
 }
 
 set_defaults("rtc_library") {
   configs = rtc_add_configs
+  public_deps = rtc_common_public_deps  # no-presubmit-check TODO(webrtc:8603)
   suppressed_configs = []
   absl_deps = []
 }
 
 set_defaults("rtc_source_set") {
   configs = rtc_add_configs
+  public_deps = rtc_common_public_deps  # no-presubmit-check TODO(webrtc:8603)
   suppressed_configs = []
   absl_deps = []
 }
 
 set_defaults("rtc_static_library") {
   configs = rtc_add_configs
+  public_deps = rtc_common_public_deps  # no-presubmit-check TODO(webrtc:8603)
   suppressed_configs = []
   absl_deps = []
 }
 
 set_defaults("rtc_executable") {
   configs = rtc_add_configs
+  public_deps = rtc_common_public_deps  # no-presubmit-check TODO(webrtc:8603)
   suppressed_configs = []
 }
 
 set_defaults("rtc_shared_library") {
   configs = rtc_add_configs
+  public_deps = rtc_common_public_deps  # no-presubmit-check TODO(webrtc:8603)
   suppressed_configs = []
 }
 
@@ -427,8 +477,8 @@ all_poison_types = [
   # Default task queue implementation.
   "default_task_queue",
 
-  # JSON parsing should not be needed in the "slim and modular" WebRTC.
-  "rtc_json",
+  # Default echo detector implementation.
+  "default_echo_detector",
 
   # Software video codecs (VP8 and VP9 through libvpx).
   "software_video_codecs",
@@ -487,12 +537,10 @@ template("rtc_test") {
       ]
     }
 
-    # When not targeting a simulator, building //base/test:google_test_runner
-    # fails, so it is added only when the test is not a real XCTest and when
-    # targeting a simulator.
-    if (is_ios && target_cpu == "x64" && rtc_include_tests) {
+    # Build //test:google_test_runner_objc when the test is not a real XCTest.
+    if (is_ios && rtc_include_tests) {
       if (!defined(invoker.is_xctest) || !invoker.is_xctest) {
-        xctest_module_target = "//base/test:google_test_runner"
+        xctest_module_target = "//test:google_test_runner_objc"
       }
     }
 
@@ -510,14 +558,14 @@ template("rtc_test") {
       }
     }
 
-    if (using_sanitizer) {
-      if (is_linux) {
-        if (!defined(invoker.data)) {
-          data = []
-        }
-        data +=
-            [ "//third_party/llvm-build/Release+Asserts/lib/libstdc++.so.6" ]
+    # TODO(crbug.com/webrtc/13556): Adding the .app folder in the runtime_deps
+    # shoulnd't be necessary. this code should be removed and the same solution
+    # as Chromium should be used.
+    if (is_ios) {
+      if (!defined(invoker.data)) {
+        data = []
       }
+      data += [ "${root_out_dir}/${target_name}.app" ]
     }
   }
 }
@@ -718,10 +766,7 @@ template("rtc_static_library") {
 # This template automatically switches the target type between source_set
 # and static_library.
 #
-# This should be the default target type for all the WebRTC targets with
-# one exception. Do not use this template for header only targets, in that case
-# rtc_source_set must be used in order to avoid build errors (e.g. libtool
-# complains if the output .a file is empty).
+# This should be the default target type for all the WebRTC targets.
 #
 # How does it work:
 # Since all files in a source_set are linked into a final binary, while files
@@ -733,7 +778,23 @@ template("rtc_static_library") {
 # For the same reason, testonly targets will always be expanded to
 # source_set in order to be sure that tests are present in the test binary.
 template("rtc_library") {
-  if (is_component_build || (defined(invoker.testonly) && invoker.testonly)) {
+  header_only = true
+  if (defined(invoker.sources)) {
+    non_header_sources = filter_exclude(invoker.sources,
+                                        [
+                                          "*.h",
+                                          "*.hh",
+                                          "*.inc",
+                                        ])
+    if (non_header_sources != []) {
+      header_only = false
+    }
+  }
+
+  # Header only libraries should use source_set as a static_library with no
+  # source files will cause issues with macOS libtool.
+  if (header_only || is_component_build ||
+      (defined(invoker.testonly) && invoker.testonly)) {
     target_type = "source_set"
   } else {
     target_type = "static_library"
@@ -951,14 +1012,13 @@ template("rtc_shared_library") {
   }
 }
 
-if (is_ios) {
-  # TODO: Generate module.modulemap file to enable use in Swift
-  # projects. See "mac_framework_bundle_with_umbrella_header".
-  template("ios_framework_bundle_with_umbrella_header") {
+if (is_mac || is_ios) {
+  template("apple_framework_bundle_with_umbrella_header") {
     forward_variables_from(invoker, [ "output_name" ])
     this_target_name = target_name
     umbrella_header_path =
         "$target_gen_dir/$output_name.framework/WebRTC/$output_name.h"
+    modulemap_path = "$target_gen_dir/Modules/module.modulemap"
 
     action_foreach("create_bracket_include_headers_$target_name") {
       script = "//tools_webrtc/apple/copy_framework_header.py"
@@ -976,101 +1036,62 @@ if (is_ios) {
       ]
     }
 
-    ios_framework_bundle(target_name) {
-      forward_variables_from(invoker, "*", [ "public_headers" ])
-      public_headers = get_target_outputs(
-              ":create_bracket_include_headers_$this_target_name")
-      deps += [
-        ":copy_umbrella_header_$target_name",
-        ":create_bracket_include_headers_$target_name",
-      ]
+    if (is_mac) {
+      mac_framework_bundle(target_name) {
+        forward_variables_from(invoker, "*", [ "configs" ])
+        if (defined(invoker.configs)) {
+          configs += invoker.configs
+        }
+
+        framework_version = "A"
+        framework_contents = [
+          "Headers",
+          "Modules",
+          "Resources",
+        ]
+
+        ldflags = [
+          "-all_load",
+          "-install_name",
+          "@rpath/$output_name.framework/$output_name",
+        ]
+
+        deps += [
+          ":copy_framework_headers_$this_target_name",
+          ":copy_modulemap_$this_target_name",
+          ":copy_umbrella_header_$this_target_name",
+          ":create_bracket_include_headers_$this_target_name",
+          ":modulemap_$this_target_name",
+          ":umbrella_header_$this_target_name",
+        ]
+      }
+    }
+    if (is_ios) {
+      ios_framework_bundle(target_name) {
+        forward_variables_from(invoker,
+                               "*",
+                               [
+                                 "configs",
+                                 "public_headers",
+                               ])
+        if (defined(invoker.configs)) {
+          configs += invoker.configs
+        }
+        public_headers = get_target_outputs(
+                ":create_bracket_include_headers_$this_target_name")
+
+        deps += [
+          ":copy_umbrella_header_$this_target_name",
+          ":create_bracket_include_headers_$this_target_name",
+        ]
+      }
     }
 
-    action("umbrella_header_$target_name") {
-      public_headers = get_target_outputs(
-              ":create_bracket_include_headers_$this_target_name")
-
-      script = "//tools_webrtc/ios/generate_umbrella_header.py"
-
-      outputs = [ umbrella_header_path ]
-      args = [
-               "--out",
-               rebase_path(umbrella_header_path, root_build_dir),
-               "--sources",
-             ] + public_headers
-      deps = [ ":create_bracket_include_headers_$this_target_name" ]
-    }
-
-    if (target_environment == "catalyst") {
+    if (is_mac || target_environment == "catalyst") {
       # Catalyst frameworks use the same layout as regular Mac frameworks.
       headers_dir = "Versions/A/Headers"
     } else {
       headers_dir = "Headers"
-    }
-    copy("copy_umbrella_header_$target_name") {
-      sources = [ umbrella_header_path ]
-      outputs =
-          [ "$root_out_dir/$output_name.framework/$headers_dir/$output_name.h" ]
-
-      deps = [ ":umbrella_header_$target_name" ]
-    }
-  }
-
-  set_defaults("ios_framework_bundle_with_umbrella_header") {
-    configs = default_shared_library_configs
-  }
-}
-
-if (is_mac) {
-  template("mac_framework_bundle_with_umbrella_header") {
-    forward_variables_from(invoker, [ "output_name" ])
-    this_target_name = target_name
-    umbrella_header_path = "$target_gen_dir/umbrella_header/$output_name.h"
-    modulemap_path = "$target_gen_dir/Modules/module.modulemap"
-
-    mac_framework_bundle(target_name) {
-      forward_variables_from(invoker, "*", [ "configs" ])
-      if (defined(invoker.configs)) {
-        configs += invoker.configs
-      }
-
-      framework_version = "A"
-      framework_contents = [
-        "Headers",
-        "Modules",
-        "Resources",
-      ]
-
-      ldflags = [
-        "-all_load",
-        "-install_name",
-        "@rpath/$output_name.framework/$output_name",
-      ]
-
-      deps += [
-        ":copy_framework_headers_$this_target_name",
-        ":copy_modulemap_$this_target_name",
-        ":copy_umbrella_header_$this_target_name",
-        ":create_bracket_include_headers_$this_target_name",
-        ":modulemap_$this_target_name",
-        ":umbrella_header_$this_target_name",
-      ]
-    }
-
-    action_foreach("create_bracket_include_headers_$this_target_name") {
-      script = "//tools_webrtc/apple/copy_framework_header.py"
-      sources = invoker.sources
-      output_name = invoker.output_name
-      outputs = [
-        "$target_gen_dir/$output_name.framework/WebRTC/{{source_file_part}}",
-      ]
-      args = [
-        "--input",
-        "{{source}}",
-        "--output",
-        rebase_path(target_gen_dir, root_build_dir) +
-            "/$output_name.framework/WebRTC/{{source_file_part}}",
-      ]
     }
 
     bundle_data("copy_framework_headers_$this_target_name") {
@@ -1113,11 +1134,12 @@ if (is_mac) {
       deps = [ ":create_bracket_include_headers_$this_target_name" ]
     }
 
-    bundle_data("copy_umbrella_header_$this_target_name") {
+    copy("copy_umbrella_header_$target_name") {
       sources = [ umbrella_header_path ]
-      outputs = [ "{{bundle_contents_dir}}/Headers/$output_name.h" ]
+      outputs =
+          [ "$root_out_dir/$output_name.framework/$headers_dir/$output_name.h" ]
 
-      deps = [ ":umbrella_header_$this_target_name" ]
+      deps = [ ":umbrella_header_$target_name" ]
     }
   }
 }

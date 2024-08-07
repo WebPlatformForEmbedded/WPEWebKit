@@ -20,6 +20,7 @@
 
 #include "absl/types/optional.h"
 #include "api/crypto_params.h"
+#include "api/field_trials_view.h"
 #include "api/rtc_error.h"
 #include "p2p/base/packet_transport_internal.h"
 #include "pc/rtp_transport.h"
@@ -36,11 +37,10 @@ namespace webrtc {
 // parameters for the SrtpSession underneath.
 class SrtpTransport : public RtpTransport {
  public:
-  explicit SrtpTransport(bool rtcp_mux_enabled);
+  SrtpTransport(bool rtcp_mux_enabled, const FieldTrialsView& field_trials);
 
   virtual ~SrtpTransport() = default;
 
-  // SrtpTransportInterface specific implementation.
   virtual RTCError SetSrtpSendKey(const cricket::CryptoParams& params);
   virtual RTCError SetSrtpReceiveKey(const cricket::CryptoParams& params);
 
@@ -61,11 +61,11 @@ class SrtpTransport : public RtpTransport {
   // Create new send/recv sessions and set the negotiated crypto keys for RTP
   // packet encryption. The keys can either come from SDES negotiation or DTLS
   // handshake.
-  bool SetRtpParams(int send_cs,
+  bool SetRtpParams(int send_crypto_suite,
                     const uint8_t* send_key,
                     int send_key_len,
                     const std::vector<int>& send_extension_ids,
-                    int recv_cs,
+                    int recv_crypto_suite,
                     const uint8_t* recv_key,
                     int recv_key_len,
                     const std::vector<int>& recv_extension_ids);
@@ -73,11 +73,11 @@ class SrtpTransport : public RtpTransport {
   // Create new send/recv sessions and set the negotiated crypto keys for RTCP
   // packet encryption. The keys can either come from SDES negotiation or DTLS
   // handshake.
-  bool SetRtcpParams(int send_cs,
+  bool SetRtcpParams(int send_crypto_suite,
                      const uint8_t* send_key,
                      int send_key_len,
                      const std::vector<int>& send_extension_ids,
-                     int recv_cs,
+                     int recv_crypto_suite,
                      const uint8_t* recv_key,
                      int recv_key_len,
                      const std::vector<int>& recv_extension_ids);
@@ -86,7 +86,7 @@ class SrtpTransport : public RtpTransport {
 
   // If external auth is enabled, SRTP will write a dummy auth tag that then
   // later must get replaced before the packet is sent out. Only supported for
-  // non-GCM cipher suites and can be checked through "IsExternalAuthActive"
+  // non-GCM crypto suites and can be checked through "IsExternalAuthActive"
   // if it is actually used. This method is only valid before the RTP params
   // have been set.
   void EnableExternalAuth();
@@ -155,8 +155,8 @@ class SrtpTransport : public RtpTransport {
 
   absl::optional<cricket::CryptoParams> send_params_;
   absl::optional<cricket::CryptoParams> recv_params_;
-  absl::optional<int> send_cipher_suite_;
-  absl::optional<int> recv_cipher_suite_;
+  absl::optional<int> send_crypto_suite_;
+  absl::optional<int> recv_crypto_suite_;
   rtc::ZeroOnFreeBuffer<uint8_t> send_key_;
   rtc::ZeroOnFreeBuffer<uint8_t> recv_key_;
 
@@ -167,6 +167,8 @@ class SrtpTransport : public RtpTransport {
   int rtp_abs_sendtime_extn_id_ = -1;
 
   int decryption_failure_count_ = 0;
+
+  const FieldTrialsView& field_trials_;
 };
 
 }  // namespace webrtc

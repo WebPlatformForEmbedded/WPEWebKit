@@ -14,6 +14,7 @@
 #include <string>
 #include <vector>
 
+#include "absl/strings/string_view.h"
 #include "api/audio/echo_canceller3_factory.h"
 #include "modules/audio_coding/neteq/tools/resample_input_audio_file.h"
 #include "modules/audio_processing/aec_dump/aec_dump_factory.h"
@@ -41,13 +42,13 @@ void MaybeResetBuffer(std::unique_ptr<ChannelBuffer<float>>* buffer,
 
 class DebugDumpGenerator {
  public:
-  DebugDumpGenerator(const std::string& input_file_name,
+  DebugDumpGenerator(absl::string_view input_file_name,
                      int input_rate_hz,
                      int input_channels,
-                     const std::string& reverse_file_name,
+                     absl::string_view reverse_file_name,
                      int reverse_rate_hz,
                      int reverse_channels,
-                     const std::string& dump_file_name,
+                     absl::string_view dump_file_name,
                      bool enable_pre_amplifier);
 
   // Constructor that uses default input files.
@@ -115,13 +116,13 @@ class DebugDumpGenerator {
   const std::string dump_file_name_;
 };
 
-DebugDumpGenerator::DebugDumpGenerator(const std::string& input_file_name,
+DebugDumpGenerator::DebugDumpGenerator(absl::string_view input_file_name,
                                        int input_rate_hz,
                                        int input_channels,
-                                       const std::string& reverse_file_name,
+                                       absl::string_view reverse_file_name,
                                        int reverse_rate_hz,
                                        int reverse_channels,
-                                       const std::string& dump_file_name,
+                                       absl::string_view dump_file_name,
                                        bool enable_pre_amplifier)
     : input_config_(input_rate_hz, input_channels),
       reverse_config_(reverse_rate_hz, reverse_channels),
@@ -254,13 +255,13 @@ class DebugDumpTest : public ::testing::Test {
   // VerifyDebugDump replays a debug dump using APM and verifies that the result
   // is bit-exact-identical to the output channel in the dump. This is only
   // guaranteed if the debug dump is started on the first frame.
-  void VerifyDebugDump(const std::string& in_filename);
+  void VerifyDebugDump(absl::string_view in_filename);
 
  private:
   DebugDumpReplayer debug_dump_replayer_;
 };
 
-void DebugDumpTest::VerifyDebugDump(const std::string& in_filename) {
+void DebugDumpTest::VerifyDebugDump(absl::string_view in_filename) {
   ASSERT_TRUE(debug_dump_replayer_.SetDumpFile(in_filename));
 
   while (const absl::optional<audioproc::Event> event =
@@ -351,8 +352,6 @@ TEST_F(DebugDumpTest, VerifyCombinedExperimentalStringInclusive) {
   apm_config.echo_canceller.enabled = true;
   apm_config.gain_controller1.analog_gain_controller.enabled = true;
   apm_config.gain_controller1.analog_gain_controller.startup_min_volume = 0;
-  // Arbitrarily set clipping gain to 17, which will never be the default.
-  apm_config.gain_controller1.analog_gain_controller.clipped_level_min = 17;
   DebugDumpGenerator generator(apm_config);
   generator.StartRecording();
   generator.Process(100);
@@ -369,8 +368,6 @@ TEST_F(DebugDumpTest, VerifyCombinedExperimentalStringInclusive) {
       const audioproc::Config* msg = &event->config();
       ASSERT_TRUE(msg->has_experiments_description());
       EXPECT_PRED_FORMAT2(::testing::IsSubstring, "EchoController",
-                          msg->experiments_description().c_str());
-      EXPECT_PRED_FORMAT2(::testing::IsSubstring, "AgcClippingLevelExperiment",
                           msg->experiments_description().c_str());
     }
   }
@@ -420,33 +417,6 @@ TEST_F(DebugDumpTest, VerifyAec3ExperimentalString) {
       const audioproc::Config* msg = &event->config();
       ASSERT_TRUE(msg->has_experiments_description());
       EXPECT_PRED_FORMAT2(::testing::IsSubstring, "EchoController",
-                          msg->experiments_description().c_str());
-    }
-  }
-}
-
-TEST_F(DebugDumpTest, VerifyAgcClippingLevelExperimentalString) {
-  AudioProcessing::Config apm_config;
-  apm_config.gain_controller1.analog_gain_controller.enabled = true;
-  apm_config.gain_controller1.analog_gain_controller.startup_min_volume = 0;
-  // Arbitrarily set clipping gain to 17, which will never be the default.
-  apm_config.gain_controller1.analog_gain_controller.clipped_level_min = 17;
-  DebugDumpGenerator generator(apm_config);
-  generator.StartRecording();
-  generator.Process(100);
-  generator.StopRecording();
-
-  DebugDumpReplayer debug_dump_replayer_;
-
-  ASSERT_TRUE(debug_dump_replayer_.SetDumpFile(generator.dump_file_name()));
-
-  while (const absl::optional<audioproc::Event> event =
-             debug_dump_replayer_.GetNextEvent()) {
-    debug_dump_replayer_.RunNextEvent();
-    if (event->type() == audioproc::Event::CONFIG) {
-      const audioproc::Config* msg = &event->config();
-      ASSERT_TRUE(msg->has_experiments_description());
-      EXPECT_PRED_FORMAT2(::testing::IsSubstring, "AgcClippingLevelExperiment",
                           msg->experiments_description().c_str());
     }
   }

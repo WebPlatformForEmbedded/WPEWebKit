@@ -15,12 +15,23 @@ include_rules = [
   "+p2p",
   "+sound",
   "+system_wrappers",
-  "+usrsctplib",
   "+third_party/libyuv",
 ]
 
 specific_include_rules = {
   "win32devicemanager\.cc": [
     "+third_party/logitech/files/logitechquickcam.h",
+  ],
+  ".*webrtc_video_engine\.h": [
+    "+video/config",
+  ],
+  ".*media_channel\.h": [
+    "+video/config",
+  ],
+  ".*webrtc_video_engine_unittest\.cc": [
+    "+video/config",
+  ],
+  ".*fake_webrtc_call\.cc": [
+    "+video/config",
   ],
 }

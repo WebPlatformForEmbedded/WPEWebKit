@@ -89,8 +89,12 @@ Ref<VideoFrameGStreamer> VideoFrameGStreamer::createFromPixelBuffer(Ref<PixelBuf
         auto outputBuffer = adoptGRef(gst_buffer_new_allocate(nullptr, GST_VIDEO_INFO_SIZE(&outputInfo), nullptr));
         {
             GUniquePtr<GstVideoConverter> converter(gst_video_converter_new(&inputInfo, &outputInfo, nullptr));
-            GstMappedFrame inputFrame(buffer.get(), inputInfo, GST_MAP_READ);
-            GstMappedFrame outputFrame(outputBuffer.get(), outputInfo, GST_MAP_WRITE);
+            GstMappedFrame inputFrame(buffer.get(), &inputInfo, GST_MAP_READ);
+            GstMappedFrame outputFrame(outputBuffer.get(), &outputInfo, GST_MAP_WRITE);
+            if (!inputFrame || !outputFrame) {
+                GST_WARNING("frames could not be mapped");
+                ASSERT_NOT_REACHED();
+            }
             gst_video_converter_frame(converter.get(), inputFrame.get(), outputFrame.get());
         }
 
@@ -154,8 +158,13 @@ GRefPtr<GstSample> VideoFrameGStreamer::resizedSample(const IntSize& destination
     auto outputBuffer = adoptGRef(gst_buffer_new_allocate(nullptr, GST_VIDEO_INFO_SIZE(&outputInfo), nullptr));
     {
         GUniquePtr<GstVideoConverter> converter(gst_video_converter_new(&inputInfo, &outputInfo, nullptr));
-        GstMappedFrame inputFrame(buffer, inputInfo, GST_MAP_READ);
-        GstMappedFrame outputFrame(outputBuffer.get(), outputInfo, GST_MAP_WRITE);
+        GstMappedFrame inputFrame(buffer, &inputInfo, GST_MAP_READ);
+        GstMappedFrame outputFrame(outputBuffer.get(), &outputInfo, GST_MAP_WRITE);
+        if (!inputFrame || !outputFrame) {
+            GST_WARNING("frames could not be mapped");
+            ASSERT_NOT_REACHED();
+            return nullptr;
+        }
         gst_video_converter_frame(converter.get(), inputFrame.get(), outputFrame.get());
     }
 
@@ -198,10 +207,15 @@ RefPtr<JSC::Uint8ClampedArray> VideoFrameGStreamer::computeRGBAImageData() const
     unsigned byteLength = GST_VIDEO_INFO_SIZE(&inputInfo);
     auto bufferStorage = JSC::ArrayBuffer::create(width * height, 4);
     auto outputBuffer = adoptGRef(gst_buffer_new_wrapped_full(GST_MEMORY_FLAG_NO_SHARE, bufferStorage->data(), byteLength, 0, byteLength, nullptr, [](gpointer) { }));
-    GstMappedFrame outputFrame(outputBuffer.get(), outputInfo, GST_MAP_WRITE);
+    GstMappedFrame outputFrame(outputBuffer.get(), &outputInfo, GST_MAP_WRITE);
 
     GUniquePtr<GstVideoConverter> converter(gst_video_converter_new(&inputInfo, &outputInfo, nullptr));
-    GstMappedFrame inputFrame(gst_sample_get_buffer(m_sample.get()), inputInfo, GST_MAP_READ);
+    GstMappedFrame inputFrame(gst_sample_get_buffer(m_sample.get()), &inputInfo, GST_MAP_READ);
+    if (!inputFrame || !outputFrame) {
+        GST_WARNING("frames could not be mapped");
+        ASSERT_NOT_REACHED();
+        return nullptr;
+    }
     gst_video_converter_frame(converter.get(), inputFrame.get(), outputFrame.get());
     return JSC::Uint8ClampedArray::tryCreate(WTFMove(bufferStorage), 0, byteLength);
 }

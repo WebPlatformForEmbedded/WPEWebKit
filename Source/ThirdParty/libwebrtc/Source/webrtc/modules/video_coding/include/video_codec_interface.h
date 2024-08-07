@@ -13,14 +13,16 @@
 
 #include <vector>
 
-#include "absl/base/attributes.h"
 #include "absl/types/optional.h"
 #include "api/video/video_frame.h"
+#include "api/video_codecs/scalability_mode.h"
 #include "api/video_codecs/video_decoder.h"
 #include "api/video_codecs/video_encoder.h"
 #include "common_video/generic_frame_descriptor/generic_frame_info.h"
 #include "modules/video_coding/codecs/h264/include/h264_globals.h"
+#ifdef WEBRTC_USE_H265
 #include "modules/video_coding/codecs/h265/include/h265_globals.h"
+#endif
 #include "modules/video_coding/codecs/vp9/include/vp9_globals.h"
 #include "modules/video_coding/include/video_error_codes.h"
 #include "rtc_base/system/rtc_export.h"
@@ -79,8 +81,6 @@ struct CodecSpecificInfoVP9 {
   // Frame reference data.
   uint8_t num_ref_pics;
   uint8_t p_diff[kMaxVp9RefPics];
-
-  ABSL_DEPRECATED("") bool end_of_picture;
 };
 static_assert(std::is_pod<CodecSpecificInfoVP9>::value, "");
 
@@ -93,7 +93,7 @@ struct CodecSpecificInfoH264 {
 };
 static_assert(std::is_pod<CodecSpecificInfoH264>::value, "");
 
-#ifndef DISABLE_H265
+#ifdef WEBRTC_USE_H265
 struct CodecSpecificInfoH265 {
   H265PacketizationMode packetization_mode;
   bool idr_frame;
@@ -104,7 +104,7 @@ union CodecSpecificInfoUnion {
   CodecSpecificInfoVP8 VP8;
   CodecSpecificInfoVP9 VP9;
   CodecSpecificInfoH264 H264;
-#ifndef DISABLE_H265
+#ifdef WEBRTC_USE_H265
   CodecSpecificInfoH265 H265;
 #endif
 };
@@ -123,6 +123,7 @@ struct RTC_EXPORT CodecSpecificInfo {
   bool end_of_picture = true;
   absl::optional<GenericFrameInfo> generic_frame_info;
   absl::optional<FrameDependencyStructure> template_structure;
+  absl::optional<ScalabilityMode> scalability_mode;
 };
 
 }  // namespace webrtc

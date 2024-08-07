@@ -72,7 +72,7 @@ class StreamResetHandler {
                      ReassemblyQueue* reassembly_queue,
                      RetransmissionQueue* retransmission_queue,
                      const DcSctpSocketHandoverState* handover_state = nullptr)
-      : log_prefix_(std::string(log_prefix) + "reset: "),
+      : log_prefix_(log_prefix),
         ctx_(context),
         data_tracker_(data_tracker),
         reassembly_queue_(reassembly_queue),
@@ -86,10 +86,13 @@ class StreamResetHandler {
                 ? ReconfigRequestSN(handover_state->tx.next_reset_req_sn)
                 : ReconfigRequestSN(*ctx_->my_initial_tsn())),
         last_processed_req_seq_nbr_(
-            handover_state ? ReconfigRequestSN(
-                                 handover_state->rx.last_completed_reset_req_sn)
-                           : ReconfigRequestSN(*ctx_->peer_initial_tsn() - 1)) {
-  }
+            incoming_reconfig_request_sn_unwrapper_.Unwrap(
+                handover_state
+                    ? ReconfigRequestSN(
+                          handover_state->rx.last_completed_reset_req_sn)
+                    : ReconfigRequestSN(*ctx_->peer_initial_tsn() - 1))),
+        last_processed_req_result_(
+            ReconfigurationResponseParameter::Result::kSuccessNothingToDo) {}
 
   // Initiates reset of the provided streams. While there can only be one
   // ongoing stream reset request at any time, this method can be called at any
@@ -112,6 +115,7 @@ class StreamResetHandler {
   void AddHandoverState(DcSctpSocketHandoverState& state);
 
  private:
+  using UnwrappedReconfigRequestSn = UnwrappedSequenceNumber<ReconfigRequestSN>;
   // Represents a stream request operation. There can only be one ongoing at
   // any time, and a sent request may either succeed, fail or result in the
   // receiver signaling that it can't process it right now, and then it will be
@@ -184,7 +188,7 @@ class StreamResetHandler {
   // fails to validate, and returns false, it will also add a response to
   // `responses`.
   bool ValidateReqSeqNbr(
-      ReconfigRequestSN req_seq_nbr,
+      UnwrappedReconfigRequestSn req_seq_nbr,
       std::vector<ReconfigurationResponseParameter>& responses);
 
   // Called when this socket receives an outgoing stream reset request. It might
@@ -209,16 +213,13 @@ class StreamResetHandler {
   // Expiration handler for the Reconfig timer.
   absl::optional<DurationMs> OnReconfigTimerExpiry();
 
-  const std::string log_prefix_;
+  const absl::string_view log_prefix_;
   Context* ctx_;
   DataTracker* data_tracker_;
   ReassemblyQueue* reassembly_queue_;
   RetransmissionQueue* retransmission_queue_;
+  UnwrappedReconfigRequestSn::Unwrapper incoming_reconfig_request_sn_unwrapper_;
   const std::unique_ptr<Timer> reconfig_timer_;
-
-  // Outgoing streams that have been requested to be reset, but hasn't yet
-  // been included in an outgoing request.
-  webrtc::flat_set<StreamID> streams_to_reset_;
 
   // The next sequence number for outgoing stream requests.
   ReconfigRequestSN next_outgoing_req_seq_nbr_;
@@ -227,7 +228,9 @@ class StreamResetHandler {
   absl::optional<CurrentRequest> current_request_;
 
   // For incoming requests - last processed request sequence number.
-  ReconfigRequestSN last_processed_req_seq_nbr_;
+  UnwrappedReconfigRequestSn last_processed_req_seq_nbr_;
+  // The result from last processed incoming request
+  ReconfigurationResponseParameter::Result last_processed_req_result_;
 };
 }  // namespace dcsctp
 

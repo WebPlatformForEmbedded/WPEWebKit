@@ -24,7 +24,7 @@ namespace {
 std::unique_ptr<SimulcastTestFixture> CreateSpecificSimulcastTestFixture() {
   std::unique_ptr<VideoEncoderFactory> encoder_factory =
       std::make_unique<FunctionVideoEncoderFactory>(
-          []() { return H264Encoder::Create(cricket::VideoCodec("H264")); });
+          []() { return H264Encoder::Create(); });
   std::unique_ptr<VideoDecoderFactory> decoder_factory =
       std::make_unique<FunctionVideoDecoderFactory>(
           []() { return H264Decoder::Create(); });
@@ -35,8 +35,12 @@ std::unique_ptr<SimulcastTestFixture> CreateSpecificSimulcastTestFixture() {
 }  // namespace
 
 TEST(TestH264Simulcast, TestKeyFrameRequestsOnAllStreams) {
+  GTEST_SKIP() << "Not applicable to H264.";
+}
+
+TEST(TestH264Simulcast, TestKeyFrameRequestsOnSpecificStreams) {
   auto fixture = CreateSpecificSimulcastTestFixture();
-  fixture->TestKeyFrameRequestsOnAllStreams();
+  fixture->TestKeyFrameRequestsOnSpecificStreams();
 }
 
 TEST(TestH264Simulcast, TestPaddingAllStreams) {

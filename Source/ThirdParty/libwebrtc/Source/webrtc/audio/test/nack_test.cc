@@ -25,16 +25,16 @@ TEST_F(NackTest, ShouldNackInLossyNetwork) {
     const int64_t kLossPercent = 30;
     const int kNackHistoryMs = 1000;
 
-    BuiltInNetworkBehaviorConfig GetNetworkPipeConfig() const override {
+    BuiltInNetworkBehaviorConfig GetSendTransportConfig() const override {
       BuiltInNetworkBehaviorConfig pipe_config;
       pipe_config.queue_delay_ms = kRttMs / 2;
       pipe_config.loss_percent = kLossPercent;
       return pipe_config;
     }
 
-    void ModifyAudioConfigs(
-        AudioSendStream::Config* send_config,
-        std::vector<AudioReceiveStream::Config>* receive_configs) override {
+    void ModifyAudioConfigs(AudioSendStream::Config* send_config,
+                            std::vector<AudioReceiveStreamInterface::Config>*
+                                receive_configs) override {
       ASSERT_EQ(receive_configs->size(), 1U);
       (*receive_configs)[0].rtp.nack.rtp_history_ms = kNackHistoryMs;
       AudioEndToEndTest::ModifyAudioConfigs(send_config, receive_configs);
@@ -43,12 +43,12 @@ TEST_F(NackTest, ShouldNackInLossyNetwork) {
     void PerformTest() override { SleepMs(kTestDurationMs); }
 
     void OnStreamsStopped() override {
-      AudioReceiveStream::Stats recv_stats =
+      AudioReceiveStreamInterface::Stats recv_stats =
           receive_stream()->GetStats(/*get_and_clear_legacy_stats=*/true);
       EXPECT_GT(recv_stats.nacks_sent, 0U);
       AudioSendStream::Stats send_stats = send_stream()->GetStats();
       EXPECT_GT(send_stats.retransmitted_packets_sent, 0U);
-      EXPECT_GT(send_stats.nacks_rcvd, 0U);
+      EXPECT_GT(send_stats.nacks_received, 0U);
     }
   } test;
 

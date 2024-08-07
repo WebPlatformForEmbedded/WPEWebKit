@@ -11,18 +11,34 @@
 #include "media/engine/internal_decoder_factory.h"
 
 #include "absl/strings/match.h"
+#include "api/video_codecs/av1_profile.h"
 #include "api/video_codecs/sdp_video_format.h"
 #include "api/video_codecs/video_codec.h"
 #include "media/base/codec.h"
 #include "media/base/media_constants.h"
-#include "modules/video_coding/codecs/av1/libaom_av1_decoder.h"
 #include "modules/video_coding/codecs/h264/include/h264.h"
 #include "modules/video_coding/codecs/vp8/include/vp8.h"
 #include "modules/video_coding/codecs/vp9/include/vp9.h"
 #include "rtc_base/checks.h"
 #include "rtc_base/logging.h"
+#include "system_wrappers/include/field_trial.h"
+
+#if defined(RTC_DAV1D_IN_INTERNAL_DECODER_FACTORY)
+#include "modules/video_coding/codecs/av1/dav1d_decoder.h"  // nogncheck
+#endif
 
 namespace webrtc {
+namespace {
+#if defined(RTC_DAV1D_IN_INTERNAL_DECODER_FACTORY)
+constexpr bool kDav1dIsIncluded = true;
+#else
+constexpr bool kDav1dIsIncluded = false;
+std::unique_ptr<VideoDecoder> CreateDav1dDecoder() {
+  return nullptr;
+}
+#endif
+
+}  // namespace
 
 std::vector<SdpVideoFormat> InternalDecoderFactory::GetSupportedFormats()
     const {
@@ -30,10 +46,16 @@ std::vector<SdpVideoFormat> InternalDecoderFactory::GetSupportedFormats()
   formats.push_back(SdpVideoFormat(cricket::kVp8CodecName));
   for (const SdpVideoFormat& format : SupportedVP9DecoderCodecs())
     formats.push_back(format);
-  for (const SdpVideoFormat& h264_format : SupportedH264Codecs())
+  for (const SdpVideoFormat& h264_format : SupportedH264DecoderCodecs())
     formats.push_back(h264_format);
-  if (kIsLibaomAv1DecoderSupported)
+
+  if (kDav1dIsIncluded) {
     formats.push_back(SdpVideoFormat(cricket::kAv1CodecName));
+    formats.push_back(SdpVideoFormat(
+        cricket::kAv1CodecName,
+        {{kAV1FmtpProfile, AV1ProfileToString(AV1Profile::kProfile1).data()}}));
+  }
+
   return formats;
 }
 
@@ -69,11 +91,13 @@ std::unique_ptr<VideoDecoder> InternalDecoderFactory::CreateVideoDecoder(
     return VP9Decoder::Create();
   if (absl::EqualsIgnoreCase(format.name, cricket::kH264CodecName))
     return H264Decoder::Create();
-  if (kIsLibaomAv1DecoderSupported &&
-      absl::EqualsIgnoreCase(format.name, cricket::kAv1CodecName))
-    return CreateLibaomAv1Decoder();
 
-  RTC_NOTREACHED();
+  if (absl::EqualsIgnoreCase(format.name, cricket::kAv1CodecName) &&
+      kDav1dIsIncluded) {
+    return CreateDav1dDecoder();
+  }
+
+  RTC_DCHECK_NOTREACHED();
   return nullptr;
 }
 

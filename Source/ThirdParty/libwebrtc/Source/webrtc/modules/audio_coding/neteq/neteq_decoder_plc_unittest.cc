@@ -23,7 +23,6 @@
 #include "modules/audio_coding/neteq/tools/input_audio_file.h"
 #include "modules/audio_coding/neteq/tools/neteq_test.h"
 #include "rtc_base/numerics/safe_conversions.h"
-#include "rtc_base/ref_counted_object.h"
 #include "test/audio_decoder_proxy_factory.h"
 #include "test/gtest.h"
 #include "test/testsupport/file_utils.h"
@@ -128,6 +127,10 @@ class LossyInput : public NetEqInput {
     return input_->NextOutputEventTime();
   }
 
+  absl::optional<SetMinimumDelayInfo> NextSetMinimumDelayInfo() const override {
+    return input_->NextSetMinimumDelayInfo();
+  }
+
   std::unique_ptr<PacketData> PopPacket() override {
     if (loss_cadence_ != 0 && (++count_ % loss_cadence_) == 0) {
       // Pop `burst_length_` packets to create the loss.
@@ -141,6 +144,10 @@ class LossyInput : public NetEqInput {
   }
 
   void AdvanceOutputEvent() override { return input_->AdvanceOutputEvent(); }
+
+  void AdvanceSetMinimumDelay() override {
+    return input_->AdvanceSetMinimumDelay();
+  }
 
   bool ended() const override { return input_->ended(); }
 

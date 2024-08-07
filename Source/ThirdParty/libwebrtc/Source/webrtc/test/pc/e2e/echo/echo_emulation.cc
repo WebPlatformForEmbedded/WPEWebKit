@@ -12,6 +12,8 @@
 #include <limits>
 #include <utility>
 
+#include "api/test/pclf/media_configuration.h"
+
 namespace webrtc {
 namespace webrtc_pc_e2e {
 namespace {
@@ -22,7 +24,7 @@ constexpr int kSingleBufferDurationMs = 10;
 
 EchoEmulatingCapturer::EchoEmulatingCapturer(
     std::unique_ptr<TestAudioDeviceModule::Capturer> capturer,
-    PeerConnectionE2EQualityTestFixture::EchoEmulationConfig config)
+    EchoEmulationConfig config)
     : delegate_(std::move(capturer)),
       config_(config),
       renderer_queue_(2 * config_.echo_delay.ms() / kSingleBufferDurationMs),
@@ -57,7 +59,7 @@ void EchoEmulatingCapturer::OnAudioRendered(
   }
   queue_input_.assign(data.begin(), data.end());
   if (!renderer_queue_.Insert(&queue_input_)) {
-    RTC_LOG(WARNING) << "Echo queue is full";
+    RTC_LOG(LS_WARNING) << "Echo queue is full";
   }
 }
 

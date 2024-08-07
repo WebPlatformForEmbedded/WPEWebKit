@@ -15,6 +15,7 @@
 
 #include <memory>
 
+#include "absl/strings/string_view.h"
 #include "api/audio_codecs/builtin_audio_decoder_factory.h"
 #include "api/audio_codecs/builtin_audio_encoder_factory.h"
 #include "modules/audio_coding/include/audio_coding_module.h"
@@ -51,7 +52,7 @@ Sender::Sender()
 
 void Sender::Setup(AudioCodingModule* acm,
                    RTPStream* rtpStream,
-                   std::string in_file_name,
+                   absl::string_view in_file_name,
                    int in_sample_rate,
                    int payload_type,
                    SdpAudioFormat format) {
@@ -101,36 +102,32 @@ Receiver::Receiver()
     : _playoutLengthSmpls(kWebRtc10MsPcmAudio),
       _payloadSizeBytes(MAX_INCOMING_PAYLOAD) {}
 
-void Receiver::Setup(AudioCodingModule* acm,
+void Receiver::Setup(acm2::AcmReceiver* acm_receiver,
                      RTPStream* rtpStream,
-                     std::string out_file_name,
+                     absl::string_view out_file_name,
                      size_t channels,
                      int file_num) {
-  EXPECT_EQ(0, acm->InitializeReceiver());
-
   if (channels == 1) {
-    acm->SetReceiveCodecs({{103, {"ISAC", 16000, 1}},
-                           {104, {"ISAC", 32000, 1}},
-                           {107, {"L16", 8000, 1}},
-                           {108, {"L16", 16000, 1}},
-                           {109, {"L16", 32000, 1}},
-                           {0, {"PCMU", 8000, 1}},
-                           {8, {"PCMA", 8000, 1}},
-                           {102, {"ILBC", 8000, 1}},
-                           {9, {"G722", 8000, 1}},
-                           {120, {"OPUS", 48000, 2}},
-                           {13, {"CN", 8000, 1}},
-                           {98, {"CN", 16000, 1}},
-                           {99, {"CN", 32000, 1}}});
+    acm_receiver->SetCodecs({{107, {"L16", 8000, 1}},
+                             {108, {"L16", 16000, 1}},
+                             {109, {"L16", 32000, 1}},
+                             {0, {"PCMU", 8000, 1}},
+                             {8, {"PCMA", 8000, 1}},
+                             {102, {"ILBC", 8000, 1}},
+                             {9, {"G722", 8000, 1}},
+                             {120, {"OPUS", 48000, 2}},
+                             {13, {"CN", 8000, 1}},
+                             {98, {"CN", 16000, 1}},
+                             {99, {"CN", 32000, 1}}});
   } else {
     ASSERT_EQ(channels, 2u);
-    acm->SetReceiveCodecs({{111, {"L16", 8000, 2}},
-                           {112, {"L16", 16000, 2}},
-                           {113, {"L16", 32000, 2}},
-                           {110, {"PCMU", 8000, 2}},
-                           {118, {"PCMA", 8000, 2}},
-                           {119, {"G722", 8000, 2}},
-                           {120, {"OPUS", 48000, 2, {{"stereo", "1"}}}}});
+    acm_receiver->SetCodecs({{111, {"L16", 8000, 2}},
+                             {112, {"L16", 16000, 2}},
+                             {113, {"L16", 32000, 2}},
+                             {110, {"PCMU", 8000, 2}},
+                             {118, {"PCMA", 8000, 2}},
+                             {119, {"G722", 8000, 2}},
+                             {120, {"OPUS", 48000, 2, {{"stereo", "1"}}}}});
   }
 
   int playSampFreq;
@@ -147,7 +144,7 @@ void Receiver::Setup(AudioCodingModule* acm,
   _realPayloadSizeBytes = 0;
   _playoutBuffer = new int16_t[kWebRtc10MsPcmAudio];
   _frequency = playSampFreq;
-  _acm = acm;
+  _acm_receiver = acm_receiver;
   _firstTime = true;
 }
 
@@ -172,8 +169,9 @@ bool Receiver::IncomingPacket() {
       }
     }
 
-    EXPECT_EQ(0, _acm->IncomingPacket(_incomingPayload, _realPayloadSizeBytes,
-                                      _rtpHeader));
+    EXPECT_EQ(0, _acm_receiver->InsertPacket(
+                     _rtpHeader, rtc::ArrayView<const uint8_t>(
+                                     _incomingPayload, _realPayloadSizeBytes)));
     _realPayloadSizeBytes = _rtpStream->Read(&_rtpHeader, _incomingPayload,
                                              _payloadSizeBytes, &_nextTime);
     if (_realPayloadSizeBytes == 0 && _rtpStream->EndOfFile()) {
@@ -186,7 +184,7 @@ bool Receiver::IncomingPacket() {
 bool Receiver::PlayoutData() {
   AudioFrame audioFrame;
   bool muted;
-  int32_t ok = _acm->PlayoutData10Ms(_frequency, &audioFrame, &muted);
+  int32_t ok = _acm_receiver->GetAudio(_frequency, &audioFrame, &muted);
   if (muted) {
     ADD_FAILURE();
     return false;
@@ -231,9 +229,8 @@ EncodeDecodeTest::EncodeDecodeTest() = default;
 
 void EncodeDecodeTest::Perform() {
   const std::map<int, SdpAudioFormat> send_codecs = {
-      {103, {"ISAC", 16000, 1}}, {104, {"ISAC", 32000, 1}},
-      {107, {"L16", 8000, 1}},   {108, {"L16", 16000, 1}},
-      {109, {"L16", 32000, 1}},  {0, {"PCMU", 8000, 1}},
+      {107, {"L16", 8000, 1}},  {108, {"L16", 16000, 1}},
+      {109, {"L16", 32000, 1}}, {0, {"PCMU", 8000, 1}},
       {8, {"PCMA", 8000, 1}},
 #ifdef WEBRTC_CODEC_ILBC
       {102, {"ILBC", 8000, 1}},
@@ -242,8 +239,7 @@ void EncodeDecodeTest::Perform() {
   int file_num = 0;
   for (const auto& send_codec : send_codecs) {
     RTPFile rtpFile;
-    std::unique_ptr<AudioCodingModule> acm(AudioCodingModule::Create(
-        AudioCodingModule::Config(CreateBuiltinAudioDecoderFactory())));
+    std::unique_ptr<AudioCodingModule> acm(AudioCodingModule::Create());
 
     std::string fileName = webrtc::test::TempFilename(
         webrtc::test::OutputPath(), "encode_decode_rtp");
@@ -258,8 +254,12 @@ void EncodeDecodeTest::Perform() {
 
     rtpFile.Open(fileName.c_str(), "rb");
     rtpFile.ReadHeader();
+    std::unique_ptr<acm2::AcmReceiver> acm_receiver(
+        std::make_unique<acm2::AcmReceiver>(
+            acm2::AcmReceiver::Config(CreateBuiltinAudioDecoderFactory())));
     Receiver receiver;
-    receiver.Setup(acm.get(), &rtpFile, "encodeDecode_out", 1, file_num);
+    receiver.Setup(acm_receiver.get(), &rtpFile, "encodeDecode_out", 1,
+                   file_num);
     receiver.Run();
     receiver.Teardown();
     rtpFile.Close();

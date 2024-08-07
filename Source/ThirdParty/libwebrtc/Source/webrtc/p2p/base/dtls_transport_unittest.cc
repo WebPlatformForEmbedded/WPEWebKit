@@ -15,6 +15,7 @@
 #include <set>
 #include <utility>
 
+#include "absl/strings/string_view.h"
 #include "api/dtls_transport_interface.h"
 #include "p2p/base/fake_ice_transport.h"
 #include "p2p/base/packet_transport_internal.h"
@@ -55,16 +56,20 @@ void SetRemoteFingerprintFromCert(
   if (modify_digest) {
     ++fingerprint->digest.MutableData()[0];
   }
-  // Even if digest is verified to be incorrect, should fail asynchrnously.
-  EXPECT_TRUE(transport->SetRemoteFingerprint(
-      fingerprint->algorithm,
-      reinterpret_cast<const uint8_t*>(fingerprint->digest.data()),
-      fingerprint->digest.size()));
+
+  // Even if digest is verified to be incorrect, should fail asynchronously.
+  EXPECT_TRUE(
+      transport
+          ->SetRemoteParameters(
+              fingerprint->algorithm,
+              reinterpret_cast<const uint8_t*>(fingerprint->digest.data()),
+              fingerprint->digest.size(), absl::nullopt)
+          .ok());
 }
 
 class DtlsTestClient : public sigslot::has_slots<> {
  public:
-  explicit DtlsTestClient(const std::string& name) : name_(name) {}
+  explicit DtlsTestClient(absl::string_view name) : name_(name) {}
   void CreateCertificate(rtc::KeyType key_type) {
     certificate_ =
         rtc::RTCCertificate::Create(rtc::SSLIdentity::Create(name_, key_type));
@@ -380,6 +385,7 @@ class DtlsTransportTestBase {
   }
 
  protected:
+  rtc::AutoThread main_thread_;
   rtc::ScopedFakeClock fake_clock_;
   DtlsTestClient client1_;
   DtlsTestClient client2_;

@@ -14,11 +14,13 @@
 
 #include "absl/flags/flag.h"
 #include "absl/flags/parse.h"
+#include "absl/strings/string_view.h"
 #include "api/audio_codecs/builtin_audio_decoder_factory.h"
 #include "api/audio_codecs/builtin_audio_encoder_factory.h"
 #include "rtc_base/socket_address.h"
 #include "test/logging/file_log_writer.h"
 #include "test/network/network_emulation.h"
+#include "test/scenario/video_stream.h"
 #include "test/testsupport/file_utils.h"
 
 ABSL_FLAG(bool, scenario_logs, false, "Save logs from scenario framework.");
@@ -32,13 +34,13 @@ namespace test {
 namespace {
 
 std::unique_ptr<FileLogWriterFactory> GetScenarioLogManager(
-    std::string file_name) {
+    absl::string_view file_name) {
   if (absl::GetFlag(FLAGS_scenario_logs) && !file_name.empty()) {
     std::string output_root = absl::GetFlag(FLAGS_scenario_logs_root);
     if (output_root.empty())
       output_root = OutputPath() + "output_data/";
 
-    auto base_filename = output_root + file_name + ".";
+    auto base_filename = output_root + std::string(file_name) + ".";
     RTC_LOG(LS_INFO) << "Saving scenario logs to: " << base_filename;
     return std::make_unique<FileLogWriterFactory>(base_filename);
   }
@@ -54,17 +56,18 @@ Scenario::Scenario(const testing::TestInfo* test_info)
     : Scenario(std::string(test_info->test_suite_name()) + "/" +
                test_info->name()) {}
 
-Scenario::Scenario(std::string file_name)
+Scenario::Scenario(absl::string_view file_name)
     : Scenario(file_name, /*real_time=*/false) {}
 
-Scenario::Scenario(std::string file_name, bool real_time)
+Scenario::Scenario(absl::string_view file_name, bool real_time)
     : Scenario(GetScenarioLogManager(file_name), real_time) {}
 
 Scenario::Scenario(
     std::unique_ptr<LogWriterFactoryInterface> log_writer_factory,
     bool real_time)
     : log_writer_factory_(std::move(log_writer_factory)),
-      network_manager_(real_time ? TimeMode::kRealTime : TimeMode::kSimulated),
+      network_manager_(real_time ? TimeMode::kRealTime : TimeMode::kSimulated,
+                       EmulatedNetworkStatsGatheringMode::kDefault),
       clock_(network_manager_.time_controller()->GetClock()),
       audio_decoder_factory_(CreateBuiltinAudioDecoderFactory()),
       audio_encoder_factory_(CreateBuiltinAudioEncoderFactory()),
@@ -77,7 +80,7 @@ Scenario::~Scenario() {
   if (start_time_.IsFinite())
     Stop();
   for (auto& call_client : clients_) {
-    call_client->transport_->Disconnect();
+    call_client->SendTask([&] { call_client->transport_->Disconnect(); });
     call_client->UnBind();
   }
 }
@@ -91,7 +94,7 @@ ColumnPrinter Scenario::TimePrinter() {
       32);
 }
 
-StatesPrinter* Scenario::CreatePrinter(std::string name,
+StatesPrinter* Scenario::CreatePrinter(absl::string_view name,
                                        TimeDelta interval,
                                        std::vector<ColumnPrinter> printers) {
   std::vector<ColumnPrinter> all_printers{TimePrinter()};
@@ -105,7 +108,8 @@ StatesPrinter* Scenario::CreatePrinter(std::string name,
   return printer;
 }
 
-CallClient* Scenario::CreateClient(std::string name, CallClientConfig config) {
+CallClient* Scenario::CreateClient(absl::string_view name,
+                                   CallClientConfig config) {
   CallClient* client = new CallClient(network_manager_.time_controller(),
                                       GetLogWriterFactory(name), config);
   if (config.transport.state_log_interval.IsFinite()) {
@@ -118,7 +122,7 @@ CallClient* Scenario::CreateClient(std::string name, CallClientConfig config) {
 }
 
 CallClient* Scenario::CreateClient(
-    std::string name,
+    absl::string_view name,
     std::function<void(CallClientConfig*)> config_modifier) {
   CallClientConfig config;
   config_modifier(&config);
@@ -221,6 +225,9 @@ VideoStreamPair* Scenario::CreateVideoStream(
 VideoStreamPair* Scenario::CreateVideoStream(
     std::pair<CallClient*, CallClient*> clients,
     VideoStreamConfig config) {
+  std::vector<RtpExtension> extensions = GetVideoRtpExtensions(config);
+  clients.first->SetVideoReceiveRtpHeaderExtensions(extensions);
+  clients.second->SetVideoReceiveRtpHeaderExtensions(extensions);
   video_streams_.emplace_back(
       new VideoStreamPair(clients.first, clients.second, config));
   return video_streams_.back().get();
@@ -237,6 +244,9 @@ AudioStreamPair* Scenario::CreateAudioStream(
 AudioStreamPair* Scenario::CreateAudioStream(
     std::pair<CallClient*, CallClient*> clients,
     AudioStreamConfig config) {
+  std::vector<RtpExtension> extensions = GetAudioRtpExtensions(config);
+  clients.first->SetAudioReceiveRtpHeaderExtensions(extensions);
+  clients.second->SetAudioReceiveRtpHeaderExtensions(extensions);
   audio_streams_.emplace_back(
       new AudioStreamPair(clients.first, audio_encoder_factory_, clients.second,
                           audio_decoder_factory_, config));
@@ -244,29 +254,31 @@ AudioStreamPair* Scenario::CreateAudioStream(
 }
 
 void Scenario::Every(TimeDelta interval,
-                     std::function<void(TimeDelta)> function) {
-  RepeatingTaskHandle::DelayedStart(task_queue_.Get(), interval,
-                                    [interval, function] {
-                                      function(interval);
-                                      return interval;
-                                    });
+                     absl::AnyInvocable<void(TimeDelta)> function) {
+  RepeatingTaskHandle::DelayedStart(
+      task_queue_.get(), interval,
+      [interval, function = std::move(function)]() mutable {
+        function(interval);
+        return interval;
+      });
 }
 
-void Scenario::Every(TimeDelta interval, std::function<void()> function) {
-  RepeatingTaskHandle::DelayedStart(task_queue_.Get(), interval,
-                                    [interval, function] {
-                                      function();
-                                      return interval;
-                                    });
+void Scenario::Every(TimeDelta interval, absl::AnyInvocable<void()> function) {
+  RepeatingTaskHandle::DelayedStart(
+      task_queue_.get(), interval,
+      [interval, function = std::move(function)]() mutable {
+        function();
+        return interval;
+      });
 }
 
-void Scenario::Post(std::function<void()> function) {
-  task_queue_.PostTask(function);
+void Scenario::Post(absl::AnyInvocable<void() &&> function) {
+  task_queue_->PostTask(std::move(function));
 }
 
-void Scenario::At(TimeDelta offset, std::function<void()> function) {
+void Scenario::At(TimeDelta offset, absl::AnyInvocable<void() &&> function) {
   RTC_DCHECK_GT(offset, TimeSinceStart());
-  task_queue_.PostDelayedTask(function, TimeUntilTarget(offset).ms());
+  task_queue_->PostDelayedTask(std::move(function), TimeUntilTarget(offset));
 }
 
 void Scenario::RunFor(TimeDelta duration) {

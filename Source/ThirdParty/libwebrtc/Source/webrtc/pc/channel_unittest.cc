@@ -10,22 +10,30 @@
 
 #include "pc/channel.h"
 
-#include <cstdint>
-#include <memory>
-#include <utility>
+#include <stddef.h>
 
+#include <cstdint>
+#include <string>
+#include <type_traits>
+
+#include "absl/functional/any_invocable.h"
 #include "api/array_view.h"
 #include "api/audio_options.h"
 #include "api/rtp_parameters.h"
+#include "api/task_queue/pending_task_safety_flag.h"
 #include "media/base/codec.h"
 #include "media/base/fake_media_engine.h"
 #include "media/base/fake_rtp.h"
 #include "media/base/media_channel.h"
+#include "media/base/media_constants.h"
+#include "media/base/rid_description.h"
 #include "p2p/base/candidate_pair_interface.h"
+#include "p2p/base/dtls_transport_internal.h"
 #include "p2p/base/fake_dtls_transport.h"
 #include "p2p/base/fake_packet_transport.h"
 #include "p2p/base/ice_transport_internal.h"
 #include "p2p/base/p2p_constants.h"
+#include "p2p/base/packet_transport_internal.h"
 #include "pc/dtls_srtp_transport.h"
 #include "pc/jsep_transport.h"
 #include "pc/rtp_transport.h"
@@ -35,25 +43,33 @@
 #include "rtc_base/checks.h"
 #include "rtc_base/rtc_certificate.h"
 #include "rtc_base/ssl_identity.h"
-#include "rtc_base/task_utils/pending_task_safety_flag.h"
-#include "rtc_base/task_utils/to_queued_task.h"
+#include "rtc_base/task_queue_for_test.h"
 #include "test/gmock.h"
 #include "test/gtest.h"
-
-using cricket::DtlsTransportInternal;
-using cricket::FakeVoiceMediaChannel;
-using cricket::RidDescription;
-using cricket::RidDirection;
-using cricket::StreamParams;
-using webrtc::RtpTransceiverDirection;
-using webrtc::SdpType;
+#include "test/scoped_key_value_config.h"
 
 namespace {
-const cricket::AudioCodec kPcmuCodec(0, "PCMU", 64000, 8000, 1);
-const cricket::AudioCodec kPcmaCodec(8, "PCMA", 64000, 8000, 1);
-const cricket::AudioCodec kIsacCodec(103, "ISAC", 40000, 16000, 1);
-const cricket::VideoCodec kH264Codec(97, "H264");
-const cricket::VideoCodec kH264SvcCodec(99, "H264-SVC");
+
+using ::cricket::DtlsTransportInternal;
+using ::cricket::FakeVoiceMediaReceiveChannel;
+using ::cricket::FakeVoiceMediaSendChannel;
+using ::cricket::RidDescription;
+using ::cricket::RidDirection;
+using ::cricket::StreamParams;
+using ::testing::AllOf;
+using ::testing::ElementsAre;
+using ::testing::Field;
+using ::webrtc::RtpTransceiverDirection;
+using ::webrtc::SdpType;
+
+const cricket::Codec kPcmuCodec =
+    cricket::CreateAudioCodec(0, "PCMU", 64000, 1);
+const cricket::Codec kPcmaCodec =
+    cricket::CreateAudioCodec(8, "PCMA", 64000, 1);
+const cricket::Codec kIsacCodec =
+    cricket::CreateAudioCodec(103, "ISAC", 40000, 1);
+const cricket::Codec kH264Codec = cricket::CreateVideoCodec(97, "H264");
+const cricket::Codec kH264SvcCodec = cricket::CreateVideoCodec(99, "H264-SVC");
 const uint32_t kSsrc1 = 0x1111;
 const uint32_t kSsrc2 = 0x2222;
 const uint32_t kSsrc3 = 0x3333;
@@ -62,35 +78,42 @@ const int kAudioPts[] = {0, 8};
 const int kVideoPts[] = {97, 99};
 enum class NetworkIsWorker { Yes, No };
 
-}  // namespace
 
 template <class ChannelT,
-          class MediaChannelT,
+          class MediaSendChannelT,
+          class MediaReceiveChannelT,
+          class MediaSendChannelInterfaceT,
+          class MediaReceiveChannelInterfaceT,
           class ContentT,
-          class CodecT,
           class MediaInfoT,
           class OptionsT>
 class Traits {
  public:
   typedef ChannelT Channel;
-  typedef MediaChannelT MediaChannel;
+  typedef MediaSendChannelT MediaSendChannel;
+  typedef MediaReceiveChannelT MediaReceiveChannel;
+  typedef MediaSendChannelInterfaceT MediaSendChannelInterface;
+  typedef MediaReceiveChannelInterfaceT MediaReceiveChannelInterface;
   typedef ContentT Content;
-  typedef CodecT Codec;
   typedef MediaInfoT MediaInfo;
   typedef OptionsT Options;
 };
 
 class VoiceTraits : public Traits<cricket::VoiceChannel,
-                                  cricket::FakeVoiceMediaChannel,
+                                  cricket::FakeVoiceMediaSendChannel,
+                                  cricket::FakeVoiceMediaReceiveChannel,
+                                  cricket::VoiceMediaSendChannelInterface,
+                                  cricket::VoiceMediaReceiveChannelInterface,
                                   cricket::AudioContentDescription,
-                                  cricket::AudioCodec,
                                   cricket::VoiceMediaInfo,
                                   cricket::AudioOptions> {};
 
 class VideoTraits : public Traits<cricket::VideoChannel,
-                                  cricket::FakeVideoMediaChannel,
+                                  cricket::FakeVideoMediaSendChannel,
+                                  cricket::FakeVideoMediaReceiveChannel,
+                                  cricket::VideoMediaSendChannelInterface,
+                                  cricket::VideoMediaReceiveChannelInterface,
                                   cricket::VideoContentDescription,
-                                  cricket::VideoCodec,
                                   cricket::VideoMediaInfo,
                                   cricket::VideoOptions> {};
 
@@ -126,20 +149,28 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
 
   ~ChannelTest() {
     if (network_thread_) {
-      network_thread_->Invoke<void>(
-          RTC_FROM_HERE, [this]() { network_thread_safety_->SetNotAlive(); });
+      SendTask(network_thread_, [this]() {
+        network_thread_safety_->SetNotAlive();
+        DeinitChannels();
+      });
     }
   }
 
   void CreateChannels(int flags1, int flags2) {
-    CreateChannels(std::make_unique<typename T::MediaChannel>(
-                       nullptr, typename T::Options(), network_thread_),
-                   std::make_unique<typename T::MediaChannel>(
-                       nullptr, typename T::Options(), network_thread_),
+    CreateChannels(std::make_unique<typename T::MediaSendChannel>(
+                       typename T::Options(), network_thread_),
+                   std::make_unique<typename T::MediaReceiveChannel>(
+                       typename T::Options(), network_thread_),
+                   std::make_unique<typename T::MediaSendChannel>(
+                       typename T::Options(), network_thread_),
+                   std::make_unique<typename T::MediaReceiveChannel>(
+                       typename T::Options(), network_thread_),
                    flags1, flags2);
   }
-  void CreateChannels(std::unique_ptr<typename T::MediaChannel> ch1,
-                      std::unique_ptr<typename T::MediaChannel> ch2,
+  void CreateChannels(std::unique_ptr<typename T::MediaSendChannel> ch1s,
+                      std::unique_ptr<typename T::MediaReceiveChannel> ch1r,
+                      std::unique_ptr<typename T::MediaSendChannel> ch2s,
+                      std::unique_ptr<typename T::MediaReceiveChannel> ch2r,
                       int flags1,
                       int flags2) {
     RTC_DCHECK(!channel1_);
@@ -156,30 +187,22 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
     // channels.
     RTC_DCHECK_EQ(flags1 & RAW_PACKET_TRANSPORT, flags2 & RAW_PACKET_TRANSPORT);
     rtc::Thread* worker_thread = rtc::Thread::Current();
-    rtc::PacketTransportInternal* rtp1 = nullptr;
-    rtc::PacketTransportInternal* rtcp1 = nullptr;
-    rtc::PacketTransportInternal* rtp2 = nullptr;
-    rtc::PacketTransportInternal* rtcp2 = nullptr;
     // Based on flags, create fake DTLS or raw packet transports.
     if (flags1 & RAW_PACKET_TRANSPORT) {
       fake_rtp_packet_transport1_.reset(
           new rtc::FakePacketTransport("channel1_rtp"));
-      rtp1 = fake_rtp_packet_transport1_.get();
       if (!(flags1 & RTCP_MUX)) {
         fake_rtcp_packet_transport1_.reset(
             new rtc::FakePacketTransport("channel1_rtcp"));
-        rtcp1 = fake_rtcp_packet_transport1_.get();
       }
     } else {
       // Confirmed to work with KT_RSA and KT_ECDSA.
       fake_rtp_dtls_transport1_.reset(new cricket::FakeDtlsTransport(
           "channel1", cricket::ICE_CANDIDATE_COMPONENT_RTP, network_thread_));
-      rtp1 = fake_rtp_dtls_transport1_.get();
       if (!(flags1 & RTCP_MUX)) {
         fake_rtcp_dtls_transport1_.reset(new cricket::FakeDtlsTransport(
             "channel1", cricket::ICE_CANDIDATE_COMPONENT_RTCP,
             network_thread_));
-        rtcp1 = fake_rtcp_dtls_transport1_.get();
       }
       if (flags1 & DTLS) {
         auto cert1 = rtc::RTCCertificate::Create(
@@ -194,22 +217,18 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
     if (flags2 & RAW_PACKET_TRANSPORT) {
       fake_rtp_packet_transport2_.reset(
           new rtc::FakePacketTransport("channel2_rtp"));
-      rtp2 = fake_rtp_packet_transport2_.get();
       if (!(flags2 & RTCP_MUX)) {
         fake_rtcp_packet_transport2_.reset(
             new rtc::FakePacketTransport("channel2_rtcp"));
-        rtcp2 = fake_rtcp_packet_transport2_.get();
       }
     } else {
       // Confirmed to work with KT_RSA and KT_ECDSA.
       fake_rtp_dtls_transport2_.reset(new cricket::FakeDtlsTransport(
           "channel2", cricket::ICE_CANDIDATE_COMPONENT_RTP, network_thread_));
-      rtp2 = fake_rtp_dtls_transport2_.get();
       if (!(flags2 & RTCP_MUX)) {
         fake_rtcp_dtls_transport2_.reset(new cricket::FakeDtlsTransport(
             "channel2", cricket::ICE_CANDIDATE_COMPONENT_RTCP,
             network_thread_));
-        rtcp2 = fake_rtcp_dtls_transport2_.get();
       }
       if (flags2 & DTLS) {
         auto cert2 = rtc::RTCCertificate::Create(
@@ -229,10 +248,10 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
         fake_rtp_dtls_transport2_.get(), fake_rtcp_dtls_transport2_.get(),
         flags2);
 
-    channel1_ = CreateChannel(worker_thread, network_thread_, std::move(ch1),
-                              rtp_transport1_.get(), flags1);
-    channel2_ = CreateChannel(worker_thread, network_thread_, std::move(ch2),
-                              rtp_transport2_.get(), flags2);
+    channel1_ = CreateChannel(worker_thread, network_thread_, std::move(ch1s),
+                              std::move(ch1r), rtp_transport1_.get(), flags1);
+    channel2_ = CreateChannel(worker_thread, network_thread_, std::move(ch2s),
+                              std::move(ch2r), rtp_transport2_.get(), flags2);
     CreateContent(flags1, kPcmuCodec, kH264Codec, &local_media_content1_);
     CreateContent(flags2, kPcmuCodec, kH264Codec, &local_media_content2_);
     CopyContent(local_media_content1_, &remote_media_content1_);
@@ -255,7 +274,8 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
   std::unique_ptr<typename T::Channel> CreateChannel(
       rtc::Thread* worker_thread,
       rtc::Thread* network_thread,
-      std::unique_ptr<typename T::MediaChannel> ch,
+      std::unique_ptr<typename T::MediaSendChannel> ch_send,
+      std::unique_ptr<typename T::MediaReceiveChannel> ch_receive,
       webrtc::RtpTransportInternal* rtp_transport,
       int flags);
 
@@ -283,20 +303,35 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
     }
   }
 
+  // Unininitializes the channels on the network thread.
+  void DeinitChannels() {
+    if (!channel1_ && !channel2_)
+      return;
+    SendTask(network_thread_, [this]() {
+      if (channel1_) {
+        RTC_DCHECK_RUN_ON(channel1_->network_thread());
+        channel1_->SetRtpTransport(nullptr);
+      }
+      if (channel2_) {
+        RTC_DCHECK_RUN_ON(channel2_->network_thread());
+        channel2_->SetRtpTransport(nullptr);
+      }
+    });
+  }
+
   std::unique_ptr<webrtc::RtpTransport> CreateUnencryptedTransport(
       rtc::PacketTransportInternal* rtp_packet_transport,
       rtc::PacketTransportInternal* rtcp_packet_transport) {
     auto rtp_transport = std::make_unique<webrtc::RtpTransport>(
         rtcp_packet_transport == nullptr);
 
-    network_thread_->Invoke<void>(
-        RTC_FROM_HERE,
-        [&rtp_transport, rtp_packet_transport, rtcp_packet_transport] {
-          rtp_transport->SetRtpPacketTransport(rtp_packet_transport);
-          if (rtcp_packet_transport) {
-            rtp_transport->SetRtcpPacketTransport(rtcp_packet_transport);
-          }
-        });
+    SendTask(network_thread_,
+             [&rtp_transport, rtp_packet_transport, rtcp_packet_transport] {
+               rtp_transport->SetRtpPacketTransport(rtp_packet_transport);
+               if (rtcp_packet_transport) {
+                 rtp_transport->SetRtcpPacketTransport(rtcp_packet_transport);
+               }
+             });
     return rtp_transport;
   }
 
@@ -304,19 +339,18 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
       cricket::DtlsTransportInternal* rtp_dtls_transport,
       cricket::DtlsTransportInternal* rtcp_dtls_transport) {
     auto dtls_srtp_transport = std::make_unique<webrtc::DtlsSrtpTransport>(
-        rtcp_dtls_transport == nullptr);
+        rtcp_dtls_transport == nullptr, field_trials_);
 
-    network_thread_->Invoke<void>(
-        RTC_FROM_HERE,
-        [&dtls_srtp_transport, rtp_dtls_transport, rtcp_dtls_transport] {
-          dtls_srtp_transport->SetDtlsTransports(rtp_dtls_transport,
-                                                 rtcp_dtls_transport);
-        });
+    SendTask(network_thread_,
+             [&dtls_srtp_transport, rtp_dtls_transport, rtcp_dtls_transport] {
+               dtls_srtp_transport->SetDtlsTransports(rtp_dtls_transport,
+                                                      rtcp_dtls_transport);
+             });
     return dtls_srtp_transport;
   }
 
   void ConnectFakeTransports() {
-    network_thread_->Invoke<void>(RTC_FROM_HERE, [this] {
+    SendTask(network_thread_, [this] {
       bool asymmetric = false;
       // Depending on test flags, could be using DTLS or raw packet transport.
       if (fake_rtp_dtls_transport1_ && fake_rtp_dtls_transport2_) {
@@ -343,17 +377,18 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
   }
 
   bool SendInitiate() {
+    std::string err;
     bool result = channel1_->SetLocalContent(&local_media_content1_,
-                                             SdpType::kOffer, NULL);
+                                             SdpType::kOffer, err);
     if (result) {
       channel1_->Enable(true);
       FlushCurrentThread();
       result = channel2_->SetRemoteContent(&remote_media_content1_,
-                                           SdpType::kOffer, NULL);
+                                           SdpType::kOffer, err);
       if (result) {
         ConnectFakeTransports();
         result = channel2_->SetLocalContent(&local_media_content2_,
-                                            SdpType::kAnswer, NULL);
+                                            SdpType::kAnswer, err);
       }
     }
     return result;
@@ -362,47 +397,52 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
   bool SendAccept() {
     channel2_->Enable(true);
     FlushCurrentThread();
+    std::string err;
     return channel1_->SetRemoteContent(&remote_media_content2_,
-                                       SdpType::kAnswer, NULL);
+                                       SdpType::kAnswer, err);
   }
 
   bool SendOffer() {
+    std::string err;
     bool result = channel1_->SetLocalContent(&local_media_content1_,
-                                             SdpType::kOffer, NULL);
+                                             SdpType::kOffer, err);
     if (result) {
       channel1_->Enable(true);
       result = channel2_->SetRemoteContent(&remote_media_content1_,
-                                           SdpType::kOffer, NULL);
+                                           SdpType::kOffer, err);
     }
     return result;
   }
 
   bool SendProvisionalAnswer() {
+    std::string err;
     bool result = channel2_->SetLocalContent(&local_media_content2_,
-                                             SdpType::kPrAnswer, NULL);
+                                             SdpType::kPrAnswer, err);
     if (result) {
       channel2_->Enable(true);
       result = channel1_->SetRemoteContent(&remote_media_content2_,
-                                           SdpType::kPrAnswer, NULL);
+                                           SdpType::kPrAnswer, err);
       ConnectFakeTransports();
     }
     return result;
   }
 
   bool SendFinalAnswer() {
+    std::string err;
     bool result = channel2_->SetLocalContent(&local_media_content2_,
-                                             SdpType::kAnswer, NULL);
-    if (result)
+                                             SdpType::kAnswer, err);
+    if (result) {
       result = channel1_->SetRemoteContent(&remote_media_content2_,
-                                           SdpType::kAnswer, NULL);
+                                           SdpType::kAnswer, err);
+    }
     return result;
   }
 
-  void SendRtp(typename T::MediaChannel* media_channel, rtc::Buffer data) {
-    network_thread_->PostTask(webrtc::ToQueuedTask(
+  void SendRtp(typename T::MediaSendChannel* media_channel, rtc::Buffer data) {
+    network_thread_->PostTask(webrtc::SafeTask(
         network_thread_safety_, [media_channel, data = std::move(data)]() {
-          media_channel->SendRtp(data.data(), data.size(),
-                                 rtc::PacketOptions());
+          media_channel->SendPacket(data.data(), data.size(),
+                                    rtc::PacketOptions());
         }));
   }
 
@@ -411,7 +451,7 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
   }
 
   void SendRtp1(rtc::Buffer data) {
-    SendRtp(media_channel1(), std::move(data));
+    SendRtp(media_send_channel1_impl(), std::move(data));
   }
 
   void SendRtp2() {
@@ -419,7 +459,7 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
   }
 
   void SendRtp2(rtc::Buffer data) {
-    SendRtp(media_channel2(), std::move(data));
+    SendRtp(media_send_channel2_impl(), std::move(data));
   }
 
   // Methods to send custom data.
@@ -431,19 +471,21 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
   }
 
   bool CheckRtp1() {
-    return media_channel1()->CheckRtp(rtp_packet_.data(), rtp_packet_.size());
+    return media_receive_channel1_impl()->CheckRtp(rtp_packet_.data(),
+                                                   rtp_packet_.size());
   }
   bool CheckRtp2() {
-    return media_channel2()->CheckRtp(rtp_packet_.data(), rtp_packet_.size());
+    return media_receive_channel2_impl()->CheckRtp(rtp_packet_.data(),
+                                                   rtp_packet_.size());
   }
   // Methods to check custom data.
   bool CheckCustomRtp1(uint32_t ssrc, int sequence_number, int pl_type = -1) {
     rtc::Buffer data = CreateRtpData(ssrc, sequence_number, pl_type);
-    return media_channel1()->CheckRtp(data.data(), data.size());
+    return media_receive_channel1_impl()->CheckRtp(data.data(), data.size());
   }
   bool CheckCustomRtp2(uint32_t ssrc, int sequence_number, int pl_type = -1) {
     rtc::Buffer data = CreateRtpData(ssrc, sequence_number, pl_type);
-    return media_channel2()->CheckRtp(data.data(), data.size());
+    return media_receive_channel2_impl()->CheckRtp(data.data(), data.size());
   }
   rtc::Buffer CreateRtpData(uint32_t ssrc, int sequence_number, int pl_type) {
     rtc::Buffer data(rtp_packet_.data(), rtp_packet_.size());
@@ -456,12 +498,12 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
     return data;
   }
 
-  bool CheckNoRtp1() { return media_channel1()->CheckNoRtp(); }
-  bool CheckNoRtp2() { return media_channel2()->CheckNoRtp(); }
+  bool CheckNoRtp1() { return media_send_channel1_impl()->CheckNoRtp(); }
+  bool CheckNoRtp2() { return media_send_channel2_impl()->CheckNoRtp(); }
 
   void CreateContent(int flags,
-                     const cricket::AudioCodec& audio_codec,
-                     const cricket::VideoCodec& video_codec,
+                     const cricket::Codec& audio_codec,
+                     const cricket::Codec& video_codec,
                      typename T::Content* content) {
     // overridden in specialized classes
   }
@@ -483,11 +525,10 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
   // destroyed before this object goes out of scope.
   class ScopedCallThread {
    public:
-    template <class FunctorT>
-    explicit ScopedCallThread(FunctorT&& functor)
+    explicit ScopedCallThread(absl::AnyInvocable<void() &&> functor)
         : thread_(rtc::Thread::Create()) {
       thread_->Start();
-      thread_->PostTask(RTC_FROM_HERE, std::forward<FunctorT>(functor));
+      thread_->PostTask(std::move(functor));
     }
 
     ~ScopedCallThread() { thread_->Stop(); }
@@ -497,10 +538,6 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
    private:
     std::unique_ptr<rtc::Thread> thread_;
   };
-
-  bool CodecMatches(const typename T::Codec& c1, const typename T::Codec& c2) {
-    return false;  // overridden in specialized classes
-  }
 
   cricket::CandidatePairInterface* last_selected_candidate_pair() {
     return last_selected_candidate_pair_;
@@ -517,18 +554,21 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
   // network thread, which callers need to factor in.
   bool IsSrtpActive(std::unique_ptr<typename T::Channel>& channel) {
     RTC_DCHECK(channel.get());
-    return network_thread_->Invoke<bool>(
-        RTC_FROM_HERE, [&] { return channel->srtp_active(); });
+    bool result;
+    SendTask(network_thread_, [&] { result = channel->srtp_active(); });
+    return result;
   }
 
   // Returns true iff the transport is set for a channel and rtcp_mux_enabled()
   // returns true.
   bool IsRtcpMuxEnabled(std::unique_ptr<typename T::Channel>& channel) {
     RTC_DCHECK(channel.get());
-    return network_thread_->Invoke<bool>(RTC_FROM_HERE, [&] {
-      return channel->rtp_transport() &&
-             channel->rtp_transport()->rtcp_mux_enabled();
+    bool result;
+    SendTask(network_thread_, [&] {
+      result = channel->rtp_transport() &&
+               channel->rtp_transport()->rtcp_mux_enabled();
     });
+    return result;
   }
 
   // Tests that can be used by derived classes.
@@ -537,13 +577,20 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
   void TestInit() {
     CreateChannels(0, 0);
     EXPECT_FALSE(IsSrtpActive(channel1_));
-    EXPECT_FALSE(media_channel1()->sending());
+    EXPECT_FALSE(media_send_channel1_impl()->sending());
     if (verify_playout_) {
-      EXPECT_FALSE(media_channel1()->playout());
+      EXPECT_FALSE(media_receive_channel1_impl()->playout());
     }
-    EXPECT_TRUE(media_channel1()->codecs().empty());
-    EXPECT_TRUE(media_channel1()->recv_streams().empty());
-    EXPECT_TRUE(media_channel1()->rtp_packets().empty());
+    EXPECT_TRUE(media_send_channel1_impl()->send_codecs().empty());
+    EXPECT_TRUE(media_receive_channel1_impl()->recv_streams().empty());
+    EXPECT_TRUE(media_send_channel1_impl()->rtp_packets().empty());
+    // Basic sanity test for send and receive channel objects
+    EXPECT_EQ(channel1_->media_send_channel()->media_type(),
+              media_send_channel1_impl()->media_type());
+    EXPECT_EQ(channel1_->media_receive_channel()->media_type(),
+              media_receive_channel1_impl()->media_type());
+    EXPECT_EQ(channel1_->media_send_channel()->media_type(),
+              channel1_->media_receive_channel()->media_type());
   }
 
   // Test that SetLocalContent and SetRemoteContent properly configure
@@ -552,12 +599,13 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
     CreateChannels(0, 0);
     typename T::Content content;
     CreateContent(0, kPcmuCodec, kH264Codec, &content);
-    EXPECT_TRUE(channel1_->SetLocalContent(&content, SdpType::kOffer, NULL));
-    EXPECT_EQ(0U, media_channel1()->codecs().size());
-    EXPECT_TRUE(channel1_->SetRemoteContent(&content, SdpType::kAnswer, NULL));
-    ASSERT_EQ(1U, media_channel1()->codecs().size());
-    EXPECT_TRUE(
-        CodecMatches(content.codecs()[0], media_channel1()->codecs()[0]));
+    std::string err;
+    EXPECT_TRUE(channel1_->SetLocalContent(&content, SdpType::kOffer, err));
+    EXPECT_EQ(0U, media_send_channel1_impl()->send_codecs().size());
+    EXPECT_TRUE(channel1_->SetRemoteContent(&content, SdpType::kAnswer, err));
+    ASSERT_EQ(1U, media_send_channel1_impl()->send_codecs().size());
+    EXPECT_EQ(content.codecs()[0],
+              media_send_channel1_impl()->send_codecs()[0]);
   }
 
   // Test that SetLocalContent and SetRemoteContent properly configure
@@ -571,10 +619,11 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
     auto offer_enum = offer ? (T::Content::kSession) : (T::Content::kNo);
     auto answer_enum = answer ? (T::Content::kSession) : (T::Content::kNo);
     content.set_extmap_allow_mixed_enum(offer_enum);
-    EXPECT_TRUE(channel1_->SetLocalContent(&content, SdpType::kOffer, NULL));
+    std::string err;
+    EXPECT_TRUE(channel1_->SetLocalContent(&content, SdpType::kOffer, err));
     content.set_extmap_allow_mixed_enum(answer_enum);
-    EXPECT_TRUE(channel1_->SetRemoteContent(&content, SdpType::kAnswer, NULL));
-    EXPECT_EQ(answer, media_channel1()->ExtmapAllowMixed());
+    EXPECT_TRUE(channel1_->SetRemoteContent(&content, SdpType::kAnswer, err));
+    EXPECT_EQ(answer, media_send_channel1_impl()->ExtmapAllowMixed());
   }
   void TestSetContentsExtmapAllowMixedCallee(bool offer, bool answer) {
     // For a callee, SetRemoteContent() is called first with an offer and next
@@ -585,10 +634,11 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
     auto offer_enum = offer ? (T::Content::kSession) : (T::Content::kNo);
     auto answer_enum = answer ? (T::Content::kSession) : (T::Content::kNo);
     content.set_extmap_allow_mixed_enum(offer_enum);
-    EXPECT_TRUE(channel1_->SetRemoteContent(&content, SdpType::kOffer, NULL));
+    std::string err;
+    EXPECT_TRUE(channel1_->SetRemoteContent(&content, SdpType::kOffer, err));
     content.set_extmap_allow_mixed_enum(answer_enum);
-    EXPECT_TRUE(channel1_->SetLocalContent(&content, SdpType::kAnswer, NULL));
-    EXPECT_EQ(answer, media_channel1()->ExtmapAllowMixed());
+    EXPECT_TRUE(channel1_->SetLocalContent(&content, SdpType::kAnswer, err));
+    EXPECT_EQ(answer, media_send_channel1()->ExtmapAllowMixed());
   }
 
   // Test that SetLocalContent and SetRemoteContent properly deals
@@ -596,13 +646,14 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
   void TestSetContentsNullOffer() {
     CreateChannels(0, 0);
     typename T::Content content;
-    EXPECT_TRUE(channel1_->SetLocalContent(&content, SdpType::kOffer, NULL));
+    std::string err;
+    EXPECT_TRUE(channel1_->SetLocalContent(&content, SdpType::kOffer, err));
     CreateContent(0, kPcmuCodec, kH264Codec, &content);
-    EXPECT_EQ(0U, media_channel1()->codecs().size());
-    EXPECT_TRUE(channel1_->SetRemoteContent(&content, SdpType::kAnswer, NULL));
-    ASSERT_EQ(1U, media_channel1()->codecs().size());
-    EXPECT_TRUE(
-        CodecMatches(content.codecs()[0], media_channel1()->codecs()[0]));
+    EXPECT_EQ(0U, media_send_channel1_impl()->send_codecs().size());
+    EXPECT_TRUE(channel1_->SetRemoteContent(&content, SdpType::kAnswer, err));
+    ASSERT_EQ(1U, media_send_channel1_impl()->send_codecs().size());
+    EXPECT_EQ(content.codecs()[0],
+              media_send_channel1_impl()->send_codecs()[0]);
   }
 
   // Test that SetLocalContent and SetRemoteContent properly set RTCP
@@ -613,12 +664,13 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
     CreateContent(0, kPcmuCodec, kH264Codec, &content);
     // Both sides agree on mux. Should no longer be a separate RTCP channel.
     content.set_rtcp_mux(true);
-    EXPECT_TRUE(channel1_->SetLocalContent(&content, SdpType::kOffer, NULL));
-    EXPECT_TRUE(channel1_->SetRemoteContent(&content, SdpType::kAnswer, NULL));
+    std::string err;
+    EXPECT_TRUE(channel1_->SetLocalContent(&content, SdpType::kOffer, err));
+    EXPECT_TRUE(channel1_->SetRemoteContent(&content, SdpType::kAnswer, err));
     // Only initiator supports mux. Should still have a separate RTCP channel.
-    EXPECT_TRUE(channel2_->SetLocalContent(&content, SdpType::kOffer, NULL));
+    EXPECT_TRUE(channel2_->SetLocalContent(&content, SdpType::kOffer, err));
     content.set_rtcp_mux(false);
-    EXPECT_TRUE(channel2_->SetRemoteContent(&content, SdpType::kAnswer, NULL));
+    EXPECT_TRUE(channel2_->SetRemoteContent(&content, SdpType::kAnswer, err));
   }
 
   // Test that SetLocalContent and SetRemoteContent properly
@@ -626,13 +678,11 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
   // SdpType::kOffer / SdpType::kAnswer.
   void TestChangeStreamParamsInContent() {
     cricket::StreamParams stream1;
-    stream1.groupid = "group1";
     stream1.id = "stream1";
     stream1.ssrcs.push_back(kSsrc1);
     stream1.cname = "stream1_cname";
 
     cricket::StreamParams stream2;
-    stream2.groupid = "group1";
     stream2.id = "stream2";
     stream2.ssrcs.push_back(kSsrc2);
     stream2.cname = "stream2_cname";
@@ -642,22 +692,23 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
     typename T::Content content1;
     CreateContent(0, kPcmuCodec, kH264Codec, &content1);
     content1.AddStream(stream1);
-    EXPECT_TRUE(channel1_->SetLocalContent(&content1, SdpType::kOffer, NULL));
+    std::string err;
+    EXPECT_TRUE(channel1_->SetLocalContent(&content1, SdpType::kOffer, err));
     channel1_->Enable(true);
-    EXPECT_EQ(1u, media_channel1()->send_streams().size());
+    EXPECT_EQ(1u, media_send_channel1_impl()->send_streams().size());
 
-    EXPECT_TRUE(channel2_->SetRemoteContent(&content1, SdpType::kOffer, NULL));
-    EXPECT_EQ(1u, media_channel2()->recv_streams().size());
+    EXPECT_TRUE(channel2_->SetRemoteContent(&content1, SdpType::kOffer, err));
+    EXPECT_EQ(1u, media_receive_channel2_impl()->recv_streams().size());
     ConnectFakeTransports();
 
     // Channel 2 do not send anything.
     typename T::Content content2;
     CreateContent(0, kPcmuCodec, kH264Codec, &content2);
-    EXPECT_TRUE(channel1_->SetRemoteContent(&content2, SdpType::kAnswer, NULL));
-    EXPECT_EQ(0u, media_channel1()->recv_streams().size());
-    EXPECT_TRUE(channel2_->SetLocalContent(&content2, SdpType::kAnswer, NULL));
+    EXPECT_TRUE(channel1_->SetRemoteContent(&content2, SdpType::kAnswer, err));
+    EXPECT_EQ(0u, media_receive_channel1_impl()->recv_streams().size());
+    EXPECT_TRUE(channel2_->SetLocalContent(&content2, SdpType::kAnswer, err));
     channel2_->Enable(true);
-    EXPECT_EQ(0u, media_channel2()->send_streams().size());
+    EXPECT_EQ(0u, media_send_channel2_impl()->send_streams().size());
 
     SendCustomRtp1(kSsrc1, 0);
     WaitForThreads();
@@ -667,22 +718,22 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
     typename T::Content content3;
     CreateContent(0, kPcmuCodec, kH264Codec, &content3);
     content3.AddStream(stream2);
-    EXPECT_TRUE(channel2_->SetLocalContent(&content3, SdpType::kOffer, NULL));
-    ASSERT_EQ(1u, media_channel2()->send_streams().size());
-    EXPECT_EQ(stream2, media_channel2()->send_streams()[0]);
+    EXPECT_TRUE(channel2_->SetLocalContent(&content3, SdpType::kOffer, err));
+    ASSERT_EQ(1u, media_send_channel2_impl()->send_streams().size());
+    EXPECT_EQ(stream2, media_send_channel2_impl()->send_streams()[0]);
 
-    EXPECT_TRUE(channel1_->SetRemoteContent(&content3, SdpType::kOffer, NULL));
-    ASSERT_EQ(1u, media_channel1()->recv_streams().size());
-    EXPECT_EQ(stream2, media_channel1()->recv_streams()[0]);
+    EXPECT_TRUE(channel1_->SetRemoteContent(&content3, SdpType::kOffer, err));
+    ASSERT_EQ(1u, media_receive_channel1_impl()->recv_streams().size());
+    EXPECT_EQ(stream2, media_receive_channel1_impl()->recv_streams()[0]);
 
     // Channel 1 replies but stop sending stream1.
     typename T::Content content4;
     CreateContent(0, kPcmuCodec, kH264Codec, &content4);
-    EXPECT_TRUE(channel1_->SetLocalContent(&content4, SdpType::kAnswer, NULL));
-    EXPECT_EQ(0u, media_channel1()->send_streams().size());
+    EXPECT_TRUE(channel1_->SetLocalContent(&content4, SdpType::kAnswer, err));
+    EXPECT_EQ(0u, media_send_channel1_impl()->send_streams().size());
 
-    EXPECT_TRUE(channel2_->SetRemoteContent(&content4, SdpType::kAnswer, NULL));
-    EXPECT_EQ(0u, media_channel2()->recv_streams().size());
+    EXPECT_TRUE(channel2_->SetRemoteContent(&content4, SdpType::kAnswer, err));
+    EXPECT_EQ(0u, media_receive_channel2_impl()->recv_streams().size());
 
     SendCustomRtp2(kSsrc2, 0);
     WaitForThreads();
@@ -693,58 +744,59 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
   void TestPlayoutAndSendingStates() {
     CreateChannels(0, 0);
     if (verify_playout_) {
-      EXPECT_FALSE(media_channel1()->playout());
+      EXPECT_FALSE(media_receive_channel1_impl()->playout());
     }
-    EXPECT_FALSE(media_channel1()->sending());
+    EXPECT_FALSE(media_send_channel1_impl()->sending());
     if (verify_playout_) {
-      EXPECT_FALSE(media_channel2()->playout());
+      EXPECT_FALSE(media_receive_channel2_impl()->playout());
     }
-    EXPECT_FALSE(media_channel2()->sending());
+    EXPECT_FALSE(media_send_channel2_impl()->sending());
     channel1_->Enable(true);
     FlushCurrentThread();
     if (verify_playout_) {
-      EXPECT_FALSE(media_channel1()->playout());
+      EXPECT_FALSE(media_receive_channel1_impl()->playout());
     }
-    EXPECT_FALSE(media_channel1()->sending());
+    EXPECT_FALSE(media_send_channel1_impl()->sending());
+    std::string err;
     EXPECT_TRUE(channel1_->SetLocalContent(&local_media_content1_,
-                                           SdpType::kOffer, NULL));
+                                           SdpType::kOffer, err));
     if (verify_playout_) {
-      EXPECT_TRUE(media_channel1()->playout());
+      EXPECT_TRUE(media_receive_channel1_impl()->playout());
     }
-    EXPECT_FALSE(media_channel1()->sending());
+    EXPECT_FALSE(media_send_channel1_impl()->sending());
     EXPECT_TRUE(channel2_->SetRemoteContent(&local_media_content1_,
-                                            SdpType::kOffer, NULL));
+                                            SdpType::kOffer, err));
     if (verify_playout_) {
-      EXPECT_FALSE(media_channel2()->playout());
+      EXPECT_FALSE(media_receive_channel2_impl()->playout());
     }
-    EXPECT_FALSE(media_channel2()->sending());
+    EXPECT_FALSE(media_send_channel2_impl()->sending());
     EXPECT_TRUE(channel2_->SetLocalContent(&local_media_content2_,
-                                           SdpType::kAnswer, NULL));
+                                           SdpType::kAnswer, err));
     if (verify_playout_) {
-      EXPECT_FALSE(media_channel2()->playout());
+      EXPECT_FALSE(media_receive_channel2_impl()->playout());
     }
-    EXPECT_FALSE(media_channel2()->sending());
+    EXPECT_FALSE(media_send_channel2_impl()->sending());
     ConnectFakeTransports();
     if (verify_playout_) {
-      EXPECT_TRUE(media_channel1()->playout());
+      EXPECT_TRUE(media_receive_channel1_impl()->playout());
     }
-    EXPECT_FALSE(media_channel1()->sending());
+    EXPECT_FALSE(media_send_channel1_impl()->sending());
     if (verify_playout_) {
-      EXPECT_FALSE(media_channel2()->playout());
+      EXPECT_FALSE(media_receive_channel2_impl()->playout());
     }
-    EXPECT_FALSE(media_channel2()->sending());
+    EXPECT_FALSE(media_send_channel2_impl()->sending());
     channel2_->Enable(true);
     FlushCurrentThread();
     if (verify_playout_) {
-      EXPECT_TRUE(media_channel2()->playout());
+      EXPECT_TRUE(media_receive_channel2_impl()->playout());
     }
-    EXPECT_TRUE(media_channel2()->sending());
+    EXPECT_TRUE(media_send_channel2_impl()->sending());
     EXPECT_TRUE(channel1_->SetRemoteContent(&local_media_content2_,
-                                            SdpType::kAnswer, NULL));
+                                            SdpType::kAnswer, err));
     if (verify_playout_) {
-      EXPECT_TRUE(media_channel1()->playout());
+      EXPECT_TRUE(media_receive_channel1_impl()->playout());
     }
-    EXPECT_TRUE(media_channel1()->sending());
+    EXPECT_TRUE(media_send_channel1_impl()->sending());
   }
 
   // Test that changing the MediaContentDirection in the local and remote
@@ -762,60 +814,83 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
     channel2_->Enable(true);
     FlushCurrentThread();
     if (verify_playout_) {
-      EXPECT_FALSE(media_channel1()->playout());
+      EXPECT_FALSE(media_receive_channel1_impl()->playout());
     }
-    EXPECT_FALSE(media_channel1()->sending());
+    EXPECT_FALSE(media_send_channel1_impl()->sending());
     if (verify_playout_) {
-      EXPECT_FALSE(media_channel2()->playout());
+      EXPECT_FALSE(media_receive_channel2_impl()->playout());
     }
-    EXPECT_FALSE(media_channel2()->sending());
+    EXPECT_FALSE(media_send_channel2_impl()->sending());
 
-    EXPECT_TRUE(channel1_->SetLocalContent(&content1, SdpType::kOffer, NULL));
-    EXPECT_TRUE(channel2_->SetRemoteContent(&content1, SdpType::kOffer, NULL));
+    std::string err;
+    EXPECT_TRUE(channel1_->SetLocalContent(&content1, SdpType::kOffer, err));
+    EXPECT_TRUE(channel2_->SetRemoteContent(&content1, SdpType::kOffer, err));
+    EXPECT_TRUE(channel2_->SetLocalContent(&content2, SdpType::kPrAnswer, err));
     EXPECT_TRUE(
-        channel2_->SetLocalContent(&content2, SdpType::kPrAnswer, NULL));
-    EXPECT_TRUE(
-        channel1_->SetRemoteContent(&content2, SdpType::kPrAnswer, NULL));
+        channel1_->SetRemoteContent(&content2, SdpType::kPrAnswer, err));
     ConnectFakeTransports();
 
     if (verify_playout_) {
-      EXPECT_TRUE(media_channel1()->playout());
+      EXPECT_TRUE(media_receive_channel1_impl()->playout());
     }
-    EXPECT_FALSE(media_channel1()->sending());  // remote InActive
+    EXPECT_FALSE(media_send_channel1_impl()->sending());  // remote InActive
     if (verify_playout_) {
-      EXPECT_FALSE(media_channel2()->playout());  // local InActive
+      EXPECT_FALSE(media_receive_channel2_impl()->playout());  // local InActive
     }
-    EXPECT_FALSE(media_channel2()->sending());  // local InActive
+    EXPECT_FALSE(media_send_channel2_impl()->sending());  // local InActive
 
     // Update `content2` to be RecvOnly.
     content2.set_direction(RtpTransceiverDirection::kRecvOnly);
+    EXPECT_TRUE(channel2_->SetLocalContent(&content2, SdpType::kPrAnswer, err));
     EXPECT_TRUE(
-        channel2_->SetLocalContent(&content2, SdpType::kPrAnswer, NULL));
-    EXPECT_TRUE(
-        channel1_->SetRemoteContent(&content2, SdpType::kPrAnswer, NULL));
+        channel1_->SetRemoteContent(&content2, SdpType::kPrAnswer, err));
 
     if (verify_playout_) {
-      EXPECT_TRUE(media_channel1()->playout());
+      EXPECT_TRUE(media_receive_channel1_impl()->playout());
     }
-    EXPECT_TRUE(media_channel1()->sending());
+    EXPECT_TRUE(media_send_channel1_impl()->sending());
     if (verify_playout_) {
-      EXPECT_TRUE(media_channel2()->playout());  // local RecvOnly
+      EXPECT_TRUE(media_receive_channel2_impl()->playout());  // local RecvOnly
     }
-    EXPECT_FALSE(media_channel2()->sending());  // local RecvOnly
+    EXPECT_FALSE(media_send_channel2_impl()->sending());  // local RecvOnly
 
     // Update `content2` to be SendRecv.
     content2.set_direction(RtpTransceiverDirection::kSendRecv);
-    EXPECT_TRUE(channel2_->SetLocalContent(&content2, SdpType::kAnswer, NULL));
-    EXPECT_TRUE(channel1_->SetRemoteContent(&content2, SdpType::kAnswer, NULL));
+    EXPECT_TRUE(channel2_->SetLocalContent(&content2, SdpType::kAnswer, err));
+    EXPECT_TRUE(channel1_->SetRemoteContent(&content2, SdpType::kAnswer, err));
 
     if (verify_playout_) {
-      EXPECT_TRUE(media_channel1()->playout());
+      EXPECT_TRUE(media_receive_channel1_impl()->playout());
     }
-    EXPECT_TRUE(media_channel1()->sending());
+    EXPECT_TRUE(media_send_channel1_impl()->sending());
     if (verify_playout_) {
-      EXPECT_TRUE(media_channel2()->playout());
+      EXPECT_TRUE(media_receive_channel2_impl()->playout());
     }
-    EXPECT_TRUE(media_channel2()->sending());
+    EXPECT_TRUE(media_send_channel2_impl()->sending());
+
+    // Update `content2` to be inactive on the receiver while sending at the
+    // sender.
+    content2.set_direction(RtpTransceiverDirection::kInactive);
+    EXPECT_TRUE(channel1_->SetLocalContent(&content1, SdpType::kOffer, err));
+    EXPECT_TRUE(channel2_->SetRemoteContent(&content1, SdpType::kOffer, err));
+    EXPECT_TRUE(channel2_->SetLocalContent(&content2, SdpType::kAnswer, err));
+    content2.set_direction(RtpTransceiverDirection::kRecvOnly);
+    EXPECT_TRUE(channel1_->SetRemoteContent(&content2, SdpType::kAnswer, err));
+    if (verify_playout_) {
+      EXPECT_FALSE(media_receive_channel2_impl()->playout());
+    }
+    EXPECT_TRUE(media_send_channel1_impl()->sending());
+
+    // Re-enable `content2`.
+    content2.set_direction(RtpTransceiverDirection::kSendRecv);
+    EXPECT_TRUE(channel1_->SetLocalContent(&content1, SdpType::kOffer, err));
+    EXPECT_TRUE(channel2_->SetRemoteContent(&content1, SdpType::kOffer, err));
+    EXPECT_TRUE(channel2_->SetLocalContent(&content2, SdpType::kAnswer, err));
+    EXPECT_TRUE(channel1_->SetRemoteContent(&content2, SdpType::kAnswer, err));
+    if (verify_playout_) {
+      EXPECT_TRUE(media_receive_channel2_impl()->playout());
+    }
+    EXPECT_TRUE(media_send_channel1_impl()->sending());
   }
 
   // Tests that when the transport channel signals a candidate pair change
@@ -831,27 +906,27 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
     CreateChannels(DTLS, DTLS);
     SendInitiate();
 
-    typename T::MediaChannel* media_channel1 =
-        static_cast<typename T::MediaChannel*>(channel1_->media_channel());
-    ASSERT_TRUE(media_channel1);
+    typename T::MediaSendChannel* media_send_channel1_impl =
+        this->media_send_channel1_impl();
+    ASSERT_TRUE(media_send_channel1_impl);
 
     // Need to wait for the threads before calling
     // `set_num_network_route_changes` because the network route would be set
     // when creating the channel.
     WaitForThreads();
-    media_channel1->set_num_network_route_changes(0);
-    network_thread_->Invoke<void>(RTC_FROM_HERE, [this] {
+    media_send_channel1_impl->set_num_network_route_changes(0);
+    SendTask(network_thread_, [this] {
       rtc::NetworkRoute network_route;
       // The transport channel becomes disconnected.
       fake_rtp_dtls_transport1_->ice_transport()->SignalNetworkRouteChanged(
           absl::optional<rtc::NetworkRoute>(network_route));
     });
     WaitForThreads();
-    EXPECT_EQ(1, media_channel1->num_network_route_changes());
-    EXPECT_FALSE(media_channel1->last_network_route().connected);
-    media_channel1->set_num_network_route_changes(0);
+    EXPECT_EQ(1, media_send_channel1_impl->num_network_route_changes());
+    EXPECT_FALSE(media_send_channel1_impl->last_network_route().connected);
+    media_send_channel1_impl->set_num_network_route_changes(0);
 
-    network_thread_->Invoke<void>(RTC_FROM_HERE, [this] {
+    SendTask(network_thread_, [this] {
       rtc::NetworkRoute network_route;
       network_route.connected = true;
       network_route.local =
@@ -866,16 +941,19 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
           absl::optional<rtc::NetworkRoute>(network_route));
     });
     WaitForThreads();
-    EXPECT_EQ(1, media_channel1->num_network_route_changes());
-    EXPECT_TRUE(media_channel1->last_network_route().connected);
-    EXPECT_EQ(kLocalNetId,
-              media_channel1->last_network_route().local.network_id());
-    EXPECT_EQ(kRemoteNetId,
-              media_channel1->last_network_route().remote.network_id());
-    EXPECT_EQ(kLastPacketId,
-              media_channel1->last_network_route().last_sent_packet_id);
+    EXPECT_EQ(1, media_send_channel1_impl->num_network_route_changes());
+    EXPECT_TRUE(media_send_channel1_impl->last_network_route().connected);
+    EXPECT_EQ(
+        kLocalNetId,
+        media_send_channel1_impl->last_network_route().local.network_id());
+    EXPECT_EQ(
+        kRemoteNetId,
+        media_send_channel1_impl->last_network_route().remote.network_id());
+    EXPECT_EQ(
+        kLastPacketId,
+        media_send_channel1_impl->last_network_route().last_sent_packet_id);
     EXPECT_EQ(kTransportOverheadPerPacket + kSrtpOverheadPerPacket,
-              media_channel1->transport_overhead_per_packet());
+              media_send_channel1_impl->transport_overhead_per_packet());
   }
 
   // Test setting up a call.
@@ -884,18 +962,18 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
     EXPECT_FALSE(IsSrtpActive(channel1_));
     EXPECT_TRUE(SendInitiate());
     if (verify_playout_) {
-      EXPECT_TRUE(media_channel1()->playout());
+      EXPECT_TRUE(media_receive_channel1_impl()->playout());
     }
-    EXPECT_FALSE(media_channel1()->sending());
+    EXPECT_FALSE(media_send_channel1_impl()->sending());
     EXPECT_TRUE(SendAccept());
     EXPECT_FALSE(IsSrtpActive(channel1_));
-    EXPECT_TRUE(media_channel1()->sending());
-    EXPECT_EQ(1U, media_channel1()->codecs().size());
+    EXPECT_TRUE(media_send_channel1_impl()->sending());
+    EXPECT_EQ(1U, media_send_channel1_impl()->send_codecs().size());
     if (verify_playout_) {
-      EXPECT_TRUE(media_channel2()->playout());
+      EXPECT_TRUE(media_receive_channel2_impl()->playout());
     }
-    EXPECT_TRUE(media_channel2()->sending());
-    EXPECT_EQ(1U, media_channel2()->codecs().size());
+    EXPECT_TRUE(media_send_channel2_impl()->sending());
+    EXPECT_EQ(1U, media_send_channel2_impl()->send_codecs().size());
   }
 
   // Send voice RTP data to the other side and ensure it gets there.
@@ -920,6 +998,9 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
     EXPECT_TRUE(SendAccept());
     SendRtp1();
     SendRtp2();
+
+    DeinitChannels();
+
     // Do not wait, destroy channels.
     channel1_.reset(nullptr);
     channel2_.reset(nullptr);
@@ -1008,9 +1089,8 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
     EXPECT_TRUE(CheckNoRtp2());
 
     // Lose writability, which should fail.
-    network_thread_->Invoke<void>(RTC_FROM_HERE, [this] {
-      fake_rtp_dtls_transport1_->SetWritable(false);
-    });
+    SendTask(network_thread_,
+             [this] { fake_rtp_dtls_transport1_->SetWritable(false); });
     SendRtp1();
     SendRtp2();
     WaitForThreads();
@@ -1018,10 +1098,9 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
     EXPECT_TRUE(CheckNoRtp2());
 
     // Regain writability
-    network_thread_->Invoke<void>(RTC_FROM_HERE, [this] {
-      fake_rtp_dtls_transport1_->SetWritable(true);
-    });
-    EXPECT_TRUE(media_channel1()->sending());
+    SendTask(network_thread_,
+             [this] { fake_rtp_dtls_transport1_->SetWritable(true); });
+    EXPECT_TRUE(media_send_channel1_impl()->sending());
     SendRtp1();
     SendRtp2();
     WaitForThreads();
@@ -1031,11 +1110,11 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
     EXPECT_TRUE(CheckNoRtp2());
 
     // Lose writability completely
-    network_thread_->Invoke<void>(RTC_FROM_HERE, [this] {
+    SendTask(network_thread_, [this] {
       bool asymmetric = true;
       fake_rtp_dtls_transport1_->SetDestination(nullptr, asymmetric);
     });
-    EXPECT_TRUE(media_channel1()->sending());
+    EXPECT_TRUE(media_send_channel1_impl()->sending());
 
     // Should fail also.
     SendRtp1();
@@ -1046,12 +1125,12 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
     EXPECT_TRUE(CheckNoRtp1());
 
     // Gain writability back
-    network_thread_->Invoke<void>(RTC_FROM_HERE, [this] {
+    SendTask(network_thread_, [this] {
       bool asymmetric = true;
       fake_rtp_dtls_transport1_->SetDestination(fake_rtp_dtls_transport2_.get(),
                                                 asymmetric);
     });
-    EXPECT_TRUE(media_channel1()->sending());
+    EXPECT_TRUE(media_send_channel1_impl()->sending());
     SendRtp1();
     SendRtp2();
     WaitForThreads();
@@ -1104,19 +1183,19 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
     std::unique_ptr<typename T::Content> content(
         CreateMediaContentWithStream(1));
 
-    media_channel1()->set_fail_set_recv_codecs(true);
+    media_receive_channel1_impl()->set_fail_set_recv_codecs(true);
     EXPECT_FALSE(
-        channel1_->SetLocalContent(content.get(), SdpType::kOffer, &err));
+        channel1_->SetLocalContent(content.get(), SdpType::kOffer, err));
     EXPECT_FALSE(
-        channel1_->SetLocalContent(content.get(), SdpType::kAnswer, &err));
+        channel1_->SetLocalContent(content.get(), SdpType::kAnswer, err));
 
-    media_channel1()->set_fail_set_send_codecs(true);
+    media_send_channel1_impl()->set_fail_set_send_codecs(true);
     EXPECT_FALSE(
-        channel1_->SetRemoteContent(content.get(), SdpType::kOffer, &err));
+        channel1_->SetRemoteContent(content.get(), SdpType::kOffer, err));
 
-    media_channel1()->set_fail_set_send_codecs(true);
+    media_send_channel1_impl()->set_fail_set_send_codecs(true);
     EXPECT_FALSE(
-        channel1_->SetRemoteContent(content.get(), SdpType::kAnswer, &err));
+        channel1_->SetRemoteContent(content.get(), SdpType::kAnswer, err));
   }
 
   void TestSendTwoOffers() {
@@ -1126,15 +1205,15 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
     std::unique_ptr<typename T::Content> content1(
         CreateMediaContentWithStream(1));
     EXPECT_TRUE(
-        channel1_->SetLocalContent(content1.get(), SdpType::kOffer, &err));
-    EXPECT_TRUE(media_channel1()->HasSendStream(1));
+        channel1_->SetLocalContent(content1.get(), SdpType::kOffer, err));
+    EXPECT_TRUE(media_send_channel1_impl()->HasSendStream(1));
 
     std::unique_ptr<typename T::Content> content2(
         CreateMediaContentWithStream(2));
     EXPECT_TRUE(
-        channel1_->SetLocalContent(content2.get(), SdpType::kOffer, &err));
-    EXPECT_FALSE(media_channel1()->HasSendStream(1));
-    EXPECT_TRUE(media_channel1()->HasSendStream(2));
+        channel1_->SetLocalContent(content2.get(), SdpType::kOffer, err));
+    EXPECT_FALSE(media_send_channel1_impl()->HasSendStream(1));
+    EXPECT_TRUE(media_send_channel1_impl()->HasSendStream(2));
   }
 
   void TestReceiveTwoOffers() {
@@ -1144,15 +1223,15 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
     std::unique_ptr<typename T::Content> content1(
         CreateMediaContentWithStream(1));
     EXPECT_TRUE(
-        channel1_->SetRemoteContent(content1.get(), SdpType::kOffer, &err));
-    EXPECT_TRUE(media_channel1()->HasRecvStream(1));
+        channel1_->SetRemoteContent(content1.get(), SdpType::kOffer, err));
+    EXPECT_TRUE(media_receive_channel1_impl()->HasRecvStream(1));
 
     std::unique_ptr<typename T::Content> content2(
         CreateMediaContentWithStream(2));
     EXPECT_TRUE(
-        channel1_->SetRemoteContent(content2.get(), SdpType::kOffer, &err));
-    EXPECT_FALSE(media_channel1()->HasRecvStream(1));
-    EXPECT_TRUE(media_channel1()->HasRecvStream(2));
+        channel1_->SetRemoteContent(content2.get(), SdpType::kOffer, err));
+    EXPECT_FALSE(media_receive_channel1_impl()->HasRecvStream(1));
+    EXPECT_TRUE(media_receive_channel1_impl()->HasRecvStream(2));
   }
 
   void TestSendPrAnswer() {
@@ -1163,25 +1242,25 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
     std::unique_ptr<typename T::Content> content1(
         CreateMediaContentWithStream(1));
     EXPECT_TRUE(
-        channel1_->SetRemoteContent(content1.get(), SdpType::kOffer, &err));
-    EXPECT_TRUE(media_channel1()->HasRecvStream(1));
+        channel1_->SetRemoteContent(content1.get(), SdpType::kOffer, err));
+    EXPECT_TRUE(media_receive_channel1_impl()->HasRecvStream(1));
 
     // Send PR answer
     std::unique_ptr<typename T::Content> content2(
         CreateMediaContentWithStream(2));
     EXPECT_TRUE(
-        channel1_->SetLocalContent(content2.get(), SdpType::kPrAnswer, &err));
-    EXPECT_TRUE(media_channel1()->HasRecvStream(1));
-    EXPECT_TRUE(media_channel1()->HasSendStream(2));
+        channel1_->SetLocalContent(content2.get(), SdpType::kPrAnswer, err));
+    EXPECT_TRUE(media_receive_channel1_impl()->HasRecvStream(1));
+    EXPECT_TRUE(media_send_channel1_impl()->HasSendStream(2));
 
     // Send answer
     std::unique_ptr<typename T::Content> content3(
         CreateMediaContentWithStream(3));
     EXPECT_TRUE(
-        channel1_->SetLocalContent(content3.get(), SdpType::kAnswer, &err));
-    EXPECT_TRUE(media_channel1()->HasRecvStream(1));
-    EXPECT_FALSE(media_channel1()->HasSendStream(2));
-    EXPECT_TRUE(media_channel1()->HasSendStream(3));
+        channel1_->SetLocalContent(content3.get(), SdpType::kAnswer, err));
+    EXPECT_TRUE(media_receive_channel1_impl()->HasRecvStream(1));
+    EXPECT_FALSE(media_send_channel1_impl()->HasSendStream(2));
+    EXPECT_TRUE(media_send_channel1_impl()->HasSendStream(3));
   }
 
   void TestReceivePrAnswer() {
@@ -1192,40 +1271,40 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
     std::unique_ptr<typename T::Content> content1(
         CreateMediaContentWithStream(1));
     EXPECT_TRUE(
-        channel1_->SetLocalContent(content1.get(), SdpType::kOffer, &err));
-    EXPECT_TRUE(media_channel1()->HasSendStream(1));
+        channel1_->SetLocalContent(content1.get(), SdpType::kOffer, err));
+    EXPECT_TRUE(media_send_channel1_impl()->HasSendStream(1));
 
     // Receive PR answer
     std::unique_ptr<typename T::Content> content2(
         CreateMediaContentWithStream(2));
     EXPECT_TRUE(
-        channel1_->SetRemoteContent(content2.get(), SdpType::kPrAnswer, &err));
-    EXPECT_TRUE(media_channel1()->HasSendStream(1));
-    EXPECT_TRUE(media_channel1()->HasRecvStream(2));
+        channel1_->SetRemoteContent(content2.get(), SdpType::kPrAnswer, err));
+    EXPECT_TRUE(media_send_channel1_impl()->HasSendStream(1));
+    EXPECT_TRUE(media_receive_channel1_impl()->HasRecvStream(2));
 
     // Receive answer
     std::unique_ptr<typename T::Content> content3(
         CreateMediaContentWithStream(3));
     EXPECT_TRUE(
-        channel1_->SetRemoteContent(content3.get(), SdpType::kAnswer, &err));
-    EXPECT_TRUE(media_channel1()->HasSendStream(1));
-    EXPECT_FALSE(media_channel1()->HasRecvStream(2));
-    EXPECT_TRUE(media_channel1()->HasRecvStream(3));
+        channel1_->SetRemoteContent(content3.get(), SdpType::kAnswer, err));
+    EXPECT_TRUE(media_send_channel1_impl()->HasSendStream(1));
+    EXPECT_FALSE(media_receive_channel1_impl()->HasRecvStream(2));
+    EXPECT_TRUE(media_receive_channel1_impl()->HasRecvStream(3));
   }
 
   void TestOnTransportReadyToSend() {
     CreateChannels(0, 0);
-    EXPECT_FALSE(media_channel1()->ready_to_send());
+    EXPECT_FALSE(media_send_channel1_impl()->ready_to_send());
 
     network_thread_->PostTask(
-        RTC_FROM_HERE, [this] { channel1_->OnTransportReadyToSend(true); });
+        [this] { channel1_->OnTransportReadyToSend(true); });
     WaitForThreads();
-    EXPECT_TRUE(media_channel1()->ready_to_send());
+    EXPECT_TRUE(media_send_channel1_impl()->ready_to_send());
 
     network_thread_->PostTask(
-        RTC_FROM_HERE, [this] { channel1_->OnTransportReadyToSend(false); });
+        [this] { channel1_->OnTransportReadyToSend(false); });
     WaitForThreads();
-    EXPECT_FALSE(media_channel1()->ready_to_send());
+    EXPECT_FALSE(media_send_channel1_impl()->ready_to_send());
   }
 
   bool SetRemoteContentWithBitrateLimit(int remote_limit) {
@@ -1251,10 +1330,11 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
 
   void DefaultMaxBitrateIsUnlimited() {
     CreateChannels(0, 0);
+    std::string err;
     EXPECT_TRUE(channel1_->SetLocalContent(&local_media_content1_,
-                                           SdpType::kOffer, NULL));
-    EXPECT_EQ(media_channel1()->max_bps(), -1);
-    VerifyMaxBitrate(media_channel1()->GetRtpSendParameters(kSsrc1),
+                                           SdpType::kOffer, err));
+    EXPECT_EQ(media_send_channel1_impl()->max_bps(), -1);
+    VerifyMaxBitrate(media_send_channel1()->GetRtpSendParameters(kSsrc1),
                      absl::nullopt);
   }
 
@@ -1276,7 +1356,7 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
 
     bool rcv_success, send_success;
     int rcv_buf, send_buf;
-    network_thread_->Invoke<void>(RTC_FROM_HERE, [&] {
+    SendTask(network_thread_, [&] {
       channel1_->SetOption(cricket::BaseChannel::ST_RTP,
                            rtc::Socket::Option::OPT_SNDBUF, kSndBufSize);
       channel2_->SetOption(cricket::BaseChannel::ST_RTP,
@@ -1326,15 +1406,14 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
     CreateChannels(0, 0);
     typename T::Content content1, content2, content3;
     CreateSimulcastContent({"f", "h", "q"}, &content1);
-    EXPECT_TRUE(
-        channel1_->SetLocalContent(&content1, SdpType::kOffer, nullptr));
+    std::string err;
+    EXPECT_TRUE(channel1_->SetLocalContent(&content1, SdpType::kOffer, err));
     VerifySimulcastStreamParams(content1.streams()[0], channel1_.get());
     StreamParams stream1 = channel1_->local_streams()[0];
 
     // Create a similar offer. SetLocalContent should not remove and add.
     CreateSimulcastContent({"f", "h", "q"}, &content2);
-    EXPECT_TRUE(
-        channel1_->SetLocalContent(&content2, SdpType::kOffer, nullptr));
+    EXPECT_TRUE(channel1_->SetLocalContent(&content2, SdpType::kOffer, err));
     VerifySimulcastStreamParams(content2.streams()[0], channel1_.get());
     StreamParams stream2 = channel1_->local_streams()[0];
     // Check that the streams are identical (SSRCs didn't change).
@@ -1342,8 +1421,7 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
 
     // Create third offer that has same RIDs in different order.
     CreateSimulcastContent({"f", "q", "h"}, &content3);
-    EXPECT_TRUE(
-        channel1_->SetLocalContent(&content3, SdpType::kOffer, nullptr));
+    EXPECT_TRUE(channel1_->SetLocalContent(&content3, SdpType::kOffer, err));
     VerifySimulcastStreamParams(content3.streams()[0], channel1_.get());
   }
 
@@ -1361,31 +1439,64 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
   void WaitForThreads(rtc::ArrayView<rtc::Thread*> threads) {
     // `threads` and current thread post packets to network thread.
     for (rtc::Thread* thread : threads) {
-      thread->Invoke<void>(RTC_FROM_HERE,
-                           [thread] { ProcessThreadQueue(thread); });
+      SendTask(thread, [thread] { ProcessThreadQueue(thread); });
     }
     ProcessThreadQueue(rtc::Thread::Current());
     // Network thread move them around and post back to worker = current thread.
     if (!network_thread_->IsCurrent()) {
-      network_thread_->Invoke<void>(
-          RTC_FROM_HERE, [this] { ProcessThreadQueue(network_thread_); });
+      SendTask(network_thread_,
+               [this] { ProcessThreadQueue(network_thread_); });
     }
     // Worker thread = current Thread process received messages.
     ProcessThreadQueue(rtc::Thread::Current());
   }
 
-  typename T::MediaChannel* media_channel1() {
+  // Accessors that return the standard VideoMedia{Send|Receive}ChannelInterface
+  typename T::MediaSendChannelInterface* media_send_channel1() {
+    return channel1_->media_send_channel();
+  }
+  typename T::MediaSendChannelInterface* media_send_channel2() {
+    return channel2_->media_send_channel();
+  }
+  typename T::MediaReceiveChannelInterface* media_receive_channel1() {
+    return channel1_->media_receive_channel();
+  }
+  typename T::MediaReceiveChannelInterface* media_receive_channel2() {
+    return channel2_->media_receive_channel();
+  }
+
+  // Accessors that return the FakeMedia<type>SendChannel object.
+  // Note that these depend on getting the object back that was
+  // passed to the channel constructor.
+  // T::MediaSendChannel is either FakeVoiceMediaSendChannel or
+  // FakeVideoMediaSendChannel.
+  typename T::MediaSendChannel* media_send_channel1_impl() {
     RTC_DCHECK(channel1_);
-    RTC_DCHECK(channel1_->media_channel());
-    return static_cast<typename T::MediaChannel*>(channel1_->media_channel());
+    return static_cast<typename T::MediaSendChannel*>(
+        channel1_->media_send_channel());
   }
 
-  typename T::MediaChannel* media_channel2() {
+  typename T::MediaSendChannel* media_send_channel2_impl() {
     RTC_DCHECK(channel2_);
-    RTC_DCHECK(channel2_->media_channel());
-    return static_cast<typename T::MediaChannel*>(channel2_->media_channel());
+    RTC_DCHECK(channel2_->media_send_channel());
+    return static_cast<typename T::MediaSendChannel*>(
+        channel2_->media_send_channel());
+  }
+  typename T::MediaReceiveChannel* media_receive_channel1_impl() {
+    RTC_DCHECK(channel1_);
+    RTC_DCHECK(channel1_->media_receive_channel());
+    return static_cast<typename T::MediaReceiveChannel*>(
+        channel1_->media_receive_channel());
   }
 
+  typename T::MediaReceiveChannel* media_receive_channel2_impl() {
+    RTC_DCHECK(channel2_);
+    RTC_DCHECK(channel2_->media_receive_channel());
+    return static_cast<typename T::MediaReceiveChannel*>(
+        channel2_->media_receive_channel());
+  }
+
+  rtc::AutoThread main_thread_;
   // TODO(pbos): Remove playout from all media channels and let renderers mute
   // themselves.
   const bool verify_playout_;
@@ -1416,29 +1527,34 @@ class ChannelTest : public ::testing::Test, public sigslot::has_slots<> {
   rtc::Buffer rtcp_packet_;
   cricket::CandidatePairInterface* last_selected_candidate_pair_;
   rtc::UniqueRandomIdGenerator ssrc_generator_;
+  webrtc::test::ScopedKeyValueConfig field_trials_;
 };
 
 template <>
 std::unique_ptr<cricket::VoiceChannel> ChannelTest<VoiceTraits>::CreateChannel(
     rtc::Thread* worker_thread,
     rtc::Thread* network_thread,
-    std::unique_ptr<cricket::FakeVoiceMediaChannel> ch,
+    std::unique_ptr<cricket::FakeVoiceMediaSendChannel> send_ch,
+    std::unique_ptr<cricket::FakeVoiceMediaReceiveChannel> receive_ch,
     webrtc::RtpTransportInternal* rtp_transport,
     int flags) {
   rtc::Thread* signaling_thread = rtc::Thread::Current();
   auto channel = std::make_unique<cricket::VoiceChannel>(
-      worker_thread, network_thread, signaling_thread, std::move(ch),
-      cricket::CN_AUDIO, (flags & DTLS) != 0, webrtc::CryptoOptions(),
-      &ssrc_generator_);
-  channel->Init_w(rtp_transport);
+      worker_thread, network_thread, signaling_thread, std::move(send_ch),
+      std::move(receive_ch), cricket::CN_AUDIO, (flags & DTLS) != 0,
+      webrtc::CryptoOptions(), &ssrc_generator_);
+  SendTask(network_thread, [&]() {
+    RTC_DCHECK_RUN_ON(channel->network_thread());
+    channel->SetRtpTransport(rtp_transport);
+  });
   return channel;
 }
 
 template <>
 void ChannelTest<VoiceTraits>::CreateContent(
     int flags,
-    const cricket::AudioCodec& audio_codec,
-    const cricket::VideoCodec& video_codec,
+    const cricket::Codec& audio_codec,
+    const cricket::Codec& video_codec,
     cricket::AudioContentDescription* audio) {
   audio->AddCodec(audio_codec);
   audio->set_rtcp_mux((flags & RTCP_MUX) != 0);
@@ -1449,13 +1565,6 @@ void ChannelTest<VoiceTraits>::CopyContent(
     const cricket::AudioContentDescription& source,
     cricket::AudioContentDescription* audio) {
   *audio = source;
-}
-
-template <>
-bool ChannelTest<VoiceTraits>::CodecMatches(const cricket::AudioCodec& c1,
-                                            const cricket::AudioCodec& c2) {
-  return c1.name == c2.name && c1.clockrate == c2.clockrate &&
-         c1.bitrate == c2.bitrate && c1.channels == c2.channels;
 }
 
 template <>
@@ -1505,23 +1614,27 @@ template <>
 std::unique_ptr<cricket::VideoChannel> ChannelTest<VideoTraits>::CreateChannel(
     rtc::Thread* worker_thread,
     rtc::Thread* network_thread,
-    std::unique_ptr<cricket::FakeVideoMediaChannel> ch,
+    std::unique_ptr<cricket::FakeVideoMediaSendChannel> send_ch,
+    std::unique_ptr<cricket::FakeVideoMediaReceiveChannel> receive_ch,
     webrtc::RtpTransportInternal* rtp_transport,
     int flags) {
   rtc::Thread* signaling_thread = rtc::Thread::Current();
   auto channel = std::make_unique<cricket::VideoChannel>(
-      worker_thread, network_thread, signaling_thread, std::move(ch),
-      cricket::CN_VIDEO, (flags & DTLS) != 0, webrtc::CryptoOptions(),
-      &ssrc_generator_);
-  channel->Init_w(rtp_transport);
+      worker_thread, network_thread, signaling_thread, std::move(send_ch),
+      std::move(receive_ch), cricket::CN_VIDEO, (flags & DTLS) != 0,
+      webrtc::CryptoOptions(), &ssrc_generator_);
+  SendTask(network_thread, [&]() {
+    RTC_DCHECK_RUN_ON(channel->network_thread());
+    channel->SetRtpTransport(rtp_transport);
+  });
   return channel;
 }
 
 template <>
 void ChannelTest<VideoTraits>::CreateContent(
     int flags,
-    const cricket::AudioCodec& audio_codec,
-    const cricket::VideoCodec& video_codec,
+    const cricket::Codec& audio_codec,
+    const cricket::Codec& video_codec,
     cricket::VideoContentDescription* video) {
   video->AddCodec(video_codec);
   video->set_rtcp_mux((flags & RTCP_MUX) != 0);
@@ -1532,12 +1645,6 @@ void ChannelTest<VideoTraits>::CopyContent(
     const cricket::VideoContentDescription& source,
     cricket::VideoContentDescription* video) {
   *video = source;
-}
-
-template <>
-bool ChannelTest<VideoTraits>::CodecMatches(const cricket::VideoCodec& c1,
-                                            const cricket::VideoCodec& c2) {
-  return c1.name == c2.name;
 }
 
 template <>
@@ -1564,8 +1671,8 @@ class VideoChannelDoubleThreadTest : public ChannelTest<VideoTraits> {
 
 TEST_F(VoiceChannelSingleThreadTest, TestInit) {
   Base::TestInit();
-  EXPECT_FALSE(media_channel1()->IsStreamMuted(0));
-  EXPECT_TRUE(media_channel1()->dtmf_info_queue().empty());
+  EXPECT_FALSE(media_send_channel1_impl()->IsStreamMuted(0));
+  EXPECT_TRUE(media_send_channel1_impl()->dtmf_info_queue().empty());
 }
 
 TEST_F(VoiceChannelSingleThreadTest, TestDeinit) {
@@ -1701,8 +1808,8 @@ TEST_F(VoiceChannelSingleThreadTest, SocketOptionsMergedOnSetTransport) {
 // VoiceChannelDoubleThreadTest
 TEST_F(VoiceChannelDoubleThreadTest, TestInit) {
   Base::TestInit();
-  EXPECT_FALSE(media_channel1()->IsStreamMuted(0));
-  EXPECT_TRUE(media_channel1()->dtmf_info_queue().empty());
+  EXPECT_FALSE(media_send_channel1_impl()->IsStreamMuted(0));
+  EXPECT_TRUE(media_send_channel1_impl()->dtmf_info_queue().empty());
 }
 
 TEST_F(VoiceChannelDoubleThreadTest, TestDeinit) {
@@ -1975,71 +2082,89 @@ TEST_F(VideoChannelSingleThreadTest, UpdateLocalStreamsWithSimulcast) {
 }
 
 TEST_F(VideoChannelSingleThreadTest, TestSetLocalOfferWithPacketization) {
-  const cricket::VideoCodec kVp8Codec(97, "VP8");
-  cricket::VideoCodec vp9_codec(98, "VP9");
+  const cricket::VideoCodec kVp8Codec = cricket::CreateVideoCodec(97, "VP8");
+  cricket::VideoCodec vp9_codec = cricket::CreateVideoCodec(98, "VP9");
   vp9_codec.packetization = cricket::kPacketizationParamRaw;
   cricket::VideoContentDescription video;
   video.set_codecs({kVp8Codec, vp9_codec});
 
   CreateChannels(0, 0);
 
-  EXPECT_TRUE(channel1_->SetLocalContent(&video, SdpType::kOffer, NULL));
-  EXPECT_THAT(media_channel1()->send_codecs(), testing::IsEmpty());
-  ASSERT_THAT(media_channel1()->recv_codecs(), testing::SizeIs(2));
-  EXPECT_TRUE(media_channel1()->recv_codecs()[0].Matches(kVp8Codec));
-  EXPECT_EQ(media_channel1()->recv_codecs()[0].packetization, absl::nullopt);
-  EXPECT_TRUE(media_channel1()->recv_codecs()[1].Matches(vp9_codec));
-  EXPECT_EQ(media_channel1()->recv_codecs()[1].packetization,
+  std::string err;
+  EXPECT_TRUE(channel1_->SetLocalContent(&video, SdpType::kOffer, err));
+  EXPECT_THAT(media_send_channel1_impl()->send_codecs(), testing::IsEmpty());
+  ASSERT_THAT(media_receive_channel1_impl()->recv_codecs(), testing::SizeIs(2));
+  EXPECT_TRUE(media_receive_channel1_impl()->recv_codecs()[0].Matches(
+      kVp8Codec, &field_trials_));
+  EXPECT_EQ(media_receive_channel1_impl()->recv_codecs()[0].packetization,
+            absl::nullopt);
+  EXPECT_TRUE(media_receive_channel1_impl()->recv_codecs()[1].Matches(
+      vp9_codec, &field_trials_));
+  EXPECT_EQ(media_receive_channel1_impl()->recv_codecs()[1].packetization,
             cricket::kPacketizationParamRaw);
 }
 
 TEST_F(VideoChannelSingleThreadTest, TestSetRemoteOfferWithPacketization) {
-  const cricket::VideoCodec kVp8Codec(97, "VP8");
-  cricket::VideoCodec vp9_codec(98, "VP9");
+  const cricket::VideoCodec kVp8Codec = cricket::CreateVideoCodec(97, "VP8");
+  cricket::VideoCodec vp9_codec = cricket::CreateVideoCodec(98, "VP9");
   vp9_codec.packetization = cricket::kPacketizationParamRaw;
   cricket::VideoContentDescription video;
   video.set_codecs({kVp8Codec, vp9_codec});
 
   CreateChannels(0, 0);
 
-  EXPECT_TRUE(channel1_->SetRemoteContent(&video, SdpType::kOffer, NULL));
-  EXPECT_THAT(media_channel1()->recv_codecs(), testing::IsEmpty());
-  ASSERT_THAT(media_channel1()->send_codecs(), testing::SizeIs(2));
-  EXPECT_TRUE(media_channel1()->send_codecs()[0].Matches(kVp8Codec));
-  EXPECT_EQ(media_channel1()->send_codecs()[0].packetization, absl::nullopt);
-  EXPECT_TRUE(media_channel1()->send_codecs()[1].Matches(vp9_codec));
-  EXPECT_EQ(media_channel1()->send_codecs()[1].packetization,
+  std::string err;
+  EXPECT_TRUE(channel1_->SetRemoteContent(&video, SdpType::kOffer, err));
+  EXPECT_TRUE(err.empty());
+  EXPECT_THAT(media_receive_channel1_impl()->recv_codecs(), testing::IsEmpty());
+  ASSERT_THAT(media_send_channel1_impl()->send_codecs(), testing::SizeIs(2));
+  EXPECT_TRUE(media_send_channel1_impl()->send_codecs()[0].Matches(
+      kVp8Codec, &field_trials_));
+  EXPECT_EQ(media_send_channel1_impl()->send_codecs()[0].packetization,
+            absl::nullopt);
+  EXPECT_TRUE(media_send_channel1_impl()->send_codecs()[1].Matches(
+      vp9_codec, &field_trials_));
+  EXPECT_EQ(media_send_channel1_impl()->send_codecs()[1].packetization,
             cricket::kPacketizationParamRaw);
 }
 
 TEST_F(VideoChannelSingleThreadTest, TestSetAnswerWithPacketization) {
-  const cricket::VideoCodec kVp8Codec(97, "VP8");
-  cricket::VideoCodec vp9_codec(98, "VP9");
+  const cricket::VideoCodec kVp8Codec = cricket::CreateVideoCodec(97, "VP8");
+  cricket::VideoCodec vp9_codec = cricket::CreateVideoCodec(98, "VP9");
   vp9_codec.packetization = cricket::kPacketizationParamRaw;
   cricket::VideoContentDescription video;
   video.set_codecs({kVp8Codec, vp9_codec});
 
   CreateChannels(0, 0);
 
-  EXPECT_TRUE(channel1_->SetLocalContent(&video, SdpType::kOffer, NULL));
-  EXPECT_TRUE(channel1_->SetRemoteContent(&video, SdpType::kAnswer, NULL));
-  ASSERT_THAT(media_channel1()->recv_codecs(), testing::SizeIs(2));
-  EXPECT_TRUE(media_channel1()->recv_codecs()[0].Matches(kVp8Codec));
-  EXPECT_EQ(media_channel1()->recv_codecs()[0].packetization, absl::nullopt);
-  EXPECT_TRUE(media_channel1()->recv_codecs()[1].Matches(vp9_codec));
-  EXPECT_EQ(media_channel1()->recv_codecs()[1].packetization,
+  std::string err;
+  EXPECT_TRUE(channel1_->SetLocalContent(&video, SdpType::kOffer, err));
+  EXPECT_TRUE(err.empty());
+  EXPECT_TRUE(channel1_->SetRemoteContent(&video, SdpType::kAnswer, err));
+  EXPECT_TRUE(err.empty());
+  ASSERT_THAT(media_receive_channel1_impl()->recv_codecs(), testing::SizeIs(2));
+  EXPECT_TRUE(media_receive_channel1_impl()->recv_codecs()[0].Matches(
+      kVp8Codec, &field_trials_));
+  EXPECT_EQ(media_receive_channel1_impl()->recv_codecs()[0].packetization,
+            absl::nullopt);
+  EXPECT_TRUE(media_receive_channel1_impl()->recv_codecs()[1].Matches(
+      vp9_codec, &field_trials_));
+  EXPECT_EQ(media_receive_channel1_impl()->recv_codecs()[1].packetization,
             cricket::kPacketizationParamRaw);
-  EXPECT_THAT(media_channel1()->send_codecs(), testing::SizeIs(2));
-  EXPECT_TRUE(media_channel1()->send_codecs()[0].Matches(kVp8Codec));
-  EXPECT_EQ(media_channel1()->send_codecs()[0].packetization, absl::nullopt);
-  EXPECT_TRUE(media_channel1()->send_codecs()[1].Matches(vp9_codec));
-  EXPECT_EQ(media_channel1()->send_codecs()[1].packetization,
+  EXPECT_THAT(media_send_channel1_impl()->send_codecs(), testing::SizeIs(2));
+  EXPECT_TRUE(media_send_channel1_impl()->send_codecs()[0].Matches(
+      kVp8Codec, &field_trials_));
+  EXPECT_EQ(media_send_channel1_impl()->send_codecs()[0].packetization,
+            absl::nullopt);
+  EXPECT_TRUE(media_send_channel1_impl()->send_codecs()[1].Matches(
+      vp9_codec, &field_trials_));
+  EXPECT_EQ(media_send_channel1_impl()->send_codecs()[1].packetization,
             cricket::kPacketizationParamRaw);
 }
 
 TEST_F(VideoChannelSingleThreadTest, TestSetLocalAnswerWithoutPacketization) {
-  const cricket::VideoCodec kLocalCodec(98, "VP8");
-  cricket::VideoCodec remote_codec(99, "VP8");
+  const cricket::VideoCodec kLocalCodec = cricket::CreateVideoCodec(98, "VP8");
+  cricket::VideoCodec remote_codec = cricket::CreateVideoCodec(99, "VP8");
   remote_codec.packetization = cricket::kPacketizationParamRaw;
   cricket::VideoContentDescription local_video;
   local_video.set_codecs({kLocalCodec});
@@ -2048,19 +2173,21 @@ TEST_F(VideoChannelSingleThreadTest, TestSetLocalAnswerWithoutPacketization) {
 
   CreateChannels(0, 0);
 
-  EXPECT_TRUE(
-      channel1_->SetRemoteContent(&remote_video, SdpType::kOffer, NULL));
-  EXPECT_TRUE(channel1_->SetLocalContent(&local_video, SdpType::kAnswer, NULL));
-  ASSERT_THAT(media_channel1()->recv_codecs(), testing::SizeIs(1));
-  EXPECT_EQ(media_channel1()->recv_codecs()[0].packetization, absl::nullopt);
-  ASSERT_THAT(media_channel1()->send_codecs(), testing::SizeIs(1));
-  EXPECT_EQ(media_channel1()->send_codecs()[0].packetization, absl::nullopt);
+  std::string err;
+  EXPECT_TRUE(channel1_->SetRemoteContent(&remote_video, SdpType::kOffer, err));
+  EXPECT_TRUE(channel1_->SetLocalContent(&local_video, SdpType::kAnswer, err));
+  ASSERT_THAT(media_receive_channel1_impl()->recv_codecs(), testing::SizeIs(1));
+  EXPECT_EQ(media_receive_channel1_impl()->recv_codecs()[0].packetization,
+            absl::nullopt);
+  ASSERT_THAT(media_send_channel1_impl()->send_codecs(), testing::SizeIs(1));
+  EXPECT_EQ(media_send_channel1_impl()->send_codecs()[0].packetization,
+            absl::nullopt);
 }
 
 TEST_F(VideoChannelSingleThreadTest, TestSetRemoteAnswerWithoutPacketization) {
-  cricket::VideoCodec local_codec(98, "VP8");
+  cricket::VideoCodec local_codec = cricket::CreateVideoCodec(98, "VP8");
   local_codec.packetization = cricket::kPacketizationParamRaw;
-  const cricket::VideoCodec kRemoteCodec(99, "VP8");
+  const cricket::VideoCodec kRemoteCodec = cricket::CreateVideoCodec(99, "VP8");
   cricket::VideoContentDescription local_video;
   local_video.set_codecs({local_codec});
   cricket::VideoContentDescription remote_video;
@@ -2068,20 +2195,23 @@ TEST_F(VideoChannelSingleThreadTest, TestSetRemoteAnswerWithoutPacketization) {
 
   CreateChannels(0, 0);
 
-  EXPECT_TRUE(channel1_->SetLocalContent(&local_video, SdpType::kOffer, NULL));
+  std::string err;
+  EXPECT_TRUE(channel1_->SetLocalContent(&local_video, SdpType::kOffer, err));
   EXPECT_TRUE(
-      channel1_->SetRemoteContent(&remote_video, SdpType::kAnswer, NULL));
-  ASSERT_THAT(media_channel1()->recv_codecs(), testing::SizeIs(1));
-  EXPECT_EQ(media_channel1()->recv_codecs()[0].packetization, absl::nullopt);
-  ASSERT_THAT(media_channel1()->send_codecs(), testing::SizeIs(1));
-  EXPECT_EQ(media_channel1()->send_codecs()[0].packetization, absl::nullopt);
+      channel1_->SetRemoteContent(&remote_video, SdpType::kAnswer, err));
+  ASSERT_THAT(media_receive_channel1_impl()->recv_codecs(), testing::SizeIs(1));
+  EXPECT_EQ(media_receive_channel1_impl()->recv_codecs()[0].packetization,
+            absl::nullopt);
+  ASSERT_THAT(media_send_channel1_impl()->send_codecs(), testing::SizeIs(1));
+  EXPECT_EQ(media_send_channel1_impl()->send_codecs()[0].packetization,
+            absl::nullopt);
 }
 
 TEST_F(VideoChannelSingleThreadTest,
        TestSetRemoteAnswerWithInvalidPacketization) {
-  cricket::VideoCodec local_codec(98, "VP8");
+  cricket::VideoCodec local_codec = cricket::CreateVideoCodec(98, "VP8");
   local_codec.packetization = cricket::kPacketizationParamRaw;
-  cricket::VideoCodec remote_codec(99, "VP8");
+  cricket::VideoCodec remote_codec = cricket::CreateVideoCodec(99, "VP8");
   remote_codec.packetization = "unknownpacketizationattributevalue";
   cricket::VideoContentDescription local_video;
   local_video.set_codecs({local_codec});
@@ -2090,20 +2220,23 @@ TEST_F(VideoChannelSingleThreadTest,
 
   CreateChannels(0, 0);
 
-  EXPECT_TRUE(channel1_->SetLocalContent(&local_video, SdpType::kOffer, NULL));
+  std::string err;
+  EXPECT_TRUE(channel1_->SetLocalContent(&local_video, SdpType::kOffer, err));
+  EXPECT_TRUE(err.empty());
   EXPECT_FALSE(
-      channel1_->SetRemoteContent(&remote_video, SdpType::kAnswer, NULL));
-  ASSERT_THAT(media_channel1()->recv_codecs(), testing::SizeIs(1));
-  EXPECT_EQ(media_channel1()->recv_codecs()[0].packetization,
+      channel1_->SetRemoteContent(&remote_video, SdpType::kAnswer, err));
+  EXPECT_FALSE(err.empty());
+  ASSERT_THAT(media_receive_channel1_impl()->recv_codecs(), testing::SizeIs(1));
+  EXPECT_EQ(media_receive_channel1_impl()->recv_codecs()[0].packetization,
             cricket::kPacketizationParamRaw);
-  EXPECT_THAT(media_channel1()->send_codecs(), testing::IsEmpty());
+  EXPECT_THAT(media_send_channel1_impl()->send_codecs(), testing::IsEmpty());
 }
 
 TEST_F(VideoChannelSingleThreadTest,
        TestSetLocalAnswerWithInvalidPacketization) {
-  cricket::VideoCodec local_codec(98, "VP8");
+  cricket::VideoCodec local_codec = cricket::CreateVideoCodec(98, "VP8");
   local_codec.packetization = cricket::kPacketizationParamRaw;
-  const cricket::VideoCodec kRemoteCodec(99, "VP8");
+  const cricket::VideoCodec kRemoteCodec = cricket::CreateVideoCodec(99, "VP8");
   cricket::VideoContentDescription local_video;
   local_video.set_codecs({local_codec});
   cricket::VideoContentDescription remote_video;
@@ -2111,13 +2244,151 @@ TEST_F(VideoChannelSingleThreadTest,
 
   CreateChannels(0, 0);
 
-  EXPECT_TRUE(
-      channel1_->SetRemoteContent(&remote_video, SdpType::kOffer, NULL));
-  EXPECT_FALSE(
-      channel1_->SetLocalContent(&local_video, SdpType::kAnswer, NULL));
-  EXPECT_THAT(media_channel1()->recv_codecs(), testing::IsEmpty());
-  ASSERT_THAT(media_channel1()->send_codecs(), testing::SizeIs(1));
-  EXPECT_EQ(media_channel1()->send_codecs()[0].packetization, absl::nullopt);
+  std::string err;
+  EXPECT_TRUE(channel1_->SetRemoteContent(&remote_video, SdpType::kOffer, err));
+  EXPECT_TRUE(err.empty());
+  EXPECT_FALSE(channel1_->SetLocalContent(&local_video, SdpType::kAnswer, err));
+  EXPECT_FALSE(err.empty());
+  EXPECT_THAT(media_receive_channel1_impl()->recv_codecs(), testing::IsEmpty());
+  ASSERT_THAT(media_send_channel1_impl()->send_codecs(), testing::SizeIs(1));
+  EXPECT_EQ(media_send_channel1_impl()->send_codecs()[0].packetization,
+            absl::nullopt);
+}
+
+TEST_F(VideoChannelSingleThreadTest,
+       StopsPacketizationVerificationWhenMatchIsFoundInRemoteAnswer) {
+  cricket::VideoCodec vp8_foo = cricket::CreateVideoCodec(96, "VP8");
+  vp8_foo.packetization = "foo";
+  cricket::VideoCodec vp8_bar = cricket::CreateVideoCodec(97, "VP8");
+  vp8_bar.packetization = "bar";
+  cricket::VideoCodec vp9 = cricket::CreateVideoCodec(98, "VP9");
+  cricket::VideoCodec vp9_foo = cricket::CreateVideoCodec(99, "VP9");
+  vp9_foo.packetization = "bar";
+  cricket::VideoContentDescription local;
+  local.set_codecs({vp8_foo, vp8_bar, vp9_foo});
+  cricket::VideoContentDescription remote;
+  remote.set_codecs({vp8_foo, vp9});
+
+  CreateChannels(0, 0);
+  std::string err;
+  ASSERT_TRUE(channel1_->SetLocalContent(&local, SdpType::kOffer, err)) << err;
+  ASSERT_TRUE(channel1_->SetRemoteContent(&remote, SdpType::kAnswer, err))
+      << err;
+
+  EXPECT_THAT(
+      media_receive_channel1_impl()->recv_codecs(),
+      ElementsAre(AllOf(Field(&cricket::Codec::id, 96),
+                        Field(&cricket::Codec::packetization, "foo")),
+                  AllOf(Field(&cricket::Codec::id, 97),
+                        Field(&cricket::Codec::packetization, "bar")),
+                  AllOf(Field(&cricket::Codec::id, 99),
+                        Field(&cricket::Codec::packetization, absl::nullopt))));
+  EXPECT_THAT(
+      media_send_channel1_impl()->send_codecs(),
+      ElementsAre(AllOf(Field(&cricket::Codec::id, 96),
+                        Field(&cricket::Codec::packetization, "foo")),
+                  AllOf(Field(&cricket::Codec::id, 98),
+                        Field(&cricket::Codec::packetization, absl::nullopt))));
+}
+
+TEST_F(VideoChannelSingleThreadTest,
+       StopsPacketizationVerificationWhenMatchIsFoundInLocalAnswer) {
+  cricket::VideoCodec vp8_foo = cricket::CreateVideoCodec(96, "VP8");
+  vp8_foo.packetization = "foo";
+  cricket::VideoCodec vp8_bar = cricket::CreateVideoCodec(97, "VP8");
+  vp8_bar.packetization = "bar";
+  cricket::VideoCodec vp9 = cricket::CreateVideoCodec(98, "VP9");
+  cricket::VideoCodec vp9_foo = cricket::CreateVideoCodec(99, "VP9");
+  vp9_foo.packetization = "bar";
+  cricket::VideoContentDescription local;
+  local.set_codecs({vp8_foo, vp9});
+  cricket::VideoContentDescription remote;
+  remote.set_codecs({vp8_foo, vp8_bar, vp9_foo});
+
+  CreateChannels(0, 0);
+  std::string err;
+  ASSERT_TRUE(channel1_->SetRemoteContent(&remote, SdpType::kOffer, err))
+      << err;
+  ASSERT_TRUE(channel1_->SetLocalContent(&local, SdpType::kAnswer, err)) << err;
+
+  EXPECT_THAT(
+      media_receive_channel1_impl()->recv_codecs(),
+      ElementsAre(AllOf(Field(&cricket::Codec::id, 96),
+                        Field(&cricket::Codec::packetization, "foo")),
+                  AllOf(Field(&cricket::Codec::id, 98),
+                        Field(&cricket::Codec::packetization, absl::nullopt))));
+  EXPECT_THAT(
+      media_send_channel1_impl()->send_codecs(),
+      ElementsAre(AllOf(Field(&cricket::Codec::id, 96),
+                        Field(&cricket::Codec::packetization, "foo")),
+                  AllOf(Field(&cricket::Codec::id, 97),
+                        Field(&cricket::Codec::packetization, "bar")),
+                  AllOf(Field(&cricket::Codec::id, 99),
+                        Field(&cricket::Codec::packetization, absl::nullopt))));
+}
+
+TEST_F(VideoChannelSingleThreadTest,
+       ConsidersAllCodecsWithDiffrentPacketizationsInRemoteAnswer) {
+  cricket::VideoCodec vp8 = cricket::CreateVideoCodec(96, "VP8");
+  cricket::VideoCodec vp8_raw = cricket::CreateVideoCodec(97, "VP8");
+  vp8_raw.packetization = cricket::kPacketizationParamRaw;
+  cricket::VideoContentDescription local;
+  local.set_codecs({vp8, vp8_raw});
+  cricket::VideoContentDescription remote;
+  remote.set_codecs({vp8_raw, vp8});
+
+  CreateChannels(0, 0);
+  std::string err;
+  ASSERT_TRUE(channel1_->SetLocalContent(&local, SdpType::kOffer, err)) << err;
+  ASSERT_TRUE(channel1_->SetRemoteContent(&remote, SdpType::kAnswer, err))
+      << err;
+
+  EXPECT_THAT(
+      media_receive_channel1_impl()->recv_codecs(),
+      ElementsAre(AllOf(Field(&cricket::Codec::id, 96),
+                        Field(&cricket::Codec::packetization, absl::nullopt)),
+                  AllOf(Field(&cricket::Codec::id, 97),
+                        Field(&cricket::Codec::packetization,
+                              cricket::kPacketizationParamRaw))));
+  EXPECT_THAT(
+      media_send_channel1_impl()->send_codecs(),
+      ElementsAre(AllOf(Field(&cricket::Codec::id, 97),
+                        Field(&cricket::Codec::packetization,
+                              cricket::kPacketizationParamRaw)),
+                  AllOf(Field(&cricket::Codec::id, 96),
+                        Field(&cricket::Codec::packetization, absl::nullopt))));
+}
+
+TEST_F(VideoChannelSingleThreadTest,
+       ConsidersAllCodecsWithDiffrentPacketizationsInLocalAnswer) {
+  cricket::VideoCodec vp8 = cricket::CreateVideoCodec(96, "VP8");
+  cricket::VideoCodec vp8_raw = cricket::CreateVideoCodec(97, "VP8");
+  vp8_raw.packetization = cricket::kPacketizationParamRaw;
+  cricket::VideoContentDescription local;
+  local.set_codecs({vp8_raw, vp8});
+  cricket::VideoContentDescription remote;
+  remote.set_codecs({vp8, vp8_raw});
+
+  CreateChannels(0, 0);
+  std::string err;
+  ASSERT_TRUE(channel1_->SetRemoteContent(&remote, SdpType::kOffer, err))
+      << err;
+  ASSERT_TRUE(channel1_->SetLocalContent(&local, SdpType::kAnswer, err)) << err;
+
+  EXPECT_THAT(
+      media_receive_channel1_impl()->recv_codecs(),
+      ElementsAre(AllOf(Field(&cricket::Codec::id, 97),
+                        Field(&cricket::Codec::packetization,
+                              cricket::kPacketizationParamRaw)),
+                  AllOf(Field(&cricket::Codec::id, 96),
+                        Field(&cricket::Codec::packetization, absl::nullopt))));
+  EXPECT_THAT(
+      media_send_channel1_impl()->send_codecs(),
+      ElementsAre(AllOf(Field(&cricket::Codec::id, 96),
+                        Field(&cricket::Codec::packetization, absl::nullopt)),
+                  AllOf(Field(&cricket::Codec::id, 97),
+                        Field(&cricket::Codec::packetization,
+                              cricket::kPacketizationParamRaw))));
 }
 
 // VideoChannelDoubleThreadTest
@@ -2255,5 +2526,4 @@ TEST_F(VideoChannelDoubleThreadTest, SocketOptionsMergedOnSetTransport) {
   Base::SocketOptionsMergedOnSetTransport();
 }
 
-
-// TODO(pthatcher): TestSetReceiver?
+}  // namespace

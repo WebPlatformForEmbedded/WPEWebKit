@@ -32,6 +32,7 @@
 
 ALLOW_UNUSED_PARAMETERS_BEGIN
 ALLOW_DEPRECATED_DECLARATIONS_BEGIN
+ALLOW_COMMA_BEGIN
 
 #include <webrtc/api/peer_connection_interface.h>
 #include <webrtc/api/scoped_refptr.h>
@@ -40,6 +41,7 @@ ALLOW_DEPRECATED_DECLARATIONS_BEGIN
 
 ALLOW_DEPRECATED_DECLARATIONS_END
 ALLOW_UNUSED_PARAMETERS_END
+ALLOW_COMMA_END
 
 namespace rtc {
 class NetworkManager;
@@ -121,7 +123,10 @@ public:
 protected:
     LibWebRTCProvider();
 
+ALLOW_DEPRECATED_DECLARATIONS_BEGIN
+    // FIXME: https://bugs.webkit.org/show_bug.cgi?id=265791
     rtc::scoped_refptr<webrtc::PeerConnectionInterface> createPeerConnection(webrtc::PeerConnectionObserver&, rtc::NetworkManager&, rtc::PacketSocketFactory&, webrtc::PeerConnectionInterface::RTCConfiguration&&, std::unique_ptr<webrtc::AsyncResolverFactory>&&);
+ALLOW_DEPRECATED_DECLARATIONS_END
 
     rtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface> createPeerConnectionFactory(rtc::Thread* networkThread, rtc::Thread* signalingThread);
     virtual std::unique_ptr<webrtc::VideoDecoderFactory> createDecoderFactory();

@@ -10,11 +10,22 @@
 #include "modules/congestion_controller/goog_cc/delay_based_bwe_unittest_helper.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <vector>
 
+#include "absl/types/optional.h"
+#include "api/transport/network_types.h"
+#include "api/units/data_rate.h"
+#include "api/units/data_size.h"
+#include "api/units/time_delta.h"
+#include "api/units/timestamp.h"
+#include "modules/congestion_controller/goog_cc/acknowledged_bitrate_estimator_interface.h"
 #include "modules/congestion_controller/goog_cc/delay_based_bwe.h"
+#include "modules/congestion_controller/goog_cc/probe_bitrate_estimator.h"
 #include "rtc_base/checks.h"
+#include "test/field_trial.h"
 
 namespace webrtc {
 constexpr size_t kMtu = 1200;
@@ -128,7 +139,6 @@ int64_t StreamGenerator::GenerateFrame(std::vector<PacketResult>* packets,
   auto it =
       std::min_element(streams_.begin(), streams_.end(), RtpStream::Compare);
   (*it)->GenerateFrame(time_now_us, packets);
-  int i = 0;
   for (PacketResult& packet : *packets) {
     int capacity_bpus = capacity_ / 1000;
     int64_t required_network_time_us =
@@ -138,7 +148,6 @@ int64_t StreamGenerator::GenerateFrame(std::vector<PacketResult>* packets,
         std::max(time_now_us + required_network_time_us,
                  prev_arrival_time_us_ + required_network_time_us);
     packet.receive_time = Timestamp::Micros(prev_arrival_time_us_);
-    ++i;
   }
   it = std::min_element(streams_.begin(), streams_.end(), RtpStream::Compare);
   return std::max((*it)->next_rtp_time(), time_now_us);
@@ -146,7 +155,8 @@ int64_t StreamGenerator::GenerateFrame(std::vector<PacketResult>* packets,
 }  // namespace test
 
 DelayBasedBweTest::DelayBasedBweTest()
-    : field_trial(std::make_unique<test::ScopedFieldTrials>(GetParam())),
+    : field_trial(std::make_unique<test::ScopedFieldTrials>(
+          "WebRTC-Bwe-RobustThroughputEstimatorSettings/enabled:true/")),
       clock_(100000000),
       acknowledged_bitrate_estimator_(
           AcknowledgedBitrateEstimatorInterface::Create(&field_trial_config_)),
@@ -156,6 +166,7 @@ DelayBasedBweTest::DelayBasedBweTest()
       stream_generator_(new test::StreamGenerator(1e6,  // Capacity.
                                                   clock_.TimeInMicroseconds())),
       arrival_time_offset_ms_(0),
+      next_sequence_number_(0),
       first_update_(true) {}
 
 DelayBasedBweTest::~DelayBasedBweTest() {}
@@ -178,12 +189,20 @@ void DelayBasedBweTest::IncomingFeedback(int64_t arrival_time_ms,
                                          size_t payload_size,
                                          const PacedPacketInfo& pacing_info) {
   RTC_CHECK_GE(arrival_time_ms + arrival_time_offset_ms_, 0);
+  IncomingFeedback(Timestamp::Millis(arrival_time_ms + arrival_time_offset_ms_),
+                   Timestamp::Millis(send_time_ms), payload_size, pacing_info);
+}
+
+void DelayBasedBweTest::IncomingFeedback(Timestamp receive_time,
+                                         Timestamp send_time,
+                                         size_t payload_size,
+                                         const PacedPacketInfo& pacing_info) {
   PacketResult packet;
-  packet.receive_time =
-      Timestamp::Millis(arrival_time_ms + arrival_time_offset_ms_);
-  packet.sent_packet.send_time = Timestamp::Millis(send_time_ms);
+  packet.receive_time = receive_time;
+  packet.sent_packet.send_time = send_time;
   packet.sent_packet.size = DataSize::Bytes(payload_size);
   packet.sent_packet.pacing_info = pacing_info;
+  packet.sent_packet.sequence_number = next_sequence_number_++;
   if (packet.sent_packet.pacing_info.probe_cluster_id !=
       PacedPacketInfo::kNotAProbe)
     probe_bitrate_estimator_->HandleProbeAndEstimateBitrate(packet);

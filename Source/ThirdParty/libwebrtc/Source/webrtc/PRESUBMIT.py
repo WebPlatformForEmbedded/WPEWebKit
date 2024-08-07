@@ -1,3 +1,5 @@
+#!/usr/bin/env vpython3
+
 # Copyright (c) 2012 The WebRTC project authors. All Rights Reserved.
 #
 # Use of this source code is governed by a BSD-style license
@@ -13,6 +15,9 @@ import sys
 from collections import defaultdict
 from contextlib import contextmanager
 
+# Runs PRESUBMIT.py in py3 mode by git cl presubmit.
+USE_PYTHON3 = True
+
 # Files and directories that are *skipped* by cpplint in the presubmit script.
 CPPLINT_EXCEPTIONS = [
     'api/video_codecs/video_decoder.h',
@@ -21,7 +26,6 @@ CPPLINT_EXCEPTIONS = [
     'examples/objc',
     'media/base/stream_params.h',
     'media/base/video_common.h',
-    'media/sctp/usrsctp_transport.cc',
     'modules/audio_coding',
     'modules/audio_device',
     'modules/audio_processing',
@@ -31,6 +35,9 @@ CPPLINT_EXCEPTIONS = [
     'modules/video_capture',
     'p2p/base/pseudo_tcp.cc',
     'p2p/base/pseudo_tcp.h',
+    'PRESUBMIT.py',
+    'presubmit_test_mocks.py',
+    'presubmit_test.py',
     'rtc_base',
     'sdk/android/src/jni',
     'sdk/objc',
@@ -38,6 +45,11 @@ CPPLINT_EXCEPTIONS = [
     'test',
     'tools_webrtc',
     'voice_engine',
+]
+
+PYLINT_OLD_STYLE = [
+    "PRESUBMIT.py",
+    "tools_webrtc/autoroller/roll_deps.py",
 ]
 
 # These filters will always be removed, even if the caller specifies a filter
@@ -209,7 +221,7 @@ def CheckNoIOStreamInHeaders(input_api, output_api, source_file_filter):
         if pattern.search(contents):
             files.append(f)
 
-    if len(files):
+    if len(files) > 0:
         return [
             output_api.PresubmitError(
                 'Do not #include <iostream> in header files, since it inserts '
@@ -238,10 +250,10 @@ def CheckNoPragmaOnce(input_api, output_api, source_file_filter):
             output_api.PresubmitError(
                 'Do not use #pragma once in header files.\n'
                 'See http://www.chromium.org/developers/coding-style'
-                '#TOC-File-headers',
-                files)
+                '#TOC-File-headers', files)
         ]
     return []
+
 
 def CheckNoFRIEND_TEST(# pylint: disable=invalid-name
         input_api,
@@ -252,8 +264,8 @@ def CheckNoFRIEND_TEST(# pylint: disable=invalid-name
   used instead since that allows for FLAKY_, FAILS_ and DISABLED_ prefixes."""
     problems = []
 
-    file_filter = lambda f: (f.LocalPath().endswith(('.cc', '.h')) and
-                             source_file_filter(f))
+    file_filter = lambda f: (f.LocalPath().endswith(
+        ('.cc', '.h')) and source_file_filter(f))
     for f in input_api.AffectedFiles(file_filter=file_filter):
         for line_num, line in f.ChangedContents():
             if 'FRIEND_TEST(' in line:
@@ -370,6 +382,7 @@ def CheckAbseilDependencies(input_api, gn_files, output_api):
                  'should be moved to the "absl_deps" parameter.')
     errors = []
 
+    # pylint: disable=too-many-nested-blocks
     for gn_file in gn_files:
         gn_file_content = input_api.ReadFile(gn_file)
         for target_match in TARGET_RE.finditer(gn_file_content):
@@ -394,11 +407,10 @@ def CheckNoMixingSources(input_api, gn_files, output_api):
 
   See bugs.webrtc.org/7743 for more context.
   """
-
     def _MoreThanOneSourceUsed(*sources_lists):
         sources_used = 0
         for source_list in sources_lists:
-            if len(source_list):
+            if len(source_list) > 0:
                 sources_used += 1
         return sources_used > 1
 
@@ -459,7 +471,7 @@ def CheckNoMixingSources(input_api, gn_files, output_api):
                 'Mixed sources: \n'
                 '%s\n'
                 'Violating GN files:\n%s\n' %
-                (json.dumps(errors, indent=2), '\n'.join(errors.keys())))
+                (json.dumps(errors, indent=2), '\n'.join(list(errors.keys()))))
         ]
     return []
 
@@ -478,7 +490,8 @@ def CheckNoPackageBoundaryViolations(input_api, gn_files, output_api):
         return [
             output_api.PresubmitError(
                 'There are package boundary violations in the following GN '
-                'files:', long_text='\n\n'.join(str(err) for err in errors))
+                'files:',
+                long_text='\n\n'.join(str(err) for err in errors))
         ]
     return []
 
@@ -492,7 +505,7 @@ def CheckNoWarningSuppressionFlagsAreAdded(gn_files,
                                            input_api,
                                            output_api,
                                            error_formatter=_ReportFileAndLine):
-    """Ensure warning suppression flags are not added wihtout a reason."""
+    """Ensure warning suppression flags are not added without a reason."""
     msg = ('Usage of //build/config/clang:extra_warnings is discouraged '
            'in WebRTC.\n'
            'If you are not adding this code (e.g. you are just moving '
@@ -504,6 +517,7 @@ def CheckNoWarningSuppressionFlagsAreAdded(gn_files,
     errors = []  # 2-element tuples with (file, line number)
     clang_warn_re = input_api.re.compile(
         r'//build/config/clang:extra_warnings')
+    # pylint: disable-next=fixme
     no_presubmit_re = input_api.re.compile(
         r'# no-presubmit-check TODO\(bugs\.webrtc\.org/\d+\)')
     for f in gn_files:
@@ -623,6 +637,7 @@ def CheckCheckIncludesIsNotUsed(gn_files, input_api, output_api):
         'this is allowed: if so, get approval from a .gn owner in the '
         'root OWNERS file.\n'
         'Used in: %s (line %d).')
+    # pylint: disable-next=fixme
     no_presubmit_re = input_api.re.compile(
         r'# no-presubmit-check TODO\(bugs\.webrtc\.org/\d+\)')
     for affected_file in gn_files:
@@ -788,25 +803,21 @@ def CheckChangeHasBugField(input_api, output_api):
   """
     if input_api.change.BugsFromDescription():
         return []
-    else:
-        return [
-            output_api.PresubmitError(
-                'The "Bug: [bug number]" footer is mandatory. Please create a '
-                'bug and reference it using either of:\n'
-                ' * https://bugs.webrtc.org - reference it using Bug: '
-                'webrtc:XXXX\n'
-                ' * https://crbug.com - reference it using Bug: chromium:XXXXXX'
-            )
-        ]
+    return [
+        output_api.PresubmitError(
+            'The "Bug: [bug number]" footer is mandatory. Please create a '
+            'bug and reference it using either of:\n'
+            ' * https://bugs.webrtc.org - reference it using Bug: '
+            'webrtc:XXXX\n'
+            ' * https://crbug.com - reference it using Bug: chromium:XXXXXX')
+    ]
 
 
 def CheckJSONParseErrors(input_api, output_api, source_file_filter):
     """Check that JSON files do not contain syntax errors."""
-
     def FilterFile(affected_file):
-        return (input_api.os_path.splitext(
-            affected_file.LocalPath())[1] == '.json'
-                and source_file_filter(affected_file))
+        return (input_api.os_path.splitext(affected_file.LocalPath())[1]
+                == '.json' and source_file_filter(affected_file))
 
     def GetJSONParseError(input_api, filename):
         try:
@@ -833,23 +844,31 @@ def RunPythonTests(input_api, output_api):
     def Join(*args):
         return input_api.os_path.join(input_api.PresubmitLocalPath(), *args)
 
+    excluded_files = [
+        # These tests should be run manually after webrtc_dashboard_upload
+        # target has been built.
+        'catapult_uploader_test.py',
+        'process_perf_results_test.py',
+    ]
+
     test_directories = [
         input_api.PresubmitLocalPath(),
         Join('rtc_tools', 'py_event_log_analyzer'),
-        Join('audio', 'test', 'unittests'),
     ] + [
         root for root, _, files in os.walk(Join('tools_webrtc')) if any(
-            f.endswith('_test.py') for f in files)
+            f.endswith('_test.py') and f not in excluded_files for f in files)
     ]
 
     tests = []
+
     for directory in test_directories:
         tests.extend(
             input_api.canned_checks.GetUnitTestsInDirectory(
                 input_api,
                 output_api,
                 directory,
-                files_to_check=[r'.+_test\.py$']))
+                files_to_check=[r'.+_test\.py$'],
+                run_on_python2=False))
     return input_api.RunTests(tests, parallel=True)
 
 
@@ -882,7 +901,7 @@ def _LicenseHeader(input_api):
     """Returns the license header regexp."""
     # Accept any year number from 2003 to the current year
     current_year = int(input_api.time.strftime('%Y'))
-    allowed_years = (str(s) for s in reversed(xrange(2003, current_year + 1)))
+    allowed_years = (str(s) for s in reversed(range(2003, current_year + 1)))
     years_re = '(' + '|'.join(allowed_years) + ')'
     license_header = (
         r'.*? Copyright( \(c\))? %(year)s The WebRTC [Pp]roject [Aa]uthors\. '
@@ -921,35 +940,49 @@ def CommonChecks(input_api, output_api):
     # all python files. This is a temporary solution.
     python_file_filter = lambda f: (f.LocalPath().endswith('.py') and
                                     source_file_filter(f))
-    python_changed_files = [f.LocalPath() for f in input_api.AffectedFiles(
-        include_deletes=False, file_filter=python_file_filter)]
+    python_changed_files = [
+        f.LocalPath()
+        for f in input_api.AffectedFiles(include_deletes=False,
+                                         file_filter=python_file_filter)
+    ]
+    pylint_new_style = [
+        f for f in python_changed_files if f not in PYLINT_OLD_STYLE
+    ]
+    pylint_old_style = [
+        f for f in python_changed_files if f in PYLINT_OLD_STYLE
+    ]
+    if pylint_new_style:
+        results.extend(
+            input_api.canned_checks.RunPylint(
+                input_api,
+                output_api,
+                files_to_check=pylint_new_style,
+                files_to_skip=(
+                    r'^base[\\\/].*\.py$',
+                    r'^build[\\\/].*\.py$',
+                    r'^buildtools[\\\/].*\.py$',
+                    r'^infra[\\\/].*\.py$',
+                    r'^ios[\\\/].*\.py$',
+                    r'^out.*[\\\/].*\.py$',
+                    r'^testing[\\\/].*\.py$',
+                    r'^third_party[\\\/].*\.py$',
+                    r'^tools[\\\/].*\.py$',
+                    r'^xcodebuild.*[\\\/].*\.py$',
+                ),
+                pylintrc='pylintrc',
+                version='2.7'))
 
-    results.extend(
-        input_api.canned_checks.RunPylint(
-            input_api,
-            output_api,
-            files_to_check=python_changed_files,
-            files_to_skip=(
-                r'^base[\\\/].*\.py$',
-                r'^build[\\\/].*\.py$',
-                r'^buildtools[\\\/].*\.py$',
-                r'^infra[\\\/].*\.py$',
-                r'^ios[\\\/].*\.py$',
-                r'^out.*[\\\/].*\.py$',
-                r'^testing[\\\/].*\.py$',
-                r'^third_party[\\\/].*\.py$',
-                r'^tools[\\\/].*\.py$',
-                # TODO(phoglund): should arguably be checked.
-                r'^tools_webrtc[\\\/]mb[\\\/].*\.py$',
-                r'^xcodebuild.*[\\\/].*\.py$',
-            ),
-            pylintrc='pylintrc'))
-
-    # TODO(nisse): talk/ is no more, so make below checks simpler?
-    # WebRTC can't use the presubmit_canned_checks.PanProjectChecks function
-    # since we need to have different license checks
-    # in talk/ and webrtc/directories.
-    # Instead, hand-picked checks are included below.
+    if pylint_old_style:
+        results.extend(
+            input_api.canned_checks.RunPylint(input_api,
+                                              output_api,
+                                              files_to_check=pylint_old_style,
+                                              pylintrc='pylintrc_old_style',
+                                              version='2.7'))
+    # TODO(bugs.webrtc.org/13606): talk/ is no more, so make below checks
+    # simpler. WebRTC can't use the presubmit_canned_checks.PanProjectChecks
+    # function since we need to have different license checks in talk/ and
+    # webrtc/directories. Instead, hand-picked checks are included below.
 
     # .m and .mm files are ObjC files. For simplicity we will consider
     # .h files in ObjC subdirectories ObjC headers.
@@ -957,7 +990,7 @@ def CommonChecks(input_api, output_api):
     # Skip long-lines check for DEPS and GN files.
     build_file_filter_list = (r'.+\.gn$', r'.+\.gni$', 'DEPS')
     # Also we will skip most checks for third_party directory.
-    third_party_filter_list = (r'^third_party[\\\/].+', )
+    third_party_filter_list = (r'(^|.*[\\\/])third_party[\\\/].+', )
     eighty_char_sources = lambda x: input_api.FilterSourceFile(
         x,
         files_to_skip=build_file_filter_list + objc_filter_list +
@@ -1108,8 +1141,8 @@ def CheckApiDepsFileIsUpToDate(input_api, output_api):
 
 
 def CheckBannedAbslMakeUnique(input_api, output_api, source_file_filter):
-    file_filter = lambda f: (f.LocalPath().endswith(('.cc', '.h')) and
-                             source_file_filter(f))
+    file_filter = lambda f: (f.LocalPath().endswith(
+        ('.cc', '.h')) and source_file_filter(f))
 
     files = []
     for f in input_api.AffectedFiles(include_deletes=False,
@@ -1119,7 +1152,7 @@ def CheckBannedAbslMakeUnique(input_api, output_api, source_file_filter):
                 files.append(f)
                 break
 
-    if len(files):
+    if files:
         return [
             output_api.PresubmitError(
                 'Please use std::make_unique instead of absl::make_unique.\n'
@@ -1131,8 +1164,8 @@ def CheckBannedAbslMakeUnique(input_api, output_api, source_file_filter):
 def CheckObjcApiSymbols(input_api, output_api, source_file_filter):
     rtc_objc_export = re.compile(r'RTC_OBJC_EXPORT(.|\n){26}',
                                  re.MULTILINE | re.DOTALL)
-    file_filter = lambda f: (f.LocalPath().endswith(('.h')) and
-                             source_file_filter(f))
+    file_filter = lambda f: (f.LocalPath().endswith(
+        ('.h')) and source_file_filter(f))
 
     files = []
     file_filter = lambda x: (input_api.FilterSourceFile(x) and
@@ -1148,7 +1181,7 @@ def CheckObjcApiSymbols(input_api, output_api, source_file_filter):
             if 'RTC_OBJC_TYPE' not in export_block:
                 files.append(f.LocalPath())
 
-    if len(files):
+    if len(files) > 0:
         return [
             output_api.PresubmitError(
                 'RTC_OBJC_EXPORT types must be wrapped into an RTC_OBJC_TYPE() '
@@ -1162,8 +1195,8 @@ def CheckObjcApiSymbols(input_api, output_api, source_file_filter):
 
 def CheckAssertUsage(input_api, output_api, source_file_filter):
     pattern = input_api.re.compile(r'\bassert\(')
-    file_filter = lambda f: (f.LocalPath().endswith(('.cc', '.h', '.m', '.mm'))
-                             and source_file_filter(f))
+    file_filter = lambda f: (f.LocalPath().endswith(
+        ('.cc', '.h', '.m', '.mm')) and source_file_filter(f))
 
     files = []
     for f in input_api.AffectedFiles(include_deletes=False,
@@ -1173,7 +1206,7 @@ def CheckAssertUsage(input_api, output_api, source_file_filter):
                 files.append(f.LocalPath())
                 break
 
-    if len(files):
+    if len(files) > 0:
         return [
             output_api.PresubmitError(
                 'Usage of assert() has been detected in the following files, '
@@ -1185,8 +1218,8 @@ def CheckAssertUsage(input_api, output_api, source_file_filter):
 def CheckAbslMemoryInclude(input_api, output_api, source_file_filter):
     pattern = input_api.re.compile(r'^#include\s*"absl/memory/memory.h"',
                                    input_api.re.MULTILINE)
-    file_filter = lambda f: (f.LocalPath().endswith(('.cc', '.h')) and
-                             source_file_filter(f))
+    file_filter = lambda f: (f.LocalPath().endswith(
+        ('.cc', '.h')) and source_file_filter(f))
 
     files = []
     for f in input_api.AffectedFiles(include_deletes=False,
@@ -1199,7 +1232,7 @@ def CheckAbslMemoryInclude(input_api, output_api, source_file_filter):
                 files.append(f)
                 break
 
-    if len(files):
+    if len(files) > 0:
         return [
             output_api.PresubmitError(
                 'Please include "absl/memory/memory.h" header for '
@@ -1244,9 +1277,8 @@ def CheckOrphanHeaders(input_api, output_api, source_file_filter):
     # eval-ed and thus doesn't have __file__.
     error_msg = """{} should be listed in {}."""
     results = []
-    exempt_paths = [
-        os.path.join('tools_webrtc', 'ios', 'SDK'),
-    ]
+    exempt_paths = [re.escape(os.path.join('tools_webrtc', 'ios', 'SDK'))]
+
     with _AddToPath(
             input_api.os_path.join(input_api.PresubmitLocalPath(),
                                    'tools_webrtc', 'presubmit_checks_lib')):
@@ -1297,7 +1329,7 @@ def _ExtractAddRulesFromParsedDeps(parsed_deps):
         rule[1:] for rule in parsed_deps.get('include_rules', [])
         if rule.startswith('+') or rule.startswith('!')
     ])
-    for _, rules in parsed_deps.get('specific_include_rules', {}).iteritems():
+    for _, rules in parsed_deps.get('specific_include_rules', {}).items():
         add_rules.update([
             rule[1:] for rule in rules
             if rule.startswith('+') or rule.startswith('!')
@@ -1309,7 +1341,7 @@ def _ParseDeps(contents):
     """Simple helper for parsing DEPS files."""
 
     # Stubs for handling special syntax in the root DEPS file.
-    class VarImpl(object):
+    class VarImpl:
         def __init__(self, local_scope):
             self._local_scope = local_scope
 
@@ -1317,14 +1349,15 @@ def _ParseDeps(contents):
             """Implements the Var syntax."""
             try:
                 return self._local_scope['vars'][var_name]
-            except KeyError:
-                raise Exception('Var is not defined: %s' % var_name)
+            except KeyError as var_not_defined:
+                raise Exception('Var is not defined: %s' %
+                                var_name) from var_not_defined
 
     local_scope = {}
     global_scope = {
         'Var': VarImpl(local_scope).Lookup,
     }
-    exec contents in global_scope, local_scope
+    exec(contents, global_scope, local_scope)
     return local_scope
 
 
@@ -1383,15 +1416,13 @@ def CheckAddedDepsHaveTargetApprovals(input_api, output_api):
             return [
                 output_api.PresubmitNotifyResult(
                     '--tbr was specified, skipping OWNERS check for DEPS '
-                    'additions'
-                )
+                    'additions')
             ]
         if input_api.dry_run:
             return [
                 output_api.PresubmitNotifyResult(
                     'This is a dry run, skipping OWNERS check for DEPS '
-                    'additions'
-                )
+                    'additions')
             ]
         if not input_api.change.issue:
             return [
@@ -1405,9 +1436,7 @@ def CheckAddedDepsHaveTargetApprovals(input_api, output_api):
 
     owner_email, reviewers = (
         input_api.canned_checks.GetCodereviewOwnerAndReviewers(
-            input_api,
-            None,
-            approval_needed=input_api.is_committing))
+            input_api, None, approval_needed=input_api.is_committing))
 
     owner_email = owner_email or input_api.change.author_email
 
@@ -1415,7 +1444,8 @@ def CheckAddedDepsHaveTargetApprovals(input_api, output_api):
         virtual_depended_on_files, reviewers.union([owner_email]), [])
     missing_files = [
         f for f in virtual_depended_on_files
-        if approval_status[f] != input_api.owners_client.APPROVED]
+        if approval_status[f] != input_api.owners_client.APPROVED
+    ]
 
     # We strip the /DEPS part that was added by
     # _FilesToCheckForIncomingDeps to fake a path to a file in a
@@ -1424,8 +1454,7 @@ def CheckAddedDepsHaveTargetApprovals(input_api, output_api):
         start_deps = path.rfind('/DEPS')
         if start_deps != -1:
             return path[:start_deps]
-        else:
-            return path
+        return path
 
     unapproved_dependencies = [
         "'+%s'," % StripDeps(path) for path in missing_files

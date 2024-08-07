@@ -116,10 +116,10 @@
 
 // http://infocenter.arm.com/help/topic/com.arm.doc.ihi0053c/IHI0053C_acle_2_0.pdf
 // Rely on NEON+CRYPTO extensions for ARM.
-/* #if defined(__ARM_NEON) && defined(__ARM_FEATURE_CRYPTO) */
-/* #undef ABSL_HAVE_ACCELERATED_AES */
-/* #define ABSL_HAVE_ACCELERATED_AES 1 */
-/* #endif */
+#if defined(__ARM_NEON) && defined(__ARM_FEATURE_CRYPTO)
+#undef ABSL_HAVE_ACCELERATED_AES
+#define ABSL_HAVE_ACCELERATED_AES 1
+#endif
 
 #endif
 
@@ -131,7 +131,7 @@
 
 // ABSL_RANDOM_INTERNAL_AES_DISPATCH indicates whether the currently active
 // platform has, or should use run-time dispatch for selecting the
-// acclerated Randen implementation.
+// accelerated Randen implementation.
 #define ABSL_RANDOM_INTERNAL_AES_DISPATCH 0
 
 #if defined(ABSL_ARCH_X86_64)

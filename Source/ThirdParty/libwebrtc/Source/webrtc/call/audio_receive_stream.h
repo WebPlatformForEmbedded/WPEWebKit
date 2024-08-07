@@ -27,18 +27,18 @@
 namespace webrtc {
 class AudioSinkInterface;
 
-class AudioReceiveStream : public MediaReceiveStream {
+class AudioReceiveStreamInterface : public MediaReceiveStreamInterface {
  public:
   struct Stats {
     Stats();
     ~Stats();
     uint32_t remote_ssrc = 0;
-    int64_t payload_bytes_rcvd = 0;
-    int64_t header_and_padding_bytes_rcvd = 0;
-    uint32_t packets_rcvd = 0;
+    int64_t payload_bytes_received = 0;
+    int64_t header_and_padding_bytes_received = 0;
+    uint32_t packets_received = 0;
     uint64_t fec_packets_received = 0;
     uint64_t fec_packets_discarded = 0;
-    uint32_t packets_lost = 0;
+    int32_t packets_lost = 0;
     uint64_t packets_discarded = 0;
     uint32_t nacks_sent = 0;
     std::string codec_name;
@@ -59,6 +59,7 @@ class AudioReceiveStream : public MediaReceiveStream {
     double jitter_buffer_delay_seconds = 0.0;
     uint64_t jitter_buffer_emitted_count = 0;
     double jitter_buffer_target_delay_seconds = 0.0;
+    double jitter_buffer_minimum_delay_seconds = 0.0;
     uint64_t inserted_samples_for_deceleration = 0;
     uint64_t removed_samples_for_acceleration = 0;
     // Stats below DO NOT correspond directly to anything in the WebRTC stats
@@ -82,7 +83,7 @@ class AudioReceiveStream : public MediaReceiveStream {
     // The timestamp at which the last packet was received, i.e. the time of the
     // local clock when it was received - not the RTP timestamp of that packet.
     // https://w3c.github.io/webrtc-stats/#dom-rtcinboundrtpstreamstats-lastpacketreceivedtimestamp
-    absl::optional<int64_t> last_packet_received_timestamp_ms;
+    absl::optional<Timestamp> last_packet_received;
     uint64_t jitter_buffer_flushes = 0;
     double relative_packet_arrival_delay_seconds = 0.0;
     int32_t interruption_count = 0;
@@ -93,12 +94,12 @@ class AudioReceiveStream : public MediaReceiveStream {
     // https://w3c.github.io/webrtc-stats/#remoteoutboundrtpstats-dict*
     absl::optional<int64_t> last_sender_report_timestamp_ms;
     absl::optional<int64_t> last_sender_report_remote_timestamp_ms;
-    uint32_t sender_reports_packets_sent = 0;
+    uint64_t sender_reports_packets_sent = 0;
     uint64_t sender_reports_bytes_sent = 0;
     uint64_t sender_reports_reports_count = 0;
     absl::optional<TimeDelta> round_trip_time;
     TimeDelta total_round_trip_time = TimeDelta::Zero();
-    int round_trip_time_measurements;
+    int round_trip_time_measurements = 0;
   };
 
   struct Config {
@@ -108,7 +109,7 @@ class AudioReceiveStream : public MediaReceiveStream {
     std::string ToString() const;
 
     // Receive-stream specific RTP settings.
-    struct Rtp : public RtpConfig {
+    struct Rtp : public ReceiveStreamRtpConfig {
       Rtp();
       ~Rtp();
 
@@ -127,7 +128,6 @@ class AudioReceiveStream : public MediaReceiveStream {
     size_t jitter_buffer_max_packets = 200;
     bool jitter_buffer_fast_accelerate = false;
     int jitter_buffer_min_delay_ms = 0;
-    bool jitter_buffer_enable_rtx_handling = false;
 
     // Identifier for an A/V synchronization group. Empty string to disable.
     // TODO(pbos): Synchronize streams in a sync group, not just one video
@@ -148,22 +148,21 @@ class AudioReceiveStream : public MediaReceiveStream {
     // decrypted in whatever way the caller choses. This is not required by
     // default.
     // TODO(tommi): Remove this member variable from the struct. It's not
-    // a part of the AudioReceiveStream state but rather a pass through
+    // a part of the AudioReceiveStreamInterface state but rather a pass through
     // variable.
     rtc::scoped_refptr<webrtc::FrameDecryptorInterface> frame_decryptor;
 
     // An optional frame transformer used by insertable streams to transform
     // encoded frames.
     // TODO(tommi): Remove this member variable from the struct. It's not
-    // a part of the AudioReceiveStream state but rather a pass through
+    // a part of the AudioReceiveStreamInterface state but rather a pass through
     // variable.
     rtc::scoped_refptr<webrtc::FrameTransformerInterface> frame_transformer;
   };
 
   // Methods that support reconfiguring the stream post initialization.
   virtual void SetDecoderMap(std::map<int, SdpAudioFormat> decoder_map) = 0;
-  virtual void SetUseTransportCcAndNackHistory(bool use_transport_cc,
-                                               int history_ms) = 0;
+  virtual void SetNackHistory(int history_ms) = 0;
   virtual void SetNonSenderRttMeasurement(bool enabled) = 0;
 
   // Returns true if the stream has been started.
@@ -194,9 +193,15 @@ class AudioReceiveStream : public MediaReceiveStream {
   // Returns current value of base minimum delay in milliseconds.
   virtual int GetBaseMinimumPlayoutDelayMs() const = 0;
 
+  // Synchronization source (stream identifier) to be received.
+  // This member will not change mid-stream and can be assumed to be const
+  // post initialization.
+  virtual uint32_t remote_ssrc() const = 0;
+
  protected:
-  virtual ~AudioReceiveStream() {}
+  virtual ~AudioReceiveStreamInterface() {}
 };
+
 }  // namespace webrtc
 
 #endif  // CALL_AUDIO_RECEIVE_STREAM_H_

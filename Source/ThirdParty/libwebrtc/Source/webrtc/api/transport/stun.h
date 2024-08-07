@@ -31,7 +31,8 @@
 namespace cricket {
 
 // These are the types of STUN messages defined in RFC 5389.
-enum StunMessageType {
+enum StunMessageType : uint16_t {
+  STUN_INVALID_MESSAGE_TYPE = 0x0000,
   STUN_BINDING_REQUEST = 0x0001,
   STUN_BINDING_INDICATION = 0x0011,
   STUN_BINDING_RESPONSE = 0x0101,
@@ -62,7 +63,6 @@ enum StunAttributeType {
   STUN_ATTR_SOFTWARE = 0x8022,            // ByteString
   STUN_ATTR_ALTERNATE_SERVER = 0x8023,    // Address
   STUN_ATTR_FINGERPRINT = 0x8028,         // UInt32
-  STUN_ATTR_ORIGIN = 0x802F,              // ByteString
   STUN_ATTR_RETRANSMIT_COUNT = 0xFF00     // UInt32
 };
 
@@ -87,15 +87,6 @@ enum StunAddressFamily {
   STUN_ADDRESS_UNDEF = 0,
   STUN_ADDRESS_IPV4 = 1,
   STUN_ADDRESS_IPV6 = 2
-};
-
-// The REQUESTED-ADDRESS-FAMILY attribute is used by clients to request
-// the allocation of a specific address type from a server.
-// There are two values defined for this field and
-// specified in [RFC5389], Section 15.1: 0x01 for IPv4 addresses and 0x02 for IPv6 addresses.
-enum RequestedFamilyAtrributeValues {
-  STUN_ATTR_IPV4_FAMILY              = 0x01,
-  STUN_ATTR_IPV6_FAMILY              = 0x02,
 };
 
 // These are the types of STUN error codes defined in RFC 5389.
@@ -154,16 +145,28 @@ class StunXorAddressAttribute;
 // that attribute class.
 class StunMessage {
  public:
+  // Constructs a StunMessage with an invalid type and empty, legacy length
+  // (16 bytes, RFC3489) transaction id.
   StunMessage();
+
+  // Construct a `StunMessage` with a specific type and generate a new
+  // 12 byte transaction id (RFC5389).
+  explicit StunMessage(uint16_t type);
+
+  StunMessage(uint16_t type, absl::string_view transaction_id);
+
   virtual ~StunMessage();
 
   // The verification status of the message. This is checked on parsing,
   // or set by AddMessageIntegrity.
+  // These values are persisted to logs. Entries should not be renumbered and
+  // numeric values should never be reused.
   enum class IntegrityStatus {
-    kNotSet,
-    kNoIntegrity,   // Message-integrity attribute missing
-    kIntegrityOk,   // Message-integrity checked OK
-    kIntegrityBad,  // Message-integrity verification failed
+    kNotSet = 0,
+    kNoIntegrity = 1,   // Message-integrity attribute missing
+    kIntegrityOk = 2,   // Message-integrity checked OK
+    kIntegrityBad = 3,  // Message-integrity verification failed
+    kMaxValue = kIntegrityBad,
   };
 
   int type() const { return type_; }
@@ -178,8 +181,13 @@ class StunMessage {
   // is determined by the lengths of the transaction ID.
   bool IsLegacy() const;
 
-  void SetType(int type) { type_ = static_cast<uint16_t>(type); }
-  bool SetTransactionID(const std::string& str);
+  [[deprecated]] void SetType(int type) { type_ = static_cast<uint16_t>(type); }
+  [[deprecated]] bool SetTransactionID(absl::string_view transaction_id) {
+    if (!IsValidTransactionId(transaction_id))
+      return false;
+    SetTransactionIdForTesting(transaction_id);
+    return true;
+  }
 
   // Get a list of all of the attribute types in the "comprehension required"
   // range that were not recognized.
@@ -212,6 +220,11 @@ class StunMessage {
   // This uses the buffered raw-format message stored by Read().
   IntegrityStatus ValidateMessageIntegrity(const std::string& password);
 
+  // Revalidates the STUN message with (possibly) a new password.
+  // Indicates that calling logic needs review - probably previous call
+  // was checking with the wrong password.
+  IntegrityStatus RevalidateMessageIntegrity(const std::string& password);
+
   // Returns the current integrity status of the message.
   IntegrityStatus integrity() const { return integrity_; }
 
@@ -228,7 +241,7 @@ class StunMessage {
   }
 
   // Adds a MESSAGE-INTEGRITY attribute that is valid for the current message.
-  bool AddMessageIntegrity(const std::string& password);
+  bool AddMessageIntegrity(absl::string_view password);
 
   // Adds a STUN_ATTR_GOOG_MESSAGE_INTEGRITY_32 attribute that is valid for the
   // current message.
@@ -242,6 +255,9 @@ class StunMessage {
 
   // Verifies that a given buffer is STUN by checking for a correct FINGERPRINT.
   static bool ValidateFingerprint(const char* data, size_t size);
+
+  // Generates a new 12 byte (RFC5389) transaction id.
+  static std::string GenerateTransactionId();
 
   // Adds a FINGERPRINT attribute that is valid for the current message.
   bool AddFingerprint();
@@ -259,7 +275,10 @@ class StunMessage {
 
   // Modify the stun magic cookie used for this STUN message.
   // This is used for testing.
-  void SetStunMagicCookie(uint32_t val);
+  [[deprecated]] void SetStunMagicCookie(uint32_t val);
+
+  // Change the internal transaction id. Used only for testing.
+  void SetTransactionIdForTesting(absl::string_view transaction_id);
 
   // Contruct a copy of `this`.
   std::unique_ptr<StunMessage> Clone() const;
@@ -269,29 +288,27 @@ class StunMessage {
   bool EqualAttributes(const StunMessage* other,
                        std::function<bool(int type)> attribute_type_mask) const;
 
-  // Expose raw-buffer ValidateMessageIntegrity function for testing.
-  static bool ValidateMessageIntegrityForTesting(const char* data,
-                                                 size_t size,
-                                                 const std::string& password) {
-    return ValidateMessageIntegrity(data, size, password);
-  }
-  // Expose raw-buffer ValidateMessageIntegrity function for testing.
-  static bool ValidateMessageIntegrity32ForTesting(
-      const char* data,
-      size_t size,
-      const std::string& password) {
-    return ValidateMessageIntegrity32(data, size, password);
-  }
   // Validates that a STUN message in byte buffer form
   // has a correct MESSAGE-INTEGRITY value.
   // These functions are not recommended and will be deprecated; use
   // ValidateMessageIntegrity(password) on the parsed form instead.
-  static bool ValidateMessageIntegrity(const char* data,
-                                       size_t size,
-                                       const std::string& password);
-  static bool ValidateMessageIntegrity32(const char* data,
-                                         size_t size,
-                                         const std::string& password);
+  [[deprecated("Use member function")]] static bool ValidateMessageIntegrity(
+      const char* data,
+      size_t size,
+      const std::string& password);
+  [[deprecated("Use member function")]] static bool ValidateMessageIntegrity32(
+      const char* data,
+      size_t size,
+      const std::string& password);
+
+  // Expose raw-buffer ValidateMessageIntegrity function for testing.
+  static bool ValidateMessageIntegrityForTesting(const char* data,
+                                                 size_t size,
+                                                 const std::string& password);
+  // Expose raw-buffer ValidateMessageIntegrity function for testing.
+  static bool ValidateMessageIntegrity32ForTesting(const char* data,
+                                                   size_t size,
+                                                   const std::string& password);
 
  protected:
   // Verifies that the given attribute is allowed for this message.
@@ -302,22 +319,21 @@ class StunMessage {
  private:
   StunAttribute* CreateAttribute(int type, size_t length) /* const*/;
   const StunAttribute* GetAttribute(int type) const;
-  static bool IsValidTransactionId(const std::string& transaction_id);
+  static bool IsValidTransactionId(absl::string_view transaction_id);
   bool AddMessageIntegrityOfType(int mi_attr_type,
                                  size_t mi_attr_size,
-                                 const char* key,
-                                 size_t keylen);
+                                 absl::string_view key);
   static bool ValidateMessageIntegrityOfType(int mi_attr_type,
                                              size_t mi_attr_size,
                                              const char* data,
                                              size_t size,
                                              const std::string& password);
 
-  uint16_t type_;
-  uint16_t length_;
+  uint16_t type_ = STUN_INVALID_MESSAGE_TYPE;
+  uint16_t length_ = 0;
   std::string transaction_id_;
-  uint32_t reduced_transaction_id_;
-  uint32_t stun_magic_cookie_;
+  uint32_t reduced_transaction_id_ = 0;
+  uint32_t stun_magic_cookie_ = kStunMagicCookie;
   // The original buffer for messages created by Read().
   std::string buffer_;
   IntegrityStatus integrity_ = IntegrityStatus::kNotSet;
@@ -496,7 +512,7 @@ class StunUInt64Attribute : public StunAttribute {
 class StunByteStringAttribute : public StunAttribute {
  public:
   explicit StunByteStringAttribute(uint16_t type);
-  StunByteStringAttribute(uint16_t type, const std::string& str);
+  StunByteStringAttribute(uint16_t type, absl::string_view str);
   StunByteStringAttribute(uint16_t type, const void* bytes, size_t length);
   StunByteStringAttribute(uint16_t type, uint16_t length);
   ~StunByteStringAttribute() override;
@@ -504,10 +520,16 @@ class StunByteStringAttribute : public StunAttribute {
   StunAttributeValueType value_type() const override;
 
   const char* bytes() const { return bytes_; }
-  std::string GetString() const { return std::string(bytes_, length()); }
+  absl::string_view string_view() const {
+    return absl::string_view(bytes_, length());
+  }
 
-  void CopyBytes(const char* bytes);  // uses strlen
+  [[deprecated]] std::string GetString() const {
+    return std::string(bytes_, length());
+  }
+
   void CopyBytes(const void* bytes, size_t length);
+  void CopyBytes(absl::string_view bytes);
 
   uint8_t GetByte(size_t index) const;
   void SetByte(size_t index, uint8_t value);
@@ -645,13 +667,16 @@ enum RelayAttributeType {
 
 // A "GTURN" STUN message.
 class RelayMessage : public StunMessage {
+ public:
+  using StunMessage::StunMessage;
+
  protected:
   StunAttributeValueType GetAttributeValueType(int type) const override;
   StunMessage* CreateNew() const override;
 };
 
 // Defined in TURN RFC 5766.
-enum TurnMessageType {
+enum TurnMessageType : uint16_t {
   STUN_ALLOCATE_REQUEST = 0x0003,
   STUN_ALLOCATE_RESPONSE = 0x0103,
   STUN_ALLOCATE_ERROR_RESPONSE = 0x0113,
@@ -675,9 +700,6 @@ enum TurnAttributeType {
   // TODO(mallinath) - Uncomment after RelayAttributes are renamed.
   // STUN_ATTR_DATA                     = 0x0013,  // ByteString
   STUN_ATTR_XOR_RELAYED_ADDRESS = 0x0016,  // XorAddress
-// The REQUESTED-ADDRESS-FAMILY attribute is used by clients to request
-// the allocation of a specific address type from a server.
-  STUN_ATTR_REQUESTED_ADDRESS_FAMILY    = 0x0017,  // IPv6 RFC 6156
   STUN_ATTR_EVEN_PORT = 0x0018,            // ByteString, 1 byte.
   STUN_ATTR_REQUESTED_TRANSPORT = 0x0019,  // UInt32
   STUN_ATTR_DONT_FRAGMENT = 0x001A,        // No content, Length = 0
@@ -702,6 +724,9 @@ extern const char STUN_ERROR_REASON_ALLOCATION_MISMATCH[];
 extern const char STUN_ERROR_REASON_WRONG_CREDENTIALS[];
 extern const char STUN_ERROR_REASON_UNSUPPORTED_PROTOCOL[];
 class TurnMessage : public StunMessage {
+ public:
+  using StunMessage::StunMessage;
+
  protected:
   StunAttributeValueType GetAttributeValueType(int type) const override;
   StunMessage* CreateNew() const override;
@@ -731,9 +756,10 @@ enum IceAttributeType {
   STUN_ATTR_GOOG_MISC_INFO = 0xC059,
   // Obsolete.
   STUN_ATTR_GOOG_OBSOLETE_1 = 0xC05A,
-  STUN_ATTR_GOOG_CONNECTION_ID = 0xC05B,  // Not yet implemented.
-  STUN_ATTR_GOOG_DELTA = 0xC05C,          // Not yet implemented.
-  STUN_ATTR_GOOG_DELTA_ACK = 0xC05D,      // Not yet implemented.
+  STUN_ATTR_GOOG_CONNECTION_ID = 0xC05B,   // Not yet implemented.
+  STUN_ATTR_GOOG_DELTA = 0xC05C,           // Not yet implemented.
+  STUN_ATTR_GOOG_DELTA_ACK = 0xC05D,       // Not yet implemented.
+  STUN_ATTR_GOOG_DELTA_SYNC_REQ = 0xC05E,  // Not yet implemented.
   // MESSAGE-INTEGRITY truncated to 32-bit.
   STUN_ATTR_GOOG_MESSAGE_INTEGRITY_32 = 0xC060,
 };
@@ -760,6 +786,9 @@ extern const char STUN_ERROR_REASON_ROLE_CONFLICT[];
 
 // A RFC 5245 ICE STUN message.
 class IceMessage : public StunMessage {
+ public:
+  using StunMessage::StunMessage;
+
  protected:
   StunAttributeValueType GetAttributeValueType(int type) const override;
   StunMessage* CreateNew() const override;

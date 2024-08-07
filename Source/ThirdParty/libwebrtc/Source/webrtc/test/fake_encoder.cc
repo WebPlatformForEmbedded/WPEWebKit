@@ -17,7 +17,6 @@
 #include <memory>
 #include <string>
 
-#include "api/task_queue/queued_task.h"
 #include "api/video/video_content_type.h"
 #include "modules/video_coding/codecs/h264/include/h264_globals.h"
 #include "modules/video_coding/include/video_codec_interface.h"
@@ -50,6 +49,7 @@ void WriteCounter(unsigned char* payload, uint32_t counter) {
 
 FakeEncoder::FakeEncoder(Clock* clock)
     : clock_(clock),
+      num_initializations_(0),
       callback_(nullptr),
       max_target_bitrate_kbps_(-1),
       pending_keyframe_(true),
@@ -77,10 +77,16 @@ void FakeEncoder::SetQp(int qp) {
   qp_ = qp;
 }
 
+void FakeEncoder::SetImplementationName(absl::string_view implementation_name) {
+  MutexLock lock(&mutex_);
+  implementation_name_ = std::string(implementation_name);
+}
+
 int32_t FakeEncoder::InitEncode(const VideoCodec* config,
                                 const Settings& settings) {
   MutexLock lock(&mutex_);
   config_ = *config;
+  ++num_initializations_;
   current_rate_settings_.bitrate.SetBitrate(0, 0, config_.startBitrate * 1000);
   current_rate_settings_.framerate_fps = config_.maxFramerate;
   pending_keyframe_ = true;
@@ -92,10 +98,9 @@ int32_t FakeEncoder::Encode(const VideoFrame& input_image,
                             const std::vector<VideoFrameType>* frame_types) {
   unsigned char max_framerate;
   unsigned char num_simulcast_streams;
-  SpatialLayer simulcast_streams[kMaxSimulcastStreams];
+  SimulcastStream simulcast_streams[kMaxSimulcastStreams];
   EncodedImageCallback* callback;
   RateControlParameters rates;
-  VideoCodecMode mode;
   bool keyframe;
   uint32_t counter;
   absl::optional<int> qp;
@@ -108,7 +113,6 @@ int32_t FakeEncoder::Encode(const VideoFrame& input_image,
     }
     callback = callback_;
     rates = current_rate_settings_;
-    mode = config_.mode;
     if (rates.framerate_fps <= 0.0) {
       rates.framerate_fps = max_framerate;
     }
@@ -137,14 +141,14 @@ int32_t FakeEncoder::Encode(const VideoFrame& input_image,
     EncodedImage encoded;
     encoded.SetEncodedData(buffer);
 
-    encoded.SetTimestamp(input_image.timestamp());
+    encoded.SetRtpTimestamp(input_image.timestamp());
     encoded._frameType = frame_info.keyframe ? VideoFrameType::kVideoFrameKey
                                              : VideoFrameType::kVideoFrameDelta;
     encoded._encodedWidth = simulcast_streams[i].width;
     encoded._encodedHeight = simulcast_streams[i].height;
     if (qp)
       encoded.qp_ = *qp;
-    encoded.SetSpatialIndex(i);
+    encoded.SetSimulcastIndex(i);
     CodecSpecificInfo codec_specific = EncodeHook(encoded, buffer);
 
     if (callback->OnEncodedImage(encoded, &codec_specific).error !=
@@ -168,7 +172,7 @@ FakeEncoder::FrameInfo FakeEncoder::NextFrame(
     bool keyframe,
     uint8_t num_simulcast_streams,
     const VideoBitrateAllocation& target_bitrate,
-    SpatialLayer simulcast_streams[kMaxSimulcastStreams],
+    SimulcastStream simulcast_streams[kMaxSimulcastStreams],
     int framerate) {
   FrameInfo frame_info;
   frame_info.keyframe = keyframe;
@@ -262,7 +266,7 @@ void FakeEncoder::SetRatesLocked(const RateControlParameters& parameters) {
           uint32_t bitrate = current_rate_settings_.bitrate.GetBitrate(
               spatial_idx, temporal_idx);
           bitrate = static_cast<uint32_t>(
-              (bitrate * int64_t{max_target_bitrate_kbps_}) /
+              (bitrate* int64_t{max_target_bitrate_kbps_}) /
               allocated_bitrate_kbps);
           current_rate_settings_.bitrate.SetBitrate(spatial_idx, temporal_idx,
                                                     bitrate);
@@ -272,11 +276,11 @@ void FakeEncoder::SetRatesLocked(const RateControlParameters& parameters) {
   }
 }
 
-const char* FakeEncoder::kImplementationName = "fake_encoder";
 VideoEncoder::EncoderInfo FakeEncoder::GetEncoderInfo() const {
   EncoderInfo info;
-  info.implementation_name = kImplementationName;
   MutexLock lock(&mutex_);
+  info.implementation_name = implementation_name_.value_or(kImplementationName);
+  info.is_hardware_accelerated = true;
   for (int sid = 0; sid < config_.numberOfSimulcastStreams; ++sid) {
     int number_of_temporal_layers =
         config_.simulcastStream[sid].numberOfTemporalLayers;
@@ -293,6 +297,16 @@ VideoEncoder::EncoderInfo FakeEncoder::GetEncoderInfo() const {
 int FakeEncoder::GetConfiguredInputFramerate() const {
   MutexLock lock(&mutex_);
   return static_cast<int>(current_rate_settings_.framerate_fps + 0.5);
+}
+
+int FakeEncoder::GetNumInitializations() const {
+  MutexLock lock(&mutex_);
+  return num_initializations_;
+}
+
+const VideoCodec& FakeEncoder::config() const {
+  MutexLock lock(&mutex_);
+  return config_;
 }
 
 FakeH264Encoder::FakeH264Encoder(Clock* clock)
@@ -393,26 +407,6 @@ int32_t MultithreadedFakeH264Encoder::InitEncode(const VideoCodec* config,
   return FakeH264Encoder::InitEncode(config, settings);
 }
 
-class MultithreadedFakeH264Encoder::EncodeTask : public QueuedTask {
- public:
-  EncodeTask(MultithreadedFakeH264Encoder* encoder,
-             const VideoFrame& input_image,
-             const std::vector<VideoFrameType>* frame_types)
-      : encoder_(encoder),
-        input_image_(input_image),
-        frame_types_(*frame_types) {}
-
- private:
-  bool Run() override {
-    encoder_->EncodeCallback(input_image_, &frame_types_);
-    return true;
-  }
-
-  MultithreadedFakeH264Encoder* const encoder_;
-  VideoFrame input_image_;
-  std::vector<VideoFrameType> frame_types_;
-};
-
 int32_t MultithreadedFakeH264Encoder::Encode(
     const VideoFrame& input_image,
     const std::vector<VideoFrameType>* frame_types) {
@@ -425,7 +419,9 @@ int32_t MultithreadedFakeH264Encoder::Encode(
     return WEBRTC_VIDEO_CODEC_UNINITIALIZED;
   }
 
-  queue->PostTask(std::make_unique<EncodeTask>(this, input_image, frame_types));
+  queue->PostTask([this, input_image, frame_types = *frame_types] {
+    EncodeCallback(input_image, &frame_types);
+  });
 
   return WEBRTC_VIDEO_CODEC_OK;
 }

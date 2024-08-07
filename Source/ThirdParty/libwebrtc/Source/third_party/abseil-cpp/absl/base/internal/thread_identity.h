@@ -62,8 +62,8 @@ struct PerThreadSynch {
     return reinterpret_cast<ThreadIdentity*>(this);
   }
 
-  PerThreadSynch *next;  // Circular waiter queue; initialized to 0.
-  PerThreadSynch *skip;  // If non-zero, all entries in Mutex queue
+  PerThreadSynch* next;  // Circular waiter queue; initialized to 0.
+  PerThreadSynch* skip;  // If non-zero, all entries in Mutex queue
                          // up to and including "skip" have same
                          // condition as this, and will be woken later
   bool may_skip;         // if false while on mutex queue, a mutex unlocker
@@ -104,10 +104,7 @@ struct PerThreadSynch {
   //
   // Transitions from kAvailable to kQueued require no barrier, they
   // are externally ordered by the Mutex.
-  enum State {
-    kAvailable,
-    kQueued
-  };
+  enum State { kAvailable, kQueued };
   std::atomic<State> state;
 
   // The wait parameters of the current wait.  waitp is null if the
@@ -122,18 +119,22 @@ struct PerThreadSynch {
   // pointer unchanged.
   SynchWaitParams* waitp;
 
-  intptr_t readers;     // Number of readers in mutex.
+  intptr_t readers;  // Number of readers in mutex.
 
   // When priority will next be read (cycles).
   int64_t next_priority_read_cycles;
 
   // Locks held; used during deadlock detection.
   // Allocated in Synch_GetAllLocks() and freed in ReclaimThreadIdentity().
-  SynchLocksHeld *all_locks;
+  SynchLocksHeld* all_locks;
 };
 
 // The instances of this class are allocated in NewThreadIdentity() with an
 // alignment of PerThreadSynch::kAlignment.
+//
+// NOTE: The layout of fields in this structure is critical, please do not
+//       add, remove, or modify the field placements without fully auditing the
+//       layout.
 struct ThreadIdentity {
   // Must be the first member.  The Mutex implementation requires that
   // the PerThreadSynch object associated with each thread is
@@ -143,7 +144,7 @@ struct ThreadIdentity {
 
   // Private: Reserved for absl::synchronization_internal::Waiter.
   struct WaiterState {
-    alignas(void*) char data[128];
+    alignas(void*) char data[256];
   } waiter_state;
 
   // Used by PerThreadSem::{Get,Set}ThreadBlockedCounter().
@@ -166,7 +167,10 @@ struct ThreadIdentity {
 //
 // Does not malloc(*), and is async-signal safe.
 // [*] Technically pthread_setspecific() does malloc on first use; however this
-// is handled internally within tcmalloc's initialization already.
+// is handled internally within tcmalloc's initialization already. Note that
+// darwin does *not* use tcmalloc, so this can catch you if using MallocHooks
+// on Apple platforms. Whatever function is calling your MallocHooks will need
+// to watch for recursion on Apple platforms.
 //
 // New ThreadIdentity objects can be constructed and associated with a thread
 // by calling GetOrCreateCurrentThreadIdentity() in per-thread-sem.h.
@@ -188,32 +192,32 @@ void ClearCurrentThreadIdentity();
 // May be chosen at compile time via: -DABSL_FORCE_THREAD_IDENTITY_MODE=<mode
 // index>
 #ifdef ABSL_THREAD_IDENTITY_MODE_USE_POSIX_SETSPECIFIC
-#error ABSL_THREAD_IDENTITY_MODE_USE_POSIX_SETSPECIFIC cannot be direcly set
+#error ABSL_THREAD_IDENTITY_MODE_USE_POSIX_SETSPECIFIC cannot be directly set
 #else
 #define ABSL_THREAD_IDENTITY_MODE_USE_POSIX_SETSPECIFIC 0
 #endif
 
 #ifdef ABSL_THREAD_IDENTITY_MODE_USE_TLS
-#error ABSL_THREAD_IDENTITY_MODE_USE_TLS cannot be direcly set
+#error ABSL_THREAD_IDENTITY_MODE_USE_TLS cannot be directly set
 #else
 #define ABSL_THREAD_IDENTITY_MODE_USE_TLS 1
 #endif
 
 #ifdef ABSL_THREAD_IDENTITY_MODE_USE_CPP11
-#error ABSL_THREAD_IDENTITY_MODE_USE_CPP11 cannot be direcly set
+#error ABSL_THREAD_IDENTITY_MODE_USE_CPP11 cannot be directly set
 #else
 #define ABSL_THREAD_IDENTITY_MODE_USE_CPP11 2
 #endif
 
 #ifdef ABSL_THREAD_IDENTITY_MODE
-#error ABSL_THREAD_IDENTITY_MODE cannot be direcly set
+#error ABSL_THREAD_IDENTITY_MODE cannot be directly set
 #elif defined(ABSL_FORCE_THREAD_IDENTITY_MODE)
 #define ABSL_THREAD_IDENTITY_MODE ABSL_FORCE_THREAD_IDENTITY_MODE
 #elif defined(_WIN32) && !defined(__MINGW32__)
 #define ABSL_THREAD_IDENTITY_MODE ABSL_THREAD_IDENTITY_MODE_USE_CPP11
 #elif defined(__APPLE__) && defined(ABSL_HAVE_THREAD_LOCAL)
 #define ABSL_THREAD_IDENTITY_MODE ABSL_THREAD_IDENTITY_MODE_USE_CPP11
-#elif ABSL_PER_THREAD_TLS && defined(__GOOGLE_GRTE_VERSION__) &&        \
+#elif ABSL_PER_THREAD_TLS && defined(__GOOGLE_GRTE_VERSION__) && \
     (__GOOGLE_GRTE_VERSION__ >= 20140228L)
 // Support for async-safe TLS was specifically added in GRTEv4.  It's not
 // present in the upstream eglibc.
@@ -236,13 +240,18 @@ ABSL_CONST_INIT extern thread_local ThreadIdentity* thread_identity_ptr;
 #error Thread-local storage not detected on this platform
 #endif
 
-// thread_local variables cannot be in headers exposed by DLLs. However, it is
-// important for performance reasons in general that
-// `CurrentThreadIdentityIfPresent` be inlined. This is not possible across a
-// DLL boundary so, with DLLs, we opt to have the function not be inlined. Note
+// thread_local variables cannot be in headers exposed by DLLs or in certain
+// build configurations on Apple platforms. However, it is important for
+// performance reasons in general that `CurrentThreadIdentityIfPresent` be
+// inlined. In the other cases we opt to have the function not be inlined. Note
 // that `CurrentThreadIdentityIfPresent` is declared above so we can exclude
-// this entire inline definition when compiling as a DLL.
-#if !defined(ABSL_BUILD_DLL) && !defined(ABSL_CONSUME_DLL)
+// this entire inline definition.
+#if !defined(__APPLE__) && !defined(ABSL_BUILD_DLL) && \
+    !defined(ABSL_CONSUME_DLL)
+#define ABSL_INTERNAL_INLINE_CURRENT_THREAD_IDENTITY_IF_PRESENT 1
+#endif
+
+#ifdef ABSL_INTERNAL_INLINE_CURRENT_THREAD_IDENTITY_IF_PRESENT
 inline ThreadIdentity* CurrentThreadIdentityIfPresent() {
   return thread_identity_ptr;
 }

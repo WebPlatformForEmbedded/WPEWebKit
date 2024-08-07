@@ -16,6 +16,7 @@
 #include <string>
 #include <vector>
 
+#include "absl/strings/string_view.h"
 #include "api/crypto/crypto_options.h"
 #include "api/crypto/frame_encryptor_interface.h"
 #include "api/frame_transformer_interface.h"
@@ -34,7 +35,7 @@ class MockRtpTransportControllerSend
  public:
   MOCK_METHOD(RtpVideoSenderInterface*,
               CreateRtpVideoSender,
-              ((std::map<uint32_t, RtpState>),
+              ((const std::map<uint32_t, RtpState>&),
                (const std::map<uint32_t, RtpPayloadState>&),
                const RtpConfig&,
                int rtcp_report_interval_ms,
@@ -49,7 +50,6 @@ class MockRtpTransportControllerSend
               DestroyRtpVideoSender,
               (RtpVideoSenderInterface*),
               (override));
-  MOCK_METHOD(rtc::TaskQueue*, GetWorkerQueue, (), (override));
   MOCK_METHOD(PacketRouter*, packet_router, (), (override));
   MOCK_METHOD(NetworkStateEstimateObserver*,
               network_state_estimate_observer,
@@ -76,10 +76,10 @@ class MockRtpTransportControllerSend
               (override));
   MOCK_METHOD(void,
               OnNetworkRouteChanged,
-              (const std::string&, const rtc::NetworkRoute&),
+              (absl::string_view, const rtc::NetworkRoute&),
               (override));
   MOCK_METHOD(void, OnNetworkAvailability, (bool), (override));
-  MOCK_METHOD(RtcpBandwidthObserver*, GetBandwidthObserver, (), (override));
+  MOCK_METHOD(NetworkLinkRtcpObserver*, GetRtcpObserver, (), (override));
   MOCK_METHOD(int64_t, GetPacerQueuingDelayMs, (), (const, override));
   MOCK_METHOD(absl::optional<Timestamp>,
               GetFirstPacketTime,

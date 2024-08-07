@@ -1,7 +1,7 @@
-# Using Abseil in WebRTC
+<!-- go/cmark -->
+<!--* freshness: {owner: 'danilchap' reviewed: '2021-05-12'} *-->
 
-<?% config.freshness.owner = 'danilchap' %?>
-<?% config.freshness.reviewed = '2021-05-12' %?>
+# Using Abseil in WebRTC
 
 You may use a subset of the utilities provided by the [Abseil][abseil]
 library when writing WebRTC C++ code. Below, we list the explicitly
@@ -25,13 +25,17 @@ will generate a shared library.
 
 ## **Allowed**
 
+* `absl::AnyInvocable`
 * `absl::bind_front`
+* `absl::Cleanup`
 * `absl::InlinedVector`
+* `absl::Nonnull` and `absl::Nullable`
 * `absl::WrapUnique`
 * `absl::optional` and related stuff from `absl/types/optional.h`.
 * `absl::string_view`
 * The functions in `absl/strings/ascii.h`, `absl/strings/match.h`,
   and `absl/strings/str_replace.h`.
+* The functions in `absl/strings/escaping.h`.
 * `absl::is_trivially_copy_constructible`,
   `absl::is_trivially_copy_assignable`, and
   `absl::is_trivially_destructible` from `absl/meta/type_traits.h`.

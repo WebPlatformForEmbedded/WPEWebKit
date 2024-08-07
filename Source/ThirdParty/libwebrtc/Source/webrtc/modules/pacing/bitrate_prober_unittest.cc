@@ -12,6 +12,10 @@
 
 #include <algorithm>
 
+#include "api/transport/network_types.h"
+#include "api/units/data_rate.h"
+#include "api/units/time_delta.h"
+#include "api/units/timestamp.h"
 #include "test/explicit_key_value_config.h"
 #include "test/gtest.h"
 
@@ -22,7 +26,7 @@ TEST(BitrateProberTest, VerifyStatesAndTimeBetweenProbes) {
   BitrateProber prober(config);
   EXPECT_FALSE(prober.is_probing());
 
-  Timestamp now = Timestamp::Millis(0);
+  Timestamp now = Timestamp::Zero();
   const Timestamp start_time = now;
   EXPECT_EQ(prober.NextProbeTime(now), Timestamp::PlusInfinity());
 
@@ -32,8 +36,16 @@ TEST(BitrateProberTest, VerifyStatesAndTimeBetweenProbes) {
   const DataSize kProbeSize = DataSize::Bytes(1000);
   const TimeDelta kMinProbeDuration = TimeDelta::Millis(15);
 
-  prober.CreateProbeCluster(kTestBitrate1, now, 0);
-  prober.CreateProbeCluster(kTestBitrate2, now, 1);
+  prober.CreateProbeCluster({.at_time = now,
+                             .target_data_rate = kTestBitrate1,
+                             .target_duration = TimeDelta::Millis(15),
+                             .target_probe_count = 5,
+                             .id = 0});
+  prober.CreateProbeCluster({.at_time = now,
+                             .target_data_rate = kTestBitrate2,
+                             .target_duration = TimeDelta::Millis(15),
+                             .target_probe_count = 5,
+                             .id = 1});
   EXPECT_FALSE(prober.is_probing());
 
   prober.OnIncomingPacket(kProbeSize);
@@ -85,7 +97,11 @@ TEST(BitrateProberTest, DoesntProbeWithoutRecentPackets) {
   Timestamp now = Timestamp::Zero();
   EXPECT_EQ(prober.NextProbeTime(now), Timestamp::PlusInfinity());
 
-  prober.CreateProbeCluster(DataRate::KilobitsPerSec(900), now, 0);
+  prober.CreateProbeCluster({.at_time = now,
+                             .target_data_rate = DataRate::KilobitsPerSec(900),
+                             .target_duration = TimeDelta::Millis(15),
+                             .target_probe_count = 5,
+                             .id = 0});
   EXPECT_FALSE(prober.is_probing());
 
   prober.OnIncomingPacket(kProbeSize);
@@ -94,37 +110,7 @@ TEST(BitrateProberTest, DoesntProbeWithoutRecentPackets) {
   prober.ProbeSent(now, kProbeSize);
 }
 
-TEST(BitrateProberTest, DoesntDiscardDelayedProbesInLegacyMode) {
-  const TimeDelta kMaxProbeDelay = TimeDelta::Millis(3);
-  const test::ExplicitKeyValueConfig trials(
-      "WebRTC-Bwe-ProbingBehavior/"
-      "abort_delayed_probes:0,"
-      "max_probe_delay:3ms/");
-  BitrateProber prober(trials);
-  const DataSize kProbeSize = DataSize::Bytes(1000);
-
-  Timestamp now = Timestamp::Zero();
-  prober.CreateProbeCluster(DataRate::KilobitsPerSec(900), now, 0);
-  prober.OnIncomingPacket(kProbeSize);
-  EXPECT_TRUE(prober.is_probing());
-  EXPECT_EQ(prober.CurrentCluster(now)->probe_cluster_id, 0);
-  // Advance to first probe time and indicate sent probe.
-  now = std::max(now, prober.NextProbeTime(now));
-  prober.ProbeSent(now, kProbeSize);
-
-  // Advance time 1ms past timeout for the next probe.
-  Timestamp next_probe_time = prober.NextProbeTime(now);
-  EXPECT_GT(next_probe_time, now);
-  now += next_probe_time - now + kMaxProbeDelay + TimeDelta::Millis(1);
-
-  EXPECT_EQ(prober.NextProbeTime(now), Timestamp::PlusInfinity());
-  // Check that legacy behaviour where prober is reset in TimeUntilNextProbe is
-  // no longer there. Probes are no longer retried if they are timed out.
-  prober.OnIncomingPacket(kProbeSize);
-  EXPECT_EQ(prober.NextProbeTime(now), Timestamp::PlusInfinity());
-}
-
-TEST(BitrateProberTest, DiscardsDelayedProbesWhenNotInLegacyMode) {
+TEST(BitrateProberTest, DiscardsDelayedProbes) {
   const TimeDelta kMaxProbeDelay = TimeDelta::Millis(3);
   const test::ExplicitKeyValueConfig trials(
       "WebRTC-Bwe-ProbingBehavior/"
@@ -136,7 +122,11 @@ TEST(BitrateProberTest, DiscardsDelayedProbesWhenNotInLegacyMode) {
   Timestamp now = Timestamp::Zero();
 
   // Add two probe clusters.
-  prober.CreateProbeCluster(DataRate::KilobitsPerSec(900), now, /*id=*/0);
+  prober.CreateProbeCluster({.at_time = now,
+                             .target_data_rate = DataRate::KilobitsPerSec(900),
+                             .target_duration = TimeDelta::Millis(15),
+                             .target_probe_count = 5,
+                             .id = 0});
 
   prober.OnIncomingPacket(kProbeSize);
   EXPECT_TRUE(prober.is_probing());
@@ -156,15 +146,73 @@ TEST(BitrateProberTest, DiscardsDelayedProbesWhenNotInLegacyMode) {
   EXPECT_FALSE(prober.CurrentCluster(now).has_value());
 }
 
+TEST(BitrateProberTest, LimitsNumberOfPendingProbeClusters) {
+  const FieldTrialBasedConfig config;
+  BitrateProber prober(config);
+  const DataSize kProbeSize = DataSize::Bytes(1000);
+  Timestamp now = Timestamp::Zero();
+  prober.CreateProbeCluster({.at_time = now,
+                             .target_data_rate = DataRate::KilobitsPerSec(900),
+                             .target_duration = TimeDelta::Millis(15),
+                             .target_probe_count = 5,
+                             .id = 0});
+  prober.OnIncomingPacket(kProbeSize);
+  ASSERT_TRUE(prober.is_probing());
+  ASSERT_EQ(prober.CurrentCluster(now)->probe_cluster_id, 0);
+
+  for (int i = 1; i < 11; ++i) {
+    prober.CreateProbeCluster(
+        {.at_time = now,
+         .target_data_rate = DataRate::KilobitsPerSec(900),
+         .target_duration = TimeDelta::Millis(15),
+         .target_probe_count = 5,
+         .id = i});
+    prober.OnIncomingPacket(kProbeSize);
+  }
+  // Expect some clusters has been dropped.
+  EXPECT_TRUE(prober.is_probing());
+  EXPECT_GE(prober.CurrentCluster(now)->probe_cluster_id, 5);
+
+  Timestamp max_expected_probe_time = now + TimeDelta::Seconds(1);
+  while (prober.is_probing() && now < max_expected_probe_time) {
+    now = std::max(now, prober.NextProbeTime(now));
+    prober.ProbeSent(now, kProbeSize);
+  }
+  EXPECT_FALSE(prober.is_probing());
+}
+
 TEST(BitrateProberTest, DoesntInitializeProbingForSmallPackets) {
   const FieldTrialBasedConfig config;
   BitrateProber prober(config);
-
   prober.SetEnabled(true);
-  EXPECT_FALSE(prober.is_probing());
+  ASSERT_FALSE(prober.is_probing());
 
+  prober.CreateProbeCluster({.at_time = Timestamp::Zero(),
+                             .target_data_rate = DataRate::KilobitsPerSec(1000),
+                             .target_duration = TimeDelta::Millis(15),
+                             .target_probe_count = 5,
+                             .id = 0});
   prober.OnIncomingPacket(DataSize::Bytes(100));
+
   EXPECT_FALSE(prober.is_probing());
+}
+
+TEST(BitrateProberTest, DoesInitializeProbingForSmallPacketsIfConfigured) {
+  const test::ExplicitKeyValueConfig config(
+      "WebRTC-Bwe-ProbingBehavior/"
+      "min_packet_size:0bytes/");
+  BitrateProber prober(config);
+  prober.SetEnabled(true);
+  ASSERT_FALSE(prober.is_probing());
+
+  prober.CreateProbeCluster({.at_time = Timestamp::Zero(),
+                             .target_data_rate = DataRate::KilobitsPerSec(1000),
+                             .target_duration = TimeDelta::Millis(15),
+                             .target_probe_count = 5,
+                             .id = 0});
+  prober.OnIncomingPacket(DataSize::Bytes(10));
+
+  EXPECT_TRUE(prober.is_probing());
 }
 
 TEST(BitrateProberTest, VerifyProbeSizeOnHighBitrate) {
@@ -173,11 +221,38 @@ TEST(BitrateProberTest, VerifyProbeSizeOnHighBitrate) {
 
   const DataRate kHighBitrate = DataRate::KilobitsPerSec(10000);  // 10 Mbps
 
-  prober.CreateProbeCluster(kHighBitrate, Timestamp::Millis(0),
-                            /*cluster_id=*/0);
+  prober.CreateProbeCluster({.at_time = Timestamp::Zero(),
+                             .target_data_rate = kHighBitrate,
+                             .target_duration = TimeDelta::Millis(15),
+                             .target_probe_count = 5,
+                             .id = 0});
   // Probe size should ensure a minimum of 1 ms interval.
   EXPECT_GT(prober.RecommendedMinProbeSize(),
             kHighBitrate * TimeDelta::Millis(1));
+}
+
+TEST(BitrateProberTest, ProbeSizeCanBeSetWithFieldTrial) {
+  const test::ExplicitKeyValueConfig trials(
+      "WebRTC-Bwe-ProbingBehavior/min_probe_delta:20ms/");
+  BitrateProber prober(trials);
+  prober.SetEnabled(true);
+
+  const DataRate kHighBitrate = DataRate::KilobitsPerSec(10000);  // 10 Mbps
+
+  prober.CreateProbeCluster({.at_time = Timestamp::Zero(),
+                             .target_data_rate = kHighBitrate,
+                             .target_duration = TimeDelta::Millis(15),
+                             .target_probe_count = 5,
+                             .id = 0});
+  EXPECT_EQ(prober.RecommendedMinProbeSize(),
+            kHighBitrate * TimeDelta::Millis(20));
+
+  prober.OnIncomingPacket(DataSize::Bytes(1000));
+  // Next time to send probe should be "min_probe_delta" if the recommended
+  // number of bytes has been sent.
+  prober.ProbeSent(Timestamp::Zero(), prober.RecommendedMinProbeSize());
+  EXPECT_EQ(prober.NextProbeTime(Timestamp::Zero()),
+            Timestamp::Zero() + TimeDelta::Millis(20));
 }
 
 TEST(BitrateProberTest, MinumumNumberOfProbingPackets) {
@@ -188,8 +263,13 @@ TEST(BitrateProberTest, MinumumNumberOfProbingPackets) {
   const DataRate kBitrate = DataRate::KilobitsPerSec(100);
   const DataSize kPacketSize = DataSize::Bytes(1000);
 
-  Timestamp now = Timestamp::Millis(0);
-  prober.CreateProbeCluster(kBitrate, now, 0);
+  Timestamp now = Timestamp::Zero();
+  prober.CreateProbeCluster({.at_time = Timestamp::Zero(),
+                             .target_data_rate = kBitrate,
+                             .target_duration = TimeDelta::Millis(15),
+                             .target_probe_count = 5,
+                             .id = 0});
+
   prober.OnIncomingPacket(kPacketSize);
   for (int i = 0; i < 5; ++i) {
     EXPECT_TRUE(prober.is_probing());
@@ -206,8 +286,12 @@ TEST(BitrateProberTest, ScaleBytesUsedForProbing) {
   const DataSize kPacketSize = DataSize::Bytes(1000);
   const DataSize kExpectedDataSent = kBitrate * TimeDelta::Millis(15);
 
-  Timestamp now = Timestamp::Millis(0);
-  prober.CreateProbeCluster(kBitrate, now, /*cluster_id=*/0);
+  Timestamp now = Timestamp::Zero();
+  prober.CreateProbeCluster({.at_time = Timestamp::Zero(),
+                             .target_data_rate = kBitrate,
+                             .target_duration = TimeDelta::Millis(15),
+                             .target_probe_count = 5,
+                             .id = 0});
   prober.OnIncomingPacket(kPacketSize);
   DataSize data_sent = DataSize::Zero();
   while (data_sent < kExpectedDataSent) {
@@ -226,8 +310,12 @@ TEST(BitrateProberTest, HighBitrateProbing) {
   const DataSize kPacketSize = DataSize::Bytes(1000);
   const DataSize kExpectedDataSent = kBitrate * TimeDelta::Millis(15);
 
-  Timestamp now = Timestamp::Millis(0);
-  prober.CreateProbeCluster(kBitrate, now, 0);
+  Timestamp now = Timestamp::Zero();
+  prober.CreateProbeCluster({.at_time = Timestamp::Zero(),
+                             .target_data_rate = kBitrate,
+                             .target_duration = TimeDelta::Millis(15),
+                             .target_probe_count = 5,
+                             .id = 0});
   prober.OnIncomingPacket(kPacketSize);
   DataSize data_sent = DataSize::Zero();
   while (data_sent < kExpectedDataSent) {
@@ -248,16 +336,28 @@ TEST(BitrateProberTest, ProbeClusterTimeout) {
   const DataSize kExpectedDataSent = kSmallPacketSize * 2 * 5;
   const TimeDelta kTimeout = TimeDelta::Millis(5000);
 
-  Timestamp now = Timestamp::Millis(0);
-  prober.CreateProbeCluster(kBitrate, now, /*cluster_id=*/0);
+  Timestamp now = Timestamp::Zero();
+  prober.CreateProbeCluster({.at_time = now,
+                             .target_data_rate = kBitrate,
+                             .target_duration = TimeDelta::Millis(15),
+                             .target_probe_count = 5,
+                             .id = 0});
   prober.OnIncomingPacket(kSmallPacketSize);
   EXPECT_FALSE(prober.is_probing());
   now += kTimeout;
-  prober.CreateProbeCluster(kBitrate / 10, now, /*cluster_id=*/1);
+  prober.CreateProbeCluster({.at_time = now,
+                             .target_data_rate = kBitrate / 10,
+                             .target_duration = TimeDelta::Millis(15),
+                             .target_probe_count = 5,
+                             .id = 1});
   prober.OnIncomingPacket(kSmallPacketSize);
   EXPECT_FALSE(prober.is_probing());
   now += TimeDelta::Millis(1);
-  prober.CreateProbeCluster(kBitrate / 10, now, /*cluster_id=*/2);
+  prober.CreateProbeCluster({.at_time = now,
+                             .target_data_rate = kBitrate / 10,
+                             .target_duration = TimeDelta::Millis(15),
+                             .target_probe_count = 5,
+                             .id = 2});
   prober.OnIncomingPacket(kSmallPacketSize);
   EXPECT_TRUE(prober.is_probing());
   DataSize data_sent = DataSize::Zero();
@@ -269,4 +369,43 @@ TEST(BitrateProberTest, ProbeClusterTimeout) {
 
   EXPECT_FALSE(prober.is_probing());
 }
+
+TEST(BitrateProberTest, CanProbeImmediatelyIfConfigured) {
+  const test::ExplicitKeyValueConfig trials(
+      "WebRTC-Bwe-ProbingBehavior/min_packet_size:0/");
+
+  BitrateProber prober(trials);
+  prober.CreateProbeCluster({.at_time = Timestamp::Zero(),
+                             .target_data_rate = DataRate::KilobitsPerSec(300),
+                             .target_duration = TimeDelta::Millis(15),
+                             .target_probe_count = 5,
+                             .id = 0});
+  EXPECT_TRUE(prober.is_probing());
+}
+
+TEST(BitrateProberTest, CanProbeImmediatelyAgainAfterProbeIfConfigured) {
+  const test::ExplicitKeyValueConfig trials(
+      "WebRTC-Bwe-ProbingBehavior/min_packet_size:0/");
+
+  BitrateProber prober(trials);
+  ProbeClusterConfig cluster_config = {
+      .at_time = Timestamp::Zero(),
+      .target_data_rate = DataRate::KilobitsPerSec(300),
+      .target_duration = TimeDelta::Millis(15),
+      .target_probe_count = 1,
+      .id = 0};
+  prober.CreateProbeCluster(cluster_config);
+  ASSERT_TRUE(prober.is_probing());
+  (cluster_config.target_data_rate * cluster_config.target_duration).bytes();
+  prober.ProbeSent(
+      Timestamp::Zero() + TimeDelta::Millis(1),
+      cluster_config.target_data_rate * cluster_config.target_duration);
+  ASSERT_FALSE(prober.is_probing());
+
+  cluster_config.id = 2;
+  cluster_config.at_time = Timestamp::Zero() + TimeDelta::Millis(100);
+  prober.CreateProbeCluster(cluster_config);
+  EXPECT_TRUE(prober.is_probing());
+}
+
 }  // namespace webrtc

@@ -25,6 +25,7 @@
 #include "rtc_base/synchronization/mutex.h"
 #include "rtc_base/task_queue_for_test.h"
 #include "test/call_test.h"
+#include "test/video_test_constants.h"
 
 namespace webrtc {
 namespace {
@@ -43,7 +44,7 @@ const size_t kNumTemporalLayers[] = {1, 2, 3};
 class PictureIdObserver : public test::RtpRtcpObserver {
  public:
   explicit PictureIdObserver(VideoCodecType codec_type)
-      : test::RtpRtcpObserver(test::CallTest::kDefaultTimeoutMs),
+      : test::RtpRtcpObserver(test::VideoTestConstants::kDefaultTimeout),
         depacketizer_(CreateVideoRtpDepacketizer(codec_type)),
         max_expected_picture_id_gap_(0),
         max_expected_tl0_idx_gap_(0),
@@ -84,9 +85,10 @@ class PictureIdObserver : public test::RtpRtcpObserver {
                     ParsedPacket* parsed) const {
     RtpPacket rtp_packet;
     EXPECT_TRUE(rtp_packet.Parse(packet, length));
-    EXPECT_TRUE(rtp_packet.Ssrc() == test::CallTest::kVideoSendSsrcs[0] ||
-                rtp_packet.Ssrc() == test::CallTest::kVideoSendSsrcs[1] ||
-                rtp_packet.Ssrc() == test::CallTest::kVideoSendSsrcs[2])
+    EXPECT_TRUE(
+        rtp_packet.Ssrc() == test::VideoTestConstants::kVideoSendSsrcs[0] ||
+        rtp_packet.Ssrc() == test::VideoTestConstants::kVideoSendSsrcs[1] ||
+        rtp_packet.Ssrc() == test::VideoTestConstants::kVideoSendSsrcs[2])
         << "Unknown SSRC sent.";
 
     if (rtp_packet.payload_size() == 0) {
@@ -111,7 +113,7 @@ class PictureIdObserver : public test::RtpRtcpObserver {
       parsed->tl0_pic_idx = vp9_header->tl0_pic_idx;
       parsed->temporal_idx = vp9_header->temporal_idx;
     } else {
-      RTC_NOTREACHED();
+      RTC_DCHECK_NOTREACHED();
     }
 
     parsed->frame_type = parsed_payload->video_header.frame_type;
@@ -135,11 +137,15 @@ class PictureIdObserver : public test::RtpRtcpObserver {
     // Expect continuously increasing picture id.
     int diff = ForwardDiff<uint16_t, kPictureIdWraparound>(last.picture_id,
                                                            current.picture_id);
-    if (diff > 1) {
+    EXPECT_LE(diff - 1, max_expected_picture_id_gap_);
+    if (diff > 2) {
       // If the VideoSendStream is destroyed, any frames still in queue is lost.
-      // Gaps only possible for first frame after a recreation, i.e. key frames.
+      // This can result in a two-frame gap, which will result in logs like
+      // "packet transmission failed, no matching RTP module found, or
+      // transmission error".
+      // A larger gap is only possible for first frame after a recreation, i.e.
+      // key frames.
       EXPECT_EQ(VideoFrameType::kVideoFrameKey, current.frame_type);
-      EXPECT_LE(diff - 1, max_expected_picture_id_gap_);
     }
   }
 
@@ -169,11 +175,11 @@ class PictureIdObserver : public test::RtpRtcpObserver {
     }
   }
 
-  Action OnSendRtp(const uint8_t* packet, size_t length) override {
+  Action OnSendRtp(rtc::ArrayView<const uint8_t> packet) override {
     MutexLock lock(&mutex_);
 
     ParsedPacket parsed;
-    if (!ParsePayload(packet, length, &parsed))
+    if (!ParsePayload(packet.data(), packet.size(), &parsed))
       return SEND_PACKET;
 
     uint32_t ssrc = parsed.ssrc;
@@ -213,7 +219,7 @@ class PictureIdTest : public test::CallTest,
   PictureIdTest() : num_temporal_layers_(GetParam()) {}
 
   virtual ~PictureIdTest() {
-    SendTask(RTC_FROM_HERE, task_queue(), [this]() {
+    SendTask(task_queue(), [this]() {
       send_transport_.reset();
       receive_transport_.reset();
       DestroyCalls();
@@ -233,7 +239,14 @@ class PictureIdTest : public test::CallTest,
   std::unique_ptr<PictureIdObserver> observer_;
 };
 
-INSTANTIATE_TEST_SUITE_P(TemporalLayers,
+// TODO(bugs.webrtc.org/13725): Enable on android when flakiness fixed.
+#if defined(WEBRTC_ANDROID)
+#define MAYBE_TemporalLayers DISABLED_TemporalLayers
+#else
+#define MAYBE_TemporalLayers TemporalLayers
+#endif
+
+INSTANTIATE_TEST_SUITE_P(MAYBE_TemporalLayers,
                          PictureIdTest,
                          ::testing::ValuesIn(kNumTemporalLayers));
 
@@ -242,26 +255,17 @@ void PictureIdTest::SetupEncoder(VideoEncoderFactory* encoder_factory,
   observer_.reset(
       new PictureIdObserver(PayloadStringToCodecType(payload_name)));
 
-  SendTask(
-      RTC_FROM_HERE, task_queue(), [this, encoder_factory, payload_name]() {
-        CreateCalls();
-
-        send_transport_.reset(new test::PacketTransport(
-            task_queue(), sender_call_.get(), observer_.get(),
-            test::PacketTransport::kSender, payload_type_map_,
-            std::make_unique<FakeNetworkPipe>(
-                Clock::GetRealTimeClock(),
-                std::make_unique<SimulatedNetwork>(
-                    BuiltInNetworkBehaviorConfig()))));
-
-        CreateSendConfig(kNumSimulcastStreams, 0, 0, send_transport_.get());
-        GetVideoSendConfig()->encoder_settings.encoder_factory =
-            encoder_factory;
-        GetVideoSendConfig()->rtp.payload_name = payload_name;
-        GetVideoEncoderConfig()->codec_type =
-            PayloadStringToCodecType(payload_name);
-        SetVideoEncoderConfig(/* number_of_streams */ 1);
-      });
+  SendTask(task_queue(), [this, encoder_factory, payload_name]() {
+    CreateCalls();
+    CreateSendTransport(BuiltInNetworkBehaviorConfig(), observer_.get());
+    CreateSendConfig(test::VideoTestConstants::kNumSimulcastStreams, 0, 0,
+                     send_transport_.get());
+    GetVideoSendConfig()->encoder_settings.encoder_factory = encoder_factory;
+    GetVideoSendConfig()->rtp.payload_name = payload_name;
+    GetVideoEncoderConfig()->codec_type =
+        PayloadStringToCodecType(payload_name);
+    SetVideoEncoderConfig(/* number_of_streams */ 1);
+  });
 }
 
 void PictureIdTest::SetVideoEncoderConfig(int num_streams) {
@@ -288,7 +292,7 @@ void PictureIdTest::SetVideoEncoderConfig(int num_streams) {
 
 void PictureIdTest::TestPictureIdContinuousAfterReconfigure(
     const std::vector<int>& ssrc_counts) {
-  SendTask(RTC_FROM_HERE, task_queue(), [this]() {
+  SendTask(task_queue(), [this]() {
     CreateVideoStreams();
     CreateFrameGeneratorCapturer(kFrameRate, kFrameMaxWidth, kFrameMaxHeight);
 
@@ -306,14 +310,14 @@ void PictureIdTest::TestPictureIdContinuousAfterReconfigure(
     observer_->SetExpectedSsrcs(ssrc_count);
     observer_->ResetObservedSsrcs();
     // Make sure the picture_id sequence is continuous on reinit and recreate.
-    SendTask(RTC_FROM_HERE, task_queue(), [this]() {
+    SendTask(task_queue(), [this]() {
       GetVideoSendStream()->ReconfigureVideoEncoder(
           GetVideoEncoderConfig()->Copy());
     });
     EXPECT_TRUE(observer_->Wait()) << "Timed out waiting for packets.";
   }
 
-  SendTask(RTC_FROM_HERE, task_queue(), [this]() {
+  SendTask(task_queue(), [this]() {
     Stop();
     DestroyStreams();
   });
@@ -321,7 +325,7 @@ void PictureIdTest::TestPictureIdContinuousAfterReconfigure(
 
 void PictureIdTest::TestPictureIdIncreaseAfterRecreateStreams(
     const std::vector<int>& ssrc_counts) {
-  SendTask(RTC_FROM_HERE, task_queue(), [this]() {
+  SendTask(task_queue(), [this]() {
     CreateVideoStreams();
     CreateFrameGeneratorCapturer(kFrameRate, kFrameMaxWidth, kFrameMaxHeight);
 
@@ -336,7 +340,7 @@ void PictureIdTest::TestPictureIdIncreaseAfterRecreateStreams(
   // with it, therefore it is expected that some frames might be lost.
   observer_->SetMaxExpectedPictureIdGap(kMaxFramesLost);
   for (int ssrc_count : ssrc_counts) {
-    SendTask(RTC_FROM_HERE, task_queue(), [this, &ssrc_count]() {
+    SendTask(task_queue(), [this, &ssrc_count]() {
       DestroyVideoSendStreams();
 
       SetVideoEncoderConfig(ssrc_count);
@@ -351,7 +355,7 @@ void PictureIdTest::TestPictureIdIncreaseAfterRecreateStreams(
     EXPECT_TRUE(observer_->Wait()) << "Timed out waiting for packets.";
   }
 
-  SendTask(RTC_FROM_HERE, task_queue(), [this]() {
+  SendTask(task_queue(), [this]() {
     Stop();
     DestroyStreams();
   });
@@ -364,7 +368,8 @@ TEST_P(PictureIdTest, ContinuousAfterReconfigureVp8) {
   TestPictureIdContinuousAfterReconfigure({1, 3, 3, 1, 1});
 }
 
-TEST_P(PictureIdTest, IncreasingAfterRecreateStreamVp8) {
+// TODO(bugs.webrtc.org/14985): Investigate and reenable.
+TEST_P(PictureIdTest, DISABLED_IncreasingAfterRecreateStreamVp8) {
   test::FunctionVideoEncoderFactory encoder_factory(
       []() { return VP8Encoder::Create(); });
   SetupEncoder(&encoder_factory, "VP8");
@@ -391,7 +396,9 @@ TEST_P(PictureIdTest, ContinuousAfterReconfigureSimulcastEncoderAdapter) {
   TestPictureIdContinuousAfterReconfigure({1, 3, 3, 1, 1});
 }
 
-TEST_P(PictureIdTest, IncreasingAfterRecreateStreamSimulcastEncoderAdapter) {
+// TODO(bugs.webrtc.org/14985): Investigate and reenable.
+TEST_P(PictureIdTest,
+       DISABLED_IncreasingAfterRecreateStreamSimulcastEncoderAdapter) {
   InternalEncoderFactory internal_encoder_factory;
   test::FunctionVideoEncoderFactory encoder_factory(
       [&internal_encoder_factory]() {
@@ -415,7 +422,8 @@ TEST_P(PictureIdTest, ContinuousAfterStreamCountChangeSimulcastEncoderAdapter) {
   TestPictureIdContinuousAfterReconfigure({3, 1, 3});
 }
 
-TEST_P(PictureIdTest, IncreasingAfterRecreateStreamVp9) {
+// TODO(bugs.webrtc.org/14985): Investigate and reenable.
+TEST_P(PictureIdTest, DISABLED_IncreasingAfterRecreateStreamVp9) {
   test::FunctionVideoEncoderFactory encoder_factory(
       []() { return VP9Encoder::Create(); });
   SetupEncoder(&encoder_factory, "VP9");

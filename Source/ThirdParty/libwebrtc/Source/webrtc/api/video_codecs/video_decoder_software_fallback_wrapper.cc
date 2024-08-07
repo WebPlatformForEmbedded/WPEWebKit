@@ -16,7 +16,6 @@
 #include <string>
 #include <utility>
 
-#include "absl/base/macros.h"
 #include "api/video/encoded_image.h"
 #include "api/video_codecs/video_decoder.h"
 #include "modules/video_coding/include/video_error_codes.h"
@@ -42,7 +41,6 @@ class VideoDecoderSoftwareFallbackWrapper final : public VideoDecoder {
   bool Configure(const Settings& settings) override;
 
   int32_t Decode(const EncodedImage& input_image,
-                 bool missing_frames,
                  int64_t render_time_ms) override;
 
   int32_t RegisterDecodeCompleteCallback(
@@ -84,8 +82,9 @@ VideoDecoderSoftwareFallbackWrapper::VideoDecoderSoftwareFallbackWrapper(
       hw_decoder_(std::move(hw_decoder)),
       fallback_decoder_(std::move(sw_fallback_decoder)),
       fallback_implementation_name_(
-          std::string(fallback_decoder_->ImplementationName()) +
-          " (fallback from: " + hw_decoder_->ImplementationName() + ")"),
+          fallback_decoder_->GetDecoderInfo().implementation_name +
+          " (fallback from: " +
+          hw_decoder_->GetDecoderInfo().implementation_name + ")"),
       callback_(nullptr),
       hw_decoded_frames_since_last_fallback_(0),
       hw_consequtive_generic_errors_(0) {}
@@ -167,14 +166,12 @@ void VideoDecoderSoftwareFallbackWrapper::UpdateFallbackDecoderHistograms() {
       RTC_HISTOGRAM_COUNTS_100000(kFallbackHistogramsUmaPrefix + "H264",
                                   hw_decoded_frames_since_last_fallback_);
       break;
-#ifndef DISABLE_H265
-    case kVideoCodecH265:
-      RTC_HISTOGRAM_COUNTS_100000(kFallbackHistogramsUmaPrefix + "H265",
-                                  hw_decoded_frames_since_last_fallback_);
-      break;
-#endif
     case kVideoCodecMultiplex:
       RTC_HISTOGRAM_COUNTS_100000(kFallbackHistogramsUmaPrefix + "Multiplex",
+                                  hw_decoded_frames_since_last_fallback_);
+      break;
+    case kVideoCodecH265:
+      RTC_HISTOGRAM_COUNTS_100000(kFallbackHistogramsUmaPrefix + "H265",
                                   hw_decoded_frames_since_last_fallback_);
       break;
   }
@@ -182,7 +179,6 @@ void VideoDecoderSoftwareFallbackWrapper::UpdateFallbackDecoderHistograms() {
 
 int32_t VideoDecoderSoftwareFallbackWrapper::Decode(
     const EncodedImage& input_image,
-    bool missing_frames,
     int64_t render_time_ms) {
   TRACE_EVENT0("webrtc", "VideoDecoderSoftwareFallbackWrapper::Decode");
   switch (decoder_type_) {
@@ -190,7 +186,7 @@ int32_t VideoDecoderSoftwareFallbackWrapper::Decode(
       return WEBRTC_VIDEO_CODEC_UNINITIALIZED;
     case DecoderType::kHardware: {
       int32_t ret = WEBRTC_VIDEO_CODEC_FALLBACK_SOFTWARE;
-      ret = hw_decoder_->Decode(input_image, missing_frames, render_time_ms);
+      ret = hw_decoder_->Decode(input_image, render_time_ms);
       if (ret != WEBRTC_VIDEO_CODEC_FALLBACK_SOFTWARE) {
         if (ret != WEBRTC_VIDEO_CODEC_ERROR) {
           ++hw_decoded_frames_since_last_fallback_;
@@ -215,13 +211,12 @@ int32_t VideoDecoderSoftwareFallbackWrapper::Decode(
       }
 
       // Fallback decoder initialized, fall-through.
-      ABSL_FALLTHROUGH_INTENDED;
+      [[fallthrough]];
     }
     case DecoderType::kFallback:
-      return fallback_decoder_->Decode(input_image, missing_frames,
-                                       render_time_ms);
+      return fallback_decoder_->Decode(input_image, render_time_ms);
     default:
-      RTC_NOTREACHED();
+      RTC_DCHECK_NOTREACHED();
       return WEBRTC_VIDEO_CODEC_ERROR;
   }
 }
@@ -246,7 +241,7 @@ int32_t VideoDecoderSoftwareFallbackWrapper::Release() {
       status = WEBRTC_VIDEO_CODEC_OK;
       break;
     default:
-      RTC_NOTREACHED();
+      RTC_DCHECK_NOTREACHED();
       status = WEBRTC_VIDEO_CODEC_ERROR;
   }
 

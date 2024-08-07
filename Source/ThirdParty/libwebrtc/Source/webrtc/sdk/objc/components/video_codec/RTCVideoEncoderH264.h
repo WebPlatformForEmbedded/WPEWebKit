@@ -20,4 +20,9 @@ __attribute__((objc_runtime_name("WK_RTCVideoEncoderH264")))
 
 - (instancetype)initWithCodecInfo:(RTCVideoCodecInfo *)codecInfo;
 - (void)setH264LowLatencyEncoderEnabled:(bool)enabled;
+- (void)setUseAnnexB:(bool)useAnnexB;
+- (void)setDescriptionCallback:(RTCVideoEncoderDescriptionCallback)callback;
+- (void)setErrorCallback:(RTCVideoEncoderErrorCallback)callback;
+- (void)flush;
+- (void)enableL1T2ScalabilityMode;
 @end

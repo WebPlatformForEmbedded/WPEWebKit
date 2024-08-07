@@ -275,7 +275,7 @@ TEST(SvcRateAllocatorTest, SupportsAv1) {
   codec.width = 640;
   codec.height = 360;
   codec.codecType = kVideoCodecAV1;
-  codec.SetScalabilityMode("L3T3");
+  codec.SetScalabilityMode(ScalabilityMode::kL3T3);
   codec.spatialLayers[0].active = true;
   codec.spatialLayers[0].minBitrate = 30;
   codec.spatialLayers[0].targetBitrate = 51;
@@ -304,7 +304,7 @@ TEST(SvcRateAllocatorTest, SupportsAv1WithSkippedLayer) {
   codec.width = 640;
   codec.height = 360;
   codec.codecType = kVideoCodecAV1;
-  codec.SetScalabilityMode("L3T3");
+  codec.SetScalabilityMode(ScalabilityMode::kL3T3);
   codec.spatialLayers[0].active = false;
   codec.spatialLayers[0].minBitrate = 30;
   codec.spatialLayers[0].targetBitrate = 51;
@@ -333,7 +333,7 @@ TEST(SvcRateAllocatorTest, UsesScalabilityModeToGetNumberOfLayers) {
   codec.width = 640;
   codec.height = 360;
   codec.codecType = kVideoCodecAV1;
-  codec.SetScalabilityMode("L2T2");
+  codec.SetScalabilityMode(ScalabilityMode::kL2T2);
   codec.spatialLayers[0].active = true;
   codec.spatialLayers[0].minBitrate = 30;
   codec.spatialLayers[0].targetBitrate = 51;
@@ -358,6 +358,21 @@ TEST(SvcRateAllocatorTest, UsesScalabilityModeToGetNumberOfLayers) {
 
   // expect codec.spatialLayers[2].active is ignored because scability mode uses
   // just 2 spatial layers.
+  EXPECT_EQ(allocation.GetSpatialLayerSum(2), 0u);
+}
+
+TEST(SvcRateAllocatorTest, CapsAllocationToMaxBitrate) {
+  VideoCodec codec = Configure(1280, 720, 3, 3, false);
+  codec.maxBitrate = 70;  // Cap the overall max bitrate to 70kbps.
+  SvcRateAllocator allocator = SvcRateAllocator(codec);
+
+  // Allocate 3Mbps which should be enough for all layers.
+  VideoBitrateAllocation allocation =
+      allocator.Allocate(VideoBitrateAllocationParameters(3'000'000, 30));
+
+  // The 3Mbps should be capped to 70kbps, so only first layer is active.
+  EXPECT_EQ(allocation.GetSpatialLayerSum(0), 70'000u);
+  EXPECT_EQ(allocation.GetSpatialLayerSum(1), 0u);
   EXPECT_EQ(allocation.GetSpatialLayerSum(2), 0u);
 }
 

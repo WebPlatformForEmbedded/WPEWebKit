@@ -23,20 +23,24 @@
 
 #ifdef WEBRTC_WINDOWS_CORE_AUDIO_BUILD
 
+// clang-format off
+// To get Windows includes in the right order, this must come before the Windows
+// includes below.
 #include "modules/audio_device/win/audio_device_core_win.h"
-
-#include <string.h>
+// clang-format on
 
 #include <comdef.h>
 #include <dmo.h>
 #include <functiondiscoverykeys_devpkey.h>
 #include <mmsystem.h>
+#include <string.h>
 #include <strsafe.h>
 #include <uuids.h>
 #include <windows.h>
 
 #include <iomanip>
 
+#include "api/make_ref_counted.h"
 #include "rtc_base/checks.h"
 #include "rtc_base/logging.h"
 #include "rtc_base/platform_thread.h"
@@ -343,33 +347,33 @@ bool AudioDeviceWindowsCore::CoreAudioIsSupported() {
 // ----------------------------------------------------------------------------
 
 AudioDeviceWindowsCore::AudioDeviceWindowsCore()
-    : _avrtLibrary(NULL),
+    : _avrtLibrary(nullptr),
       _winSupportAvrt(false),
       _comInit(ScopedCOMInitializer::kMTA),
-      _ptrAudioBuffer(NULL),
-      _ptrEnumerator(NULL),
-      _ptrRenderCollection(NULL),
-      _ptrCaptureCollection(NULL),
-      _ptrDeviceOut(NULL),
-      _ptrDeviceIn(NULL),
-      _ptrClientOut(NULL),
-      _ptrClientIn(NULL),
-      _ptrRenderClient(NULL),
-      _ptrCaptureClient(NULL),
-      _ptrCaptureVolume(NULL),
-      _ptrRenderSimpleVolume(NULL),
-      _dmo(NULL),
-      _mediaBuffer(NULL),
+      _ptrAudioBuffer(nullptr),
+      _ptrEnumerator(nullptr),
+      _ptrRenderCollection(nullptr),
+      _ptrCaptureCollection(nullptr),
+      _ptrDeviceOut(nullptr),
+      _ptrDeviceIn(nullptr),
+      _ptrClientOut(nullptr),
+      _ptrClientIn(nullptr),
+      _ptrRenderClient(nullptr),
+      _ptrCaptureClient(nullptr),
+      _ptrCaptureVolume(nullptr),
+      _ptrRenderSimpleVolume(nullptr),
+      _dmo(nullptr),
+      _mediaBuffer(nullptr),
       _builtInAecEnabled(false),
-      _hRenderSamplesReadyEvent(NULL),
-      _hPlayThread(NULL),
-      _hRenderStartedEvent(NULL),
-      _hShutdownRenderEvent(NULL),
-      _hCaptureSamplesReadyEvent(NULL),
-      _hRecThread(NULL),
-      _hCaptureStartedEvent(NULL),
-      _hShutdownCaptureEvent(NULL),
-      _hMmTask(NULL),
+      _hRenderSamplesReadyEvent(nullptr),
+      _hPlayThread(nullptr),
+      _hRenderStartedEvent(nullptr),
+      _hShutdownRenderEvent(nullptr),
+      _hCaptureSamplesReadyEvent(nullptr),
+      _hRecThread(nullptr),
+      _hCaptureStartedEvent(nullptr),
+      _hShutdownCaptureEvent(nullptr),
+      _hMmTask(nullptr),
       _playAudioFrameSize(0),
       _playSampleRate(0),
       _playBlockSize(0),
@@ -1887,18 +1891,18 @@ int32_t AudioDeviceWindowsCore::InitPlayout() {
         break;
       } else {
         if (pWfxClosestMatch) {
-          RTC_LOG(INFO) << "nChannels=" << Wfx.nChannels
-                        << ", nSamplesPerSec=" << Wfx.nSamplesPerSec
-                        << " is not supported. Closest match: "
-                           "nChannels="
-                        << pWfxClosestMatch->nChannels << ", nSamplesPerSec="
-                        << pWfxClosestMatch->nSamplesPerSec;
+          RTC_LOG(LS_INFO) << "nChannels=" << Wfx.nChannels
+                           << ", nSamplesPerSec=" << Wfx.nSamplesPerSec
+                           << " is not supported. Closest match: "
+                              "nChannels="
+                           << pWfxClosestMatch->nChannels << ", nSamplesPerSec="
+                           << pWfxClosestMatch->nSamplesPerSec;
           CoTaskMemFree(pWfxClosestMatch);
           pWfxClosestMatch = NULL;
         } else {
-          RTC_LOG(INFO) << "nChannels=" << Wfx.nChannels
-                        << ", nSamplesPerSec=" << Wfx.nSamplesPerSec
-                        << " is not supported. No closest match.";
+          RTC_LOG(LS_INFO) << "nChannels=" << Wfx.nChannels
+                           << ", nSamplesPerSec=" << Wfx.nSamplesPerSec
+                           << " is not supported. No closest match.";
         }
       }
     }
@@ -2090,7 +2094,8 @@ int32_t AudioDeviceWindowsCore::InitRecordingDMO() {
         << "AudioDeviceBuffer must be attached before streaming can start";
   }
 
-  _mediaBuffer = new MediaBufferImpl(_recBlockSize * _recAudioFrameSize);
+  _mediaBuffer = rtc::make_ref_counted<MediaBufferImpl>(_recBlockSize *
+                                                        _recAudioFrameSize);
 
   // Optional, but if called, must be after media types are set.
   hr = _dmo->AllocateStreamingResources();
@@ -2208,18 +2213,18 @@ int32_t AudioDeviceWindowsCore::InitRecording() {
         break;
       } else {
         if (pWfxClosestMatch) {
-          RTC_LOG(INFO) << "nChannels=" << Wfx.Format.nChannels
-                        << ", nSamplesPerSec=" << Wfx.Format.nSamplesPerSec
-                        << " is not supported. Closest match: "
-                           "nChannels="
-                        << pWfxClosestMatch->nChannels << ", nSamplesPerSec="
-                        << pWfxClosestMatch->nSamplesPerSec;
+          RTC_LOG(LS_INFO) << "nChannels=" << Wfx.Format.nChannels
+                           << ", nSamplesPerSec=" << Wfx.Format.nSamplesPerSec
+                           << " is not supported. Closest match: "
+                              "nChannels="
+                           << pWfxClosestMatch->nChannels << ", nSamplesPerSec="
+                           << pWfxClosestMatch->nSamplesPerSec;
           CoTaskMemFree(pWfxClosestMatch);
           pWfxClosestMatch = NULL;
         } else {
-          RTC_LOG(INFO) << "nChannels=" << Wfx.Format.nChannels
-                        << ", nSamplesPerSec=" << Wfx.Format.nSamplesPerSec
-                        << " is not supported. No closest match.";
+          RTC_LOG(LS_INFO) << "nChannels=" << Wfx.Format.nChannels
+                           << ", nSamplesPerSec=" << Wfx.Format.nSamplesPerSec
+                           << " is not supported. No closest match.";
         }
       }
     }
@@ -2996,7 +3001,7 @@ DWORD AudioDeviceWindowsCore::DoCaptureThreadPollDMO() {
       DWORD dwStatus = 0;
       {
         DMO_OUTPUT_DATA_BUFFER dmoBuffer = {0};
-        dmoBuffer.pBuffer = _mediaBuffer;
+        dmoBuffer.pBuffer = _mediaBuffer.get();
         dmoBuffer.pBuffer->AddRef();
 
         // Poll the DMO for AEC processed capture data. The DMO will
@@ -3009,7 +3014,7 @@ DWORD AudioDeviceWindowsCore::DoCaptureThreadPollDMO() {
       if (FAILED(hr)) {
         _TraceCOMError(hr);
         keepRecording = false;
-        RTC_NOTREACHED();
+        RTC_DCHECK_NOTREACHED();
         break;
       }
 
@@ -3021,7 +3026,7 @@ DWORD AudioDeviceWindowsCore::DoCaptureThreadPollDMO() {
       if (FAILED(hr)) {
         _TraceCOMError(hr);
         keepRecording = false;
-        RTC_NOTREACHED();
+        RTC_DCHECK_NOTREACHED();
         break;
       }
 
@@ -3046,7 +3051,7 @@ DWORD AudioDeviceWindowsCore::DoCaptureThreadPollDMO() {
       if (FAILED(hr)) {
         _TraceCOMError(hr);
         keepRecording = false;
-        RTC_NOTREACHED();
+        RTC_DCHECK_NOTREACHED();
         break;
       }
 
@@ -3250,9 +3255,10 @@ DWORD AudioDeviceWindowsCore::DoCaptureThread() {
         QueryPerformanceCounter(&t1);
 
         // Get the current recording and playout delay.
-        uint32_t sndCardRecDelay = (uint32_t)(
-            ((((UINT64)t1.QuadPart * _perfCounterFactor) - recTime) / 10000) +
-            (10 * syncBufIndex) / _recBlockSize - 10);
+        uint32_t sndCardRecDelay =
+            (uint32_t)(((((UINT64)t1.QuadPart * _perfCounterFactor) - recTime) /
+                        10000) +
+                       (10 * syncBufIndex) / _recBlockSize - 10);
         uint32_t sndCardPlayDelay = static_cast<uint32_t>(_sndCardPlayDelay);
 
         while (syncBufIndex >= _recBlockSize) {
@@ -3393,32 +3399,34 @@ int AudioDeviceWindowsCore::SetDMOProperties() {
 
   // Set the AEC system mode.
   // SINGLE_CHANNEL_AEC - AEC processing only.
-  if (SetVtI4Property(ps, MFPKEY_WMAAECMA_SYSTEM_MODE, SINGLE_CHANNEL_AEC)) {
+  if (SetVtI4Property(ps.get(), MFPKEY_WMAAECMA_SYSTEM_MODE,
+                      SINGLE_CHANNEL_AEC)) {
     return -1;
   }
 
   // Set the AEC source mode.
   // VARIANT_TRUE - Source mode (we poll the AEC for captured data).
-  if (SetBoolProperty(ps, MFPKEY_WMAAECMA_DMO_SOURCE_MODE, VARIANT_TRUE) ==
-      -1) {
+  if (SetBoolProperty(ps.get(), MFPKEY_WMAAECMA_DMO_SOURCE_MODE,
+                      VARIANT_TRUE) == -1) {
     return -1;
   }
 
   // Enable the feature mode.
   // This lets us override all the default processing settings below.
-  if (SetBoolProperty(ps, MFPKEY_WMAAECMA_FEATURE_MODE, VARIANT_TRUE) == -1) {
+  if (SetBoolProperty(ps.get(), MFPKEY_WMAAECMA_FEATURE_MODE, VARIANT_TRUE) ==
+      -1) {
     return -1;
   }
 
   // Disable analog AGC (default enabled).
-  if (SetBoolProperty(ps, MFPKEY_WMAAECMA_MIC_GAIN_BOUNDER, VARIANT_FALSE) ==
-      -1) {
+  if (SetBoolProperty(ps.get(), MFPKEY_WMAAECMA_MIC_GAIN_BOUNDER,
+                      VARIANT_FALSE) == -1) {
     return -1;
   }
 
   // Disable noise suppression (default enabled).
   // 0 - Disabled, 1 - Enabled
-  if (SetVtI4Property(ps, MFPKEY_WMAAECMA_FEATR_NS, 0) == -1) {
+  if (SetVtI4Property(ps.get(), MFPKEY_WMAAECMA_FEATR_NS, 0) == -1) {
     return -1;
   }
 
@@ -3463,7 +3471,8 @@ int AudioDeviceWindowsCore::SetDMOProperties() {
                    static_cast<uint32_t>(0x0000ffff & inDevIndex);
   RTC_LOG(LS_VERBOSE) << "Capture device index: " << inDevIndex
                       << ", render device index: " << outDevIndex;
-  if (SetVtI4Property(ps, MFPKEY_WMAAECMA_DEVICE_INDEXES, devIndex) == -1) {
+  if (SetVtI4Property(ps.get(), MFPKEY_WMAAECMA_DEVICE_INDEXES, devIndex) ==
+      -1) {
     return -1;
   }
 
@@ -3766,7 +3775,7 @@ int32_t AudioDeviceWindowsCore::_GetDefaultDeviceIndex(EDataFlow dir,
       SAFE_RELEASE(ptrDevice);
     }
 
-    if (_GetDeviceID(device, szDeviceID, kDeviceIDLength) == -1) {
+    if (_GetDeviceID(device.get(), szDeviceID, kDeviceIDLength) == -1) {
       return -1;
     }
 

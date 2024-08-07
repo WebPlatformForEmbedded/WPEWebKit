@@ -123,8 +123,9 @@ bool DataTracker::IsTSNValid(TSN tsn) const {
   return true;
 }
 
-void DataTracker::Observe(TSN tsn,
+bool DataTracker::Observe(TSN tsn,
                           AnyDataChunk::ImmediateAckFlag immediate_ack) {
+  bool is_duplicate = false;
   UnwrappedTSN unwrapped_tsn = tsn_unwrapper_.Unwrap(tsn);
 
   // IsTSNValid must be called prior to calling this method.
@@ -143,6 +144,7 @@ void DataTracker::Observe(TSN tsn,
     // packet arrives with duplicate DATA chunk(s) bundled with new DATA chunks,
     // the endpoint MAY immediately send a SACK."
     UpdateAckState(AckState::kImmediate, "duplicate data");
+    is_duplicate = true;
   } else {
     if (unwrapped_tsn == last_cumulative_acked_tsn_.next_value()) {
       last_cumulative_acked_tsn_ = unwrapped_tsn;
@@ -167,6 +169,7 @@ void DataTracker::Observe(TSN tsn,
         // delay. If a packet arrives with duplicate DATA chunk(s) bundled with
         // new DATA chunks, the endpoint MAY immediately send a SACK."
         // No need to do this. SACKs are sent immediately on packet loss below.
+        is_duplicate = true;
       }
     }
   }
@@ -208,9 +211,10 @@ void DataTracker::Observe(TSN tsn,
   } else if (ack_state_ == AckState::kDelayed) {
     UpdateAckState(AckState::kImmediate, "received DATA when already delayed");
   }
+  return !is_duplicate;
 }
 
-void DataTracker::HandleForwardTsn(TSN new_cumulative_ack) {
+bool DataTracker::HandleForwardTsn(TSN new_cumulative_ack) {
   // ForwardTSN is sent to make the receiver (this socket) "forget" about partly
   // received (or not received at all) data, up until `new_cumulative_ack`.
 
@@ -228,7 +232,7 @@ void DataTracker::HandleForwardTsn(TSN new_cumulative_ack) {
     // indicate the previous SACK was lost in the network."
     UpdateAckState(AckState::kImmediate,
                    "FORWARD_TSN new_cumulative_tsn was behind");
-    return;
+    return false;
   }
 
   // https://tools.ietf.org/html/rfc3758#section-3.6
@@ -267,6 +271,7 @@ void DataTracker::HandleForwardTsn(TSN new_cumulative_ack) {
     UpdateAckState(AckState::kImmediate,
                    "received FORWARD_TSN when already delayed");
   }
+  return true;
 }
 
 SackChunk DataTracker::CreateSelectiveAck(size_t a_rwnd) {
@@ -369,4 +374,14 @@ void DataTracker::AddHandoverState(DcSctpSocketHandoverState& state) {
   state.rx.seen_packet = seen_packet_;
 }
 
+void DataTracker::RestoreFromState(const DcSctpSocketHandoverState& state) {
+  // Validate that the component is in pristine state.
+  RTC_DCHECK(additional_tsn_blocks_.empty());
+  RTC_DCHECK(duplicate_tsns_.empty());
+  RTC_DCHECK(!seen_packet_);
+
+  seen_packet_ = state.rx.seen_packet;
+  last_cumulative_acked_tsn_ =
+      tsn_unwrapper_.Unwrap(TSN(state.rx.last_cumulative_acked_tsn));
+}
 }  // namespace dcsctp

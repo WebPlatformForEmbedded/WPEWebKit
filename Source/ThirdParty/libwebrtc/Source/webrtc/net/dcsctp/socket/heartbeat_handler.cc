@@ -88,7 +88,7 @@ HeartbeatHandler::HeartbeatHandler(absl::string_view log_prefix,
                                    const DcSctpOptions& options,
                                    Context* context,
                                    TimerManager* timer_manager)
-    : log_prefix_(std::string(log_prefix) + "heartbeat: "),
+    : log_prefix_(log_prefix),
       ctx_(context),
       timer_manager_(timer_manager),
       interval_duration_(options.heartbeat_interval),
@@ -154,7 +154,7 @@ void HeartbeatHandler::HandleHeartbeatAck(HeartbeatAckChunk chunk) {
   }
 
   TimeMs now = ctx_->callbacks().TimeMillis();
-  if (info->created_at() <= now) {
+  if (info->created_at() > TimeMs(0) && info->created_at() <= now) {
     ctx_->ObserveRTT(now - info->created_at());
   }
 

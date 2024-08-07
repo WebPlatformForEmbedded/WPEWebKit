@@ -11,6 +11,8 @@
 #ifndef CALL_CALL_FACTORY_H_
 #define CALL_CALL_FACTORY_H_
 
+#include <memory>
+
 #include "api/call/call_factory_interface.h"
 #include "api/sequence_checker.h"
 #include "call/call.h"
@@ -22,15 +24,12 @@ namespace webrtc {
 class CallFactory : public CallFactoryInterface {
  public:
   CallFactory();
+  ~CallFactory() override = default;
 
  private:
-  ~CallFactory() override {}
-
-  Call* CreateCall(const CallConfig& config) override;
+  std::unique_ptr<Call> CreateCall(const CallConfig& config) override;
 
   RTC_NO_UNIQUE_ADDRESS SequenceChecker call_thread_;
-  rtc::scoped_refptr<SharedModuleThread> module_thread_
-      RTC_GUARDED_BY(call_thread_);
 };
 
 }  // namespace webrtc

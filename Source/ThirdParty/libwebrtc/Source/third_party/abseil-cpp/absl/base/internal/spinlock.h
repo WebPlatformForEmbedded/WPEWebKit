@@ -16,21 +16,21 @@
 
 //  Most users requiring mutual exclusion should use Mutex.
 //  SpinLock is provided for use in two situations:
-//   - for use in code that Mutex itself depends on
+//   - for use by Abseil internal code that Mutex itself depends on
 //   - for async signal safety (see below)
 
 // SpinLock is async signal safe.  If a spinlock is used within a signal
 // handler, all code that acquires the lock must ensure that the signal cannot
 // arrive while they are holding the lock.  Typically, this is done by blocking
 // the signal.
+//
+// Threads waiting on a SpinLock may be woken in an arbitrary order.
 
 #ifndef ABSL_BASE_INTERNAL_SPINLOCK_H_
 #define ABSL_BASE_INTERNAL_SPINLOCK_H_
 
-#include <stdint.h>
-#include <sys/types.h>
-
 #include <atomic>
+#include <cstdint>
 
 #include "absl/base/attributes.h"
 #include "absl/base/const_init.h"
@@ -39,9 +39,15 @@
 #include "absl/base/internal/raw_logging.h"
 #include "absl/base/internal/scheduling_mode.h"
 #include "absl/base/internal/tsan_mutex_interface.h"
-#include "absl/base/macros.h"
-#include "absl/base/port.h"
 #include "absl/base/thread_annotations.h"
+
+namespace tcmalloc {
+namespace tcmalloc_internal {
+
+class AllocationGuardSpinLockHolder;
+
+}  // namespace tcmalloc_internal
+}  // namespace tcmalloc
 
 namespace absl {
 ABSL_NAMESPACE_BEGIN
@@ -118,6 +124,14 @@ class ABSL_LOCKABLE SpinLock {
     return (lockword_.load(std::memory_order_relaxed) & kSpinLockHeld) != 0;
   }
 
+  // Return immediately if this thread holds the SpinLock exclusively.
+  // Otherwise, report an error by crashing with a diagnostic.
+  inline void AssertHeld() const ABSL_ASSERT_EXCLUSIVE_LOCK() {
+    if (!IsHeld()) {
+      ABSL_RAW_LOG(FATAL, "thread should hold the lock on SpinLock");
+    }
+  }
+
  protected:
   // These should not be exported except for testing.
 
@@ -127,10 +141,11 @@ class ABSL_LOCKABLE SpinLock {
                                    int64_t wait_end_time);
 
   // Extract number of wait cycles in a lock value.
-  static uint64_t DecodeWaitCycles(uint32_t lock_value);
+  static int64_t DecodeWaitCycles(uint32_t lock_value);
 
   // Provide access to protected method above.  Use for testing only.
   friend struct SpinLockTest;
+  friend class tcmalloc::tcmalloc_internal::AllocationGuardSpinLockHolder;
 
  private:
   // lockword_ is used to store the following:
@@ -163,6 +178,10 @@ class ABSL_LOCKABLE SpinLock {
   static constexpr bool IsCooperative(
       base_internal::SchedulingMode scheduling_mode) {
     return scheduling_mode == base_internal::SCHEDULE_COOPERATIVE_AND_KERNEL;
+  }
+
+  bool IsCooperative() const {
+    return lockword_.load(std::memory_order_relaxed) & kSpinLockCooperative;
   }
 
   uint32_t TryLockInternal(uint32_t lock_value, uint32_t wait_cycles);

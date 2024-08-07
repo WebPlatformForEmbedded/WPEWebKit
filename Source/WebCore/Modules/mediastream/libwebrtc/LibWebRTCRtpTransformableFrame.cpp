@@ -86,12 +86,10 @@ RTCEncodedAudioFrameMetadata LibWebRTCRtpTransformableFrame::audioMetadata() con
     Vector<uint32_t> cssrcs;
     if (!m_isAudioSenderFrame) {
         auto* audioFrame = static_cast<webrtc::TransformableAudioFrameInterface*>(m_rtcFrame.get());
-        auto& header = audioFrame->GetHeader();
-        if (header.numCSRCs) {
-            cssrcs.reserveInitialCapacity(header.numCSRCs);
-            for (size_t cptr = 0; cptr < header.numCSRCs; ++cptr)
-                cssrcs.uncheckedAppend(header.arrOfCSRCs[cptr]);
-        }
+        auto contributingSources = audioFrame->GetContributingSources();
+        cssrcs.reserveInitialCapacity(contributingSources.size());
+        for (size_t cptr = 0; cptr < contributingSources.size(); ++cptr)
+            cssrcs.uncheckedAppend(contributingSources[cptr]);
     }
     return { m_rtcFrame->GetSsrc(), WTFMove(cssrcs) };
 }
@@ -101,7 +99,7 @@ RTCEncodedVideoFrameMetadata LibWebRTCRtpTransformableFrame::videoMetadata() con
     if (!m_rtcFrame)
         return { };
     auto* videoFrame = static_cast<webrtc::TransformableVideoFrameInterface*>(m_rtcFrame.get());
-    auto& metadata = videoFrame->GetMetadata();
+    auto metadata = videoFrame->Metadata();
 
     std::optional<int64_t> frameId;
     if (metadata.GetFrameId())

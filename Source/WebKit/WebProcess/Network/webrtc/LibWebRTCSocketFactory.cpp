@@ -67,24 +67,6 @@ IPC::Connection* LibWebRTCSocketFactory::connection()
     return m_connection.get();
 }
 
-rtc::AsyncPacketSocket* LibWebRTCSocketFactory::createServerTcpSocket(const void* socketGroup, const rtc::SocketAddress& address, uint16_t minPort, uint16_t maxPort, int options)
-{
-    ASSERT(!WTF::isMainRunLoop());
-    auto socket = makeUnique<LibWebRTCSocket>(*this, socketGroup, LibWebRTCSocket::Type::ServerTCP, address, rtc::SocketAddress());
-
-    if (m_connection)
-        m_connection->send(Messages::NetworkRTCProvider::CreateServerTCPSocket(socket->identifier(), RTCNetwork::SocketAddress(address), minPort, maxPort, options), 0);
-    else {
-        callOnMainRunLoop([] {
-            WebProcess::singleton().ensureNetworkProcessConnection();
-        });
-        m_pendingMessageTasks.append([identifier = socket->identifier(), address = RTCNetwork::SocketAddress(address), minPort, maxPort, options](auto& connection) {
-            connection.send(Messages::NetworkRTCProvider::CreateServerTCPSocket(identifier, address, minPort, maxPort, options), 0);
-        });
-    }
-    return socket.release();
-}
-
 rtc::AsyncPacketSocket* LibWebRTCSocketFactory::createUdpSocket(const void* socketGroup, const rtc::SocketAddress& address, uint16_t minPort, uint16_t maxPort, WebPageProxyIdentifier pageIdentifier, bool isFirstParty, bool isRelayDisabled, const WebCore::RegistrableDomain& domain)
 {
     ASSERT(!WTF::isMainRunLoop());
@@ -166,6 +148,8 @@ void LibWebRTCSocketFactory::forSocketInGroup(const void* socketGroup, const Fun
     }
 }
 
+ALLOW_DEPRECATED_DECLARATIONS_BEGIN
+// FIXME: https://bugs.webkit.org/show_bug.cgi?id=265791
 rtc::AsyncResolverInterface* LibWebRTCSocketFactory::createAsyncResolver()
 {
     auto resolver = makeUnique<LibWebRTCResolver>();
@@ -173,6 +157,7 @@ rtc::AsyncResolverInterface* LibWebRTCSocketFactory::createAsyncResolver()
     m_resolvers.set(resolverPointer->identifier(), WTFMove(resolver));
     return resolverPointer;
 }
+ALLOW_DEPRECATED_DECLARATIONS_END
 
 } // namespace WebKit
 

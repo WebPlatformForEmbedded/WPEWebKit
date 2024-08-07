@@ -16,6 +16,8 @@
 #include <winsock2.h>  // for timeval
 #endif
 
+#include <array>
+#include <cfloat>
 #include <chrono>  // NOLINT(build/c++11)
 #include <cmath>
 #include <cstdint>
@@ -27,6 +29,7 @@
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "absl/strings/str_format.h"
 #include "absl/time/time.h"
 
 namespace {
@@ -1390,6 +1393,14 @@ void VerifyApproxSameAsMul(double time_as_seconds, int* const misses) {
 // Seconds(point) returns a duration near point * Seconds(1.0). (They may
 // not be exactly equal due to fused multiply/add contraction.)
 TEST(Duration, ToDoubleSecondsCheckEdgeCases) {
+#if (defined(__i386__) || defined(_M_IX86)) && FLT_EVAL_METHOD != 0
+  // We're using an x87-compatible FPU, and intermediate operations can be
+  // performed with 80-bit floats. This means the edge cases are different than
+  // what we expect here, so just skip this test.
+  GTEST_SKIP()
+      << "Skipping the test because we detected x87 floating-point semantics";
+#endif
+
   constexpr uint32_t kTicksPerSecond = absl::time_internal::kTicksPerSecond;
   constexpr auto duration_tick = absl::time_internal::MakeDuration(0, 1u);
   int misses = 0;
@@ -1807,6 +1818,20 @@ TEST(Duration, FormatParseRoundTrip) {
   TEST_PARSE_ROUNDTRIP(huge_range + (absl::Seconds(1) - absl::Nanoseconds(1)));
 
 #undef TEST_PARSE_ROUNDTRIP
+}
+
+TEST(Duration, AbslStringify) {
+  // FormatDuration is already well tested, so just use one test case here to
+  // verify that StrFormat("%v", d) works as expected.
+  absl::Duration d = absl::Seconds(1);
+  EXPECT_EQ(absl::StrFormat("%v", d), absl::FormatDuration(d));
+}
+
+TEST(Duration, NoPadding) {
+  // Should match the size of a struct with uint32_t alignment and no padding.
+  using NoPadding = std::array<uint32_t, 3>;
+  EXPECT_EQ(sizeof(NoPadding), sizeof(absl::Duration));
+  EXPECT_EQ(alignof(NoPadding), alignof(absl::Duration));
 }
 
 }  // namespace

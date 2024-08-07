@@ -24,7 +24,12 @@ secondary_source = "//build/secondary/"
 # matching these patterns (see "gn help label_pattern" for format) will not have
 # their includes checked for proper dependencies when you run either
 # "gn check" or "gn gen --check".
-no_check_targets = [ "//third_party/icu/*" ]
+no_check_targets = [
+  "//third_party/icu/*",
+
+  # TODO(crbug.com/1151236) Remove once fixed.
+  "//base/allocator/partition_allocator:partition_alloc",
+]
 
 # These are the list of GN files that run exec_script. This whitelist exists
 # to force additional review for new uses of exec_script, which is strongly
@@ -47,7 +52,7 @@ default_args = {
   ios_deployment_target = "12.0"
 
   # The SDK API level, in contrast, is set by build/android/AndroidManifest.xml.
-  android32_ndk_api_level = 16
+  android32_ndk_api_level = 21
   android64_ndk_api_level = 21
 
   # WebRTC does not provide the gflags dependency. Because libyuv uses it only
@@ -57,4 +62,16 @@ default_args = {
   enable_libaom = true
 
   gtest_enable_absl_printers = true
+
+  # Differently from Chromium, WebRTC still support SDK 21.
+  default_min_sdk_version = 21
+
+  # Prevent jsoncpp to pass -Wno-deprecated-declarations to users
+  jsoncpp_no_deprecated_declarations = false
+
+  # Fixes the abi-revision issue.
+  # TODO(https://bugs.webrtc.org/14437):  Remove this section if general
+  # Chromium fix resolves the problem.
+  fuchsia_sdk_readelf_exec =
+      "//third_party/llvm-build/Release+Asserts/bin/llvm-readelf"
 }

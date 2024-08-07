@@ -20,8 +20,6 @@
 #include "api/sequence_checker.h"
 #include "api/test/time_controller.h"
 #include "api/units/timestamp.h"
-#include "modules/include/module.h"
-#include "modules/utility/include/process_thread.h"
 #include "rtc_base/fake_clock.h"
 #include "rtc_base/platform_thread_types.h"
 #include "rtc_base/synchronization/mutex.h"
@@ -58,32 +56,30 @@ class SimulatedTimeControllerImpl : public TaskQueueFactory,
   // except that if this method is called from a task, the task queue running
   // that task is skipped.
   void YieldExecution() RTC_LOCKS_EXCLUDED(time_lock_, lock_) override;
-  // Create process thread with the name |thread_name|.
-  std::unique_ptr<ProcessThread> CreateProcessThread(const char* thread_name)
-      RTC_LOCKS_EXCLUDED(time_lock_, lock_);
-  // Create thread using provided |socket_server|.
+
+  // Create thread using provided `socket_server`.
   std::unique_ptr<rtc::Thread> CreateThread(
       const std::string& name,
       std::unique_ptr<rtc::SocketServer> socket_server)
       RTC_LOCKS_EXCLUDED(time_lock_, lock_);
 
-  // Runs all runners in |runners_| that has tasks or modules ready for
+  // Runs all runners in `runners_` that has tasks or modules ready for
   // execution.
   void RunReadyRunners() RTC_LOCKS_EXCLUDED(time_lock_, lock_);
-  // Return |current_time_|.
+  // Return `current_time_`.
   Timestamp CurrentTime() const RTC_LOCKS_EXCLUDED(time_lock_);
-  // Return min of runner->GetNextRunTime() for runner in |runners_|.
+  // Return min of runner->GetNextRunTime() for runner in `runners_`.
   Timestamp NextRunTime() const RTC_LOCKS_EXCLUDED(lock_);
-  // Set |current_time_| to |target_time|.
+  // Set `current_time_` to `target_time`.
   void AdvanceTime(Timestamp target_time) RTC_LOCKS_EXCLUDED(time_lock_);
-  // Adds |runner| to |runners_|.
+  // Adds `runner` to `runners_`.
   void Register(SimulatedSequenceRunner* runner) RTC_LOCKS_EXCLUDED(lock_);
-  // Removes |runner| from |runners_|.
+  // Removes `runner` from `runners_`.
   void Unregister(SimulatedSequenceRunner* runner) RTC_LOCKS_EXCLUDED(lock_);
 
-  // Indicates that |yielding_from| is not ready to run.
+  // Indicates that `yielding_from` is not ready to run.
   void StartYield(TaskQueueBase* yielding_from);
-  // Indicates that processing can be continued on |yielding_from|.
+  // Indicates that processing can be continued on `yielding_from`.
   void StopYield(TaskQueueBase* yielding_from);
 
  private:
@@ -109,13 +105,17 @@ class TokenTaskQueue : public TaskQueueBase {
   // Promoted to public
   using CurrentTaskQueueSetter = TaskQueueBase::CurrentTaskQueueSetter;
 
-  void Delete() override { RTC_NOTREACHED(); }
-  void PostTask(std::unique_ptr<QueuedTask> /*task*/) override {
-    RTC_NOTREACHED();
+  void Delete() override { RTC_DCHECK_NOTREACHED(); }
+  void PostTaskImpl(absl::AnyInvocable<void() &&> task,
+                    const PostTaskTraits& traits,
+                    const Location& location) override {
+    RTC_DCHECK_NOTREACHED();
   }
-  void PostDelayedTask(std::unique_ptr<QueuedTask> /*task*/,
-                       uint32_t /*milliseconds*/) override {
-    RTC_NOTREACHED();
+  void PostDelayedTaskImpl(absl::AnyInvocable<void() &&> task,
+                           TimeDelta delay,
+                           const PostDelayedTaskTraits& traits,
+                           const Location& location) override {
+    RTC_DCHECK_NOTREACHED();
   }
 };
 
@@ -131,14 +131,28 @@ class GlobalSimulatedTimeController : public TimeController {
 
   Clock* GetClock() override;
   TaskQueueFactory* GetTaskQueueFactory() override;
-  std::unique_ptr<ProcessThread> CreateProcessThread(
-      const char* thread_name) override;
   std::unique_ptr<rtc::Thread> CreateThread(
       const std::string& name,
       std::unique_ptr<rtc::SocketServer> socket_server) override;
   rtc::Thread* GetMainThread() override;
 
   void AdvanceTime(TimeDelta duration) override;
+
+  // Advances time by `duration`and do not run delayed tasks in the meantime.
+  // Runs any pending tasks at the end.
+  // Useful for simulating contention on destination queues.
+  void SkipForwardBy(TimeDelta duration);
+
+  // Makes the simulated time controller aware of a custom
+  // SimulatedSequenceRunner.
+  // TODO(bugs.webrtc.org/11581): remove method once the ModuleRtpRtcpImpl2 unit
+  // test stops using it.
+  void Register(sim_time_impl::SimulatedSequenceRunner* runner);
+  // Removes a previously installed custom SimulatedSequenceRunner from the
+  // simulated time controller.
+  // TODO(bugs.webrtc.org/11581): remove method once the ModuleRtpRtcpImpl2 unit
+  // test stops using it.
+  void Unregister(sim_time_impl::SimulatedSequenceRunner* runner);
 
  private:
   rtc::ScopedBaseFakeClock global_clock_;

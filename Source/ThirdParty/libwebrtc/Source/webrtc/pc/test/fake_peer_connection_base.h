@@ -17,8 +17,11 @@
 #include <string>
 #include <vector>
 
+#include "absl/types/optional.h"
+#include "api/field_trials_view.h"
 #include "api/sctp_transport_interface.h"
 #include "pc/peer_connection_internal.h"
+#include "test/scoped_key_value_config.h"
 
 namespace webrtc {
 
@@ -26,8 +29,6 @@ namespace webrtc {
 // FakePeerConnectionBase then overriding the interesting methods. This class
 // takes care of providing default implementations for all the pure virtual
 // functions specified in the interfaces.
-// TODO(nisse): Try to replace this with DummyPeerConnection, from
-// api/test/ ?
 class FakePeerConnectionBase : public PeerConnectionInternal {
  public:
   // PeerConnectionInterface implementation.
@@ -50,9 +51,14 @@ class FakePeerConnectionBase : public PeerConnectionInternal {
     return RTCError(RTCErrorType::UNSUPPORTED_OPERATION, "Not implemented");
   }
 
-  bool RemoveTrack(RtpSenderInterface* sender) override { return false; }
+  RTCErrorOr<rtc::scoped_refptr<RtpSenderInterface>> AddTrack(
+      rtc::scoped_refptr<MediaStreamTrackInterface> track,
+      const std::vector<std::string>& stream_ids,
+      const std::vector<RtpEncodingParameters>& init_send_encodings) override {
+    return RTCError(RTCErrorType::UNSUPPORTED_OPERATION, "Not implemented");
+  }
 
-  RTCError RemoveTrackNew(
+  RTCError RemoveTrackOrError(
       rtc::scoped_refptr<RtpSenderInterface> sender) override {
     return RTCError(RTCErrorType::UNSUPPORTED_OPERATION);
   }
@@ -249,10 +255,6 @@ class FakePeerConnectionBase : public PeerConnectionInternal {
     return {};
   }
 
-  sigslot::signal1<SctpDataChannel*>& SignalSctpDataChannelCreated() override {
-    return SignalSctpDataChannelCreated_;
-  }
-
   absl::optional<std::string> sctp_transport_name() const override {
     return absl::nullopt;
   }
@@ -267,6 +269,10 @@ class FakePeerConnectionBase : public PeerConnectionInternal {
   }
 
   Call::Stats GetCallStats() override { return Call::Stats(); }
+
+  absl::optional<AudioDeviceModule::Stats> GetAudioDeviceStats() override {
+    return absl::nullopt;
+  }
 
   bool GetLocalCertificate(
       const std::string& transport_name,
@@ -291,9 +297,73 @@ class FakePeerConnectionBase : public PeerConnectionInternal {
                   rtc::SSLRole* role) override {
     return false;
   }
+  const PeerConnectionInterface::RTCConfiguration* configuration()
+      const override {
+    return nullptr;
+  }
+
+  void ReportSdpBundleUsage(
+      const SessionDescriptionInterface& remote_description) override {}
+
+  PeerConnectionMessageHandler* message_handler() override { return nullptr; }
+  RtpTransmissionManager* rtp_manager() override { return nullptr; }
+  const RtpTransmissionManager* rtp_manager() const override { return nullptr; }
+  bool dtls_enabled() const override { return false; }
+  const PeerConnectionFactoryInterface::Options* options() const override {
+    return nullptr;
+  }
+
+  CryptoOptions GetCryptoOptions() override { return CryptoOptions(); }
+  JsepTransportController* transport_controller_s() override { return nullptr; }
+  JsepTransportController* transport_controller_n() override { return nullptr; }
+  DataChannelController* data_channel_controller() override { return nullptr; }
+  cricket::PortAllocator* port_allocator() override { return nullptr; }
+  LegacyStatsCollector* legacy_stats() override { return nullptr; }
+  PeerConnectionObserver* Observer() const override { return nullptr; }
+  absl::optional<rtc::SSLRole> GetSctpSslRole_n() override {
+    return absl::nullopt;
+  }
+  PeerConnectionInterface::IceConnectionState ice_connection_state_internal()
+      override {
+    return PeerConnectionInterface::IceConnectionState::kIceConnectionNew;
+  }
+  void SetIceConnectionState(
+      PeerConnectionInterface::IceConnectionState new_state) override {}
+  void NoteUsageEvent(UsageEvent event) override {}
+  bool IsClosed() const override { return false; }
+  bool IsUnifiedPlan() const override { return true; }
+  bool ValidateBundleSettings(
+      const cricket::SessionDescription* desc,
+      const std::map<std::string, const cricket::ContentGroup*>&
+          bundle_groups_by_mid) override {
+    return false;
+  }
+
+  RTCErrorOr<rtc::scoped_refptr<RtpTransceiverInterface>> AddTransceiver(
+      cricket::MediaType media_type,
+      rtc::scoped_refptr<MediaStreamTrackInterface> track,
+      const RtpTransceiverInit& init,
+      bool fire_callback = true) override {
+    return RTCError(RTCErrorType::INTERNAL_ERROR, "");
+  }
+  void StartSctpTransport(int local_port,
+                          int remote_port,
+                          int max_message_size) override {}
+
+  void AddRemoteCandidate(const std::string& mid,
+                          const cricket::Candidate& candidate) override {}
+
+  Call* call_ptr() override { return nullptr; }
+  bool SrtpRequired() const override { return false; }
+  bool CreateDataChannelTransport(absl::string_view mid) override {
+    return false;
+  }
+  void DestroyDataChannelTransport(RTCError error) override {}
+
+  const FieldTrialsView& trials() const override { return field_trials_; }
 
  protected:
-  sigslot::signal1<SctpDataChannel*> SignalSctpDataChannelCreated_;
+  webrtc::test::ScopedKeyValueConfig field_trials_;
 };
 
 }  // namespace webrtc

@@ -53,6 +53,7 @@ struct TrafficCounterFixture {
                                     /*id=*/1,
                                     rtc::IPAddress(kTestIpAddress),
                                     EmulatedEndpointConfig(),
+                                    EmulatedNetworkStatsGatheringMode::kDefault,
                                 },
                                 /*is_enabled=*/true, &task_queue_, &clock};
 };
@@ -87,8 +88,8 @@ TEST(CrossTrafficTest, PulsedPeaksCrossTraffic) {
     fixture.clock.AdvanceTimeMilliseconds(1);
   }
 
-  RTC_LOG(INFO) << fixture.counter.packets_count_ << " packets; "
-                << fixture.counter.total_packets_size_ << " bytes";
+  RTC_LOG(LS_INFO) << fixture.counter.packets_count_ << " packets; "
+                   << fixture.counter.total_packets_size_ << " bytes";
   // Using 50% duty cycle.
   const auto kExpectedDataSent = kRunTime * config.peak_rate * 0.5;
   EXPECT_NEAR(fixture.counter.total_packets_size_, kExpectedDataSent.bytes(),
@@ -115,8 +116,8 @@ TEST(CrossTrafficTest, RandomWalkCrossTraffic) {
     fixture.clock.AdvanceTimeMilliseconds(1);
   }
 
-  RTC_LOG(INFO) << fixture.counter.packets_count_ << " packets; "
-                << fixture.counter.total_packets_size_ << " bytes";
+  RTC_LOG(LS_INFO) << fixture.counter.packets_count_ << " packets; "
+                   << fixture.counter.total_packets_size_ << " bytes";
   // Sending at peak rate since bias = 1.
   const auto kExpectedDataSent = kRunTime * config.peak_rate;
   EXPECT_NEAR(fixture.counter.total_packets_size_, kExpectedDataSent.bytes(),
@@ -124,7 +125,8 @@ TEST(CrossTrafficTest, RandomWalkCrossTraffic) {
 }
 
 TEST(TcpMessageRouteTest, DeliveredOnLossyNetwork) {
-  NetworkEmulationManagerImpl net(TimeMode::kSimulated);
+  NetworkEmulationManagerImpl net(TimeMode::kSimulated,
+                                  EmulatedNetworkStatsGatheringMode::kDefault);
   BuiltInNetworkBehaviorConfig send;
   // 800 kbps means that the 100 kB message would be delivered in ca 1 second
   // under ideal conditions and no overhead.

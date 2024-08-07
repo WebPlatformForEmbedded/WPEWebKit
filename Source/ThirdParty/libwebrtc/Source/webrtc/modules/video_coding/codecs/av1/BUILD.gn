@@ -18,44 +18,57 @@ rtc_library("av1_svc_config") {
     "../../../../api/video_codecs:video_codecs_api",
     "../../../../rtc_base:checks",
     "../../../../rtc_base:logging",
+    "../../../../rtc_base:stringutils",
+    "../../svc:scalability_mode_util",
     "../../svc:scalability_structures",
     "../../svc:scalable_video_controller",
   ]
+
+  absl_deps = [ "//third_party/abseil-cpp/absl/container:inlined_vector" ]
 }
 
-rtc_library("libaom_av1_decoder") {
+rtc_library("dav1d_decoder") {
   visibility = [ "*" ]
   poisonous = [ "software_video_codecs" ]
-  public = [ "libaom_av1_decoder.h" ]
-  deps = [ "../../../../api/video_codecs:video_codecs_api" ]
-  absl_deps = [ "//third_party/abseil-cpp/absl/base:core_headers" ]
+  public = [ "dav1d_decoder.h" ]
+  sources = [ "dav1d_decoder.cc" ]
 
-  if (enable_libaom) {
-    sources = [ "libaom_av1_decoder.cc" ]
-    deps += [
-      "../..:video_codec_interface",
-      "../../../../api:scoped_refptr",
-      "../../../../api/video:encoded_image",
-      "../../../../api/video:video_frame",
-      "../../../../common_video",
-      "../../../../rtc_base:logging",
-      "//third_party/libaom",
-      "//third_party/libyuv",
-    ]
-    absl_deps += [ "//third_party/abseil-cpp/absl/types:optional" ]
-  } else {
-    sources = [ "libaom_av1_decoder_absent.cc" ]
-  }
+  deps = [
+    "../..:video_codec_interface",
+    "../../../../api:scoped_refptr",
+    "../../../../api/video:encoded_image",
+    "../../../../api/video:video_frame",
+    "../../../../api/video_codecs:video_codecs_api",
+    "../../../../common_video",
+    "../../../../rtc_base:logging",
+    "//third_party/dav1d",
+    "//third_party/libyuv",
+  ]
+  absl_deps = [ "//third_party/abseil-cpp/absl/types:optional" ]
 }
 
 rtc_library("libaom_av1_encoder") {
   visibility = [ "*" ]
   poisonous = [ "software_video_codecs" ]
   public = [ "libaom_av1_encoder.h" ]
+  sources = [ "libaom_av1_encoder.cc" ]
   deps = [
+    "../..:video_codec_interface",
+    "../../../../api:field_trials_view",
+    "../../../../api:scoped_refptr",
+    "../../../../api/transport:field_trial_based_config",
+    "../../../../api/video:encoded_image",
+    "../../../../api/video:video_frame",
+    "../../../../api/video_codecs:scalability_mode",
     "../../../../api/video_codecs:video_codecs_api",
+    "../../../../common_video",
+    "../../../../rtc_base:checks",
+    "../../../../rtc_base:logging",
+    "../../../../rtc_base:rtc_numerics",
+    "../../../../rtc_base/experiments:encoder_info_settings",
     "../../svc:scalability_structures",
     "../../svc:scalable_video_controller",
+    "//third_party/libaom",
   ]
   absl_deps = [
     "//third_party/abseil-cpp/absl/algorithm:container",
@@ -63,22 +76,6 @@ rtc_library("libaom_av1_encoder") {
     "//third_party/abseil-cpp/absl/strings:strings",
     "//third_party/abseil-cpp/absl/types:optional",
   ]
-
-  if (enable_libaom) {
-    sources = [ "libaom_av1_encoder.cc" ]
-    deps += [
-      "../..:video_codec_interface",
-      "../../../../api:scoped_refptr",
-      "../../../../api/video:encoded_image",
-      "../../../../api/video:video_frame",
-      "../../../../common_video",
-      "../../../../rtc_base:checks",
-      "../../../../rtc_base:logging",
-      "//third_party/libaom",
-    ]
-  } else {
-    sources = [ "libaom_av1_encoder_absent.cc" ]
-  }
 }
 
 if (rtc_include_tests) {
@@ -98,14 +95,18 @@ if (rtc_include_tests) {
         "libaom_av1_unittest.cc",
       ]
       deps += [
-        ":libaom_av1_decoder",
+        ":dav1d_decoder",
         ":libaom_av1_encoder",
         "../..:encoded_video_frame_producer",
         "../..:video_codec_interface",
+        "../../../../api:create_frame_generator",
+        "../../../../api:frame_generator_api",
         "../../../../api:mock_video_encoder",
         "../../../../api/units:data_size",
         "../../../../api/units:time_delta",
         "../../../../api/video:video_frame",
+        "../../../../test:field_trial",
+        "../../svc:scalability_mode_util",
         "../../svc:scalability_structures",
         "../../svc:scalable_video_controller",
       ]

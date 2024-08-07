@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <string>
 
+#include "absl/base/attributes.h"
 #include "absl/strings/string_view.h"
 #include "rtc_base/checks.h"
 #include "rtc_base/network_constants.h"
@@ -24,6 +25,10 @@
 #include "rtc_base/system/rtc_export.h"
 
 namespace cricket {
+
+// TURN servers are limited to 32 in accordance with
+// https://w3c.github.io/webrtc-pc/#dom-rtcconfiguration-iceservers
+static constexpr size_t kMaxTurnServers = 32;
 
 // Candidate for ICE based connection discovery.
 // TODO(phoglund): remove things in here that are not needed in the public API.
@@ -39,7 +44,7 @@ class RTC_EXPORT Candidate {
             uint32_t priority,
             absl::string_view username,
             absl::string_view password,
-            absl::string_view type,
+            absl::string_view type ABSL_ATTRIBUTE_LIFETIME_BOUND,
             uint32_t generation,
             absl::string_view foundation,
             uint16_t network_id = 0,
@@ -97,7 +102,14 @@ class RTC_EXPORT Candidate {
   void set_password(absl::string_view password) { Assign(password_, password); }
 
   const std::string& type() const { return type_; }
-  void set_type(absl::string_view type) { Assign(type_, type); }
+
+  // Setting the type requires a constant string (e.g.
+  // cricket::LOCAL_PORT_TYPE). The type should really be an enum rather than a
+  // string, but until we make that change the lifetime attribute helps us lock
+  // things down. See also the `Port` class.
+  void set_type(absl::string_view type ABSL_ATTRIBUTE_LIFETIME_BOUND) {
+    Assign(type_, type);
+  }
 
   const std::string& network_name() const { return network_name_; }
   void set_network_name(absl::string_view network_name) {
@@ -107,6 +119,13 @@ class RTC_EXPORT Candidate {
   rtc::AdapterType network_type() const { return network_type_; }
   void set_network_type(rtc::AdapterType network_type) {
     network_type_ = network_type;
+  }
+
+  rtc::AdapterType underlying_type_for_vpn() const {
+    return underlying_type_for_vpn_;
+  }
+  void set_underlying_type_for_vpn(rtc::AdapterType network_type) {
+    underlying_type_for_vpn_ = network_type;
   }
 
   // Candidates in a new generation replace those in the old generation.
@@ -162,7 +181,8 @@ class RTC_EXPORT Candidate {
 
   uint32_t GetPriority(uint32_t type_preference,
                        int network_adapter_preference,
-                       int relay_preference) const;
+                       int relay_preference,
+                       bool adjust_local_preference) const;
 
   bool operator==(const Candidate& o) const;
   bool operator!=(const Candidate& o) const;
@@ -195,6 +215,7 @@ class RTC_EXPORT Candidate {
   std::string type_;
   std::string network_name_;
   rtc::AdapterType network_type_;
+  rtc::AdapterType underlying_type_for_vpn_;
   uint32_t generation_;
   std::string foundation_;
   rtc::SocketAddress related_address_;

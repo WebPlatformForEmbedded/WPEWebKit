@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "absl/types/optional.h"
+#include "api/field_trials_view.h"
 #include "api/video_codecs/video_encoder.h"
 
 namespace webrtc {
@@ -22,7 +23,7 @@ class BalancedDegradationSettings {
  public:
   static constexpr int kNoFpsDiff = -100;
 
-  BalancedDegradationSettings();
+  BalancedDegradationSettings(const FieldTrialsView& field_trials);
   ~BalancedDegradationSettings();
 
   struct CodecTypeSpecific {
@@ -95,9 +96,9 @@ class BalancedDegradationSettings {
 
     int pixels = 0;  // Video frame size.
     // If the frame size is less than or equal to `pixels`:
-    int fps = 0;   // Min framerate to be used.
-    int kbps = 0;  // Min bitrate needed to adapt up (resolution/fps).
-    int kbps_res = 0;           // Min bitrate needed to adapt up in resolution.
+    int fps = 0;       // Min framerate to be used.
+    int kbps = 0;      // Min bitrate needed to adapt up (resolution/fps).
+    int kbps_res = 0;  // Min bitrate needed to adapt up in resolution.
     int fps_diff = kNoFpsDiff;  // Min fps reduction needed (input fps - `fps`)
                                 // w/o triggering a new subsequent downgrade
                                 // check.

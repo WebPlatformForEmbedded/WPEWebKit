@@ -26,3 +26,6 @@ pkg_check_modules(PC_LIBPULSE libpulse)
 
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(LibPulse DEFAULT_MSG PC_LIBPULSE_VERSION)
+
+set(LibPulse_INCLUDE_DIRS ${PC_LIBPULSE_INCLUDE_DIRS})
+set(LibPulse_COMPILE_OPTIONS ${PC_LIBPULSE_CFLAGS_OTHER})

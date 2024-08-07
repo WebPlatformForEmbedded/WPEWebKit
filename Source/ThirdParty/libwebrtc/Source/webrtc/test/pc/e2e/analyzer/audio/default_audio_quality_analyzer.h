@@ -17,10 +17,10 @@
 #include "absl/strings/string_view.h"
 #include "api/numerics/samples_stats_counter.h"
 #include "api/test/audio_quality_analyzer_interface.h"
+#include "api/test/metrics/metrics_logger.h"
 #include "api/test/track_id_stream_info_map.h"
 #include "api/units/time_delta.h"
 #include "rtc_base/synchronization/mutex.h"
-#include "test/testsupport/perf_test.h"
 
 namespace webrtc {
 namespace webrtc_pc_e2e {
@@ -32,10 +32,14 @@ struct AudioStreamStats {
   SamplesStatsCounter speech_expand_rate;
   SamplesStatsCounter average_jitter_buffer_delay_ms;
   SamplesStatsCounter preferred_buffer_size_ms;
+  SamplesStatsCounter energy;
 };
 
 class DefaultAudioQualityAnalyzer : public AudioQualityAnalyzerInterface {
  public:
+  explicit DefaultAudioQualityAnalyzer(
+      test::MetricsLogger* const metrics_logger);
+
   void Start(std::string test_case_name,
              TrackIdStreamInfoMap* analyzer_helper) override;
   void OnStatsReports(
@@ -56,20 +60,21 @@ class DefaultAudioQualityAnalyzer : public AudioQualityAnalyzerInterface {
     TimeDelta jitter_buffer_delay = TimeDelta::Zero();
     TimeDelta jitter_buffer_target_delay = TimeDelta::Zero();
     uint64_t jitter_buffer_emitted_count = 0;
+    double total_samples_duration = 0.0;
+    double total_audio_energy = 0.0;
   };
 
   std::string GetTestCaseName(const std::string& stream_label) const;
-  void ReportResult(const std::string& metric_name,
-                    const std::string& stream_label,
-                    const SamplesStatsCounter& counter,
-                    const std::string& unit,
-                    webrtc::test::ImproveDirection improve_direction) const;
+
+  test::MetricsLogger* const metrics_logger_;
 
   std::string test_case_name_;
   TrackIdStreamInfoMap* analyzer_helper_;
 
   mutable Mutex lock_;
   std::map<std::string, AudioStreamStats> streams_stats_ RTC_GUARDED_BY(lock_);
+  std::map<std::string, TrackIdStreamInfoMap::StreamInfo> stream_info_
+      RTC_GUARDED_BY(lock_);
   std::map<std::string, StatsSample> last_stats_sample_ RTC_GUARDED_BY(lock_);
 };
 

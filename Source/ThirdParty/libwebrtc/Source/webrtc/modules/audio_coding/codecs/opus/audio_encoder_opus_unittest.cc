@@ -14,6 +14,7 @@
 #include <memory>
 #include <utility>
 
+#include "absl/strings/string_view.h"
 #include "common_audio/mocks/mock_smoothing_filter.h"
 #include "modules/audio_coding/audio_network_adaptor/mock/mock_audio_network_adaptor.h"
 #include "modules/audio_coding/codecs/opus/audio_encoder_opus.h"
@@ -61,7 +62,7 @@ std::unique_ptr<AudioEncoderOpusStates> CreateCodec(int sample_rate_hz,
 
   MockAudioNetworkAdaptor** mock_ptr = &states->mock_audio_network_adaptor;
   AudioEncoderOpusImpl::AudioNetworkAdaptorCreator creator =
-      [mock_ptr](const std::string&, RtcEventLog* event_log) {
+      [mock_ptr](absl::string_view, RtcEventLog* event_log) {
         std::unique_ptr<MockAudioNetworkAdaptor> adaptor(
             new NiceMock<MockAudioNetworkAdaptor>());
         EXPECT_CALL(*adaptor, Die());
@@ -372,9 +373,6 @@ TEST_P(AudioEncoderOpusTest, PacketLossRateUpperBounded) {
 }
 
 TEST_P(AudioEncoderOpusTest, DoNotInvokeSetTargetBitrateIfOverheadUnknown) {
-  test::ScopedFieldTrials override_field_trials(
-      "WebRTC-SendSideBwe-WithOverhead/Enabled/");
-
   auto states = CreateCodec(sample_rate_hz_, 2);
 
   states->encoder->OnReceivedUplinkBandwidth(kDefaultOpusRate * 2,
@@ -667,6 +665,17 @@ TEST(AudioEncoderOpusTest, TestConfigFromInvalidParams) {
   config = CreateConfigWithParameters({{"ptime", "invalid"}});
   EXPECT_EQ(default_supported_frame_lengths_ms,
             config.supported_frame_lengths_ms);
+}
+
+TEST(AudioEncoderOpusTest, GetFrameLenghtRange) {
+  AudioEncoderOpusConfig config =
+      CreateConfigWithParameters({{"maxptime", "10"}, {"ptime", "10"}});
+  std::unique_ptr<AudioEncoder> encoder =
+      AudioEncoderOpus::MakeAudioEncoder(config, kDefaultOpusPayloadType);
+  auto ptime = webrtc::TimeDelta::Millis(10);
+  absl::optional<std::pair<webrtc::TimeDelta, webrtc::TimeDelta>> range = {
+      {ptime, ptime}};
+  EXPECT_EQ(encoder->GetFrameLengthRange(), range);
 }
 
 // Test that bitrate will be overridden by the "maxaveragebitrate" parameter.

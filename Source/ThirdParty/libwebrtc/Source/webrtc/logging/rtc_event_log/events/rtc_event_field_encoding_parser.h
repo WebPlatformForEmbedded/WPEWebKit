@@ -14,75 +14,9 @@
 #include <string>
 #include <vector>
 
+#include "absl/strings/string_view.h"
 #include "logging/rtc_event_log/events/rtc_event_field_encoding.h"
-
-// TODO(terelius): Compared to a generic 'Status' class, this
-// class allows us additional information about the context
-// in which the error occurred. This is currently limited to
-// the source location (file and line), but we plan on adding
-// information about the event and field name being parsed.
-// If/when we start using absl::Status in WebRTC, consider
-// whether payloads would be an appropriate alternative.
-class RtcEventLogParseStatus {
-  template <typename T>
-  friend class RtcEventLogParseStatusOr;
-
- public:
-  static RtcEventLogParseStatus Success() { return RtcEventLogParseStatus(); }
-  static RtcEventLogParseStatus Error(std::string error,
-                                      std::string file,
-                                      int line) {
-    return RtcEventLogParseStatus(error, file, line);
-  }
-
-  bool ok() const { return error_.empty(); }
-
-  std::string message() const { return error_; }
-
- private:
-  RtcEventLogParseStatus() : error_() {}
-  RtcEventLogParseStatus(std::string error, std::string file, int line)
-      : error_(error + " (" + file + ": " + std::to_string(line) + ")") {}
-
-  std::string error_;
-};
-
-template <typename T>
-class RtcEventLogParseStatusOr {
- public:
-  explicit RtcEventLogParseStatusOr(RtcEventLogParseStatus status)
-      : status_(status), value_() {}
-  explicit RtcEventLogParseStatusOr(const T& value)
-      : status_(), value_(value) {}
-
-  bool ok() const { return status_.ok(); }
-
-  std::string message() const { return status_.message(); }
-
-  const T& value() const {
-    RTC_DCHECK(ok());
-    return value_;
-  }
-
-  T& value() {
-    RTC_DCHECK(ok());
-    return value_;
-  }
-
-  static RtcEventLogParseStatusOr Error(std::string error,
-                                        std::string file,
-                                        int line) {
-    return RtcEventLogParseStatusOr(error, file, line);
-  }
-
- private:
-  RtcEventLogParseStatusOr() : status_() {}
-  RtcEventLogParseStatusOr(std::string error, std::string file, int line)
-      : status_(error, file, line), value_() {}
-
-  RtcEventLogParseStatus status_;
-  T value_;
-};
+#include "logging/rtc_event_log/events/rtc_event_log_parse_status.h"
 
 namespace webrtc {
 
@@ -129,7 +63,7 @@ class EventParser {
   uint64_t ReadOptionalValuePositions();
   void ReadDeltasAndPopulateValues(FixedLengthEncodingParametersV3 params,
                                    uint64_t num_deltas,
-                                   const uint64_t base);
+                                   uint64_t base);
   RtcEventLogParseStatus ParseNumericFieldInternal(uint64_t value_bit_width,
                                                    FieldType field_type);
   RtcEventLogParseStatus ParseStringFieldInternal();
@@ -170,6 +104,111 @@ class EventParser {
   uint64_t num_events_ = 1;
   uint64_t last_field_id_ = FieldParameters::kTimestampField;
 };
+
+// Inverse of the ExtractRtcEventMember function used when parsing
+// a log. Uses a vector of values to populate a specific field in a
+// vector of structs.
+template <typename T,
+          typename E,
+          std::enable_if_t<std::is_integral<T>::value, bool> = true>
+ABSL_MUST_USE_RESULT RtcEventLogParseStatus
+PopulateRtcEventMember(const rtc::ArrayView<uint64_t> values,
+                       T E::*member,
+                       rtc::ArrayView<E> output) {
+  size_t batch_size = values.size();
+  RTC_CHECK_EQ(output.size(), batch_size);
+  for (size_t i = 0; i < batch_size; ++i) {
+    output[i].*member = DecodeFromUnsignedToType<T>(values[i]);
+  }
+  return RtcEventLogParseStatus::Success();
+}
+
+// Same as above, but for optional fields.
+template <typename T,
+          typename E,
+          std::enable_if_t<std::is_integral<T>::value, bool> = true>
+ABSL_MUST_USE_RESULT RtcEventLogParseStatus
+PopulateRtcEventMember(const rtc::ArrayView<uint8_t> positions,
+                       const rtc::ArrayView<uint64_t> values,
+                       absl::optional<T> E::*member,
+                       rtc::ArrayView<E> output) {
+  size_t batch_size = positions.size();
+  RTC_CHECK_EQ(output.size(), batch_size);
+  RTC_CHECK_LE(values.size(), batch_size);
+  auto value_it = values.begin();
+  for (size_t i = 0; i < batch_size; ++i) {
+    if (positions[i]) {
+      RTC_CHECK(value_it != values.end());
+      output[i].*member = DecodeFromUnsignedToType<T>(value_it);
+      ++value_it;
+    } else {
+      output[i].*member = absl::nullopt;
+    }
+  }
+  RTC_CHECK(value_it == values.end());
+  return RtcEventLogParseStatus::Success();
+}
+
+// Same as above, but for enum fields.
+template <typename T,
+          typename E,
+          std::enable_if_t<std::is_enum<T>::value, bool> = true>
+ABSL_MUST_USE_RESULT RtcEventLogParseStatus
+PopulateRtcEventMember(const rtc::ArrayView<uint64_t> values,
+                       T E::*member,
+                       rtc::ArrayView<E> output) {
+  size_t batch_size = values.size();
+  RTC_CHECK_EQ(output.size(), batch_size);
+  for (size_t i = 0; i < batch_size; ++i) {
+    auto result = RtcEventLogEnum<T>::Decode(values[i]);
+    if (!result.ok()) {
+      return result.status();
+    }
+    output[i].*member = result.value();
+  }
+  return RtcEventLogParseStatus::Success();
+}
+
+// Same as above, but for string fields.
+template <typename E>
+ABSL_MUST_USE_RESULT RtcEventLogParseStatus
+PopulateRtcEventMember(const rtc::ArrayView<absl::string_view> values,
+                       std::string E::*member,
+                       rtc::ArrayView<E> output) {
+  size_t batch_size = values.size();
+  RTC_CHECK_EQ(output.size(), batch_size);
+  for (size_t i = 0; i < batch_size; ++i) {
+    output[i].*member = values[i];
+  }
+  return RtcEventLogParseStatus::Success();
+}
+
+// Same as above, but for Timestamp fields.
+// N.B. Assumes that the encoded value uses millisecond precision.
+template <typename E>
+ABSL_MUST_USE_RESULT RtcEventLogParseStatus
+PopulateRtcEventTimestamp(const rtc::ArrayView<uint64_t>& values,
+                          Timestamp E::*timestamp,
+                          rtc::ArrayView<E> output) {
+  size_t batch_size = values.size();
+  RTC_CHECK_EQ(batch_size, output.size());
+  for (size_t i = 0; i < batch_size; ++i) {
+    output[i].*timestamp =
+        Timestamp::Millis(DecodeFromUnsignedToType<int64_t>(values[i]));
+  }
+  return RtcEventLogParseStatus::Success();
+}
+
+template <typename E>
+rtc::ArrayView<E> ExtendLoggedBatch(std::vector<E>& output,
+                                    size_t new_elements) {
+  size_t old_size = output.size();
+  output.insert(output.end(), old_size + new_elements, E());
+  rtc::ArrayView<E> output_batch = output;
+  output_batch.subview(old_size);
+  RTC_DCHECK_EQ(output_batch.size(), new_elements);
+  return output_batch;
+}
 
 }  // namespace webrtc
 #endif  // LOGGING_RTC_EVENT_LOG_EVENTS_RTC_EVENT_FIELD_ENCODING_PARSER_H_

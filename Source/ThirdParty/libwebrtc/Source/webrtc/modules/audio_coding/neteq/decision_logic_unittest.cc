@@ -40,7 +40,7 @@ NetEqController::NetEqStatus CreateNetEqStatus(NetEq::Mode last_mode,
   status.expand_mutefactor = 0;
   status.packet_buffer_info.num_samples = current_delay_ms * kSamplesPerMs;
   status.packet_buffer_info.span_samples = current_delay_ms * kSamplesPerMs;
-  status.packet_buffer_info.span_samples_no_dtx =
+  status.packet_buffer_info.span_samples_wait_time =
       current_delay_ms * kSamplesPerMs;
   status.packet_buffer_info.dtx_or_cng = false;
   status.next_packet = {status.target_timestamp, false, false};
@@ -54,10 +54,8 @@ using ::testing::Return;
 class DecisionLogicTest : public ::testing::Test {
  protected:
   DecisionLogicTest() {
-    test::ScopedFieldTrials field_trial(
-        "WebRTC-Audio-NetEqDecisionLogicSettings/"
-        "estimate_dtx_delay:true,time_stretch_cn:true/");
-
+    test::ScopedFieldTrials trials(
+        "WebRTC-Audio-NetEqDecisionLogicConfig/cng_timeout_ms:1000/");
     NetEqController::Config config;
     config.tick_timer = &tick_timer_;
     config.allow_time_stretching = true;
@@ -204,6 +202,18 @@ TEST_F(DecisionLogicTest, TimeStrechComfortNoise) {
               NetEq::Operation::kNormal);
     EXPECT_FALSE(reset_decoder);
   }
+}
+
+TEST_F(DecisionLogicTest, CngTimeout) {
+  auto status = CreateNetEqStatus(NetEq::Mode::kCodecInternalCng, 0);
+  status.next_packet = absl::nullopt;
+  status.generated_noise_samples = kSamplesPerMs * 500;
+  bool reset_decoder = false;
+  EXPECT_EQ(decision_logic_->GetDecision(status, &reset_decoder),
+            NetEq::Operation::kCodecInternalCng);
+  status.generated_noise_samples = kSamplesPerMs * 1010;
+  EXPECT_EQ(decision_logic_->GetDecision(status, &reset_decoder),
+            NetEq::Operation::kExpand);
 }
 
 }  // namespace webrtc

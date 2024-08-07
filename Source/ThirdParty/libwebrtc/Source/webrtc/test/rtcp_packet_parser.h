@@ -19,7 +19,6 @@
 #include "modules/rtp_rtcp/source/rtcp_packet/app.h"
 #include "modules/rtp_rtcp/source/rtcp_packet/bye.h"
 #include "modules/rtp_rtcp/source/rtcp_packet/common_header.h"
-#include "modules/rtp_rtcp/source/rtcp_packet/extended_jitter_report.h"
 #include "modules/rtp_rtcp/source/rtcp_packet/extended_reports.h"
 #include "modules/rtp_rtcp/source/rtcp_packet/fir.h"
 #include "modules/rtp_rtcp/source/rtcp_packet/loss_notification.h"
@@ -80,11 +79,10 @@ class RtcpPacketParser {
   RtcpPacketParser();
   ~RtcpPacketParser();
 
-  bool Parse(const void* packet, size_t packet_len);
+  bool Parse(rtc::ArrayView<const uint8_t> packet);
 
   PacketCounter<rtcp::App>* app() { return &app_; }
   PacketCounter<rtcp::Bye>* bye() { return &bye_; }
-  PacketCounter<rtcp::ExtendedJitterReport>* ij() { return &ij_; }
   PacketCounter<rtcp::ExtendedReports>* xr() { return &xr_; }
   PacketCounter<rtcp::Fir>* fir() { return &fir_; }
   PacketCounter<rtcp::Nack>* nack() { return &nack_; }
@@ -110,7 +108,6 @@ class RtcpPacketParser {
  private:
   PacketCounter<rtcp::App> app_;
   PacketCounter<rtcp::Bye> bye_;
-  PacketCounter<rtcp::ExtendedJitterReport> ij_;
   PacketCounter<rtcp::ExtendedReports> xr_;
   PacketCounter<rtcp::Fir> fir_;
   PacketCounter<rtcp::Nack> nack_;

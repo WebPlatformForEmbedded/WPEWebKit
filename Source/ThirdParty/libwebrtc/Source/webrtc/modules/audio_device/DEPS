@@ -5,9 +5,10 @@ include_rules = [
 
 specific_include_rules = {
   "ensure_initialized\.cc": [
-    "+base/android",
+    "+sdk/android",
   ],
   "audio_device_impl\.cc": [
     "+sdk/objc",
+    "+sdk/android",
   ],
 }

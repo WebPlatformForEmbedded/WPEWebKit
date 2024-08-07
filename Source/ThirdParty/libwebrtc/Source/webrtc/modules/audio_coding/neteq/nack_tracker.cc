@@ -32,15 +32,17 @@ NackTracker::Config::Config() {
   auto parser = StructParametersParser::Create(
       "packet_loss_forget_factor", &packet_loss_forget_factor,
       "ms_per_loss_percent", &ms_per_loss_percent, "never_nack_multiple_times",
-      &never_nack_multiple_times);
+      &never_nack_multiple_times, "require_valid_rtt", &require_valid_rtt,
+      "max_loss_rate", &max_loss_rate);
   parser->Parse(
       webrtc::field_trial::FindFullName(kNackTrackerConfigFieldTrial));
   RTC_LOG(LS_INFO) << "Nack tracker config:"
                       " packet_loss_forget_factor="
                    << packet_loss_forget_factor
                    << " ms_per_loss_percent=" << ms_per_loss_percent
-                   << " never_nack_multiple_times="
-                   << never_nack_multiple_times;
+                   << " never_nack_multiple_times=" << never_nack_multiple_times
+                   << " require_valid_rtt=" << require_valid_rtt
+                   << " max_loss_rate=" << max_loss_rate;
 }
 
 NackTracker::NackTracker()
@@ -143,43 +145,22 @@ uint32_t NackTracker::EstimateTimestamp(uint16_t sequence_num,
   return sequence_num_diff * samples_per_packet + timestamp_last_received_rtp_;
 }
 
-void NackTracker::UpdateEstimatedPlayoutTimeBy10ms() {
-  while (!nack_list_.empty() &&
-         nack_list_.begin()->second.time_to_play_ms <= 10)
-    nack_list_.erase(nack_list_.begin());
-
-  for (NackList::iterator it = nack_list_.begin(); it != nack_list_.end(); ++it)
-    it->second.time_to_play_ms -= 10;
-}
-
 void NackTracker::UpdateLastDecodedPacket(uint16_t sequence_number,
                                           uint32_t timestamp) {
-  if (IsNewerSequenceNumber(sequence_number, sequence_num_last_decoded_rtp_) ||
-      !any_rtp_decoded_) {
-    sequence_num_last_decoded_rtp_ = sequence_number;
-    timestamp_last_decoded_rtp_ = timestamp;
-    // Packets in the list with sequence numbers less than the
-    // sequence number of the decoded RTP should be removed from the lists.
-    // They will be discarded by the jitter buffer if they arrive.
-    nack_list_.erase(nack_list_.begin(),
-                     nack_list_.upper_bound(sequence_num_last_decoded_rtp_));
-
-    // Update estimated time-to-play.
-    for (NackList::iterator it = nack_list_.begin(); it != nack_list_.end();
-         ++it)
-      it->second.time_to_play_ms = TimeToPlay(it->second.estimated_timestamp);
-  } else {
-    RTC_DCHECK_EQ(sequence_number, sequence_num_last_decoded_rtp_);
-
-    // Same sequence number as before. 10 ms is elapsed, update estimations for
-    // time-to-play.
-    UpdateEstimatedPlayoutTimeBy10ms();
-
-    // Update timestamp for better estimate of time-to-play, for packets which
-    // are added to NACK list later on.
-    timestamp_last_decoded_rtp_ += sample_rate_khz_ * 10;
-  }
   any_rtp_decoded_ = true;
+  sequence_num_last_decoded_rtp_ = sequence_number;
+  timestamp_last_decoded_rtp_ = timestamp;
+  // Packets in the list with sequence numbers less than the
+  // sequence number of the decoded RTP should be removed from the lists.
+  // They will be discarded by the jitter buffer if they arrive.
+  nack_list_.erase(nack_list_.begin(),
+                   nack_list_.upper_bound(sequence_num_last_decoded_rtp_));
+
+  // Update estimated time-to-play.
+  for (NackList::iterator it = nack_list_.begin(); it != nack_list_.end();
+       ++it) {
+    it->second.time_to_play_ms = TimeToPlay(it->second.estimated_timestamp);
+  }
 }
 
 NackTracker::NackList NackTracker::GetNackList() const {
@@ -223,6 +204,17 @@ int64_t NackTracker::TimeToPlay(uint32_t timestamp) const {
 std::vector<uint16_t> NackTracker::GetNackList(int64_t round_trip_time_ms) {
   RTC_DCHECK_GE(round_trip_time_ms, 0);
   std::vector<uint16_t> sequence_numbers;
+  if (round_trip_time_ms == 0) {
+    if (config_.require_valid_rtt) {
+      return sequence_numbers;
+    } else {
+      round_trip_time_ms = config_.default_rtt_ms;
+    }
+  }
+  if (packet_loss_rate_ >
+      static_cast<uint32_t>(config_.max_loss_rate * (1 << 30))) {
+    return sequence_numbers;
+  }
   // The estimated packet loss is between 0 and 1, so we need to multiply by 100
   // here.
   int max_wait_ms =

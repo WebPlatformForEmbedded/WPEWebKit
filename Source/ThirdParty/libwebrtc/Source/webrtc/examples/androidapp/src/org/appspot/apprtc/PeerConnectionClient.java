@@ -46,6 +46,7 @@ import org.webrtc.DefaultVideoDecoderFactory;
 import org.webrtc.DefaultVideoEncoderFactory;
 import org.webrtc.EglBase;
 import org.webrtc.IceCandidate;
+import org.webrtc.IceCandidateErrorEvent;
 import org.webrtc.Logging;
 import org.webrtc.MediaConstraints;
 import org.webrtc.MediaStream;
@@ -101,7 +102,6 @@ public class PeerConnectionClient {
   private static final String VIDEO_CODEC_PARAM_START_BITRATE = "x-google-start-bitrate";
   private static final String VIDEO_FLEXFEC_FIELDTRIAL =
       "WebRTC-FlexFEC-03-Advertised/Enabled/WebRTC-FlexFEC-03/Enabled/";
-  private static final String VIDEO_VP8_INTEL_HW_ENCODER_FIELDTRIAL = "WebRTC-IntelVP8/Enabled/";
   private static final String DISABLE_WEBRTC_AGC_FIELDTRIAL =
       "WebRTC-Audio-MinimizeResamplingOnMobile/Enabled/";
   private static final String AUDIO_CODEC_PARAM_BITRATE = "maxaveragebitrate";
@@ -442,6 +442,10 @@ public class PeerConnectionClient {
       decoderFactory = new SoftwareVideoDecoderFactory();
     }
 
+    // Disable encryption for loopback calls.
+    if (peerConnectionParameters.loopback) {
+      options.disableEncryption = true;
+    }
     factory = PeerConnectionFactory.builder()
                   .setOptions(options)
                   .setAudioDeviceModule(adm)
@@ -600,8 +604,6 @@ public class PeerConnectionClient {
     rtcConfig.continualGatheringPolicy = PeerConnection.ContinualGatheringPolicy.GATHER_CONTINUALLY;
     // Use ECDSA encryption.
     rtcConfig.keyType = PeerConnection.KeyType.ECDSA;
-    // Enable DTLS for normal calls and disable for loopback calls.
-    rtcConfig.enableDtlsSrtp = !peerConnectionParameters.loopback;
     rtcConfig.sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN;
 
     peerConnection = factory.createPeerConnection(rtcConfig, pcObserver);
@@ -999,7 +1001,6 @@ public class PeerConnectionClient {
       fieldTrials += VIDEO_FLEXFEC_FIELDTRIAL;
       Log.d(TAG, "Enable FlexFEC field trial.");
     }
-    fieldTrials += VIDEO_VP8_INTEL_HW_ENCODER_FIELDTRIAL;
     if (peerConnectionParameters.disableWebRtcAGCAndHPF) {
       fieldTrials += DISABLE_WEBRTC_AGC_FIELDTRIAL;
       Log.d(TAG, "Disable WebRTC AGC field trial.");
@@ -1209,6 +1210,13 @@ public class PeerConnectionClient {
     @Override
     public void onIceCandidate(final IceCandidate candidate) {
       executor.execute(() -> events.onIceCandidate(candidate));
+    }
+
+    @Override
+    public void onIceCandidateError(final IceCandidateErrorEvent event) {
+      Log.d(TAG,
+          "IceCandidateError address: " + event.address + ", port: " + event.port + ", url: "
+              + event.url + ", errorCode: " + event.errorCode + ", errorText: " + event.errorText);
     }
 
     @Override

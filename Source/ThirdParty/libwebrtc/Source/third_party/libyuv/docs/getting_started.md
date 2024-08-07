@@ -139,11 +139,11 @@ mips
 
 arm disassembly:
 
-    third_party/android_ndk/toolchains/aarch64-linux-android-4.9/prebuilt/linux-x86_64/bin/aarch64-linux-android-objdump -d ./out/Release/obj/libyuv/row_common.o >row_common.txt
+    llvm-objdump -d ./out/Release/obj/libyuv/row_common.o >row_common.txt
 
-    third_party/android_ndk/toolchains/aarch64-linux-android-4.9/prebuilt/linux-x86_64/bin/aarch64-linux-android-objdump -d ./out/Release/obj/libyuv_neon/row_neon.o >row_neon.txt
+    llvm-objdump -d ./out/Release/obj/libyuv_neon/row_neon.o >row_neon.txt
 
-    third_party/android_ndk/toolchains/aarch64-linux-android-4.9/prebuilt/linux-x86_64/bin/aarch64-linux-android-objdump -d ./out/Release/obj/libyuv_neon/row_neon64.o >row_neon64.txt
+    llvm-objdump -d ./out/Release/obj/libyuv_neon/row_neon64.o >row_neon64.txt
 
     Caveat: Disassembly may require optimize_max be disabled in BUILD.gn
 
@@ -180,8 +180,8 @@ Running test with C code:
 
 mips
 
-   gn gen out/Release "--args=is_debug=false target_os=\"linux\" target_cpu=\"mips64el\" mips_arch_variant=\"loongson3\" mips_use_mmi=true is_component_build=false use_sysroot=false use_gold=false"
-   gn gen out/Debug "--args=is_debug=true target_os=\"linux\" target_cpu=\"mips64el\" mips_arch_variant=\"loongson3\" mips_use_mmi=true is_component_build=false use_sysroot=false use_gold=false"
+   gn gen out/Release "--args=is_debug=false target_os=\"linux\" target_cpu=\"mips64el\" mips_arch_variant=\"loongson3\" is_component_build=false use_sysroot=false use_gold=false"
+   gn gen out/Debug "--args=is_debug=true target_os=\"linux\" target_cpu=\"mips64el\" mips_arch_variant=\"loongson3\" is_component_build=false use_sysroot=false use_gold=false"
    ninja -v -C out/Debug libyuv_unittest
    ninja -v -C out/Release libyuv_unittest
 
@@ -219,6 +219,35 @@ Install cmake: http://www.cmake.org/
     cmake -DCMAKE_BUILD_TYPE=Release ..
     make -j4
     make package
+
+## Building RISC-V target with cmake
+
+### Prerequisite: build risc-v clang toolchain and qemu
+
+If you don't have prebuilt clang and riscv64 qemu, run the script to download source and build them.
+
+    ./riscv_script/prepare_toolchain_qemu.sh
+
+After running script, clang & qemu are built in `build-toolchain-qemu/riscv-clang/` & `build-toolchain-qemu/riscv-qemu/`.
+
+### Cross-compile for RISC-V target
+    cmake -B out/Release/ -DUNIT_TEST=ON \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_TOOLCHAIN_FILE="./riscv_script/riscv-clang.cmake" \
+          -DTOOLCHAIN_PATH={TOOLCHAIN_PATH} \
+          -DUSE_RVV=ON .
+    cmake --build out/Release/
+
+
+### Run on QEMU
+
+#### Run libyuv_unittest on QEMU
+    cd out/Release/
+    USE_RVV=ON \
+    TOOLCHAIN_PATH={TOOLCHAIN_PATH} \
+    QEMU_PREFIX_PATH={QEMU_PREFIX_PATH} \
+    ../../riscv_script/run_qemu.sh libyuv_unittest
+
 
 ## Setup for Arm Cross compile
 

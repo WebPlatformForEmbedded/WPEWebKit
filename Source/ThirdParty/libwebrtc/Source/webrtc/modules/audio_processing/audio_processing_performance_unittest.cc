@@ -10,27 +10,32 @@
 #include <math.h>
 
 #include <algorithm>
+#include <atomic>
 #include <memory>
 #include <vector>
 
+#include "absl/strings/string_view.h"
 #include "api/array_view.h"
+#include "api/numerics/samples_stats_counter.h"
+#include "api/test/metrics/global_metrics_logger_and_exporter.h"
+#include "api/test/metrics/metric.h"
 #include "modules/audio_processing/audio_processing_impl.h"
 #include "modules/audio_processing/test/audio_processing_builder_for_testing.h"
 #include "modules/audio_processing/test/test_utils.h"
-#include "rtc_base/atomic_ops.h"
 #include "rtc_base/event.h"
 #include "rtc_base/numerics/safe_conversions.h"
 #include "rtc_base/platform_thread.h"
 #include "rtc_base/random.h"
 #include "system_wrappers/include/clock.h"
 #include "test/gtest.h"
-#include "test/testsupport/perf_test.h"
 
 namespace webrtc {
-
 namespace {
 
-static const bool kPrintAllDurations = false;
+using ::webrtc::test::GetGlobalMetricsLogger;
+using ::webrtc::test::ImprovementDirection;
+using ::webrtc::test::Metric;
+using ::webrtc::test::Unit;
 
 class CallSimulator;
 
@@ -134,16 +139,16 @@ struct SimulationConfig {
 // Handler for the frame counters.
 class FrameCounters {
  public:
-  void IncreaseRenderCounter() { rtc::AtomicOps::Increment(&render_count_); }
+  void IncreaseRenderCounter() { render_count_.fetch_add(1); }
 
-  void IncreaseCaptureCounter() { rtc::AtomicOps::Increment(&capture_count_); }
+  void IncreaseCaptureCounter() { capture_count_.fetch_add(1); }
 
   int CaptureMinusRenderCounters() const {
     // The return value will be approximate, but that's good enough since
     // by the time we return the value, it's not guaranteed to be correct
     // anyway.
-    return rtc::AtomicOps::AcquireLoad(&capture_count_) -
-           rtc::AtomicOps::AcquireLoad(&render_count_);
+    return capture_count_.load(std::memory_order_acquire) -
+           render_count_.load(std::memory_order_acquire);
   }
 
   int RenderMinusCaptureCounters() const {
@@ -153,28 +158,31 @@ class FrameCounters {
   bool BothCountersExceedeThreshold(int threshold) const {
     // TODO(tommi): We could use an event to signal this so that we don't need
     // to be polling from the main thread and possibly steal cycles.
-    const int capture_count = rtc::AtomicOps::AcquireLoad(&capture_count_);
-    const int render_count = rtc::AtomicOps::AcquireLoad(&render_count_);
+    const int capture_count = capture_count_.load(std::memory_order_acquire);
+    const int render_count = render_count_.load(std::memory_order_acquire);
     return (render_count > threshold && capture_count > threshold);
   }
 
  private:
-  int render_count_ = 0;
-  int capture_count_ = 0;
+  std::atomic<int> render_count_{0};
+  std::atomic<int> capture_count_{0};
 };
 
 // Class that represents a flag that can only be raised.
 class LockedFlag {
  public:
-  bool get_flag() const { return rtc::AtomicOps::AcquireLoad(&flag_); }
+  bool get_flag() const { return flag_.load(std::memory_order_acquire); }
 
   void set_flag() {
-    if (!get_flag())  // read-only operation to avoid affecting the cache-line.
-      rtc::AtomicOps::CompareAndSwap(&flag_, 0, 1);
+    if (!get_flag()) {
+      // read-only operation to avoid affecting the cache-line.
+      int zero = 0;
+      flag_.compare_exchange_strong(zero, 1);
+    }
   }
 
  private:
-  int flag_ = 0;
+  std::atomic<int> flag_{0};
 };
 
 // Parent class for the thread processors.
@@ -199,69 +207,39 @@ class TimedThreadApiProcessor {
         frame_data_(kMaxFrameSize),
         clock_(webrtc::Clock::GetRealTimeClock()),
         num_durations_to_store_(num_durations_to_store),
+        api_call_durations_(num_durations_to_store_ - kNumInitializationFrames),
+        samples_count_(0),
         input_level_(input_level),
         processor_type_(processor_type),
-        num_channels_(num_channels) {
-    api_call_durations_.reserve(num_durations_to_store_);
-  }
+        num_channels_(num_channels) {}
 
   // Implements the callback functionality for the threads.
   bool Process();
 
   // Method for printing out the simulation statistics.
-  void print_processor_statistics(const std::string& processor_name) const {
+  void print_processor_statistics(absl::string_view processor_name) const {
     const std::string modifier = "_api_call_duration";
 
     const std::string sample_rate_name =
         "_" + std::to_string(simulation_config_->sample_rate_hz) + "Hz";
 
-    webrtc::test::PrintResultMeanAndError(
-        "apm_timing", sample_rate_name, processor_name, GetDurationAverage(),
-        GetDurationStandardDeviation(), "us", false);
-
-    if (kPrintAllDurations) {
-      webrtc::test::PrintResultList("apm_call_durations", sample_rate_name,
-                                    processor_name, api_call_durations_, "us",
-                                    false);
-    }
+    GetGlobalMetricsLogger()->LogMetric(
+        "apm_timing" + sample_rate_name, processor_name, api_call_durations_,
+        Unit::kMilliseconds, ImprovementDirection::kNeitherIsBetter);
   }
 
   void AddDuration(int64_t duration) {
-    if (api_call_durations_.size() < num_durations_to_store_) {
-      api_call_durations_.push_back(duration);
+    if (samples_count_ >= kNumInitializationFrames &&
+        samples_count_ < num_durations_to_store_) {
+      api_call_durations_.AddSample(duration);
     }
+    samples_count_++;
   }
 
  private:
   static const int kMaxCallDifference = 10;
   static const int kMaxFrameSize = 480;
   static const int kNumInitializationFrames = 5;
-
-  int64_t GetDurationStandardDeviation() const {
-    double variance = 0;
-    const int64_t average_duration = GetDurationAverage();
-    for (size_t k = kNumInitializationFrames; k < api_call_durations_.size();
-         k++) {
-      int64_t tmp = api_call_durations_[k] - average_duration;
-      variance += static_cast<double>(tmp * tmp);
-    }
-    const int denominator = rtc::checked_cast<int>(api_call_durations_.size()) -
-                            kNumInitializationFrames;
-    return (denominator > 0
-                ? rtc::checked_cast<int64_t>(sqrt(variance / denominator))
-                : -1);
-  }
-
-  int64_t GetDurationAverage() const {
-    int64_t average_duration = 0;
-    for (size_t k = kNumInitializationFrames; k < api_call_durations_.size();
-         k++) {
-      average_duration += api_call_durations_[k];
-    }
-    const int denominator = rtc::checked_cast<int>(api_call_durations_.size()) -
-                            kNumInitializationFrames;
-    return (denominator > 0 ? average_duration / denominator : -1);
-  }
 
   int ProcessCapture() {
     // Set the stream delay.
@@ -343,7 +321,6 @@ class TimedThreadApiProcessor {
     frame_data_.input_stream_config.set_sample_rate_hz(
         simulation_config_->sample_rate_hz);
     frame_data_.input_stream_config.set_num_channels(num_channels_);
-    frame_data_.input_stream_config.set_has_keyboard(false);
     populate_audio_frame(input_level_, num_channels_,
                          (simulation_config_->sample_rate_hz *
                           AudioProcessing::kChunkSizeMs / 1000),
@@ -353,7 +330,6 @@ class TimedThreadApiProcessor {
     frame_data_.output_stream_config.set_sample_rate_hz(
         simulation_config_->sample_rate_hz);
     frame_data_.output_stream_config.set_num_channels(1);
-    frame_data_.output_stream_config.set_has_keyboard(false);
   }
 
   bool ReadyToProcess() {
@@ -367,7 +343,7 @@ class TimedThreadApiProcessor {
 
     // Should not be reached, but the return statement is needed for the code to
     // build successfully on Android.
-    RTC_NOTREACHED();
+    RTC_DCHECK_NOTREACHED();
     return false;
   }
 
@@ -380,7 +356,8 @@ class TimedThreadApiProcessor {
   AudioFrameData frame_data_;
   webrtc::Clock* clock_;
   const size_t num_durations_to_store_;
-  std::vector<double> api_call_durations_;
+  SamplesStatsCounter api_call_durations_;
+  size_t samples_count_ = 0;
   const float input_level_;
   bool first_process_call_ = true;
   const ProcessorType processor_type_;
@@ -424,7 +401,8 @@ class CallSimulator : public ::testing::TestWithParam<SimulationConfig> {
   static const float kCaptureInputFloatLevel;
   static const float kRenderInputFloatLevel;
   static const int kMinNumFramesToProcess = 150;
-  static const int32_t kTestTimeout = 3 * 10 * kMinNumFramesToProcess;
+  static constexpr TimeDelta kTestTimeout =
+      TimeDelta::Millis(3 * 10 * kMinNumFramesToProcess);
 
   // Stop all running threads.
   void StopThreads() {
@@ -443,8 +421,6 @@ class CallSimulator : public ::testing::TestWithParam<SimulationConfig> {
       apm_config.gain_controller1.enabled = true;
       apm_config.gain_controller1.mode =
           AudioProcessing::Config::GainController1::kAdaptiveDigital;
-      apm_config.level_estimation.enabled = true;
-      apm_config.voice_detection.enabled = true;
       apm->ApplyConfig(apm_config);
     };
 
@@ -456,8 +432,6 @@ class CallSimulator : public ::testing::TestWithParam<SimulationConfig> {
       apm_config.noise_suppression.enabled = true;
       apm_config.gain_controller1.mode =
           AudioProcessing::Config::GainController1::kAdaptiveDigital;
-      apm_config.level_estimation.enabled = true;
-      apm_config.voice_detection.enabled = true;
       apm->ApplyConfig(apm_config);
     };
 
@@ -467,9 +441,7 @@ class CallSimulator : public ::testing::TestWithParam<SimulationConfig> {
       AudioProcessing::Config apm_config = apm->GetConfig();
       apm_config.echo_canceller.enabled = false;
       apm_config.gain_controller1.enabled = false;
-      apm_config.level_estimation.enabled = false;
       apm_config.noise_suppression.enabled = false;
-      apm_config.voice_detection.enabled = false;
       apm->ApplyConfig(apm_config);
     };
 

@@ -13,8 +13,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include <memory>
-#include <string>
 #include <utility>
 #include <vector>
 
@@ -29,6 +27,7 @@
 #include "pc/session_description.h"
 #include "pc/webrtc_sdp.h"
 #include "rtc_base/helpers.h"
+#include "rtc_base/net_helper.h"
 #include "rtc_base/socket_address.h"
 #include "rtc_base/string_encode.h"
 #include "test/gtest.h"
@@ -63,11 +62,11 @@ CreateCricketSessionDescription() {
   // VideoContentDescription
   auto video = std::make_unique<cricket::VideoContentDescription>();
 
-  audio->AddCodec(cricket::AudioCodec(103, "ISAC", 16000, 0, 0));
+  audio->AddCodec(cricket::CreateAudioCodec(103, "ISAC", 16000, 0));
   desc->AddContent(cricket::CN_AUDIO, MediaProtocolType::kRtp,
                    std::move(audio));
 
-  video->AddCodec(cricket::VideoCodec(120, "VP8"));
+  video->AddCodec(cricket::CreateVideoCodec(120, "VP8"));
   desc->AddContent(cricket::CN_VIDEO, MediaProtocolType::kRtp,
                    std::move(video));
 

@@ -20,10 +20,8 @@
 #include "api/units/timestamp.h"
 #include "call/call.h"
 #include "call/simulated_network.h"
-#include "rtc_base/constructor_magic.h"
 #include "rtc_base/copy_on_write_buffer.h"
 #include "rtc_base/synchronization/mutex.h"
-#include "rtc_base/task_queue.h"
 #include "test/network/network_emulation.h"
 #include "test/scenario/column_printer.h"
 #include "test/scenario/scenario_config.h"
@@ -55,10 +53,9 @@ class NetworkNodeTransport : public Transport {
   NetworkNodeTransport(Clock* sender_clock, Call* sender_call);
   ~NetworkNodeTransport() override;
 
-  bool SendRtp(const uint8_t* packet,
-               size_t length,
+  bool SendRtp(rtc::ArrayView<const uint8_t> packet,
                const PacketOptions& options) override;
-  bool SendRtcp(const uint8_t* packet, size_t length) override;
+  bool SendRtcp(rtc::ArrayView<const uint8_t> packet) override;
 
   void Connect(EmulatedEndpoint* endpoint,
                const rtc::SocketAddress& receiver_address,

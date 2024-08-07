@@ -20,14 +20,13 @@
 #include <vector>
 
 #include "api/sequence_checker.h"
+#include "api/task_queue/pending_task_safety_flag.h"
 #include "rtc_base/async_resolver_interface.h"
 #include "rtc_base/event.h"
 #include "rtc_base/ip_address.h"
-#include "rtc_base/ref_counted_object.h"
 #include "rtc_base/socket_address.h"
 #include "rtc_base/system/no_unique_address.h"
 #include "rtc_base/system/rtc_export.h"
-#include "rtc_base/task_utils/pending_task_safety_flag.h"
 #include "rtc_base/thread.h"
 #include "rtc_base/thread_annotations.h"
 
@@ -40,12 +39,18 @@ namespace rtc {
 // happen from the same rtc::Thread, except for Destroy which is allowed to
 // happen on another context provided it's not happening concurrently to another
 // public API call, and is the last access to the object.
-class RTC_EXPORT AsyncResolver : public AsyncResolverInterface {
+// TODO(bugs.webrtc.org/12598): Deprecate and remove
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wstrict-aliasing"
+class [[deprecated("Use AsyncDnsResolver")]] RTC_EXPORT AsyncResolver
+    : public AsyncResolverInterface {
+#pragma clang diagnostic pop
  public:
   AsyncResolver();
   ~AsyncResolver() override;
 
   void Start(const SocketAddress& addr) override;
+  void Start(const SocketAddress& addr, int family) override;
   bool GetResolvedAddress(int family, SocketAddress* addr) const override;
   int GetError() const override;
   void Destroy(bool wait) override;

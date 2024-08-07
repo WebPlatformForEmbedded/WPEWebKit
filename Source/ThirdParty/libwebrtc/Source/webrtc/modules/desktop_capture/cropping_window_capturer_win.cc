@@ -118,7 +118,7 @@ struct TopWindowVerifierContext : public SelectedWindowContext {
       // firing an assert when enabled, report that the selected window isn't
       // topmost to avoid inadvertent capture of other windows.
       RTC_LOG(LS_ERROR) << "Failed to enumerate windows: " << lastError;
-      RTC_NOTREACHED();
+      RTC_DCHECK_NOTREACHED();
       return false;
     }
   }
@@ -153,6 +153,9 @@ class CroppingWindowCapturerWin : public CroppingWindowCapturer {
   bool enumerate_current_process_windows_;
 
   rtc::scoped_refptr<FullScreenWindowDetector> full_screen_window_detector_;
+
+  // Used to make sure that we only log the usage of fullscreen detection once.
+  mutable bool fullscreen_usage_logged_ = false;
 };
 
 void CroppingWindowCapturerWin::CaptureFrame() {
@@ -307,6 +310,11 @@ WindowId CroppingWindowCapturerWin::GetWindowToCapture() const {
       full_screen_window_detector_
           ? full_screen_window_detector_->FindFullScreenWindow(selected_source)
           : 0;
+  if (full_screen_source && full_screen_source != selected_source &&
+      !fullscreen_usage_logged_) {
+    fullscreen_usage_logged_ = true;
+    LogDesktopCapturerFullscreenDetectorUsage();
+  }
   return full_screen_source ? full_screen_source : selected_source;
 }
 

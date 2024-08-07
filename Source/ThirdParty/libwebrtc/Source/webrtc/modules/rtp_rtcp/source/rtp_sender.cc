@@ -17,6 +17,7 @@
 #include <utility>
 
 #include "absl/strings/match.h"
+#include "absl/strings/string_view.h"
 #include "api/array_view.h"
 #include "api/rtc_event_log/rtc_event_log.h"
 #include "logging/rtc_event_log/events/rtc_event_rtp_packet_outgoing.h"
@@ -37,13 +38,15 @@
 namespace webrtc {
 
 namespace {
-// Max in the RFC 3550 is 255 bytes, we limit it to be modulus 32 for SRTP.
-constexpr size_t kMaxPaddingLength = 224;
 constexpr size_t kMinAudioPaddingLength = 50;
 constexpr size_t kRtpHeaderLength = 12;
 
 // Min size needed to get payload padding from packet history.
 constexpr int kMinPayloadPaddingBytes = 50;
+
+// Determines how much larger a payload padding packet may be, compared to the
+// requested padding size.
+constexpr double kMaxPaddingSizeFactor = 3.0;
 
 template <typename Extension>
 constexpr RtpExtensionSize CreateExtensionSize() {
@@ -90,8 +93,6 @@ constexpr RtpExtensionSize kAudioExtensionSizes[] = {
     CreateExtensionSize<InbandComfortNoiseExtension>(),
     CreateExtensionSize<TransmissionOffset>(),
     CreateExtensionSize<TransportSequenceNumber>(),
-    CreateMaxExtensionSize<RtpStreamId>(),
-    CreateMaxExtensionSize<RepairedRtpStreamId>(),
     CreateMaxExtensionSize<RtpMid>(),
 };
 
@@ -108,9 +109,10 @@ bool IsNonVolatile(RTPExtensionType type) {
     case kRtpExtensionTransportSequenceNumber:
     case kRtpExtensionTransportSequenceNumber02:
     case kRtpExtensionRtpStreamId:
+    case kRtpExtensionRepairedRtpStreamId:
     case kRtpExtensionMid:
-    case kRtpExtensionGenericFrameDescriptor00:
-    case kRtpExtensionGenericFrameDescriptor02:
+    case kRtpExtensionGenericFrameDescriptor:
+    case kRtpExtensionDependencyDescriptor:
       return true;
     case kRtpExtensionInbandComfortNoise:
     case kRtpExtensionAbsoluteCaptureTime:
@@ -119,13 +121,12 @@ bool IsNonVolatile(RTPExtensionType type) {
     case kRtpExtensionVideoContentType:
     case kRtpExtensionVideoLayersAllocation:
     case kRtpExtensionVideoTiming:
-    case kRtpExtensionRepairedRtpStreamId:
     case kRtpExtensionColorSpace:
     case kRtpExtensionVideoFrameTrackingId:
       return false;
     case kRtpExtensionNone:
     case kRtpExtensionNumberOfExtensions:
-      RTC_NOTREACHED();
+      RTC_DCHECK_NOTREACHED();
       return false;
   }
   RTC_CHECK_NOTREACHED();
@@ -138,28 +139,7 @@ bool HasBweExtension(const RtpHeaderExtensionMap& extensions_map) {
          extensions_map.IsRegistered(kRtpExtensionTransmissionTimeOffset);
 }
 
-double GetMaxPaddingSizeFactor(const WebRtcKeyValueConfig* field_trials) {
-  // Too low factor means RTX payload padding is rarely used and ineffective.
-  // Too high means we risk interrupting regular media packets.
-  // In practice, 3x seems to yield reasonable results.
-  constexpr double kDefaultFactor = 3.0;
-  if (!field_trials) {
-    return kDefaultFactor;
-  }
-
-  FieldTrialOptional<double> factor("factor", kDefaultFactor);
-  ParseFieldTrial({&factor}, field_trials->Lookup("WebRTC-LimitPaddingSize"));
-  RTC_CHECK_GE(factor.Value(), 0.0);
-  return factor.Value();
-}
-
 }  // namespace
-
-RTPSender::RTPSender(const RtpRtcpInterface::Configuration& config,
-                     RtpPacketHistory* packet_history,
-                     RtpPacketSender* packet_sender,
-                     PacketSequencer*)
-    : RTPSender(config, packet_history, packet_sender) {}
 
 RTPSender::RTPSender(const RtpRtcpInterface::Configuration& config,
                      RtpPacketHistory* packet_history,
@@ -171,26 +151,27 @@ RTPSender::RTPSender(const RtpRtcpInterface::Configuration& config,
       rtx_ssrc_(config.rtx_send_ssrc),
       flexfec_ssrc_(config.fec_generator ? config.fec_generator->FecSsrc()
                                          : absl::nullopt),
-      max_padding_size_factor_(GetMaxPaddingSizeFactor(config.field_trials)),
       packet_history_(packet_history),
       paced_sender_(packet_sender),
       sending_media_(true),                   // Default to sending media.
       max_packet_size_(IP_PACKET_SIZE - 28),  // Default is IP-v4/UDP.
       rtp_header_extension_map_(config.extmap_allow_mixed),
       // RTP variables
+      rid_(config.rid),
       always_send_mid_and_rid_(config.always_send_mid_and_rid),
       ssrc_has_acked_(false),
       rtx_ssrc_has_acked_(false),
-      csrcs_(),
       rtx_(kRtxOff),
       supports_bwe_extension_(false),
       retransmission_rate_limiter_(config.retransmission_rate_limiter) {
-  UpdateHeaderSizes();
   // This random initialization is not intended to be cryptographic strong.
   timestamp_offset_ = random_.Rand<uint32_t>();
 
   RTC_DCHECK(paced_sender_);
   RTC_DCHECK(packet_history_);
+  RTC_DCHECK_LE(rid_.size(), RtpStreamId::kMaxValueSizeBytes);
+
+  UpdateHeaderSizes();
 }
 
 RTPSender::~RTPSender() {
@@ -238,14 +219,6 @@ bool RTPSender::IsRtpHeaderExtensionRegistered(RTPExtensionType type) const {
   return rtp_header_extension_map_.IsRegistered(type);
 }
 
-int32_t RTPSender::DeregisterRtpHeaderExtension(RTPExtensionType type) {
-  MutexLock lock(&send_mutex_);
-  rtp_header_extension_map_.Deregister(type);
-  supports_bwe_extension_ = HasBweExtension(rtp_header_extension_map_);
-  UpdateHeaderSizes();
-  return 0;
-}
-
 void RTPSender::DeregisterRtpHeaderExtension(absl::string_view uri) {
   MutexLock lock(&send_mutex_);
   rtp_header_extension_map_.Deregister(uri);
@@ -266,6 +239,12 @@ size_t RTPSender::MaxRtpPacketSize() const {
 
 void RTPSender::SetRtxStatus(int mode) {
   MutexLock lock(&send_mutex_);
+  if (mode != kRtxOff &&
+      (!rtx_ssrc_.has_value() || rtx_payload_type_map_.empty())) {
+    RTC_LOG(LS_ERROR)
+        << "Failed to enable RTX without RTX SSRC or payload types.";
+    return;
+  }
   rtx_ = mode;
 }
 
@@ -288,16 +267,7 @@ void RTPSender::SetRtxPayloadType(int payload_type,
 }
 
 int32_t RTPSender::ReSendPacket(uint16_t packet_id) {
-  // Try to find packet in RTP packet history. Also verify RTT here, so that we
-  // don't retransmit too often.
-  absl::optional<RtpPacketHistory::PacketState> stored_packet =
-      packet_history_->GetPacketState(packet_id);
-  if (!stored_packet || stored_packet->pending_transmission) {
-    // Packet not found or already queued for retransmission, ignore.
-    return 0;
-  }
-
-  const int32_t packet_size = static_cast<int32_t>(stored_packet->packet_size);
+  int32_t packet_size = 0;
   const bool rtx = (RtxStatus() & kRtxRetransmitted) > 0;
 
   std::unique_ptr<RtpPacketToSend> packet =
@@ -306,6 +276,7 @@ int32_t RTPSender::ReSendPacket(uint16_t packet_id) {
             // Check if we're overusing retransmission bitrate.
             // TODO(sprang): Add histograms for nack success or failure
             // reasons.
+            packet_size = stored_packet.size();
             std::unique_ptr<RtpPacketToSend> retransmit_packet;
             if (retransmission_rate_limiter_ &&
                 !retransmission_rate_limiter_->TryUseRate(packet_size)) {
@@ -323,7 +294,14 @@ int32_t RTPSender::ReSendPacket(uint16_t packet_id) {
             }
             return retransmit_packet;
           });
+  if (packet_size == 0) {
+    // Packet not found or already queued for retransmission, ignore.
+    RTC_DCHECK(!packet);
+    return 0;
+  }
   if (!packet) {
+    // Packet was found, but lambda helper above chose not to create
+    // `retransmit_packet` out of it.
     return -1;
   }
   packet->set_packet_type(RtpPacketMediaType::kRetransmission);
@@ -357,7 +335,7 @@ void RTPSender::OnReceivedAckOnRtxSsrc(
 void RTPSender::OnReceivedNack(
     const std::vector<uint16_t>& nack_sequence_numbers,
     int64_t avg_rtt) {
-  packet_history_->SetRtt(5 + avg_rtt);
+  packet_history_->SetRtt(TimeDelta::Millis(5 + avg_rtt));
   for (uint16_t seq_no : nack_sequence_numbers) {
     const int32_t bytes_sent = ReSendPacket(seq_no);
     if (bytes_sent < 0) {
@@ -397,11 +375,10 @@ std::vector<std::unique_ptr<RtpPacketToSend>> RTPSender::GeneratePadding(
           packet_history_->GetPayloadPaddingPacket(
               [&](const RtpPacketToSend& packet)
                   -> std::unique_ptr<RtpPacketToSend> {
-                // Limit overshoot, generate <= `max_padding_size_factor_` *
-                // target_size_bytes.
+                // Limit overshoot, generate <= `kMaxPaddingSizeFactor` *
+                // `target_size_bytes`.
                 const size_t max_overshoot_bytes = static_cast<size_t>(
-                    ((max_padding_size_factor_ - 1.0) * target_size_bytes) +
-                    0.5);
+                    ((kMaxPaddingSizeFactor - 1.0) * target_size_bytes) + 0.5);
                 if (packet.payload_size() + kRtxHeaderSize >
                     max_overshoot_bytes + bytes_left) {
                   return nullptr;
@@ -461,6 +438,7 @@ std::vector<std::unique_ptr<RtpPacketToSend>> RTPSender::GeneratePadding(
       }
 
       RTC_DCHECK(rtx_ssrc_);
+      RTC_DCHECK(!rtx_payload_type_map_.empty());
       padding_packet->SetSsrc(*rtx_ssrc_);
       padding_packet->SetPayloadType(rtx_payload_type_map_.begin()->second);
     }
@@ -483,34 +461,16 @@ std::vector<std::unique_ptr<RtpPacketToSend>> RTPSender::GeneratePadding(
   return padding_packets;
 }
 
-bool RTPSender::SendToNetwork(std::unique_ptr<RtpPacketToSend> packet) {
-  RTC_DCHECK(packet);
-  int64_t now_ms = clock_->TimeInMilliseconds();
-
-  auto packet_type = packet->packet_type();
-  RTC_CHECK(packet_type) << "Packet type must be set before sending.";
-
-  if (packet->capture_time_ms() <= 0) {
-    packet->set_capture_time_ms(now_ms);
-  }
-
-  std::vector<std::unique_ptr<RtpPacketToSend>> packets;
-  packets.emplace_back(std::move(packet));
-  paced_sender_->EnqueuePackets(std::move(packets));
-
-  return true;
-}
-
 void RTPSender::EnqueuePackets(
     std::vector<std::unique_ptr<RtpPacketToSend>> packets) {
   RTC_DCHECK(!packets.empty());
-  int64_t now_ms = clock_->TimeInMilliseconds();
+  Timestamp now = clock_->CurrentTime();
   for (auto& packet : packets) {
     RTC_DCHECK(packet);
     RTC_CHECK(packet->packet_type().has_value())
         << "Packet type must be set before sending.";
-    if (packet->capture_time_ms() <= 0) {
-      packet->set_capture_time_ms(now_ms);
+    if (packet->capture_time() <= Timestamp::Zero()) {
+      packet->set_capture_time(now);
     }
   }
 
@@ -527,19 +487,19 @@ size_t RTPSender::ExpectedPerPacketOverhead() const {
   return max_media_packet_header_;
 }
 
-std::unique_ptr<RtpPacketToSend> RTPSender::AllocatePacket() const {
+std::unique_ptr<RtpPacketToSend> RTPSender::AllocatePacket(
+    rtc::ArrayView<const uint32_t> csrcs) {
   MutexLock lock(&send_mutex_);
-  // TODO(danilchap): Find better motivator and value for extra capacity.
-  // RtpPacketizer might slightly miscalulate needed size,
-  // SRTP may benefit from extra space in the buffer and do encryption in place
-  // saving reallocation.
-  // While sending slightly oversized packet increase chance of dropped packet,
-  // it is better than crash on drop packet without trying to send it.
-  static constexpr int kExtraCapacity = 16;
-  auto packet = std::make_unique<RtpPacketToSend>(
-      &rtp_header_extension_map_, max_packet_size_ + kExtraCapacity);
+  RTC_DCHECK_LE(csrcs.size(), kRtpCsrcSize);
+  if (csrcs.size() > max_num_csrcs_) {
+    max_num_csrcs_ = csrcs.size();
+    UpdateHeaderSizes();
+  }
+  auto packet = std::make_unique<RtpPacketToSend>(&rtp_header_extension_map_,
+                                                  max_packet_size_);
   packet->SetSsrc(ssrc_);
-  packet->SetCsrcs(csrcs_);
+  packet->SetCsrcs(csrcs);
+
   // Reserve extensions, if registered, RtpSender set in SendToNetwork.
   packet->ReserveExtension<AbsoluteSendTime>();
   packet->ReserveExtension<TransmissionOffset>();
@@ -569,6 +529,39 @@ std::unique_ptr<RtpPacketToSend> RTPSender::AllocatePacket() const {
   return packet;
 }
 
+size_t RTPSender::RtxPacketOverhead() const {
+  MutexLock lock(&send_mutex_);
+  if (rtx_ == kRtxOff) {
+    return 0;
+  }
+  size_t overhead = 0;
+
+  // Count space for the RTP header extensions that might need to be added to
+  // the RTX packet.
+  if (!always_send_mid_and_rid_ && (!rtx_ssrc_has_acked_ && ssrc_has_acked_)) {
+    // Prefer to reserve extra byte in case two byte header rtp header
+    // extensions are used.
+    static constexpr int kRtpExtensionHeaderSize = 2;
+
+    // Rtx packets hasn't been acked and would need to have mid and rrsid rtp
+    // header extensions, while media packets no longer needs to include mid and
+    // rsid extensions.
+    if (!mid_.empty()) {
+      overhead += (kRtpExtensionHeaderSize + mid_.size());
+    }
+    if (!rid_.empty()) {
+      overhead += (kRtpExtensionHeaderSize + rid_.size());
+    }
+    // RTP header extensions are rounded up to 4 bytes. Depending on already
+    // present extensions adding mid & rrsid may add up to 3 bytes of padding.
+    overhead += 3;
+  }
+
+  // Add two bytes for the original sequence number in the RTP payload.
+  overhead += kRtxHeaderSize;
+  return overhead;
+}
+
 void RTPSender::SetSendingMediaStatus(bool enabled) {
   MutexLock lock(&send_mutex_);
   sending_media_ = enabled;
@@ -593,26 +586,11 @@ uint32_t RTPSender::TimestampOffset() const {
   return timestamp_offset_;
 }
 
-void RTPSender::SetRid(const std::string& rid) {
-  // RID is used in simulcast scenario when multiple layers share the same mid.
-  MutexLock lock(&send_mutex_);
-  RTC_DCHECK_LE(rid.length(), RtpStreamId::kMaxValueSizeBytes);
-  rid_ = rid;
-  UpdateHeaderSizes();
-}
-
-void RTPSender::SetMid(const std::string& mid) {
+void RTPSender::SetMid(absl::string_view mid) {
   // This is configured via the API.
   MutexLock lock(&send_mutex_);
   RTC_DCHECK_LE(mid.length(), RtpMid::kMaxValueSizeBytes);
-  mid_ = mid;
-  UpdateHeaderSizes();
-}
-
-void RTPSender::SetCsrcs(const std::vector<uint32_t>& csrcs) {
-  RTC_DCHECK_LE(csrcs.size(), kRtpCsrcSize);
-  MutexLock lock(&send_mutex_);
-  csrcs_ = csrcs;
+  mid_ = std::string(mid);
   UpdateHeaderSizes();
 }
 
@@ -628,8 +606,7 @@ static void CopyHeaderAndExtensionsToRtxPacket(const RtpPacketToSend& packet,
   // Set the variable fields in the packet header:
   // * CSRCs - must be set before header extensions.
   // * Header extensions - replace Rid header with RepairedRid header.
-  const std::vector<uint32_t> csrcs = packet.Csrcs();
-  rtx_packet->SetCsrcs(csrcs);
+  rtx_packet->SetCsrcs(packet.Csrcs());
   for (int extension_num = kRtpExtensionNone + 1;
        extension_num < kRtpExtensionNumberOfExtensions; ++extension_num) {
     auto extension = static_cast<RTPExtensionType>(extension_num);
@@ -713,21 +690,22 @@ std::unique_ptr<RtpPacketToSend> RTPSender::BuildRtxPacket(
 
   uint8_t* rtx_payload =
       rtx_packet->AllocatePayload(packet.payload_size() + kRtxHeaderSize);
-  if (rtx_payload == nullptr)
-    return nullptr;
+  RTC_CHECK(rtx_payload);
 
   // Add OSN (original sequence number).
   ByteWriter<uint16_t>::WriteBigEndian(rtx_payload, packet.SequenceNumber());
 
   // Add original payload data.
   auto payload = packet.payload();
-  memcpy(rtx_payload + kRtxHeaderSize, payload.data(), payload.size());
+  if (!payload.empty()) {
+    memcpy(rtx_payload + kRtxHeaderSize, payload.data(), payload.size());
+  }
 
   // Add original additional data.
   rtx_packet->set_additional_data(packet.additional_data());
 
   // Copy capture time so e.g. TransmissionOffset is correctly set.
-  rtx_packet->set_capture_time_ms(packet.capture_time_ms());
+  rtx_packet->set_capture_time(packet.capture_time());
 
   return rtx_packet;
 }
@@ -766,31 +744,39 @@ RtpState RTPSender::GetRtxRtpState() const {
 
 void RTPSender::UpdateHeaderSizes() {
   const size_t rtp_header_length =
-      kRtpHeaderLength + sizeof(uint32_t) * csrcs_.size();
+      kRtpHeaderLength + sizeof(uint32_t) * max_num_csrcs_;
 
   max_padding_fec_packet_header_ =
       rtp_header_length + RtpHeaderExtensionSize(kFecOrPaddingExtensionSizes,
                                                  rtp_header_extension_map_);
 
-  // RtpStreamId and Mid are treated specially in that we check if they
-  // currently are being sent. RepairedRtpStreamId is ignored because it is sent
-  // instead of RtpStreamId on rtx packets and require the same size.
+  // RtpStreamId, Mid and RepairedRtpStreamId are treated specially in that
+  // we check if they currently are being sent. RepairedRtpStreamId can be
+  // sent instead of RtpStreamID on RTX packets and may share the same space.
+  // When the primary SSRC has already been acked but the RTX SSRC has not
+  // yet been acked, RepairedRtpStreamId needs to be taken into account
+  // separately.
   const bool send_mid_rid_on_rtx =
-      rtx_ssrc_.has_value() && !rtx_ssrc_has_acked_;
-  const bool send_mid_rid =
-      always_send_mid_and_rid_ || !ssrc_has_acked_ || send_mid_rid_on_rtx;
+      rtx_ssrc_.has_value() &&
+      (always_send_mid_and_rid_ || !rtx_ssrc_has_acked_);
+  const bool send_mid_rid = always_send_mid_and_rid_ || !ssrc_has_acked_;
   std::vector<RtpExtensionSize> non_volatile_extensions;
   for (auto& extension :
        audio_configured_ ? AudioExtensionSizes() : VideoExtensionSizes()) {
     if (IsNonVolatile(extension.type)) {
       switch (extension.type) {
         case RTPExtensionType::kRtpExtensionMid:
-          if (send_mid_rid && !mid_.empty()) {
+          if ((send_mid_rid || send_mid_rid_on_rtx) && !mid_.empty()) {
             non_volatile_extensions.push_back(extension);
           }
           break;
         case RTPExtensionType::kRtpExtensionRtpStreamId:
           if (send_mid_rid && !rid_.empty()) {
+            non_volatile_extensions.push_back(extension);
+          }
+          break;
+        case RTPExtensionType::kRtpExtensionRepairedRtpStreamId:
+          if (send_mid_rid_on_rtx && !send_mid_rid && !rid_.empty()) {
             non_volatile_extensions.push_back(extension);
           }
           break;

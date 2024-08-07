@@ -16,6 +16,8 @@
 #include <vector>
 
 #include "api/fec_controller_override.h"
+#include "api/units/time_delta.h"
+#include "api/units/timestamp.h"
 #include "api/video/encoded_image.h"
 #include "api/video/video_frame.h"
 #include "api/video_codecs/video_encoder.h"
@@ -25,6 +27,7 @@
 #include "modules/video_coding/codecs/vp8/include/vp8.h"
 #include "modules/video_coding/include/video_codec_interface.h"
 #include "modules/video_coding/utility/framerate_controller_deprecated.h"
+#include "modules/video_coding/utility/vp8_constants.h"
 #include "rtc_base/experiments/cpu_speed_experiment.h"
 #include "rtc_base/experiments/encoder_info_settings.h"
 #include "rtc_base/experiments/rate_control_settings.h"
@@ -131,6 +134,7 @@ class LibvpxVp8Encoder : public VideoEncoder {
   std::vector<vpx_codec_enc_cfg_t> vpx_configs_;
   std::vector<Vp8EncoderConfig> config_overrides_;
   std::vector<vpx_rational_t> downsampling_factors_;
+  std::vector<Timestamp> last_encoder_output_time_;
 
   // Variable frame-rate screencast related fields and methods.
   const struct VariableFramerateExperiment {
@@ -138,7 +142,7 @@ class LibvpxVp8Encoder : public VideoEncoder {
     // Framerate is limited to this value in steady state.
     float framerate_limit = 5.0;
     // This qp or below is considered a steady state.
-    int steady_state_qp = 15;
+    int steady_state_qp = kVp8SteadyStateQpThreshold;
     // Frames of at least this percentage below ideal for configured bitrate are
     // considered in a steady state.
     int steady_state_undershoot_percentage = 30;
@@ -151,6 +155,8 @@ class LibvpxVp8Encoder : public VideoEncoder {
   FecControllerOverride* fec_controller_override_ = nullptr;
 
   const LibvpxVp8EncoderInfoSettings encoder_info_override_;
+
+  absl::optional<TimeDelta> max_frame_drop_interval_;
 };
 
 }  // namespace webrtc

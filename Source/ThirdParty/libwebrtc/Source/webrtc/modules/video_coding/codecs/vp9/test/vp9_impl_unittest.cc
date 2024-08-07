@@ -17,6 +17,8 @@
 #include "api/video_codecs/video_encoder.h"
 #include "api/video_codecs/vp9_profile.h"
 #include "common_video/libyuv/include/webrtc_libyuv.h"
+#include "media/base/codec.h"
+#include "media/base/media_constants.h"
 #include "modules/rtp_rtcp/include/rtp_rtcp_defines.h"
 #include "modules/video_coding/codecs/interface/libvpx_interface.h"
 #include "modules/video_coding/codecs/interface/mock_libvpx_interface.h"
@@ -85,7 +87,7 @@ void ConfigureSvc(VideoCodec& codec_settings,
                   int num_temporal_layers = 1) {
   codec_settings.VP9()->numberOfSpatialLayers = num_spatial_layers;
   codec_settings.VP9()->numberOfTemporalLayers = num_temporal_layers;
-  codec_settings.VP9()->frameDroppingOn = false;
+  codec_settings.SetFrameDropEnabled(false);
 
   std::vector<SpatialLayer> layers = GetSvcConfig(
       codec_settings.width, codec_settings.height, codec_settings.maxFramerate,
@@ -141,7 +143,7 @@ TEST_P(TestVp9ImplForPixelFormat, EncodeDecode) {
   ASSERT_TRUE(WaitForEncodedFrame(&encoded_frame, &codec_specific_info));
   // First frame should be a key frame.
   encoded_frame._frameType = VideoFrameType::kVideoFrameKey;
-  EXPECT_EQ(WEBRTC_VIDEO_CODEC_OK, decoder_->Decode(encoded_frame, false, 0));
+  EXPECT_EQ(WEBRTC_VIDEO_CODEC_OK, decoder_->Decode(encoded_frame, 0));
   std::unique_ptr<VideoFrame> decoded_frame;
   absl::optional<uint8_t> decoded_qp;
   ASSERT_TRUE(WaitForDecodedFrame(&decoded_frame, &decoded_qp));
@@ -191,7 +193,7 @@ TEST_P(TestVp9ImplForPixelFormat, DecodedColorSpaceFromBitstream) {
   ASSERT_TRUE(WaitForEncodedFrame(&encoded_frame, &codec_specific_info));
 
   // Encoded frame without explicit color space information.
-  EXPECT_EQ(WEBRTC_VIDEO_CODEC_OK, decoder_->Decode(encoded_frame, false, 0));
+  EXPECT_EQ(WEBRTC_VIDEO_CODEC_OK, decoder_->Decode(encoded_frame, 0));
   std::unique_ptr<VideoFrame> decoded_frame;
   absl::optional<uint8_t> decoded_qp;
   ASSERT_TRUE(WaitForDecodedFrame(&decoded_frame, &decoded_qp));
@@ -209,13 +211,26 @@ TEST_P(TestVp9ImplForPixelFormat, DecodedQpEqualsEncodedQp) {
   ASSERT_TRUE(WaitForEncodedFrame(&encoded_frame, &codec_specific_info));
   // First frame should be a key frame.
   encoded_frame._frameType = VideoFrameType::kVideoFrameKey;
-  EXPECT_EQ(WEBRTC_VIDEO_CODEC_OK, decoder_->Decode(encoded_frame, false, 0));
+  EXPECT_EQ(WEBRTC_VIDEO_CODEC_OK, decoder_->Decode(encoded_frame, 0));
   std::unique_ptr<VideoFrame> decoded_frame;
   absl::optional<uint8_t> decoded_qp;
   ASSERT_TRUE(WaitForDecodedFrame(&decoded_frame, &decoded_qp));
   ASSERT_TRUE(decoded_frame);
   ASSERT_TRUE(decoded_qp);
   EXPECT_EQ(encoded_frame.qp_, *decoded_qp);
+}
+
+TEST_P(TestVp9ImplForPixelFormat, CheckCaptureTimeID) {
+  constexpr Timestamp kCaptureTimeIdentifier = Timestamp::Micros(1000);
+  VideoFrame input_frame = NextInputFrame();
+  input_frame.set_capture_time_identifier(kCaptureTimeIdentifier);
+  EXPECT_EQ(WEBRTC_VIDEO_CODEC_OK, encoder_->Encode(input_frame, nullptr));
+  EncodedImage encoded_frame;
+  CodecSpecificInfo codec_specific_info;
+  ASSERT_TRUE(WaitForEncodedFrame(&encoded_frame, &codec_specific_info));
+  ASSERT_TRUE(encoded_frame.CaptureTimeIdentifier().has_value());
+  EXPECT_EQ(kCaptureTimeIdentifier.us(),
+            encoded_frame.CaptureTimeIdentifier()->us());
 }
 
 TEST_F(TestVp9Impl, SwitchInputPixelFormatsWithoutReconfigure) {
@@ -435,7 +450,7 @@ TEST_F(TestVp9Impl, EnableDisableSpatialLayers) {
   const size_t num_frames_to_encode = 5;
 
   ConfigureSvc(codec_settings_, num_spatial_layers);
-  codec_settings_.VP9()->frameDroppingOn = true;
+  codec_settings_.SetFrameDropEnabled(true);
 
   EXPECT_EQ(WEBRTC_VIDEO_CODEC_OK,
             encoder_->InitEncode(&codec_settings_, kSettings));
@@ -491,7 +506,7 @@ TEST(Vp9ImplTest, EnableDisableSpatialLayersWithSvcController) {
   std::unique_ptr<VideoEncoder> encoder = VP9Encoder::Create();
   VideoCodec codec_settings = DefaultCodecSettings();
   ConfigureSvc(codec_settings, num_spatial_layers);
-  codec_settings.VP9()->frameDroppingOn = true;
+  codec_settings.SetFrameDropEnabled(true);
   EXPECT_EQ(encoder->InitEncode(&codec_settings, kSettings),
             WEBRTC_VIDEO_CODEC_OK);
 
@@ -559,7 +574,7 @@ TEST(Vp9ImplTest, SpatialUpswitchNotAtGOFBoundary) {
   VideoCodec codec_settings = DefaultCodecSettings();
   ConfigureSvc(codec_settings, /*num_spatial_layers=*/3,
                /*num_temporal_layers=*/3);
-  codec_settings.VP9()->frameDroppingOn = true;
+  codec_settings.SetFrameDropEnabled(true);
   EXPECT_EQ(encoder->InitEncode(&codec_settings, kSettings),
             WEBRTC_VIDEO_CODEC_OK);
 
@@ -593,8 +608,8 @@ TEST(Vp9ImplTest, SpatialUpswitchNotAtGOFBoundary) {
   EXPECT_THAT(producer.SetNumInputFrames(1).Encode(),
               ElementsAre(GenericLayerIs(0, 0), GenericLayerIs(1, 0)));
 }
-
-TEST_F(TestVp9Impl, DisableEnableBaseLayerTriggersKeyFrame) {
+// TODO(bugs.webrtc.org/13442) Enable once a forward fix has landed in WebRTC.
+TEST_F(TestVp9Impl, DISABLED_DisableEnableBaseLayerTriggersKeyFrame) {
   // Configure encoder to produce N spatial layers. Encode frames for all
   // layers. Then disable all but the last layer. Then reenable all back again.
   test::ScopedFieldTrials override_field_trials(
@@ -605,7 +620,7 @@ TEST_F(TestVp9Impl, DisableEnableBaseLayerTriggersKeyFrame) {
   const size_t num_frames_to_encode = 5;
 
   ConfigureSvc(codec_settings_, num_spatial_layers, num_temporal_layers);
-  codec_settings_.VP9()->frameDroppingOn = false;
+  codec_settings_.SetFrameDropEnabled(false);
   codec_settings_.VP9()->flexibleMode = false;
   codec_settings_.VP9()->interLayerPred = InterLayerPredMode::kOnKeyPic;
   codec_settings_.mode = VideoCodecMode::kRealtimeVideo;
@@ -749,8 +764,9 @@ TEST_F(TestVp9Impl, DisableEnableBaseLayerTriggersKeyFrame) {
     EXPECT_EQ(encoded_frame[0]._frameType, expected_type);
   }
 }
-
-TEST(Vp9ImplTest, DisableEnableBaseLayerWithSvcControllerTriggersKeyFrame) {
+// TODO(bugs.webrtc.org/13442) Enable once a forward fix has landed in WebRTC.
+TEST(Vp9ImplTest,
+     DISABLED_DisableEnableBaseLayerWithSvcControllerTriggersKeyFrame) {
   // Configure encoder to produce N spatial layers. Encode frames for all
   // layers. Then disable all but the last layer. Then reenable all back again.
   const size_t num_spatial_layers = 3;
@@ -761,7 +777,7 @@ TEST(Vp9ImplTest, DisableEnableBaseLayerWithSvcControllerTriggersKeyFrame) {
   std::unique_ptr<VideoEncoder> encoder = VP9Encoder::Create();
   VideoCodec codec_settings = DefaultCodecSettings();
   ConfigureSvc(codec_settings, num_spatial_layers, num_temporal_layers);
-  codec_settings.VP9()->frameDroppingOn = false;
+  codec_settings.SetFrameDropEnabled(false);
   codec_settings.VP9()->flexibleMode = false;
   codec_settings.VP9()->interLayerPred = InterLayerPredMode::kOnKeyPic;
   codec_settings.mode = VideoCodecMode::kRealtimeVideo;
@@ -876,7 +892,7 @@ TEST_F(TestVp9Impl, DisableEnableBaseLayerTriggersKeyFrameForScreenshare) {
   const size_t num_frames_to_encode = 5;
 
   ConfigureSvc(codec_settings_, num_spatial_layers);
-  codec_settings_.VP9()->frameDroppingOn = false;
+  codec_settings_.SetFrameDropEnabled(false);
   codec_settings_.mode = VideoCodecMode::kScreensharing;
   codec_settings_.VP9()->interLayerPred = InterLayerPredMode::kOn;
   codec_settings_.VP9()->flexibleMode = true;
@@ -1035,7 +1051,7 @@ TEST_F(TestVp9Impl, EndOfPicture) {
 TEST_F(TestVp9Impl, InterLayerPred) {
   const size_t num_spatial_layers = 2;
   ConfigureSvc(codec_settings_, num_spatial_layers);
-  codec_settings_.VP9()->frameDroppingOn = false;
+  codec_settings_.SetFrameDropEnabled(false);
 
   VideoBitrateAllocation bitrate_allocation;
   for (size_t i = 0; i < num_spatial_layers; ++i) {
@@ -1110,7 +1126,7 @@ TEST_F(TestVp9Impl,
   const size_t num_frames_to_encode = 2;
 
   ConfigureSvc(codec_settings_, num_spatial_layers);
-  codec_settings_.VP9()->frameDroppingOn = false;
+  codec_settings_.SetFrameDropEnabled(false);
 
   const std::vector<InterLayerPredMode> inter_layer_pred_modes = {
       InterLayerPredMode::kOff, InterLayerPredMode::kOn,
@@ -1167,7 +1183,7 @@ TEST_F(TestVp9Impl,
   const size_t num_frames_to_encode = 2;
 
   ConfigureSvc(codec_settings_, num_spatial_layers);
-  codec_settings_.VP9()->frameDroppingOn = false;
+  codec_settings_.SetFrameDropEnabled(false);
   codec_settings_.VP9()->flexibleMode = false;
 
   const std::vector<InterLayerPredMode> inter_layer_pred_modes = {
@@ -1222,7 +1238,7 @@ TEST_F(TestVp9Impl, EnablingDisablingUpperLayerInTheSameGof) {
   const size_t num_temporal_layers = 2;
 
   ConfigureSvc(codec_settings_, num_spatial_layers, num_temporal_layers);
-  codec_settings_.VP9()->frameDroppingOn = false;
+  codec_settings_.SetFrameDropEnabled(false);
   codec_settings_.VP9()->flexibleMode = false;
 
   codec_settings_.VP9()->interLayerPred = InterLayerPredMode::kOn;
@@ -1294,7 +1310,7 @@ TEST_F(TestVp9Impl, EnablingDisablingUpperLayerAccrossGof) {
   const size_t num_temporal_layers = 2;
 
   ConfigureSvc(codec_settings_, num_spatial_layers, num_temporal_layers);
-  codec_settings_.VP9()->frameDroppingOn = false;
+  codec_settings_.SetFrameDropEnabled(false);
   codec_settings_.VP9()->flexibleMode = false;
 
   codec_settings_.VP9()->interLayerPred = InterLayerPredMode::kOn;
@@ -1380,7 +1396,7 @@ TEST_F(TestVp9Impl, EnablingNewLayerInScreenshareForcesAllLayersWithSS) {
   // simplifies the test.
   codec_settings_.spatialLayers[1].maxFramerate = 30.0;
   codec_settings_.spatialLayers[2].maxFramerate = 30.0;
-  codec_settings_.VP9()->frameDroppingOn = false;
+  codec_settings_.SetFrameDropEnabled(false);
   codec_settings_.mode = VideoCodecMode::kScreensharing;
   codec_settings_.VP9()->interLayerPred = InterLayerPredMode::kOn;
   codec_settings_.VP9()->flexibleMode = true;
@@ -1437,7 +1453,7 @@ TEST_F(TestVp9Impl, ScreenshareFrameDropping) {
   codec_settings_.spatialLayers[0].maxFramerate = 30.0;
   codec_settings_.spatialLayers[1].maxFramerate = 30.0;
   codec_settings_.spatialLayers[2].maxFramerate = 30.0;
-  codec_settings_.VP9()->frameDroppingOn = true;
+  codec_settings_.SetFrameDropEnabled(true);
   codec_settings_.mode = VideoCodecMode::kScreensharing;
   codec_settings_.VP9()->interLayerPred = InterLayerPredMode::kOn;
   codec_settings_.VP9()->flexibleMode = true;
@@ -1529,7 +1545,7 @@ TEST_F(TestVp9Impl, RemovingLayerIsNotDelayedInScreenshareAndAddsSsInfo) {
   // simplifies the test.
   codec_settings_.spatialLayers[1].maxFramerate = 30.0;
   codec_settings_.spatialLayers[2].maxFramerate = 30.0;
-  codec_settings_.VP9()->frameDroppingOn = false;
+  codec_settings_.SetFrameDropEnabled(false);
   codec_settings_.mode = VideoCodecMode::kScreensharing;
   codec_settings_.VP9()->interLayerPred = InterLayerPredMode::kOn;
   codec_settings_.VP9()->flexibleMode = true;
@@ -1610,7 +1626,7 @@ TEST_F(TestVp9Impl, DisableNewLayerInVideoDelaysSsInfoTillTL0) {
   // Chosen by hand, the 2nd frame is dropped with configured per-layer max
   // framerate.
   ConfigureSvc(codec_settings_, num_spatial_layers, num_temporal_layers);
-  codec_settings_.VP9()->frameDroppingOn = false;
+  codec_settings_.SetFrameDropEnabled(false);
   codec_settings_.mode = VideoCodecMode::kRealtimeVideo;
   codec_settings_.VP9()->interLayerPred = InterLayerPredMode::kOnKeyPic;
   codec_settings_.VP9()->flexibleMode = false;
@@ -1669,7 +1685,7 @@ TEST_F(TestVp9Impl, DisableNewLayerInVideoDelaysSsInfoTillTL0) {
 TEST_F(TestVp9Impl,
        LowLayerMarkedAsRefIfHighLayerNotEncodedAndInterLayerPredIsEnabled) {
   ConfigureSvc(codec_settings_, 3);
-  codec_settings_.VP9()->frameDroppingOn = false;
+  codec_settings_.SetFrameDropEnabled(false);
   codec_settings_.VP9()->interLayerPred = InterLayerPredMode::kOn;
 
   EXPECT_EQ(WEBRTC_VIDEO_CODEC_OK,
@@ -1838,7 +1854,7 @@ TEST_P(Vp9ImplWithLayeringTest, FlexibleMode) {
   std::unique_ptr<VideoEncoder> encoder = VP9Encoder::Create();
   VideoCodec codec_settings = DefaultCodecSettings();
   codec_settings.VP9()->flexibleMode = true;
-  codec_settings.VP9()->frameDroppingOn = false;
+  codec_settings.SetFrameDropEnabled(false);
   codec_settings.VP9()->numberOfSpatialLayers = num_spatial_layers_;
   codec_settings.VP9()->numberOfTemporalLayers = num_temporal_layers_;
   EXPECT_EQ(encoder->InitEncode(&codec_settings, kSettings),
@@ -1944,7 +1960,7 @@ TEST_F(TestVp9ImplFrameDropping, DifferentFrameratePerSpatialLayer) {
   const size_t num_input_frames = video_duration_secs * input_framerate_fps;
 
   codec_settings_.VP9()->numberOfSpatialLayers = num_spatial_layers;
-  codec_settings_.VP9()->frameDroppingOn = false;
+  codec_settings_.SetFrameDropEnabled(false);
   codec_settings_.VP9()->flexibleMode = true;
 
   VideoBitrateAllocation bitrate_allocation;
@@ -2024,7 +2040,8 @@ class TestVp9ImplProfile2 : public TestVp9Impl {
   }
 
   std::unique_ptr<VideoEncoder> CreateEncoder() override {
-    cricket::VideoCodec profile2_codec;
+    cricket::VideoCodec profile2_codec =
+        cricket::CreateVideoCodec(cricket::kVp9CodecName);
     profile2_codec.SetParam(kVP9FmtpProfileId,
                             VP9ProfileToString(VP9Profile::kProfile2));
     return VP9Encoder::Create(profile2_codec);
@@ -2046,7 +2063,7 @@ TEST_F(TestVp9ImplProfile2, EncodeDecode) {
   ASSERT_TRUE(WaitForEncodedFrame(&encoded_frame, &codec_specific_info));
   // First frame should be a key frame.
   encoded_frame._frameType = VideoFrameType::kVideoFrameKey;
-  EXPECT_EQ(WEBRTC_VIDEO_CODEC_OK, decoder_->Decode(encoded_frame, false, 0));
+  EXPECT_EQ(WEBRTC_VIDEO_CODEC_OK, decoder_->Decode(encoded_frame, 0));
   std::unique_ptr<VideoFrame> decoded_frame;
   absl::optional<uint8_t> decoded_qp;
   ASSERT_TRUE(WaitForDecodedFrame(&decoded_frame, &decoded_qp));
@@ -2087,7 +2104,7 @@ TEST_F(TestVp9Impl, ReenablingUpperLayerAfterKFWithInterlayerPredIsEnabled) {
   const size_t num_spatial_layers = 2;
   const int num_frames_to_encode = 10;
   codec_settings_.VP9()->flexibleMode = true;
-  codec_settings_.VP9()->frameDroppingOn = false;
+  codec_settings_.SetFrameDropEnabled(false);
   codec_settings_.VP9()->numberOfSpatialLayers = num_spatial_layers;
   codec_settings_.VP9()->numberOfTemporalLayers = 1;
   codec_settings_.VP9()->interLayerPred = InterLayerPredMode::kOn;
@@ -2205,7 +2222,7 @@ TEST(Vp9SpeedSettingsTrialsTest, NoSvcUsesGlobalSpeedFromTl0InLayerConfig) {
   // Keep a raw pointer for EXPECT calls and the like. Ownership is otherwise
   // passed on to LibvpxVp9Encoder.
   auto* const vpx = new NiceMock<MockLibvpxInterface>();
-  LibvpxVp9Encoder encoder(cricket::VideoCodec(),
+  LibvpxVp9Encoder encoder(cricket::CreateVideoCodec(cricket::kVp9CodecName),
                            absl::WrapUnique<LibvpxInterface>(vpx), trials);
 
   VideoCodec settings = DefaultCodecSettings();
@@ -2249,7 +2266,7 @@ TEST(Vp9SpeedSettingsTrialsTest,
   // Keep a raw pointer for EXPECT calls and the like. Ownership is otherwise
   // passed on to LibvpxVp9Encoder.
   auto* const vpx = new NiceMock<MockLibvpxInterface>();
-  LibvpxVp9Encoder encoder(cricket::VideoCodec(),
+  LibvpxVp9Encoder encoder(cricket::CreateVideoCodec(cricket::kVp9CodecName),
                            absl::WrapUnique<LibvpxInterface>(vpx), trials);
 
   VideoCodec settings = DefaultCodecSettings();
@@ -2307,7 +2324,7 @@ TEST(Vp9SpeedSettingsTrialsTest, DefaultPerLayerFlagsWithSvc) {
   // Keep a raw pointer for EXPECT calls and the like. Ownership is otherwise
   // passed on to LibvpxVp9Encoder.
   auto* const vpx = new NiceMock<MockLibvpxInterface>();
-  LibvpxVp9Encoder encoder(cricket::VideoCodec(),
+  LibvpxVp9Encoder encoder(cricket::CreateVideoCodec(cricket::kVp9CodecName),
                            absl::WrapUnique<LibvpxInterface>(vpx), trials);
 
   VideoCodec settings = DefaultCodecSettings();

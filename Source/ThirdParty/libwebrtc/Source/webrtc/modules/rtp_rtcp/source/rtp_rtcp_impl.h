@@ -19,11 +19,11 @@
 #include <string>
 #include <vector>
 
+#include "absl/strings/string_view.h"
 #include "absl/types/optional.h"
 #include "api/rtp_headers.h"
 #include "api/video/video_bitrate_allocation.h"
 #include "modules/include/module_fec_types.h"
-#include "modules/remote_bitrate_estimator/include/remote_bitrate_estimator.h"
 #include "modules/rtp_rtcp/include/rtp_rtcp.h"
 #include "modules/rtp_rtcp/include/rtp_rtcp_defines.h"  // RTCPPacketType
 #include "modules/rtp_rtcp/source/deprecated/deprecated_rtp_sender_egress.h"
@@ -43,16 +43,16 @@ class Clock;
 struct PacedPacketInfo;
 struct RTPVideoHeader;
 
-// DEPRECATED.
-class ModuleRtpRtcpImpl : public RtpRtcp, public RTCPReceiver::ModuleRtpRtcp {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+class ABSL_DEPRECATED("") ModuleRtpRtcpImpl
+    : public RtpRtcp,
+      public RTCPReceiver::ModuleRtpRtcp {
+#pragma clang diagnostic pop
  public:
   explicit ModuleRtpRtcpImpl(
       const RtpRtcpInterface::Configuration& configuration);
   ~ModuleRtpRtcpImpl() override;
-
-  // Returns the number of milliseconds until the module want a worker thread to
-  // call Process.
-  int64_t TimeUntilNextProcess() override;
 
   // Process any pending tasks such as timeouts.
   void Process() override;
@@ -60,8 +60,7 @@ class ModuleRtpRtcpImpl : public RtpRtcp, public RTCPReceiver::ModuleRtpRtcp {
   // Receiver part.
 
   // Called when we receive an RTCP packet.
-  void IncomingRtcpPacket(const uint8_t* incoming_packet,
-                          size_t incoming_packet_length) override;
+  void IncomingRtcpPacket(rtc::ArrayView<const uint8_t> packet) override;
 
   void SetRemoteSSRC(uint32_t ssrc) override;
   void SetLocalSsrc(uint32_t ssrc) override;
@@ -76,7 +75,6 @@ class ModuleRtpRtcpImpl : public RtpRtcp, public RTCPReceiver::ModuleRtpRtcp {
 
   // Register RTP header extension.
   void RegisterRtpHeaderExtension(absl::string_view uri, int id) override;
-  int32_t DeregisterSendRtpHeaderExtension(RTPExtensionType type) override;
   void DeregisterSendRtpHeaderExtension(absl::string_view uri) override;
 
   bool SupportsPadding() const override;
@@ -102,11 +100,7 @@ class ModuleRtpRtcpImpl : public RtpRtcp, public RTCPReceiver::ModuleRtpRtcp {
 
   uint32_t SSRC() const override { return rtcp_sender_.SSRC(); }
 
-  void SetRid(const std::string& rid) override;
-
-  void SetMid(const std::string& mid) override;
-
-  void SetCsrcs(const std::vector<uint32_t>& csrcs) override;
+  void SetMid(absl::string_view mid) override;
 
   RTCPSender::FeedbackState GetFeedbackState();
 
@@ -138,13 +132,18 @@ class ModuleRtpRtcpImpl : public RtpRtcp, public RTCPReceiver::ModuleRtpRtcp {
                          int payload_type,
                          bool force_sender_report) override;
 
-  bool TrySendPacket(RtpPacketToSend* packet,
+  bool TrySendPacket(std::unique_ptr<RtpPacketToSend> packet,
                      const PacedPacketInfo& pacing_info) override;
+
+  void OnBatchComplete() override {}
 
   void SetFecProtectionParams(const FecProtectionParams& delta_params,
                               const FecProtectionParams& key_params) override;
 
   std::vector<std::unique_ptr<RtpPacketToSend>> FetchFecPackets() override;
+
+  void OnAbortedRetransmissions(
+      rtc::ArrayView<const uint16_t> sequence_numbers) override;
 
   void OnPacketsAcknowledged(
       rtc::ArrayView<const uint16_t> sequence_numbers) override;
@@ -168,23 +167,12 @@ class ModuleRtpRtcpImpl : public RtpRtcp, public RTCPReceiver::ModuleRtpRtcp {
   void SetRTCPStatus(RtcpMode method) override;
 
   // Set RTCP CName.
-  int32_t SetCNAME(const char* c_name) override;
-
-  // Get remote NTP.
-  int32_t RemoteNTP(uint32_t* received_ntp_secs,
-                    uint32_t* received_ntp_frac,
-                    uint32_t* rtcp_arrival_time_secs,
-                    uint32_t* rtcp_arrival_time_frac,
-                    uint32_t* rtcp_timestamp) const override;
+  int32_t SetCNAME(absl::string_view c_name) override;
 
   // Get RoundTripTime.
-  int32_t RTT(uint32_t remote_ssrc,
-              int64_t* rtt,
-              int64_t* avg_rtt,
-              int64_t* min_rtt,
-              int64_t* max_rtt) const override;
+  absl::optional<TimeDelta> LastRtt() const override;
 
-  int64_t ExpectedRetransmissionTimeMs() const override;
+  TimeDelta ExpectedRetransmissionTime() const override;
 
   // Force a send of an RTCP packet.
   // Normal SR and RR are triggered via the process function.
@@ -196,8 +184,8 @@ class ModuleRtpRtcpImpl : public RtpRtcp, public RTCPReceiver::ModuleRtpRtcp {
 
   // A snapshot of the most recent Report Block with additional data of
   // interest to statistics. Used to implement RTCRemoteInboundRtpStreamStats.
-  // Within this list, the ReportBlockData::RTCPReportBlock::source_ssrc(),
-  // which is the SSRC of the corresponding outbound RTP stream, is unique.
+  // Within this list, the `ReportBlockData::source_ssrc()`, which is the SSRC
+  // of the corresponding outbound RTP stream, is unique.
   std::vector<ReportBlockData> GetLatestReportBlockData() const override;
   absl::optional<SenderReportStats> GetSenderReportStats() const override;
   // Round trip time statistics computed from the XR block contained in the last
@@ -240,7 +228,7 @@ class ModuleRtpRtcpImpl : public RtpRtcp, public RTCPReceiver::ModuleRtpRtcp {
   void OnReceivedNack(
       const std::vector<uint16_t>& nack_sequence_numbers) override;
   void OnReceivedRtcpReportBlocks(
-      const ReportBlockList& report_blocks) override;
+      rtc::ArrayView<const ReportBlockData> report_blocks) override;
   void OnRequestSendReport() override;
 
   void SetVideoBitrateAllocation(
@@ -311,14 +299,11 @@ class ModuleRtpRtcpImpl : public RtpRtcp, public RTCPReceiver::ModuleRtpRtcp {
 
   int64_t last_bitrate_process_time_;
   int64_t last_rtt_process_time_;
-  int64_t next_process_time_;
   uint16_t packet_overhead_;
 
   // Send side
   int64_t nack_last_time_sent_full_ms_;
   uint16_t nack_last_seq_number_sent_;
-
-  RemoteBitrateEstimator* const remote_bitrate_;
 
   RtcpRttStats* const rtt_stats_;
 

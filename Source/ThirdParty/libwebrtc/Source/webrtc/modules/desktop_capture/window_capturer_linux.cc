@@ -14,11 +14,11 @@
 #include "modules/desktop_capture/desktop_capturer.h"
 
 #if defined(WEBRTC_USE_PIPEWIRE)
-#include "modules/desktop_capture/linux/base_capturer_pipewire.h"
+#include "modules/desktop_capture/linux/wayland/base_capturer_pipewire.h"
 #endif  // defined(WEBRTC_USE_PIPEWIRE)
 
 #if defined(WEBRTC_USE_X11)
-#include "modules/desktop_capture/linux/window_capturer_x11.h"
+#include "modules/desktop_capture/linux/x11/window_capturer_x11.h"
 #endif  // defined(WEBRTC_USE_X11)
 
 namespace webrtc {
@@ -27,16 +27,18 @@ namespace webrtc {
 std::unique_ptr<DesktopCapturer> DesktopCapturer::CreateRawWindowCapturer(
     const DesktopCaptureOptions& options) {
 #if defined(WEBRTC_USE_PIPEWIRE)
-  if (options.allow_pipewire() && DesktopCapturer::IsRunningUnderWayland()) {
-    return BaseCapturerPipeWire::CreateRawCapturer(options);
+  if (options.allow_pipewire() && BaseCapturerPipeWire::IsSupported()) {
+    return std::make_unique<BaseCapturerPipeWire>(options,
+                                                  CaptureType::kWindow);
   }
 #endif  // defined(WEBRTC_USE_PIPEWIRE)
 
 #if defined(WEBRTC_USE_X11)
-  return WindowCapturerX11::CreateRawWindowCapturer(options);
-#else
-  return nullptr;
+  if (!DesktopCapturer::IsRunningUnderWayland())
+    return WindowCapturerX11::CreateRawWindowCapturer(options);
 #endif  // defined(WEBRTC_USE_X11)
+
+  return nullptr;
 }
 
 }  // namespace webrtc

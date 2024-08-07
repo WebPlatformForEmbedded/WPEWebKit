@@ -11,17 +11,18 @@
 #include "pc/rtp_transport.h"
 
 #include <errno.h>
-#include <string>
+
+#include <cstdint>
 #include <utility>
 
 #include "absl/strings/string_view.h"
 #include "api/array_view.h"
+#include "api/units/timestamp.h"
 #include "media/base/rtp_utils.h"
 #include "modules/rtp_rtcp/source/rtp_packet_received.h"
 #include "rtc_base/checks.h"
 #include "rtc_base/copy_on_write_buffer.h"
 #include "rtc_base/logging.h"
-#include "rtc_base/third_party/sigslot/sigslot.h"
 #include "rtc_base/trace_event.h"
 
 namespace webrtc {
@@ -58,7 +59,7 @@ void RtpTransport::SetRtpPacketTransport(
     rtp_packet_transport_->SignalWritableState.disconnect(this);
     rtp_packet_transport_->SignalSentPacket.disconnect(this);
     // Reset the network route of the old transport.
-    SignalNetworkRouteChanged(absl::optional<rtc::NetworkRoute>());
+    SendNetworkRouteChanged(absl::optional<rtc::NetworkRoute>());
   }
   if (new_packet_transport) {
     new_packet_transport->SignalReadyToSend.connect(
@@ -72,7 +73,7 @@ void RtpTransport::SetRtpPacketTransport(
     new_packet_transport->SignalSentPacket.connect(this,
                                                    &RtpTransport::OnSentPacket);
     // Set the network route for the new transport.
-    SignalNetworkRouteChanged(new_packet_transport->network_route());
+    SendNetworkRouteChanged(new_packet_transport->network_route());
   }
 
   rtp_packet_transport_ = new_packet_transport;
@@ -94,7 +95,7 @@ void RtpTransport::SetRtcpPacketTransport(
     rtcp_packet_transport_->SignalWritableState.disconnect(this);
     rtcp_packet_transport_->SignalSentPacket.disconnect(this);
     // Reset the network route of the old transport.
-    SignalNetworkRouteChanged(absl::optional<rtc::NetworkRoute>());
+    SendNetworkRouteChanged(absl::optional<rtc::NetworkRoute>());
   }
   if (new_packet_transport) {
     new_packet_transport->SignalReadyToSend.connect(
@@ -108,7 +109,7 @@ void RtpTransport::SetRtcpPacketTransport(
     new_packet_transport->SignalSentPacket.connect(this,
                                                    &RtpTransport::OnSentPacket);
     // Set the network route for the new transport.
-    SignalNetworkRouteChanged(new_packet_transport->network_route());
+    SendNetworkRouteChanged(new_packet_transport->network_route());
   }
   rtcp_packet_transport_ = new_packet_transport;
 
@@ -192,8 +193,9 @@ void RtpTransport::DemuxPacket(rtc::CopyOnWriteBuffer packet,
   }
 
   if (!rtp_demuxer_.OnRtpPacket(parsed_packet)) {
-    RTC_LOG(LS_WARNING) << "Failed to demux RTP packet: "
+    RTC_LOG(LS_VERBOSE) << "Failed to demux RTP packet: "
                         << RtpDemuxer::DescribePacket(parsed_packet);
+    NotifyUnDemuxableRtpPacketReceived(parsed_packet);
   }
 }
 
@@ -210,21 +212,21 @@ void RtpTransport::OnReadyToSend(rtc::PacketTransportInternal* transport) {
 
 void RtpTransport::OnNetworkRouteChanged(
     absl::optional<rtc::NetworkRoute> network_route) {
-  SignalNetworkRouteChanged(network_route);
+  SendNetworkRouteChanged(network_route);
 }
 
 void RtpTransport::OnWritableState(
     rtc::PacketTransportInternal* packet_transport) {
   RTC_DCHECK(packet_transport == rtp_packet_transport_ ||
              packet_transport == rtcp_packet_transport_);
-  SignalWritableState(IsTransportWritable());
+  SendWritableState(IsTransportWritable());
 }
 
 void RtpTransport::OnSentPacket(rtc::PacketTransportInternal* packet_transport,
                                 const rtc::SentPacket& sent_packet) {
   RTC_DCHECK(packet_transport == rtp_packet_transport_ ||
              packet_transport == rtcp_packet_transport_);
-  SignalSentPacket(sent_packet);
+  SendSentPacket(sent_packet);
 }
 
 void RtpTransport::OnRtpPacketReceived(rtc::CopyOnWriteBuffer packet,
@@ -234,7 +236,7 @@ void RtpTransport::OnRtpPacketReceived(rtc::CopyOnWriteBuffer packet,
 
 void RtpTransport::OnRtcpPacketReceived(rtc::CopyOnWriteBuffer packet,
                                         int64_t packet_time_us) {
-  SignalRtcpPacketReceived(&packet, packet_time_us);
+  SendRtcpPacketReceived(&packet, packet_time_us);
 }
 
 void RtpTransport::OnReadPacket(rtc::PacketTransportInternal* transport,
@@ -283,8 +285,18 @@ void RtpTransport::MaybeSignalReadyToSend() {
   bool ready_to_send =
       rtp_ready_to_send_ && (rtcp_ready_to_send_ || rtcp_mux_enabled_);
   if (ready_to_send != ready_to_send_) {
+    if (processing_ready_to_send_) {
+      // Delay ReadyToSend processing until current operation is finished.
+      // Note that this may not cause a signal, since ready_to_send may
+      // have a new value by the time this executes.
+      TaskQueueBase::Current()->PostTask(
+          SafeTask(safety_.flag(), [this] { MaybeSignalReadyToSend(); }));
+      return;
+    }
     ready_to_send_ = ready_to_send;
-    SignalReadyToSend(ready_to_send);
+    processing_ready_to_send_ = true;
+    SendReadyToSend(ready_to_send);
+    processing_ready_to_send_ = false;
   }
 }
 

@@ -86,7 +86,7 @@ void ScreenCapturerWinGdi::CaptureFrame() {
   PrepareCaptureResources();
 
   if (!CaptureImage()) {
-    RTC_LOG(WARNING) << "Failed to capture screen by GDI.";
+    RTC_LOG(LS_WARNING) << "Failed to capture screen by GDI.";
     callback_->OnCaptureResult(Result::ERROR_TEMPORARY, nullptr);
     return;
   }
@@ -160,7 +160,7 @@ void ScreenCapturerWinGdi::PrepareCaptureResources() {
   }
 
   // If the display configurations have changed then recreate GDI resources.
-  if (display_configuration_monitor_.IsChanged()) {
+  if (display_configuration_monitor_.IsChanged(kFullDesktopScreenId)) {
     if (desktop_dc_) {
       ReleaseDC(NULL, desktop_dc_);
       desktop_dc_ = nullptr;

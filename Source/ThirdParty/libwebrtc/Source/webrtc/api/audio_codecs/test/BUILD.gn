@@ -21,8 +21,8 @@ if (rtc_include_tests) {
     ]
     deps = [
       "..:audio_codecs_api",
-      "../../../rtc_base:rtc_base_approved",
       "../../../test:audio_codec_mocks",
+      "../../../test:scoped_key_value_config",
       "../../../test:test_support",
       "../L16:audio_decoder_L16",
       "../L16:audio_encoder_L16",
@@ -32,10 +32,6 @@ if (rtc_include_tests) {
       "../g722:audio_encoder_g722",
       "../ilbc:audio_decoder_ilbc",
       "../ilbc:audio_encoder_ilbc",
-      "../isac:audio_decoder_isac_fix",
-      "../isac:audio_decoder_isac_float",
-      "../isac:audio_encoder_isac_fix",
-      "../isac:audio_encoder_isac_float",
       "../opus:audio_decoder_opus",
       "../opus:audio_encoder_opus",
     ]

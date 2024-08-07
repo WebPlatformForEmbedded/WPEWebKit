@@ -14,7 +14,8 @@
 #include <stddef.h>  // For size_t.
 #include <stdint.h>  // For integer types.
 
-#include "rtc_base/constructor_magic.h"
+#include "absl/strings/string_view.h"
+#include "api/units/data_size.h"
 
 namespace rtc {
 
@@ -24,8 +25,14 @@ namespace rtc {
 // Byte order is assumed big-endian/network.
 class BitBufferWriter {
  public:
+  static constexpr webrtc::DataSize kMaxLeb128Length =
+      webrtc::DataSize::Bytes(10);
+
   // Constructs a bit buffer for the writable buffer of `bytes`.
   BitBufferWriter(uint8_t* bytes, size_t byte_count);
+
+  BitBufferWriter(const BitBufferWriter&) = delete;
+  BitBufferWriter& operator=(const BitBufferWriter&) = delete;
 
   // Gets the current offset, in bytes/bits, from the start of the buffer. The
   // bit offset is the offset into the current byte, in the range [0,7].
@@ -71,6 +78,12 @@ class BitBufferWriter {
   // sequence 0, 1, -1, 2, -2, etc. in order.
   bool WriteSignedExponentialGolomb(int32_t val);
 
+  // Writes the Leb128 encoded value.
+  bool WriteLeb128(uint64_t val);
+
+  // Writes the string as bytes of data.
+  bool WriteString(absl::string_view data);
+
  private:
   // The buffer, as a writable array.
   uint8_t* const writable_bytes_;
@@ -80,8 +93,6 @@ class BitBufferWriter {
   size_t byte_offset_;
   // The current offset, in bits, into the current byte.
   size_t bit_offset_;
-
-  RTC_DISALLOW_COPY_AND_ASSIGN(BitBufferWriter);
 };
 
 }  // namespace rtc

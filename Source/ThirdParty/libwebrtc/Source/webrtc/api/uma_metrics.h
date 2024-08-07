@@ -85,14 +85,6 @@ enum IceCandidatePairType {
 
 // These values are persisted to logs. Entries should not be renumbered and
 // numeric values should never be reused.
-enum KeyExchangeProtocolType {
-  kEnumCounterKeyProtocolDtls = 0,
-  kEnumCounterKeyProtocolSdes = 1,
-  kEnumCounterKeyProtocolMax
-};
-
-// These values are persisted to logs. Entries should not be renumbered and
-// numeric values should never be reused.
 enum KeyExchangeProtocolMedia {
   kEnumCounterKeyProtocolMediaTypeDtlsAudio = 0,
   kEnumCounterKeyProtocolMediaTypeDtlsVideo = 1,
@@ -112,36 +104,6 @@ enum SdpSemanticRequested {
   kSdpSemanticRequestMax
 };
 
-// These values are persisted to logs. Entries should not be renumbered and
-// numeric values should never be reused.
-enum SdpSemanticNegotiated {
-  kSdpSemanticNegotiatedNone = 0,
-  kSdpSemanticNegotiatedPlanB = 1,
-  kSdpSemanticNegotiatedUnifiedPlan = 2,
-  kSdpSemanticNegotiatedMixed = 3,
-  kSdpSemanticNegotiatedMax
-};
-
-// Metric which records the format of the received SDP for tracking how much the
-// difference between Plan B and Unified Plan affect users.
-// These values are persisted to logs. Entries should not be renumbered and
-// numeric values should never be reused.
-enum SdpFormatReceived {
-  // No audio or video tracks. This is worth special casing since it seems to be
-  // the most common scenario (data-channel only).
-  kSdpFormatReceivedNoTracks = 0,
-  // No more than one audio and one video track. Should be compatible with both
-  // Plan B and Unified Plan endpoints.
-  kSdpFormatReceivedSimple = 1,
-  // More than one audio track or more than one video track in the Plan B format
-  // (e.g., one audio media section with multiple streams).
-  kSdpFormatReceivedComplexPlanB = 2,
-  // More than one audio track or more than one video track in the Unified Plan
-  // format (e.g., two audio media sections).
-  kSdpFormatReceivedComplexUnifiedPlan = 3,
-  kSdpFormatReceivedMax
-};
-
 // Metric for counting the outcome of adding an ICE candidate
 // These values are persisted to logs. Entries should not be renumbered and
 // numeric values should never be reused.
@@ -155,16 +117,6 @@ enum AddIceCandidateResult {
   kAddIceCandidateFailInAddition = 6,
   kAddIceCandidateFailNotUsable = 7,
   kAddIceCandidateMax
-};
-
-// Metric for recording which api surface was used to enable simulcast.
-// These values are persisted to logs. Entries should not be renumbered and
-// numeric values should never be reused.
-enum SimulcastApiVersion {
-  kSimulcastApiVersionNone = 0,
-  kSimulcastApiVersionLegacy = 1,
-  kSimulcastApiVersionSpecCompliant = 2,
-  kSimulcastApiVersionMax
 };
 
 // Metrics for reporting usage of BUNDLE.
@@ -211,6 +163,16 @@ enum ProvisionalAnswerUsage {
   kProvisionalAnswerLocal = 1,
   kProvisionalAnswerRemote = 2,
   kProvisionalAnswerMax
+};
+
+// Metrics for RTCRtpMuxPolicy. The only defined value is
+// https://w3c.github.io/webrtc-pc/#rtcrtcpmuxpolicy-enum
+// "require" but there is a legacy option "negotiate" which
+// was removed from the spec.
+enum RtcpMuxPolicyUsage {
+  kRtcpMuxPolicyUsageRequire = 0,
+  kRtcpMuxPolicyUsageNegotiate = 1,
+  kRtcpMuxPolicyUsageMax
 };
 
 // When adding new metrics please consider using the style described in

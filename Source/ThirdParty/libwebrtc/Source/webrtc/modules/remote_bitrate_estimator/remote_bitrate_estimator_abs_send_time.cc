@@ -23,9 +23,10 @@
 #include "api/units/timestamp.h"
 #include "modules/remote_bitrate_estimator/include/bwe_defines.h"
 #include "modules/remote_bitrate_estimator/include/remote_bitrate_estimator.h"
+#include "modules/rtp_rtcp/source/rtp_header_extensions.h"
+#include "modules/rtp_rtcp/source/rtp_packet_received.h"
 #include "rtc_base/checks.h"
 #include "rtc_base/logging.h"
-#include "rtc_base/thread_annotations.h"
 #include "system_wrappers/include/metrics.h"
 
 namespace webrtc {
@@ -42,15 +43,6 @@ constexpr int kMaxProbePackets = 15;
 constexpr int kExpectedNumberOfProbes = 3;
 constexpr double kTimestampToMs =
     1000.0 / static_cast<double>(1 << kInterArrivalShift);
-
-absl::optional<DataRate> OptionalRateFromOptionalBps(
-    absl::optional<int> bitrate_bps) {
-  if (bitrate_bps) {
-    return DataRate::BitsPerSec(*bitrate_bps);
-  } else {
-    return absl::nullopt;
-  }
-}
 
 template <typename K, typename V>
 std::vector<K> Keys(const std::map<K, V>& map) {
@@ -98,10 +90,7 @@ void RemoteBitrateEstimatorAbsSendTime::MaybeAddCluster(
 RemoteBitrateEstimatorAbsSendTime::RemoteBitrateEstimatorAbsSendTime(
     RemoteBitrateObserver* observer,
     Clock* clock)
-    : clock_(clock),
-      observer_(observer),
-      detector_(&field_trials_),
-      remote_rate_(&field_trials_) {
+    : clock_(clock), observer_(observer), remote_rate_(field_trials_) {
   RTC_DCHECK(clock_);
   RTC_DCHECK(observer_);
   RTC_LOG(LS_INFO) << "RemoteBitrateEstimatorAbsSendTime: Instantiating.";
@@ -212,27 +201,19 @@ bool RemoteBitrateEstimatorAbsSendTime::IsBitrateImproving(
 }
 
 void RemoteBitrateEstimatorAbsSendTime::IncomingPacket(
-    int64_t arrival_time_ms,
-    size_t payload_size,
-    const RTPHeader& header) {
-  RTC_DCHECK_RUNS_SERIALIZED(&network_race_);
-  if (!header.extension.hasAbsoluteSendTime) {
+    const RtpPacketReceived& rtp_packet) {
+  uint32_t send_time_24bits;
+  if (!rtp_packet.GetExtension<AbsoluteSendTime>(&send_time_24bits)) {
     RTC_LOG(LS_WARNING)
         << "RemoteBitrateEstimatorAbsSendTimeImpl: Incoming packet "
            "is missing absolute send time extension!";
     return;
   }
-  IncomingPacketInfo(Timestamp::Millis(arrival_time_ms),
-                     header.extension.absoluteSendTime,
-                     DataSize::Bytes(payload_size), header.ssrc);
-}
 
-void RemoteBitrateEstimatorAbsSendTime::IncomingPacketInfo(
-    Timestamp arrival_time,
-    uint32_t send_time_24bits,
-    DataSize payload_size,
-    uint32_t ssrc) {
-  RTC_CHECK(send_time_24bits < (1ul << 24));
+  Timestamp arrival_time = rtp_packet.arrival_time();
+  DataSize payload_size =
+      DataSize::Bytes(rtp_packet.payload_size() + rtp_packet.padding_size());
+
   if (!uma_recorded_) {
     RTC_HISTOGRAM_ENUMERATION(kBweTypeHistogram, BweNames::kReceiverAbsSendTime,
                               BweNames::kBweNamesMax);
@@ -249,8 +230,8 @@ void RemoteBitrateEstimatorAbsSendTime::IncomingPacketInfo(
   // here.
 
   // Check if incoming bitrate estimate is valid, and if it needs to be reset.
-  absl::optional<uint32_t> incoming_bitrate =
-      incoming_bitrate_.Rate(arrival_time.ms());
+  absl::optional<DataRate> incoming_bitrate =
+      incoming_bitrate_.Rate(arrival_time);
   if (incoming_bitrate) {
     incoming_bitrate_initialized_ = true;
   } else if (incoming_bitrate_initialized_) {
@@ -260,7 +241,7 @@ void RemoteBitrateEstimatorAbsSendTime::IncomingPacketInfo(
     incoming_bitrate_.Reset();
     incoming_bitrate_initialized_ = false;
   }
-  incoming_bitrate_.Update(payload_size.bytes(), arrival_time.ms());
+  incoming_bitrate_.Update(payload_size, arrival_time);
 
   if (first_packet_time_.IsInfinite()) {
     first_packet_time_ = now;
@@ -271,104 +252,90 @@ void RemoteBitrateEstimatorAbsSendTime::IncomingPacketInfo(
   int size_delta = 0;
   bool update_estimate = false;
   DataRate target_bitrate = DataRate::Zero();
-  std::vector<uint32_t> ssrcs;
-  {
-    MutexLock lock(&mutex_);
 
-    TimeoutStreams(now);
-    RTC_DCHECK(inter_arrival_);
-    RTC_DCHECK(estimator_);
-    // TODO(danilchap): Replace 5 lines below with insert_or_assign when that
-    // c++17 function is available.
-    auto inserted = ssrcs_.insert(std::make_pair(ssrc, now));
-    if (!inserted.second) {
-      // Already inserted, update.
-      inserted.first->second = now;
-    }
+  TimeoutStreams(now);
+  RTC_DCHECK(inter_arrival_);
+  RTC_DCHECK(estimator_);
+  ssrcs_.insert_or_assign(rtp_packet.Ssrc(), now);
 
-    // For now only try to detect probes while we don't have a valid estimate.
-    // We currently assume that only packets larger than 200 bytes are paced by
-    // the sender.
-    static constexpr DataSize kMinProbePacketSize = DataSize::Bytes(200);
-    if (payload_size > kMinProbePacketSize &&
-        (!remote_rate_.ValidEstimate() ||
-         now - first_packet_time_ < kInitialProbingInterval)) {
-      // TODO(holmer): Use a map instead to get correct order?
-      if (total_probes_received_ < kMaxProbePackets) {
-        TimeDelta send_delta = TimeDelta::Millis(-1);
-        TimeDelta recv_delta = TimeDelta::Millis(-1);
-        if (!probes_.empty()) {
-          send_delta = send_time - probes_.back().send_time;
-          recv_delta = arrival_time - probes_.back().recv_time;
-        }
-        RTC_LOG(LS_INFO) << "Probe packet received: send time="
-                         << send_time.ms()
-                         << " ms, recv time=" << arrival_time.ms()
-                         << " ms, send delta=" << send_delta.ms()
-                         << " ms, recv delta=" << recv_delta.ms() << " ms.";
+  // For now only try to detect probes while we don't have a valid estimate.
+  // We currently assume that only packets larger than 200 bytes are paced by
+  // the sender.
+  static constexpr DataSize kMinProbePacketSize = DataSize::Bytes(200);
+  if (payload_size > kMinProbePacketSize &&
+      (!remote_rate_.ValidEstimate() ||
+       now - first_packet_time_ < kInitialProbingInterval)) {
+    // TODO(holmer): Use a map instead to get correct order?
+    if (total_probes_received_ < kMaxProbePackets) {
+      TimeDelta send_delta = TimeDelta::Millis(-1);
+      TimeDelta recv_delta = TimeDelta::Millis(-1);
+      if (!probes_.empty()) {
+        send_delta = send_time - probes_.back().send_time;
+        recv_delta = arrival_time - probes_.back().recv_time;
       }
-      probes_.emplace_back(send_time, arrival_time, payload_size);
-      ++total_probes_received_;
-      // Make sure that a probe which updated the bitrate immediately has an
-      // effect by calling the OnReceiveBitrateChanged callback.
-      if (ProcessClusters(now) == ProbeResult::kBitrateUpdated)
-        update_estimate = true;
+      RTC_LOG(LS_INFO) << "Probe packet received: send time=" << send_time.ms()
+                       << " ms, recv time=" << arrival_time.ms()
+                       << " ms, send delta=" << send_delta.ms()
+                       << " ms, recv delta=" << recv_delta.ms() << " ms.";
     }
-    if (inter_arrival_->ComputeDeltas(timestamp, arrival_time.ms(), now.ms(),
-                                      payload_size.bytes(), &ts_delta, &t_delta,
-                                      &size_delta)) {
-      double ts_delta_ms = (1000.0 * ts_delta) / (1 << kInterArrivalShift);
-      estimator_->Update(t_delta, ts_delta_ms, size_delta, detector_.State(),
-                         arrival_time.ms());
-      detector_.Detect(estimator_->offset(), ts_delta_ms,
-                       estimator_->num_of_deltas(), arrival_time.ms());
-    }
+    probes_.emplace_back(send_time, arrival_time, payload_size);
+    ++total_probes_received_;
+    // Make sure that a probe which updated the bitrate immediately has an
+    // effect by calling the OnReceiveBitrateChanged callback.
+    if (ProcessClusters(now) == ProbeResult::kBitrateUpdated)
+      update_estimate = true;
+  }
+  if (inter_arrival_->ComputeDeltas(timestamp, arrival_time.ms(), now.ms(),
+                                    payload_size.bytes(), &ts_delta, &t_delta,
+                                    &size_delta)) {
+    double ts_delta_ms = (1000.0 * ts_delta) / (1 << kInterArrivalShift);
+    estimator_->Update(t_delta, ts_delta_ms, size_delta, detector_.State(),
+                       arrival_time.ms());
+    detector_.Detect(estimator_->offset(), ts_delta_ms,
+                     estimator_->num_of_deltas(), arrival_time.ms());
+  }
 
-    if (!update_estimate) {
-      // Check if it's time for a periodic update or if we should update because
-      // of an over-use.
-      if (last_update_.IsInfinite() ||
-          now.ms() - last_update_.ms() >
-              remote_rate_.GetFeedbackInterval().ms()) {
+  if (!update_estimate) {
+    // Check if it's time for a periodic update or if we should update because
+    // of an over-use.
+    if (last_update_.IsInfinite() ||
+        now.ms() - last_update_.ms() >
+            remote_rate_.GetFeedbackInterval().ms()) {
+      update_estimate = true;
+    } else if (detector_.State() == BandwidthUsage::kBwOverusing) {
+      absl::optional<DataRate> incoming_rate =
+          incoming_bitrate_.Rate(arrival_time);
+      if (incoming_rate.has_value() &&
+          remote_rate_.TimeToReduceFurther(now, *incoming_rate)) {
         update_estimate = true;
-      } else if (detector_.State() == BandwidthUsage::kBwOverusing) {
-        absl::optional<uint32_t> incoming_rate =
-            incoming_bitrate_.Rate(arrival_time.ms());
-        if (incoming_rate && remote_rate_.TimeToReduceFurther(
-                                 now, DataRate::BitsPerSec(*incoming_rate))) {
-          update_estimate = true;
-        }
       }
-    }
-
-    if (update_estimate) {
-      // The first overuse should immediately trigger a new estimate.
-      // We also have to update the estimate immediately if we are overusing
-      // and the target bitrate is too high compared to what we are receiving.
-      const RateControlInput input(
-          detector_.State(), OptionalRateFromOptionalBps(
-                                 incoming_bitrate_.Rate(arrival_time.ms())));
-      target_bitrate = remote_rate_.Update(&input, now);
-      update_estimate = remote_rate_.ValidEstimate();
-      ssrcs = Keys(ssrcs_);
     }
   }
+
+  if (update_estimate) {
+    // The first overuse should immediately trigger a new estimate.
+    // We also have to update the estimate immediately if we are overusing
+    // and the target bitrate is too high compared to what we are receiving.
+    const RateControlInput input(detector_.State(),
+                                 incoming_bitrate_.Rate(arrival_time));
+    target_bitrate = remote_rate_.Update(input, now);
+    update_estimate = remote_rate_.ValidEstimate();
+  }
+
   if (update_estimate) {
     last_update_ = now;
-    observer_->OnReceiveBitrateChanged(ssrcs, target_bitrate.bps<uint32_t>());
+    observer_->OnReceiveBitrateChanged(Keys(ssrcs_),
+                                       target_bitrate.bps<uint32_t>());
   }
 }
 
-void RemoteBitrateEstimatorAbsSendTime::Process() {}
-
-int64_t RemoteBitrateEstimatorAbsSendTime::TimeUntilNextProcess() {
-  const int64_t kDisabledModuleTime = 1000;
-  return kDisabledModuleTime;
+TimeDelta RemoteBitrateEstimatorAbsSendTime::Process() {
+  return TimeDelta::PlusInfinity();
 }
 
 void RemoteBitrateEstimatorAbsSendTime::TimeoutStreams(Timestamp now) {
   for (auto it = ssrcs_.begin(); it != ssrcs_.end();) {
-    if (now - it->second > TimeDelta::Millis(kStreamTimeOutMs)) {
+    if (now - it->second > kStreamTimeOut) {
       ssrcs_.erase(it++);
     } else {
       ++it;
@@ -377,9 +344,8 @@ void RemoteBitrateEstimatorAbsSendTime::TimeoutStreams(Timestamp now) {
   if (ssrcs_.empty()) {
     // We can't update the estimate if we don't have any active streams.
     inter_arrival_ = std::make_unique<InterArrival>(
-        (kTimestampGroupLengthMs << kInterArrivalShift) / 1000, kTimestampToMs,
-        true);
-    estimator_ = std::make_unique<OveruseEstimator>(OverUseDetectorOptions());
+        (kTimestampGroupLengthMs << kInterArrivalShift) / 1000, kTimestampToMs);
+    estimator_ = std::make_unique<OveruseEstimator>();
     // We deliberately don't reset the first_packet_time_ms_ here for now since
     // we only probe for bandwidth in the beginning of a call right now.
   }
@@ -387,41 +353,19 @@ void RemoteBitrateEstimatorAbsSendTime::TimeoutStreams(Timestamp now) {
 
 void RemoteBitrateEstimatorAbsSendTime::OnRttUpdate(int64_t avg_rtt_ms,
                                                     int64_t /*max_rtt_ms*/) {
-  MutexLock lock(&mutex_);
   remote_rate_.SetRtt(TimeDelta::Millis(avg_rtt_ms));
 }
 
 void RemoteBitrateEstimatorAbsSendTime::RemoveStream(uint32_t ssrc) {
-  MutexLock lock(&mutex_);
   ssrcs_.erase(ssrc);
 }
 
-bool RemoteBitrateEstimatorAbsSendTime::LatestEstimate(
-    std::vector<uint32_t>* ssrcs,
-    uint32_t* bitrate_bps) const {
-  // Currently accessed from both the process thread (see
-  // ModuleRtpRtcpImpl::Process()) and the configuration thread (see
-  // Call::GetStats()). Should in the future only be accessed from a single
-  // thread.
-  RTC_DCHECK(ssrcs);
-  RTC_DCHECK(bitrate_bps);
-  MutexLock lock(&mutex_);
-  if (!remote_rate_.ValidEstimate()) {
-    return false;
+DataRate RemoteBitrateEstimatorAbsSendTime::LatestEstimate() const {
+  // Currently accessed only from the worker thread (see Call::GetStats()).
+  if (!remote_rate_.ValidEstimate() || ssrcs_.empty()) {
+    return DataRate::Zero();
   }
-  *ssrcs = Keys(ssrcs_);
-  if (ssrcs_.empty()) {
-    *bitrate_bps = 0;
-  } else {
-    *bitrate_bps = remote_rate_.LatestEstimate().bps<uint32_t>();
-  }
-  return true;
+  return remote_rate_.LatestEstimate();
 }
 
-void RemoteBitrateEstimatorAbsSendTime::SetMinBitrate(int min_bitrate_bps) {
-  // Called from both the configuration thread and the network thread. Shouldn't
-  // be called from the network thread in the future.
-  MutexLock lock(&mutex_);
-  remote_rate_.SetMinBitrate(DataRate::BitsPerSec(min_bitrate_bps));
-}
 }  // namespace webrtc

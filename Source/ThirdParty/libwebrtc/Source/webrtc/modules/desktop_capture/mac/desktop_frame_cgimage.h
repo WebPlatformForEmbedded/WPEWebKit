@@ -20,7 +20,7 @@
 
 namespace webrtc {
 
-class DesktopFrameCGImage final : public DesktopFrame {
+class RTC_EXPORT DesktopFrameCGImage final : public DesktopFrame {
  public:
   // Create an image containing a snapshot of the display at the time this is
   // being called.
@@ -33,12 +33,15 @@ class DesktopFrameCGImage final : public DesktopFrame {
   static std::unique_ptr<DesktopFrameCGImage> CreateForWindow(
       CGWindowID window_id);
 
-  ~DesktopFrameCGImage() override;
-
- private:
   static std::unique_ptr<DesktopFrameCGImage> CreateFromCGImage(
       rtc::ScopedCFTypeRef<CGImageRef> cg_image);
 
+  ~DesktopFrameCGImage() override;
+
+  DesktopFrameCGImage(const DesktopFrameCGImage&) = delete;
+  DesktopFrameCGImage& operator=(const DesktopFrameCGImage&) = delete;
+
+ private:
   // This constructor expects `cg_image` to hold a non-null CGImageRef.
   DesktopFrameCGImage(DesktopSize size,
                       int stride,
@@ -48,8 +51,6 @@ class DesktopFrameCGImage final : public DesktopFrame {
 
   const rtc::ScopedCFTypeRef<CGImageRef> cg_image_;
   const rtc::ScopedCFTypeRef<CFDataRef> cg_data_;
-
-  RTC_DISALLOW_COPY_AND_ASSIGN(DesktopFrameCGImage);
 };
 
 }  // namespace webrtc

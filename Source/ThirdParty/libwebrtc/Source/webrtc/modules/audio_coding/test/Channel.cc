@@ -10,10 +10,9 @@
 
 #include "modules/audio_coding/test/Channel.h"
 
-
 #include <iostream>
 
-#include "rtc_base/format_macros.h"
+#include "rtc_base/strings/string_builder.h"
 #include "rtc_base/time_utils.h"
 
 namespace webrtc {
@@ -83,8 +82,8 @@ int32_t Channel::SendData(AudioFrameType frameType,
     return 0;
   }
 
-  status =
-      _receiverACM->IncomingPacket(_payloadData, payloadDataSize, rtp_header);
+  status = _receiverACM->InsertPacket(
+      rtp_header, rtc::ArrayView<const uint8_t>(_payloadData, payloadDataSize));
 
   return status;
 }
@@ -219,9 +218,9 @@ Channel::Channel(int16_t chID)
   }
   if (chID >= 0) {
     _saveBitStream = true;
-    char bitStreamFileName[500];
-    sprintf(bitStreamFileName, "bitStream_%d.dat", chID);
-    _bitStreamFile = fopen(bitStreamFileName, "wb");
+    rtc::StringBuilder ss;
+    ss.AppendFormat("bitStream_%d.dat", chID);
+    _bitStreamFile = fopen(ss.str().c_str(), "wb");
   } else {
     _saveBitStream = false;
   }
@@ -229,8 +228,8 @@ Channel::Channel(int16_t chID)
 
 Channel::~Channel() {}
 
-void Channel::RegisterReceiverACM(AudioCodingModule* acm) {
-  _receiverACM = acm;
+void Channel::RegisterReceiverACM(acm2::AcmReceiver* acm_receiver) {
+  _receiverACM = acm_receiver;
   return;
 }
 

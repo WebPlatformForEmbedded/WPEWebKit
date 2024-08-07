@@ -10,6 +10,7 @@
 
 #include "rtc_base/ip_address.h"
 
+#include "absl/strings/string_view.h"
 #include "test/gtest.h"
 
 namespace rtc {
@@ -60,10 +61,6 @@ static const std::string kIPv6PublicAddrAnonymizedString =
     "2401:fa00:4:x:x:x:x:x";
 static const std::string kIPv6PublicAddr2AnonymizedString =
     "2401:0:0:x:x:x:x:x";
-static const std::string kIPv4MappedAnyAddrString = "::ffff:0:0";
-static const std::string kIPv4MappedRFC1918AddrString = "::ffff:c0a8:701";
-static const std::string kIPv4MappedLoopbackAddrString = "::ffff:7f00:1";
-static const std::string kIPv4MappedPublicAddrString = "::ffff:102:0304";
 static const std::string kIPv4MappedV4StyleAddrString = "::ffff:192.168.7.1";
 
 static const std::string kIPv4BrokenString1 = "192.168.7.";
@@ -118,7 +115,7 @@ bool AreEqual(const IPAddress& addr, const IPAddress& addr2) {
   return true;
 }
 
-bool BrokenIPStringFails(const std::string& broken) {
+bool BrokenIPStringFails(absl::string_view broken) {
   IPAddress addr(0);  // Intentionally make it v4.
   if (IPFromString(kIPv4BrokenString1, &addr)) {
     return false;
@@ -126,13 +123,13 @@ bool BrokenIPStringFails(const std::string& broken) {
   return addr.family() == AF_UNSPEC;
 }
 
-bool CheckMaskCount(const std::string& mask, int expected_length) {
+bool CheckMaskCount(absl::string_view mask, int expected_length) {
   IPAddress addr;
   return IPFromString(mask, &addr) &&
          (expected_length == CountIPMaskBits(addr));
 }
 
-bool TryInvalidMaskCount(const std::string& mask) {
+bool TryInvalidMaskCount(absl::string_view mask) {
   // We don't care about the result at all, but we do want to know if
   // CountIPMaskBits is going to crash or infinite loop or something.
   IPAddress addr;
@@ -143,9 +140,9 @@ bool TryInvalidMaskCount(const std::string& mask) {
   return true;
 }
 
-bool CheckTruncateIP(const std::string& initial,
+bool CheckTruncateIP(absl::string_view initial,
                      int truncate_length,
-                     const std::string& expected_result) {
+                     absl::string_view expected_result) {
   IPAddress addr, expected;
   IPFromString(initial, &addr);
   IPFromString(expected_result, &expected);

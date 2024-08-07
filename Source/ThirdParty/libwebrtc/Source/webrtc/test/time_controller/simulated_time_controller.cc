@@ -18,7 +18,6 @@
 #include <vector>
 
 #include "absl/strings/string_view.h"
-#include "test/time_controller/simulated_process_thread.h"
 #include "test/time_controller/simulated_task_queue.h"
 #include "test/time_controller/simulated_thread.h"
 
@@ -50,17 +49,8 @@ SimulatedTimeControllerImpl::CreateTaskQueue(
   auto mutable_this = const_cast<SimulatedTimeControllerImpl*>(this);
   auto task_queue = std::unique_ptr<SimulatedTaskQueue, TaskQueueDeleter>(
       new SimulatedTaskQueue(mutable_this, name));
-  ;
   mutable_this->Register(task_queue.get());
   return task_queue;
-}
-
-std::unique_ptr<ProcessThread> SimulatedTimeControllerImpl::CreateProcessThread(
-    const char* thread_name) {
-  auto process_thread =
-      std::make_unique<SimulatedProcessThread>(this, thread_name);
-  Register(process_thread.get());
-  return process_thread;
 }
 
 std::unique_ptr<rtc::Thread> SimulatedTimeControllerImpl::CreateThread(
@@ -98,7 +88,7 @@ void SimulatedTimeControllerImpl::RunReadyRunners() {
   MutexLock lock(&lock_);
   RTC_DCHECK_EQ(rtc::CurrentThreadId(), thread_id_);
   Timestamp current_time = CurrentTime();
-  // Clearing |ready_runners_| in case this is a recursive call:
+  // Clearing `ready_runners_` in case this is a recursive call:
   // RunReadyRunners -> Run -> Event::Wait -> Yield ->RunReadyRunners
   ready_runners_.clear();
 
@@ -118,8 +108,8 @@ void SimulatedTimeControllerImpl::RunReadyRunners() {
       ready_runners_.pop_front();
       lock_.Unlock();
       // Note that the RunReady function might indirectly cause a call to
-      // Unregister() which will grab |lock_| again to remove items from
-      // |ready_runners_|.
+      // Unregister() which will grab `lock_` again to remove items from
+      // `ready_runners_`.
       runner->RunReady(current_time);
       lock_.Lock();
     }
@@ -192,11 +182,6 @@ TaskQueueFactory* GlobalSimulatedTimeController::GetTaskQueueFactory() {
   return &impl_;
 }
 
-std::unique_ptr<ProcessThread>
-GlobalSimulatedTimeController::CreateProcessThread(const char* thread_name) {
-  return impl_.CreateProcessThread(thread_name);
-}
-
 std::unique_ptr<rtc::Thread> GlobalSimulatedTimeController::CreateThread(
     const std::string& name,
     std::unique_ptr<rtc::SocketServer> socket_server) {
@@ -221,9 +206,31 @@ void GlobalSimulatedTimeController::AdvanceTime(TimeDelta duration) {
     sim_clock_.AdvanceTimeMicroseconds(delta.us());
     global_clock_.AdvanceTime(delta);
   }
-  // After time has been simulated up until |target_time| we also need to run
-  // tasks meant to be executed at |target_time|.
+  // After time has been simulated up until `target_time` we also need to run
+  // tasks meant to be executed at `target_time`.
   impl_.RunReadyRunners();
+}
+
+void GlobalSimulatedTimeController::SkipForwardBy(TimeDelta duration) {
+  rtc::ScopedYieldPolicy yield_policy(&impl_);
+  Timestamp current_time = impl_.CurrentTime();
+  Timestamp target_time = current_time + duration;
+  impl_.AdvanceTime(target_time);
+  sim_clock_.AdvanceTimeMicroseconds(duration.us());
+  global_clock_.AdvanceTime(duration);
+
+  // Run tasks that were pending during the skip.
+  impl_.RunReadyRunners();
+}
+
+void GlobalSimulatedTimeController::Register(
+    sim_time_impl::SimulatedSequenceRunner* runner) {
+  impl_.Register(runner);
+}
+
+void GlobalSimulatedTimeController::Unregister(
+    sim_time_impl::SimulatedSequenceRunner* runner) {
+  impl_.Unregister(runner);
 }
 
 }  // namespace webrtc

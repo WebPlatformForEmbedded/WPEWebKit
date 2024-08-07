@@ -25,10 +25,17 @@ uint64_t BitstreamReader::ReadBits(int bits) {
   RTC_DCHECK_LE(bits, 64);
   set_last_read_is_verified(false);
 
+#if WEBRTC_WEBKIT_BUILD
+  if (remaining_bits_ < bits || bits < 0) {
+    Invalidate();
+    return 0;
+  }
+#else
   if (remaining_bits_ < bits) {
     remaining_bits_ -= bits;
     return 0;
   }
+#endif
 
   int remaining_bits_in_first_byte = remaining_bits_ % 8;
   remaining_bits_ -= bits;
@@ -81,7 +88,12 @@ int BitstreamReader::ReadBit() {
 void BitstreamReader::ConsumeBits(int bits) {
   RTC_DCHECK_GE(bits, 0);
   set_last_read_is_verified(false);
-  if (remaining_bits_ < bits) {
+#if WEBRTC_WEBKIT_BUILD
+  if (remaining_bits_ < bits || bits < 0)
+#else
+  if (remaining_bits_ < bits)
+#endif
+  {
     Invalidate();
     return;
   }
@@ -110,11 +122,19 @@ uint32_t BitstreamReader::ReadExponentialGolomb() {
   // Count the number of leading 0.
   int zero_bit_count = 0;
   while (ReadBit() == 0) {
+#if WEBRTC_WEBKIT_BUILD
+    if (++zero_bit_count >= 32 || remaining_bits_ < 0) {
+      // Golob value won't fit into 32 bits of the return value, or we ran out of bits. Fail the parse.
+      Invalidate();
+      return 0;
+    }
+#else
     if (++zero_bit_count >= 32) {
       // Golob value won't fit into 32 bits of the return value. Fail the parse.
       Invalidate();
       return 0;
     }
+#endif
   }
 
   // The bit count of the value is the number of zeros + 1.
@@ -130,6 +150,38 @@ int BitstreamReader::ReadSignedExponentialGolomb() {
   } else {
     return (unsigned_val + 1) / 2;
   }
+}
+
+uint64_t BitstreamReader::ReadLeb128() {
+  uint64_t decoded = 0;
+  size_t i = 0;
+  uint8_t byte;
+  // A LEB128 value can in theory be arbitrarily large, but for convenience sake
+  // consider it invalid if it can't fit in an uint64_t.
+  do {
+    byte = Read<uint8_t>();
+    decoded +=
+        (static_cast<uint64_t>(byte & 0x7f) << static_cast<uint64_t>(7 * i));
+    ++i;
+  } while (i < 10 && (byte & 0x80));
+
+  // The first 9 bytes represent the first 63 bits. The tenth byte can therefore
+  // not be larger than 1 as it would overflow an uint64_t.
+  if (i == 10 && byte > 1) {
+    Invalidate();
+  }
+
+  return Ok() ? decoded : 0;
+}
+
+std::string BitstreamReader::ReadString(int num_bytes) {
+  std::string res;
+  res.reserve(num_bytes);
+  for (int i = 0; i < num_bytes; ++i) {
+    res += Read<uint8_t>();
+  }
+
+  return Ok() ? res : std::string();
 }
 
 }  // namespace webrtc

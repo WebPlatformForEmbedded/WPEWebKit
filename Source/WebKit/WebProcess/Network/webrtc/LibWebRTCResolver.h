@@ -40,7 +40,10 @@ class Connection;
 namespace WebKit {
 class LibWebRTCSocketFactory;
 
+ALLOW_DEPRECATED_DECLARATIONS_BEGIN
+// FIXME: https://bugs.webkit.org/show_bug.cgi?id=265791
 class LibWebRTCResolver final : public rtc::AsyncResolverInterface {
+ALLOW_DEPRECATED_DECLARATIONS_END
     WTF_MAKE_FAST_ALLOCATED;
 public:
     LibWebRTCResolver() : m_identifier(LibWebRTCResolverIdentifier::generate()) { }
@@ -52,7 +55,8 @@ private:
     friend class WebRTCResolver;
 
     // AsyncResolverInterface API.
-    void Start(const rtc::SocketAddress&) final;
+    void Start(const rtc::SocketAddress& address) final { Start(address, address.family()); }
+    void Start(const rtc::SocketAddress&, int) final;
     bool GetResolvedAddress(int, rtc::SocketAddress*) const final;
     int GetError() const final { return m_error; }
     void Destroy(bool) final;

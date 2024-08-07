@@ -60,7 +60,7 @@ class GStreamerEncodedImageBuffer : public webrtc::EncodedImageBufferInterface {
 public:
     static rtc::scoped_refptr<GStreamerEncodedImageBuffer> create(GRefPtr<GstSample>&& sample)
     {
-        return new rtc::RefCountedObject<GStreamerEncodedImageBuffer>(WTFMove(sample));
+        return rtc::make_ref_counted<GStreamerEncodedImageBuffer>(WTFMove(sample));
     }
 
     const uint8_t* data() const final { return m_mappedBuffer->data(); }
@@ -268,9 +268,9 @@ public:
         m_encodedFrame._encodedHeight = resolution->height();
         m_encodedFrame._frameType = GST_BUFFER_FLAG_IS_SET(encodedBuffer, GST_BUFFER_FLAG_DELTA_UNIT) ? webrtc::VideoFrameType::kVideoFrameDelta : webrtc::VideoFrameType::kVideoFrameKey;
         m_encodedFrame.capture_time_ms_ = frame.render_time_ms();
-        m_encodedFrame.SetTimestamp(frame.timestamp());
+        m_encodedFrame.SetRtpTimestamp(frame.timestamp());
 
-        GST_LOG_OBJECT(m_pipeline.get(), "Got buffer capture_time_ms: %" G_GINT64_FORMAT " _timestamp: %u", m_encodedFrame.capture_time_ms_, m_encodedFrame.Timestamp());
+        GST_LOG_OBJECT(m_pipeline.get(), "Got buffer capture_time_ms: %" G_GINT64_FORMAT " _timestamp: %u", m_encodedFrame.capture_time_ms_, m_encodedFrame.RtpTimestamp());
 
         webrtc::CodecSpecificInfo codecInfo;
         PopulateCodecSpecific(&codecInfo, encodedBuffer);
@@ -407,6 +407,12 @@ struct NoopEncoder : public webrtc::VideoEncoder
                 { cricket::kH264FmtpPacketizationMode, "1" } });
         supportedFormats->push_back(h264Format);
     }
+
+    EncoderInfo GetEncoderInfo() const final {
+        EncoderInfo info;
+        info.is_hardware_accelerated = true;
+        return info;
+    }
 };
 
 static bool useNoopEncoder() {  return true; }
@@ -421,7 +427,7 @@ std::unique_ptr<webrtc::VideoEncoder> GStreamerVideoEncoderFactory::CreateVideoE
     // bad UX in WPE/GTK browsers. So for now we prefer to use LibWebRTC's VPx encoders.
     if (format.name == cricket::kVp9CodecName) {
         GST_INFO("Using VP9 Encoder from LibWebRTC.");
-        return webrtc::VP9Encoder::Create(cricket::VideoCodec(format));
+        return webrtc::VP9Encoder::Create(cricket::CreateVideoCodec(format));
     }
 
     if (format.name == cricket::kVp8CodecName) {
@@ -432,7 +438,7 @@ std::unique_ptr<webrtc::VideoEncoder> GStreamerVideoEncoderFactory::CreateVideoE
     if (format.name == cricket::kH264CodecName) {
 #if WEBKIT_LIBWEBRTC_OPENH264_ENCODER
         GST_INFO("Using OpenH264 libwebrtc encoder.");
-        return webrtc::H264Encoder::Create(cricket::VideoCodec(format));
+        return webrtc::H264Encoder::Create(cricket::CreateVideoCodec(format));
 #else
         GST_INFO("Using H264 GStreamer encoder.");
         return makeUnique<GStreamerH264Encoder>(format);

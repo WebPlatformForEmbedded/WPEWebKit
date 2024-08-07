@@ -17,7 +17,8 @@
 
 #include "api/array_view.h"
 #include "common_video/h264/h264_common.h"
-#include "modules/video_coding/frame_object.h"
+#include "modules/rtp_rtcp/source/frame_object.h"
+#include "rtc_base/numerics/sequence_number_unwrapper.h"
 #include "rtc_base/random.h"
 #include "test/field_trial.h"
 #include "test/gmock.h"
@@ -291,6 +292,13 @@ TEST_F(PacketBufferTest, ClearSinglePacket) {
       Insert(seq_num + kMaxSize, kDeltaFrame, kFirst, kLast).buffer_cleared);
 }
 
+TEST_F(PacketBufferTest, ClearPacketBeforeFullyReceivedFrame) {
+  Insert(0, kKeyFrame, kFirst, kNotLast);
+  Insert(1, kKeyFrame, kNotFirst, kNotLast);
+  packet_buffer_.ClearTo(0);
+  EXPECT_THAT(Insert(2, kKeyFrame, kNotFirst, kLast).packets, IsEmpty());
+}
+
 TEST_F(PacketBufferTest, ClearFullBuffer) {
   for (int i = 0; i < kMaxSize; ++i)
     Insert(i, kDeltaFrame, kFirst, kLast);
@@ -397,8 +405,9 @@ class PacketBufferH264Test : public PacketBufferTest {
       IsLast last,          // is last packet of frame
       uint32_t timestamp,   // rtp timestamp
       rtc::ArrayView<const uint8_t> data = {},
-      uint32_t width = 0,     // width of frame (SPS/IDR)
-      uint32_t height = 0) {  // height of frame (SPS/IDR)
+      uint32_t width = 0,      // width of frame (SPS/IDR)
+      uint32_t height = 0,     // height of frame (SPS/IDR)
+      bool generic = false) {  // has generic descriptor
     auto packet = std::make_unique<PacketBuffer::Packet>();
     packet->video_header.codec = kVideoCodecH264;
     auto& h264_header =
@@ -420,6 +429,9 @@ class PacketBufferH264Test : public PacketBufferTest {
     packet->video_header.height = height;
     packet->video_header.is_first_packet_in_frame = first == kFirst;
     packet->video_header.is_last_packet_in_frame = last == kLast;
+    if (generic) {
+      packet->video_header.generic.emplace();
+    }
     packet->video_payload.SetData(data.data(), data.size());
 
     return PacketBufferInsertResult(
@@ -693,6 +705,12 @@ TEST_P(PacketBufferH264ParameterizedTest, OneFrameMaxSeqNum) {
               StartSeqNumsAre(65534));
 }
 
+TEST_P(PacketBufferH264ParameterizedTest, InsertTooOldPackets) {
+  InsertH264(4660, kKeyFrame, kFirst, kNotLast, 1000);
+  InsertH264(37429, kDeltaFrame, kFirst, kNotLast, 1000);
+  InsertH264(4662, kKeyFrame, kFirst, kLast, 1000);
+}
+
 TEST_P(PacketBufferH264ParameterizedTest, ClearMissingPacketsOnKeyframe) {
   InsertH264(0, kKeyFrame, kFirst, kLast, 1000);
   InsertH264(2, kKeyFrame, kFirst, kLast, 3000);
@@ -710,6 +728,18 @@ TEST_P(PacketBufferH264ParameterizedTest, FindFramesOnPadding) {
               IsEmpty());
 
   EXPECT_THAT(packet_buffer_.InsertPadding(1), StartSeqNumsAre(2));
+}
+
+TEST_P(PacketBufferH264ParameterizedTest, FindFramesOnReorderedPadding) {
+  EXPECT_THAT(InsertH264(0, kKeyFrame, kFirst, kLast, 1001),
+              StartSeqNumsAre(0));
+  EXPECT_THAT(InsertH264(1, kDeltaFrame, kFirst, kNotLast, 1002).packets,
+              IsEmpty());
+  EXPECT_THAT(packet_buffer_.InsertPadding(3).packets, IsEmpty());
+  EXPECT_THAT(InsertH264(4, kDeltaFrame, kFirst, kLast, 1003).packets,
+              IsEmpty());
+  EXPECT_THAT(InsertH264(2, kDeltaFrame, kNotFirst, kLast, 1002),
+              StartSeqNumsAre(1, 4));
 }
 
 class PacketBufferH264XIsKeyframeTest : public PacketBufferH264Test {
@@ -801,6 +831,28 @@ TEST_F(PacketBufferH264SpsPpsIdrIsKeyframeTest, SpsPpsIdrIsKeyframe) {
 
   EXPECT_THAT(packet_buffer_.InsertPacket(std::move(packet)).packets,
               ElementsAre(KeyFrame()));
+}
+
+class PacketBufferH264FrameGap : public PacketBufferH264Test {
+ protected:
+  PacketBufferH264FrameGap() : PacketBufferH264Test(true) {}
+};
+
+TEST_F(PacketBufferH264FrameGap, AllowFrameGapForH264WithGeneric) {
+  auto generic = true;
+  InsertH264(1, kKeyFrame, kFirst, kLast, 1001, {}, 0, 0, generic);
+  EXPECT_THAT(InsertH264(3, kDeltaFrame, kFirst, kLast, 1003, {}, 0, 0, generic)
+                  .packets,
+              SizeIs(1));
+}
+
+TEST_F(PacketBufferH264FrameGap, DisallowFrameGapForH264NoGeneric) {
+  auto generic = false;
+  InsertH264(1, kKeyFrame, kFirst, kLast, 1001, {}, 0, 0, generic);
+
+  EXPECT_THAT(InsertH264(3, kDeltaFrame, kFirst, kLast, 1003, {}, 0, 0, generic)
+                  .packets,
+              IsEmpty());
 }
 
 }  // namespace

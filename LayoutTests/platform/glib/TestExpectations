@@ -1465,6 +1465,8 @@ webkit.org/b/235885 webrtc/datachannel/datachannel-stats.html [ Skip ]
 webkit.org/b/235885 webrtc/datachannel/getStats-no-prflx-remote-candidate.html [ Skip ]
 webkit.org/b/235885 fast/mediastream/RTCPeerConnection-statsSelector.html [ Skip ]
 
+webrtc/video-av1.html [ Skip ]
+
 # GStreamer's DTLS agent currently generates RSA certificates only. DTLS 1.2 is not supported yet (AFAIK).
 webrtc/datachannel/dtls10.html [ Failure ]
 
@@ -1539,7 +1541,6 @@ webkit.org/b/235885 webrtc/peerconnection-page-cache.html [ Timeout ]
 webkit.org/b/235885 webrtc/remove-track.html [ Failure ]
 webkit.org/b/235885 webrtc/utf8-sdp.html [ Failure ]
 webkit.org/b/235885 webrtc/video-getParameters.html [ Failure ]
-webkit.org/b/235885 webrtc/video-mediastreamtrack-stats.html [ Failure ]
 webkit.org/b/235885 webrtc/video-stats.html [ Failure ]
 webkit.org/b/235885 webrtc/video.html [ Failure ]
 webkit.org/b/235885 webrtc/vp8-then-h264.html [ Failure ]
@@ -1589,7 +1590,6 @@ webkit.org/b/235885 webrtc/vp9-svc.html [ Skip ]
 webkit.org/b/235885 imported/w3c/web-platform-tests/webrtc/simulcast [ Skip ]
 webkit.org/b/235885 imported/w3c/web-platform-tests/webrtc/protocol/simulcast-answer.html [ Skip ]
 webkit.org/b/235885 imported/w3c/web-platform-tests/webrtc/protocol/simulcast-offer.html [ Skip ]
-webkit.org/b/191006 webkit.org/b/235885 webrtc/simulcast-h264.html [ Skip ]
 
 # DTMF not supported.
 webkit.org/b/235885 imported/w3c/web-platform-tests/webrtc/RTCDTMFSender-insertDTMF.https.html [ Skip ]

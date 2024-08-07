@@ -13,7 +13,6 @@
 
 #include <stddef.h>
 
-#include "rtc_base/constructor_magic.h"
 #include "rtc_base/socket.h"
 #include "rtc_base/stream.h"
 #include "rtc_base/third_party/sigslot/sigslot.h"
@@ -27,6 +26,9 @@ class SocketStream : public StreamInterface, public sigslot::has_slots<> {
   explicit SocketStream(Socket* socket);
   ~SocketStream() override;
 
+  SocketStream(const SocketStream&) = delete;
+  SocketStream& operator=(const SocketStream&) = delete;
+
   void Attach(Socket* socket);
   Socket* Detach();
 
@@ -34,15 +36,13 @@ class SocketStream : public StreamInterface, public sigslot::has_slots<> {
 
   StreamState GetState() const override;
 
-  StreamResult Read(void* buffer,
-                    size_t buffer_len,
-                    size_t* read,
-                    int* error) override;
+  StreamResult Read(rtc::ArrayView<uint8_t> buffer,
+                    size_t& read,
+                    int& error) override;
 
-  StreamResult Write(const void* data,
-                     size_t data_len,
-                     size_t* written,
-                     int* error) override;
+  StreamResult Write(rtc::ArrayView<const uint8_t> data,
+                     size_t& written,
+                     int& error) override;
 
   void Close() override;
 
@@ -53,8 +53,6 @@ class SocketStream : public StreamInterface, public sigslot::has_slots<> {
   void OnCloseEvent(Socket* socket, int err);
 
   Socket* socket_;
-
-  RTC_DISALLOW_COPY_AND_ASSIGN(SocketStream);
 };
 
 ///////////////////////////////////////////////////////////////////////////////

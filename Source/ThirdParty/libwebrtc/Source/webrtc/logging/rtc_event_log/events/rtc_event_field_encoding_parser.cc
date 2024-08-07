@@ -15,6 +15,7 @@
 #include "absl/types/optional.h"
 #include "logging/rtc_event_log/encoder/var_int.h"
 #include "logging/rtc_event_log/events/rtc_event_field_encoding.h"
+#include "logging/rtc_event_log/events/rtc_event_log_parse_status.h"
 #include "rtc_base/bitstream_reader.h"
 #include "rtc_base/checks.h"
 
@@ -109,10 +110,13 @@ uint64_t EventParser::ReadSingleValue(FieldType field_type) {
     case FieldType::kVarInt:
       return ReadVarInt();
     case FieldType::kString:
-      RTC_NOTREACHED();
+      RTC_DCHECK_NOTREACHED();
       SetError();
       return 0;
   }
+  RTC_DCHECK_NOTREACHED();
+  SetError();
+  return 0;
 }
 
 void EventParser::ReadDeltasAndPopulateValues(

@@ -20,8 +20,9 @@
 #include <vector>
 
 #include "absl/types/optional.h"
+#include "api/field_trials_view.h"
+#include "api/network_state_predictor.h"
 #include "api/transport/network_types.h"
-#include "api/transport/webrtc_key_value_config.h"
 #include "api/units/data_rate.h"
 #include "api/units/time_delta.h"
 #include "api/units/timestamp.h"
@@ -56,10 +57,10 @@ class LinkCapacityTracker {
 
 class RttBasedBackoff {
  public:
-  explicit RttBasedBackoff(const WebRtcKeyValueConfig* key_value_config);
+  explicit RttBasedBackoff(const FieldTrialsView* key_value_config);
   ~RttBasedBackoff();
   void UpdatePropagationRtt(Timestamp at_time, TimeDelta propagation_rtt);
-  TimeDelta CorrectedRtt(Timestamp at_time) const;
+  bool IsRttAboveLimit() const;
 
   FieldTrialFlag disabled_;
   FieldTrialParameter<TimeDelta> configured_limit_;
@@ -72,18 +73,25 @@ class RttBasedBackoff {
   Timestamp last_propagation_rtt_update_;
   TimeDelta last_propagation_rtt_;
   Timestamp last_packet_sent_;
+
+ private:
+  TimeDelta CorrectedRtt() const;
 };
 
 class SendSideBandwidthEstimation {
  public:
   SendSideBandwidthEstimation() = delete;
-  SendSideBandwidthEstimation(const WebRtcKeyValueConfig* key_value_config,
+  SendSideBandwidthEstimation(const FieldTrialsView* key_value_config,
                               RtcEventLog* event_log);
   ~SendSideBandwidthEstimation();
 
   void OnRouteChange();
 
   DataRate target_rate() const;
+  LossBasedState loss_based_state() const;
+  // Return whether the current rtt is higher than the rtt limited configured in
+  // RttBasedBackoff.
+  bool IsRttAboveLimit() const;
   uint8_t fraction_loss() const { return last_fraction_loss_; }
   TimeDelta round_trip_time() const { return last_round_trip_time_; }
 
@@ -116,7 +124,10 @@ class SendSideBandwidthEstimation {
   int GetMinBitrate() const;
   void SetAcknowledgedRate(absl::optional<DataRate> acknowledged_rate,
                            Timestamp at_time);
-  void IncomingPacketFeedbackVector(const TransportPacketsFeedback& report);
+  void UpdateLossBasedEstimator(const TransportPacketsFeedback& report,
+                                BandwidthUsage delay_detector_state,
+                                absl::optional<DataRate> probe_bitrate,
+                                bool in_alr);
 
  private:
   friend class GoogCcStatePrinter;
@@ -198,6 +209,7 @@ class SendSideBandwidthEstimation {
   DataRate bitrate_threshold_;
   LossBasedBandwidthEstimation loss_based_bandwidth_estimator_v1_;
   LossBasedBweV2 loss_based_bandwidth_estimator_v2_;
+  LossBasedState loss_based_state_;
   FieldTrialFlag disable_receiver_limit_caps_only_;
 };
 }  // namespace webrtc

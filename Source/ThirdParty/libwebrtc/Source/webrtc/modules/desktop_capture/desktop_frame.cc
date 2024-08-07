@@ -112,7 +112,7 @@ DesktopRect DesktopFrame::rect() const {
 float DesktopFrame::scale_factor() const {
   float scale = 1.0f;
 
-#if defined(WEBRTC_MAC)
+#if defined(WEBRTC_MAC) || defined(CHROMEOS)
   // At least on Windows the logical and physical pixel are the same
   // See http://crbug.com/948362.
   if (!dpi().is_zero() && dpi().x() == dpi().y())
@@ -133,6 +133,7 @@ void DesktopFrame::CopyFrameInfoFrom(const DesktopFrame& other) {
   *mutable_updated_region() = other.updated_region();
   set_top_left(other.top_left());
   set_icc_profile(other.icc_profile());
+  set_may_contain_cursor(other.may_contain_cursor());
 }
 
 void DesktopFrame::MoveFrameInfoFrom(DesktopFrame* other) {
@@ -142,6 +143,24 @@ void DesktopFrame::MoveFrameInfoFrom(DesktopFrame* other) {
   mutable_updated_region()->Swap(other->mutable_updated_region());
   set_top_left(other->top_left());
   set_icc_profile(other->icc_profile());
+  set_may_contain_cursor(other->may_contain_cursor());
+}
+
+bool DesktopFrame::FrameDataIsBlack() const {
+  if (size().is_empty())
+    return false;
+
+  uint32_t* pixel = reinterpret_cast<uint32_t*>(data());
+  for (int i = 0; i < size().width() * size().height(); ++i) {
+    if (*pixel++)
+      return false;
+  }
+  return true;
+}
+
+void DesktopFrame::SetFrameDataToBlack() {
+  const uint8_t kBlackPixelValue = 0x00;
+  memset(data(), kBlackPixelValue, stride() * size().height());
 }
 
 BasicDesktopFrame::BasicDesktopFrame(DesktopSize size)
@@ -157,9 +176,13 @@ BasicDesktopFrame::~BasicDesktopFrame() {
 // static
 DesktopFrame* BasicDesktopFrame::CopyOf(const DesktopFrame& frame) {
   DesktopFrame* result = new BasicDesktopFrame(frame.size());
-  libyuv::CopyPlane(frame.data(), frame.stride(), result->data(),
-                    result->stride(), frame.size().width() * kBytesPerPixel,
-                    frame.size().height());
+  // TODO(crbug.com/1330019): Temporary workaround for a known libyuv crash when
+  // the height or width is 0. Remove this once this change has been merged.
+  if (frame.size().width() && frame.size().height()) {
+    libyuv::CopyPlane(frame.data(), frame.stride(), result->data(),
+                      result->stride(), frame.size().width() * kBytesPerPixel,
+                      frame.size().height());
+  }
   result->CopyFrameInfoFrom(frame);
   return result;
 }

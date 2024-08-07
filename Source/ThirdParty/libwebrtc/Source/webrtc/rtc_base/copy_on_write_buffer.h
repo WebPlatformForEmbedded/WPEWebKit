@@ -19,6 +19,7 @@
 #include <type_traits>
 #include <utility>
 
+#include "absl/strings/string_view.h"
 #include "api/scoped_refptr.h"
 #include "rtc_base/buffer.h"
 #include "rtc_base/checks.h"
@@ -35,10 +36,10 @@ class RTC_EXPORT CopyOnWriteBuffer {
   // Share the data with an existing buffer.
   CopyOnWriteBuffer(const CopyOnWriteBuffer& buf);
   // Move contents from an existing buffer.
-  CopyOnWriteBuffer(CopyOnWriteBuffer&& buf);
+  CopyOnWriteBuffer(CopyOnWriteBuffer&& buf) noexcept;
 
   // Construct a buffer from a string, convenient for unittests.
-  CopyOnWriteBuffer(const std::string& s);
+  explicit CopyOnWriteBuffer(absl::string_view s);
 
   // Construct a buffer with the specified number of uninitialized bytes.
   explicit CopyOnWriteBuffer(size_t size);
@@ -81,6 +82,17 @@ class RTC_EXPORT CopyOnWriteBuffer {
                 internal::BufferCompat<uint8_t, ElemT>::value>* = nullptr>
   explicit CopyOnWriteBuffer(const VecT& v)
       : CopyOnWriteBuffer(v.data(), v.size()) {}
+
+  // Construct a buffer from a vector like type and a capacity argument
+  template <typename VecT,
+            typename ElemT = typename std::remove_pointer_t<
+                decltype(std::declval<VecT>().data())>,
+            typename std::enable_if_t<
+                !std::is_same<VecT, CopyOnWriteBuffer>::value &&
+                HasDataAndSize<VecT, ElemT>::value &&
+                internal::BufferCompat<uint8_t, ElemT>::value>* = nullptr>
+  explicit CopyOnWriteBuffer(const VecT& v, size_t capacity)
+      : CopyOnWriteBuffer(v.data(), v.size(), capacity) {}
 
   ~CopyOnWriteBuffer();
 

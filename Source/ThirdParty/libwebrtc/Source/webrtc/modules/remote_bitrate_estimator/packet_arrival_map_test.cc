@@ -27,7 +27,7 @@ TEST(PacketArrivalMapTest, IsConsistentWhenEmpty) {
 TEST(PacketArrivalMapTest, InsertsFirstItemIntoMap) {
   PacketArrivalTimeMap map;
 
-  map.AddPacket(42, 10);
+  map.AddPacket(42, Timestamp::Millis(10));
   EXPECT_EQ(map.begin_sequence_number(), 42);
   EXPECT_EQ(map.end_sequence_number(), 43);
 
@@ -43,8 +43,8 @@ TEST(PacketArrivalMapTest, InsertsFirstItemIntoMap) {
 TEST(PacketArrivalMapTest, InsertsWithGaps) {
   PacketArrivalTimeMap map;
 
-  map.AddPacket(42, 10);
-  map.AddPacket(45, 11);
+  map.AddPacket(42, Timestamp::Zero());
+  map.AddPacket(45, Timestamp::Millis(11));
   EXPECT_EQ(map.begin_sequence_number(), 42);
   EXPECT_EQ(map.end_sequence_number(), 46);
 
@@ -55,24 +55,41 @@ TEST(PacketArrivalMapTest, InsertsWithGaps) {
   EXPECT_TRUE(map.has_received(45));
   EXPECT_FALSE(map.has_received(46));
 
-  EXPECT_EQ(map.get(42), 10);
-  EXPECT_EQ(map.get(43), 0);
-  EXPECT_EQ(map.get(44), 0);
-  EXPECT_EQ(map.get(45), 11);
+  EXPECT_EQ(map.get(42), Timestamp::Zero());
+  EXPECT_LT(map.get(43), Timestamp::Zero());
+  EXPECT_LT(map.get(44), Timestamp::Zero());
+  EXPECT_EQ(map.get(45), Timestamp::Millis(11));
 
   EXPECT_EQ(map.clamp(-100), 42);
   EXPECT_EQ(map.clamp(44), 44);
   EXPECT_EQ(map.clamp(100), 46);
 }
 
+TEST(PacketArrivalMapTest, FindNextAtOrAfterWithGaps) {
+  PacketArrivalTimeMap map;
+
+  map.AddPacket(42, Timestamp::Zero());
+  map.AddPacket(45, Timestamp::Millis(11));
+  EXPECT_EQ(map.begin_sequence_number(), 42);
+  EXPECT_EQ(map.end_sequence_number(), 46);
+
+  PacketArrivalTimeMap::PacketArrivalTime packet = map.FindNextAtOrAfter(42);
+  EXPECT_EQ(packet.arrival_time, Timestamp::Zero());
+  EXPECT_EQ(packet.sequence_number, 42);
+
+  packet = map.FindNextAtOrAfter(43);
+  EXPECT_EQ(packet.arrival_time, Timestamp::Millis(11));
+  EXPECT_EQ(packet.sequence_number, 45);
+}
+
 TEST(PacketArrivalMapTest, InsertsWithinBuffer) {
   PacketArrivalTimeMap map;
 
-  map.AddPacket(42, 10);
-  map.AddPacket(45, 11);
+  map.AddPacket(42, Timestamp::Millis(10));
+  map.AddPacket(45, Timestamp::Millis(11));
 
-  map.AddPacket(43, 12);
-  map.AddPacket(44, 13);
+  map.AddPacket(43, Timestamp::Millis(12));
+  map.AddPacket(44, Timestamp::Millis(13));
 
   EXPECT_EQ(map.begin_sequence_number(), 42);
   EXPECT_EQ(map.end_sequence_number(), 46);
@@ -84,26 +101,25 @@ TEST(PacketArrivalMapTest, InsertsWithinBuffer) {
   EXPECT_TRUE(map.has_received(45));
   EXPECT_FALSE(map.has_received(46));
 
-  EXPECT_EQ(map.get(42), 10);
-  EXPECT_EQ(map.get(43), 12);
-  EXPECT_EQ(map.get(44), 13);
-  EXPECT_EQ(map.get(45), 11);
+  EXPECT_EQ(map.get(42), Timestamp::Millis(10));
+  EXPECT_EQ(map.get(43), Timestamp::Millis(12));
+  EXPECT_EQ(map.get(44), Timestamp::Millis(13));
+  EXPECT_EQ(map.get(45), Timestamp::Millis(11));
 }
 
 TEST(PacketArrivalMapTest, GrowsBufferAndRemoveOld) {
   PacketArrivalTimeMap map;
 
   constexpr int64_t kLargeSeq = 42 + PacketArrivalTimeMap::kMaxNumberOfPackets;
-  map.AddPacket(42, 10);
-  map.AddPacket(43, 11);
-  map.AddPacket(44, 12);
-  map.AddPacket(45, 13);
-  map.AddPacket(kLargeSeq, 12);
+  map.AddPacket(42, Timestamp::Millis(10));
+  map.AddPacket(43, Timestamp::Millis(11));
+  map.AddPacket(44, Timestamp::Millis(12));
+  map.AddPacket(45, Timestamp::Millis(13));
+  map.AddPacket(kLargeSeq, Timestamp::Millis(12));
 
   EXPECT_EQ(map.begin_sequence_number(), 43);
   EXPECT_EQ(map.end_sequence_number(), kLargeSeq + 1);
-  EXPECT_EQ(static_cast<size_t>(map.end_sequence_number() -
-                                map.begin_sequence_number()),
+  EXPECT_EQ(map.end_sequence_number() - map.begin_sequence_number(),
             PacketArrivalTimeMap::kMaxNumberOfPackets);
 
   EXPECT_FALSE(map.has_received(41));
@@ -116,32 +132,13 @@ TEST(PacketArrivalMapTest, GrowsBufferAndRemoveOld) {
   EXPECT_FALSE(map.has_received(kLargeSeq + 1));
 }
 
-TEST(PacketArrivalMapTest, GrowsBufferAndRemoveOldTrimsBeginning) {
-  PacketArrivalTimeMap map;
-
-  constexpr int64_t kLargeSeq = 42 + PacketArrivalTimeMap::kMaxNumberOfPackets;
-  map.AddPacket(42, 10);
-  // Missing: 43, 44
-  map.AddPacket(45, 13);
-  map.AddPacket(kLargeSeq, 12);
-
-  EXPECT_EQ(map.begin_sequence_number(), 45);
-  EXPECT_EQ(map.end_sequence_number(), kLargeSeq + 1);
-
-  EXPECT_FALSE(map.has_received(44));
-  EXPECT_TRUE(map.has_received(45));
-  EXPECT_FALSE(map.has_received(46));
-  EXPECT_TRUE(map.has_received(kLargeSeq));
-  EXPECT_FALSE(map.has_received(kLargeSeq + 1));
-}
-
 TEST(PacketArrivalMapTest, SequenceNumberJumpsDeletesAll) {
   PacketArrivalTimeMap map;
 
   constexpr int64_t kLargeSeq =
       42 + 2 * PacketArrivalTimeMap::kMaxNumberOfPackets;
-  map.AddPacket(42, 10);
-  map.AddPacket(kLargeSeq, 12);
+  map.AddPacket(42, Timestamp::Millis(10));
+  map.AddPacket(kLargeSeq, Timestamp::Millis(12));
 
   EXPECT_EQ(map.begin_sequence_number(), kLargeSeq);
   EXPECT_EQ(map.end_sequence_number(), kLargeSeq + 1);
@@ -154,8 +151,8 @@ TEST(PacketArrivalMapTest, SequenceNumberJumpsDeletesAll) {
 TEST(PacketArrivalMapTest, ExpandsBeforeBeginning) {
   PacketArrivalTimeMap map;
 
-  map.AddPacket(42, 10);
-  map.AddPacket(-1000, 13);
+  map.AddPacket(42, Timestamp::Millis(10));
+  map.AddPacket(-1000, Timestamp::Millis(13));
 
   EXPECT_EQ(map.begin_sequence_number(), -1000);
   EXPECT_EQ(map.end_sequence_number(), 43);
@@ -170,10 +167,10 @@ TEST(PacketArrivalMapTest, ExpandsBeforeBeginning) {
 TEST(PacketArrivalMapTest, ExpandingBeforeBeginningKeepsReceived) {
   PacketArrivalTimeMap map;
 
-  map.AddPacket(42, 10);
+  map.AddPacket(42, Timestamp::Millis(10));
   constexpr int64_t kSmallSeq =
       static_cast<int64_t>(42) - 2 * PacketArrivalTimeMap::kMaxNumberOfPackets;
-  map.AddPacket(kSmallSeq, 13);
+  map.AddPacket(kSmallSeq, Timestamp::Millis(13));
 
   EXPECT_EQ(map.begin_sequence_number(), 42);
   EXPECT_EQ(map.end_sequence_number(), 43);
@@ -182,10 +179,10 @@ TEST(PacketArrivalMapTest, ExpandingBeforeBeginningKeepsReceived) {
 TEST(PacketArrivalMapTest, ErasesToRemoveElements) {
   PacketArrivalTimeMap map;
 
-  map.AddPacket(42, 10);
-  map.AddPacket(43, 11);
-  map.AddPacket(44, 12);
-  map.AddPacket(45, 13);
+  map.AddPacket(42, Timestamp::Millis(10));
+  map.AddPacket(43, Timestamp::Millis(11));
+  map.AddPacket(44, Timestamp::Millis(12));
+  map.AddPacket(45, Timestamp::Millis(13));
 
   map.EraseTo(44);
 
@@ -210,8 +207,8 @@ TEST(PacketArrivalMapTest, ErasesInEmptyMap) {
 TEST(PacketArrivalMapTest, IsTolerantToWrongArgumentsForErase) {
   PacketArrivalTimeMap map;
 
-  map.AddPacket(42, 10);
-  map.AddPacket(43, 11);
+  map.AddPacket(42, Timestamp::Millis(10));
+  map.AddPacket(43, Timestamp::Millis(11));
 
   map.EraseTo(1);
 
@@ -227,14 +224,14 @@ TEST(PacketArrivalMapTest, IsTolerantToWrongArgumentsForErase) {
 TEST(PacketArrivalMapTest, EraseAllRemembersBeginningSeqNbr) {
   PacketArrivalTimeMap map;
 
-  map.AddPacket(42, 10);
-  map.AddPacket(43, 11);
-  map.AddPacket(44, 12);
-  map.AddPacket(45, 13);
+  map.AddPacket(42, Timestamp::Millis(10));
+  map.AddPacket(43, Timestamp::Millis(11));
+  map.AddPacket(44, Timestamp::Millis(12));
+  map.AddPacket(45, Timestamp::Millis(13));
 
   map.EraseTo(46);
 
-  map.AddPacket(50, 10);
+  map.AddPacket(50, Timestamp::Millis(10));
 
   EXPECT_EQ(map.begin_sequence_number(), 46);
   EXPECT_EQ(map.end_sequence_number(), 51);
@@ -246,6 +243,29 @@ TEST(PacketArrivalMapTest, EraseAllRemembersBeginningSeqNbr) {
   EXPECT_FALSE(map.has_received(49));
   EXPECT_TRUE(map.has_received(50));
   EXPECT_FALSE(map.has_received(51));
+}
+
+TEST(PacketArrivalMapTest, EraseToMissingSequenceNumber) {
+  PacketArrivalTimeMap map;
+
+  map.AddPacket(37, Timestamp::Millis(10));
+  map.AddPacket(39, Timestamp::Millis(11));
+  map.AddPacket(40, Timestamp::Millis(12));
+  map.AddPacket(41, Timestamp::Millis(13));
+
+  map.EraseTo(38);
+
+  map.AddPacket(42, Timestamp::Millis(40));
+
+  EXPECT_EQ(map.begin_sequence_number(), 38);
+  EXPECT_EQ(map.end_sequence_number(), 43);
+
+  EXPECT_FALSE(map.has_received(37));
+  EXPECT_FALSE(map.has_received(38));
+  EXPECT_TRUE(map.has_received(39));
+  EXPECT_TRUE(map.has_received(40));
+  EXPECT_TRUE(map.has_received(41));
+  EXPECT_TRUE(map.has_received(42));
 }
 
 }  // namespace

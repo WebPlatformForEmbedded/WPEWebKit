@@ -16,13 +16,11 @@
 #include "rtc_base/event.h"
 #include "rtc_base/fake_clock.h"
 #include "rtc_base/helpers.h"
-#include "rtc_base/location.h"
-#include "rtc_base/message_handler.h"
-#include "rtc_base/task_utils/to_queued_task.h"
 #include "rtc_base/thread.h"
 #include "test/gtest.h"
 
 namespace rtc {
+using ::webrtc::TimeDelta;
 
 TEST(TimeTest, TimeInMs) {
   int64_t ts_earlier = TimeMillis();
@@ -63,59 +61,6 @@ TEST(TimeTest, TestTimeDiff64) {
   int64_t ts_later = ts_earlier + ts_diff;
   EXPECT_EQ(ts_diff, rtc::TimeDiff(ts_later, ts_earlier));
   EXPECT_EQ(-ts_diff, rtc::TimeDiff(ts_earlier, ts_later));
-}
-
-class TimestampWrapAroundHandlerTest : public ::testing::Test {
- public:
-  TimestampWrapAroundHandlerTest() {}
-
- protected:
-  TimestampWrapAroundHandler wraparound_handler_;
-};
-
-TEST_F(TimestampWrapAroundHandlerTest, Unwrap) {
-  // Start value.
-  int64_t ts = 2;
-  EXPECT_EQ(ts,
-            wraparound_handler_.Unwrap(static_cast<uint32_t>(ts & 0xffffffff)));
-
-  // Wrap backwards.
-  ts = -2;
-  EXPECT_EQ(ts,
-            wraparound_handler_.Unwrap(static_cast<uint32_t>(ts & 0xffffffff)));
-
-  // Forward to 2 again.
-  ts = 2;
-  EXPECT_EQ(ts,
-            wraparound_handler_.Unwrap(static_cast<uint32_t>(ts & 0xffffffff)));
-
-  // Max positive skip ahead, until max value (0xffffffff).
-  for (uint32_t i = 0; i <= 0xf; ++i) {
-    ts = (i << 28) + 0x0fffffff;
-    EXPECT_EQ(
-        ts, wraparound_handler_.Unwrap(static_cast<uint32_t>(ts & 0xffffffff)));
-  }
-
-  // Wrap around.
-  ts += 2;
-  EXPECT_EQ(ts,
-            wraparound_handler_.Unwrap(static_cast<uint32_t>(ts & 0xffffffff)));
-
-  // Max wrap backward...
-  ts -= 0x0fffffff;
-  EXPECT_EQ(ts,
-            wraparound_handler_.Unwrap(static_cast<uint32_t>(ts & 0xffffffff)));
-
-  // ...and back again.
-  ts += 0x0fffffff;
-  EXPECT_EQ(ts,
-            wraparound_handler_.Unwrap(static_cast<uint32_t>(ts & 0xffffffff)));
-}
-
-TEST_F(TimestampWrapAroundHandlerTest, NoNegativeStart) {
-  int64_t ts = 0xfffffff0;
-  EXPECT_EQ(ts,
-            wraparound_handler_.Unwrap(static_cast<uint32_t>(ts & 0xffffffff)));
 }
 
 class TmToSeconds : public ::testing::Test {
@@ -270,10 +215,9 @@ TEST(FakeClock, SettingTimeWakesThreads) {
 
   // Post an event that won't be executed for 10 seconds.
   Event message_handler_dispatched;
-  worker->PostDelayedTask(webrtc::ToQueuedTask([&message_handler_dispatched] {
-                            message_handler_dispatched.Set();
-                          }),
-                          /*milliseconds=*/60000);
+  worker->PostDelayedTask(
+      [&message_handler_dispatched] { message_handler_dispatched.Set(); },
+      TimeDelta::Seconds(60));
 
   // Wait for a bit for the worker thread to be started and enter its socket
   // select(). Otherwise this test would be trivial since the worker thread
@@ -283,7 +227,7 @@ TEST(FakeClock, SettingTimeWakesThreads) {
   // Advance the fake clock, expecting the worker thread to wake up
   // and dispatch the message instantly.
   clock.AdvanceTime(webrtc::TimeDelta::Seconds(60u));
-  EXPECT_TRUE(message_handler_dispatched.Wait(0));
+  EXPECT_TRUE(message_handler_dispatched.Wait(webrtc::TimeDelta::Zero()));
   worker->Stop();
 
   SetClockForTesting(nullptr);

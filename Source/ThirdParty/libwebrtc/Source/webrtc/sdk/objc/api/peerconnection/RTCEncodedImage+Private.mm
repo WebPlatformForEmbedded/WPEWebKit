@@ -13,14 +13,14 @@
 #import <objc/runtime.h>
 
 #include "rtc_base/numerics/safe_conversions.h"
-#include "rtc_base/ref_counted_object.h"
+#include "api/make_ref_counted.h"
 
 namespace {
 // An implementation of EncodedImageBufferInterface that doesn't perform any copies.
 class ObjCEncodedImageBuffer : public webrtc::EncodedImageBufferInterface {
  public:
   static rtc::scoped_refptr<ObjCEncodedImageBuffer> Create(NSData *data) {
-    return new rtc::RefCountedObject<ObjCEncodedImageBuffer>(data);
+    return rtc::make_ref_counted<ObjCEncodedImageBuffer>(data);
   }
   const uint8_t *data() const override { return static_cast<const uint8_t *>(data_.bytes); }
   // TODO(bugs.webrtc.org/9378): delete this non-const data method.
@@ -84,7 +84,7 @@ __attribute__((objc_runtime_name("WK_RTCWrappedEncodedImageBuffer")))
                                  freeWhenDone:NO];
     self.encodedWidth = rtc::dchecked_cast<int32_t>(encodedImage._encodedWidth);
     self.encodedHeight = rtc::dchecked_cast<int32_t>(encodedImage._encodedHeight);
-    self.timeStamp = encodedImage.Timestamp();
+    self.timeStamp = encodedImage.RtpTimestamp();
     self.captureTimeMs = encodedImage.capture_time_ms_;
     self.ntpTimeMs = encodedImage.ntp_time_ms_;
     self.flags = encodedImage.timing_.flags;
@@ -112,7 +112,7 @@ __attribute__((objc_runtime_name("WK_RTCWrappedEncodedImageBuffer")))
   encodedImage.set_size(self.buffer.length);
   encodedImage._encodedWidth = rtc::dchecked_cast<uint32_t>(self.encodedWidth);
   encodedImage._encodedHeight = rtc::dchecked_cast<uint32_t>(self.encodedHeight);
-  encodedImage.SetTimestamp(self.timeStamp);
+  encodedImage.SetRtpTimestamp(self.timeStamp);
   encodedImage.capture_time_ms_ = self.captureTimeMs;
   encodedImage.ntp_time_ms_ = self.ntpTimeMs;
   encodedImage.timing_.flags = self.flags;

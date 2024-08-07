@@ -13,13 +13,12 @@
 #include <memory>
 #include <vector>
 
-#include "api/transport/field_trial_based_config.h"
 #include "modules/rtp_rtcp/include/rtp_header_extension_map.h"
 #include "modules/rtp_rtcp/include/rtp_rtcp_defines.h"
 #include "modules/rtp_rtcp/source/rtp_header_extensions.h"
 #include "modules/rtp_rtcp/source/rtp_packet_received.h"
 #include "modules/rtp_rtcp/source/rtp_rtcp_impl2.h"
-#include "test/field_trial.h"
+#include "rtc_base/thread.h"
 #include "test/gmock.h"
 #include "test/gtest.h"
 
@@ -33,7 +32,6 @@ enum : int {  // The first valid value is 1.
 
 const uint16_t kSeqNum = 33;
 const uint32_t kSsrc = 725242;
-const uint8_t kAudioLevel = 0x5a;
 const uint64_t kStartTime = 123456789;
 
 using ::testing::ElementsAreArray;
@@ -46,14 +44,13 @@ class LoopbackTransportTest : public webrtc::Transport {
         kAbsoluteCaptureTimeExtensionId);
   }
 
-  bool SendRtp(const uint8_t* data,
-               size_t len,
+  bool SendRtp(rtc::ArrayView<const uint8_t> data,
                const PacketOptions& /*options*/) override {
     sent_packets_.push_back(RtpPacketReceived(&receivers_extensions_));
-    EXPECT_TRUE(sent_packets_.back().Parse(data, len));
+    EXPECT_TRUE(sent_packets_.back().Parse(data));
     return true;
   }
-  bool SendRtcp(const uint8_t* data, size_t len) override { return false; }
+  bool SendRtcp(rtc::ArrayView<const uint8_t> data) override { return false; }
   const RtpPacketReceived& last_sent_packet() { return sent_packets_.back(); }
   int packets_sent() { return sent_packets_.size(); }
 
@@ -82,6 +79,7 @@ class RtpSenderAudioTest : public ::testing::Test {
     rtp_module_->SetSequenceNumber(kSeqNum);
   }
 
+  rtc::AutoThread main_thread_;
   SimulatedClock fake_clock_;
   LoopbackTransportTest transport_;
   std::unique_ptr<ModuleRtpRtcpImpl2> rtp_module_;
@@ -95,17 +93,15 @@ TEST_F(RtpSenderAudioTest, SendAudio) {
                    payload_name, payload_type, 48000, 0, 1500));
   uint8_t payload[] = {47, 11, 32, 93, 89};
 
-  ASSERT_TRUE(
-      rtp_sender_audio_->SendAudio(AudioFrameType::kAudioFrameCN, payload_type,
-                                   4321, payload, sizeof(payload),
-                                   /*absolute_capture_timestamp_ms=*/0));
+  ASSERT_TRUE(rtp_sender_audio_->SendAudio(
+      {.payload = payload, .payload_id = payload_type}));
 
   auto sent_payload = transport_.last_sent_packet().payload();
   EXPECT_THAT(sent_payload, ElementsAreArray(payload));
 }
 
 TEST_F(RtpSenderAudioTest, SendAudioWithAudioLevelExtension) {
-  EXPECT_EQ(0, rtp_sender_audio_->SetAudioLevel(kAudioLevel));
+  const uint8_t kAudioLevel = 0x5a;
   rtp_module_->RegisterRtpHeaderExtension(AudioLevel::Uri(),
                                           kAudioLevelExtensionId);
 
@@ -117,9 +113,10 @@ TEST_F(RtpSenderAudioTest, SendAudioWithAudioLevelExtension) {
   uint8_t payload[] = {47, 11, 32, 93, 89};
 
   ASSERT_TRUE(
-      rtp_sender_audio_->SendAudio(AudioFrameType::kAudioFrameCN, payload_type,
-                                   4321, payload, sizeof(payload),
-                                   /*absolute_capture_timestamp_ms=*/0));
+      rtp_sender_audio_->SendAudio({.type = AudioFrameType::kAudioFrameCN,
+                                    .payload = payload,
+                                    .payload_id = payload_type,
+                                    .audio_level_dbov = kAudioLevel}));
 
   auto sent_payload = transport_.last_sent_packet().payload();
   EXPECT_THAT(sent_payload, ElementsAreArray(payload));
@@ -133,7 +130,7 @@ TEST_F(RtpSenderAudioTest, SendAudioWithAudioLevelExtension) {
 }
 
 TEST_F(RtpSenderAudioTest, SendAudioWithoutAbsoluteCaptureTime) {
-  constexpr uint32_t kAbsoluteCaptureTimestampMs = 521;
+  constexpr Timestamp kAbsoluteCaptureTimestamp = Timestamp::Millis(521);
   const char payload_name[] = "audio";
   const uint8_t payload_type = 127;
   ASSERT_EQ(0, rtp_sender_audio_->RegisterAudioPayload(
@@ -141,53 +138,20 @@ TEST_F(RtpSenderAudioTest, SendAudioWithoutAbsoluteCaptureTime) {
   uint8_t payload[] = {47, 11, 32, 93, 89};
 
   ASSERT_TRUE(rtp_sender_audio_->SendAudio(
-      AudioFrameType::kAudioFrameCN, payload_type, 4321, payload,
-      sizeof(payload), kAbsoluteCaptureTimestampMs));
+      {.payload = payload,
+       .payload_id = payload_type,
+       .capture_time = kAbsoluteCaptureTimestamp}));
 
+  // AbsoluteCaptureTimeExtension wasn't registered, thus can't be sent.
   EXPECT_FALSE(transport_.last_sent_packet()
                    .HasExtension<AbsoluteCaptureTimeExtension>());
-}
-
-// Essentially the same test as
-// SendAudioWithAbsoluteCaptureTimeWithCaptureClockOffset but with a field
-// trial. We will remove this test eventually.
-TEST_F(RtpSenderAudioTest, SendAudioWithAbsoluteCaptureTime) {
-  // Recreate rtp_sender_audio_ with new field trial.
-  test::ScopedFieldTrials field_trial(
-      "WebRTC-IncludeCaptureClockOffset/Disabled/");
-  rtp_sender_audio_ =
-      std::make_unique<RTPSenderAudio>(&fake_clock_, rtp_module_->RtpSender());
-
-  rtp_module_->RegisterRtpHeaderExtension(AbsoluteCaptureTimeExtension::Uri(),
-                                          kAbsoluteCaptureTimeExtensionId);
-  constexpr uint32_t kAbsoluteCaptureTimestampMs = 521;
-  const char payload_name[] = "audio";
-  const uint8_t payload_type = 127;
-  ASSERT_EQ(0, rtp_sender_audio_->RegisterAudioPayload(
-                   payload_name, payload_type, 48000, 0, 1500));
-  uint8_t payload[] = {47, 11, 32, 93, 89};
-
-  ASSERT_TRUE(rtp_sender_audio_->SendAudio(
-      AudioFrameType::kAudioFrameCN, payload_type, 4321, payload,
-      sizeof(payload), kAbsoluteCaptureTimestampMs));
-
-  auto absolute_capture_time =
-      transport_.last_sent_packet()
-          .GetExtension<AbsoluteCaptureTimeExtension>();
-  EXPECT_TRUE(absolute_capture_time);
-  EXPECT_EQ(
-      absolute_capture_time->absolute_capture_timestamp,
-      Int64MsToUQ32x32(fake_clock_.ConvertTimestampToNtpTimeInMilliseconds(
-          kAbsoluteCaptureTimestampMs)));
-  EXPECT_FALSE(
-      absolute_capture_time->estimated_capture_clock_offset.has_value());
 }
 
 TEST_F(RtpSenderAudioTest,
        SendAudioWithAbsoluteCaptureTimeWithCaptureClockOffset) {
   rtp_module_->RegisterRtpHeaderExtension(AbsoluteCaptureTimeExtension::Uri(),
                                           kAbsoluteCaptureTimeExtensionId);
-  constexpr uint32_t kAbsoluteCaptureTimestampMs = 521;
+  constexpr Timestamp kAbsoluteCaptureTimestamp = Timestamp::Millis(521);
   const char payload_name[] = "audio";
   const uint8_t payload_type = 127;
   ASSERT_EQ(0, rtp_sender_audio_->RegisterAudioPayload(
@@ -195,20 +159,17 @@ TEST_F(RtpSenderAudioTest,
   uint8_t payload[] = {47, 11, 32, 93, 89};
 
   ASSERT_TRUE(rtp_sender_audio_->SendAudio(
-      AudioFrameType::kAudioFrameCN, payload_type, 4321, payload,
-      sizeof(payload), kAbsoluteCaptureTimestampMs));
+      {.payload = payload,
+       .payload_id = payload_type,
+       .capture_time = kAbsoluteCaptureTimestamp}));
 
   auto absolute_capture_time =
       transport_.last_sent_packet()
           .GetExtension<AbsoluteCaptureTimeExtension>();
-  EXPECT_TRUE(absolute_capture_time);
-  EXPECT_EQ(
-      absolute_capture_time->absolute_capture_timestamp,
-      Int64MsToUQ32x32(fake_clock_.ConvertTimestampToNtpTimeInMilliseconds(
-          kAbsoluteCaptureTimestampMs)));
-  EXPECT_TRUE(
-      absolute_capture_time->estimated_capture_clock_offset.has_value());
-  EXPECT_EQ(0, *absolute_capture_time->estimated_capture_clock_offset);
+  ASSERT_TRUE(absolute_capture_time);
+  EXPECT_EQ(NtpTime(absolute_capture_time->absolute_capture_timestamp),
+            fake_clock_.ConvertTimestampToNtpTime(kAbsoluteCaptureTimestamp));
+  EXPECT_EQ(absolute_capture_time->estimated_capture_clock_offset, 0);
 }
 
 // As RFC4733, named telephone events are carried as part of the audio stream
@@ -230,31 +191,33 @@ TEST_F(RtpSenderAudioTest, CheckMarkerBitForTelephoneEvents) {
   ASSERT_EQ(0, rtp_sender_audio_->RegisterAudioPayload(
                    kPayloadName, kPayloadType, kPayloadFrequency, 1, 0));
   // Start time is arbitrary.
-  uint32_t capture_timestamp = fake_clock_.TimeInMilliseconds();
+  uint32_t capture_timestamp = 12345;
   // DTMF event key=9, duration=500 and attenuationdB=10
   rtp_sender_audio_->SendTelephoneEvent(9, 500, 10);
   // During start, it takes the starting timestamp as last sent timestamp.
   // The duration is calculated as the difference of current and last sent
   // timestamp. So for first call it will skip since the duration is zero.
-  ASSERT_TRUE(rtp_sender_audio_->SendAudio(
-      AudioFrameType::kEmptyFrame, kPayloadType, capture_timestamp, nullptr, 0,
-      /*absolute_capture_time_ms=0*/ 0));
+  ASSERT_TRUE(
+      rtp_sender_audio_->SendAudio({.type = AudioFrameType::kEmptyFrame,
+                                    .payload_id = kPayloadType,
+                                    .rtp_timestamp = capture_timestamp}));
 
   // DTMF Sample Length is (Frequency/1000) * Duration.
   // So in this case, it is (8000/1000) * 500 = 4000.
   // Sending it as two packets.
-  ASSERT_TRUE(rtp_sender_audio_->SendAudio(AudioFrameType::kEmptyFrame,
-                                           kPayloadType,
-                                           capture_timestamp + 2000, nullptr, 0,
-                                           /*absolute_capture_time_ms=0*/ 0));
+  ASSERT_TRUE(rtp_sender_audio_->SendAudio(
+      {.type = AudioFrameType::kEmptyFrame,
+       .payload_id = kPayloadType,
+       .rtp_timestamp = capture_timestamp + 2000}));
 
   // Marker Bit should be set to 1 for first packet.
   EXPECT_TRUE(transport_.last_sent_packet().Marker());
 
-  ASSERT_TRUE(rtp_sender_audio_->SendAudio(AudioFrameType::kEmptyFrame,
-                                           kPayloadType,
-                                           capture_timestamp + 4000, nullptr, 0,
-                                           /*absolute_capture_time_ms=0*/ 0));
+  ASSERT_TRUE(rtp_sender_audio_->SendAudio(
+      {.type = AudioFrameType::kEmptyFrame,
+       .payload_id = kPayloadType,
+       .rtp_timestamp = capture_timestamp + 4000}));
+
   // Marker Bit should be set to 0 for rest of the packets.
   EXPECT_FALSE(transport_.last_sent_packet().Marker());
 }

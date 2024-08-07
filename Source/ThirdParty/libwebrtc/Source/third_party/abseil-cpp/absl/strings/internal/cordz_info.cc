@@ -19,20 +19,22 @@
 #include "absl/container/inlined_vector.h"
 #include "absl/debugging/stacktrace.h"
 #include "absl/strings/internal/cord_internal.h"
-#include "absl/strings/internal/cord_rep_ring.h"
+#include "absl/strings/internal/cord_rep_btree.h"
+#include "absl/strings/internal/cord_rep_crc.h"
 #include "absl/strings/internal/cordz_handle.h"
 #include "absl/strings/internal/cordz_statistics.h"
 #include "absl/strings/internal/cordz_update_tracker.h"
 #include "absl/synchronization/mutex.h"
+#include "absl/time/clock.h"
 #include "absl/types/span.h"
 
 namespace absl {
 ABSL_NAMESPACE_BEGIN
 namespace cord_internal {
 
-using ::absl::base_internal::SpinLockHolder;
-
-constexpr int CordzInfo::kMaxStackDepth;
+#ifdef ABSL_INTERNAL_NEED_REDUNDANT_CONSTEXPR_DECL
+constexpr size_t CordzInfo::kMaxStackDepth;
+#endif
 
 ABSL_CONST_INIT CordzInfo::List CordzInfo::global_list_{absl::kConstInit};
 
@@ -49,7 +51,7 @@ namespace {
 // The top level node is treated specially: we assume the current thread
 // (typically called from the CordzHandler) to hold a reference purely to
 // perform a safe analysis, and not being part of the application. So we
-// substract 1 from the reference count of the top node to compute the
+// subtract 1 from the reference count of the top node to compute the
 // 'application fair share' excluding the reference of the current thread.
 //
 // An example of fair sharing, and why we multiply reference counts:
@@ -74,28 +76,39 @@ class CordRepAnalyzer {
   // adds the results to `statistics`. Note that node counts and memory sizes
   // are not initialized, computed values are added to any existing values.
   void AnalyzeCordRep(const CordRep* rep) {
+    ABSL_ASSERT(rep != nullptr);
+
     // Process all linear nodes.
     // As per the class comments, use refcout - 1 on the top level node, as the
     // top level node is assumed to be referenced only for analysis purposes.
     size_t refcount = rep->refcount.Get();
     RepRef repref{rep, (refcount > 1) ? refcount - 1 : 1};
 
+    // Process the top level CRC node, if present.
+    if (repref.tag() == CRC) {
+      statistics_.node_count++;
+      statistics_.node_counts.crc++;
+      memory_usage_.Add(sizeof(CordRepCrc), repref.refcount);
+      repref = repref.Child(repref.rep->crc()->child);
+    }
+
     // Process all top level linear nodes (substrings and flats).
     repref = CountLinearReps(repref, memory_usage_);
 
-    // We should have have either a concat or ring node node if not null.
-    if (repref.rep != nullptr) {
-      assert(repref.rep->tag == RING || repref.rep->tag == CONCAT);
-      if (repref.rep->tag == RING) {
-        AnalyzeRing(repref);
-      } else if (repref.rep->tag == CONCAT) {
-        AnalyzeConcat(repref);
-      }
+    switch (repref.tag()) {
+      case CordRepKind::BTREE:
+        AnalyzeBtree(repref);
+        break;
+      default:
+        // We should have a btree node if not null.
+        ABSL_ASSERT(repref.tag() == CordRepKind::UNUSED_0);
+        break;
     }
 
     // Adds values to output
     statistics_.estimated_memory_usage += memory_usage_.total;
-    statistics_.estimated_fair_share_memory_usage += memory_usage_.fair_share;
+    statistics_.estimated_fair_share_memory_usage +=
+        static_cast<size_t>(memory_usage_.fair_share);
   }
 
  private:
@@ -107,33 +120,33 @@ class CordRepAnalyzer {
     const CordRep* rep;
     size_t refcount;
 
-    // Returns a 'child' RepRef which contains the cumulative reference count of
-    // this instance multiplied by the child's reference count.
+    // Returns a 'child' RepRef which contains the cumulative reference count
+    // of this instance multiplied by the child's reference count. Returns a
+    // nullptr RepRef value with a refcount of 0 if `child` is nullptr.
     RepRef Child(const CordRep* child) const {
+      if (child == nullptr) return RepRef{nullptr, 0};
       return RepRef{child, refcount * child->refcount.Get()};
+    }
+
+    // Returns the tag of this rep, or UNUSED_0 if this instance is null
+    constexpr CordRepKind tag() const {
+      ABSL_ASSERT(rep == nullptr || rep->tag != CordRepKind::UNUSED_0);
+      return rep ? static_cast<CordRepKind>(rep->tag) : CordRepKind::UNUSED_0;
     }
   };
 
   // Memory usage values
   struct MemoryUsage {
     size_t total = 0;
-    size_t fair_share = 0;
+    double fair_share = 0.0;
 
     // Adds 'size` memory usage to this class, with a cumulative (recursive)
     // reference count of `refcount`
     void Add(size_t size, size_t refcount) {
       total += size;
-      fair_share += size / refcount;
+      fair_share += static_cast<double>(size) / refcount;
     }
   };
-
-  // Returns `rr` if `rr.rep` is not null and a CONCAT type.
-  // Asserts that `rr.rep` is a concat node or null.
-  static RepRef AssertConcat(RepRef repref) {
-    const CordRep* rep = repref.rep;
-    assert(rep == nullptr || rep->tag == CONCAT);
-    return (rep != nullptr && rep->tag == CONCAT) ? repref : RepRef{nullptr, 0};
-  }
 
   // Counts a flat of the provide allocated size
   void CountFlat(size_t size) {
@@ -160,7 +173,7 @@ class CordRepAnalyzer {
   // buffers where we count children unrounded.
   RepRef CountLinearReps(RepRef rep, MemoryUsage& memory_usage) {
     // Consume all substrings
-    while (rep.rep->tag == SUBSTRING) {
+    while (rep.tag() == SUBSTRING) {
       statistics_.node_count++;
       statistics_.node_counts.substring++;
       memory_usage.Add(sizeof(CordRepSubstring), rep.refcount);
@@ -168,7 +181,7 @@ class CordRepAnalyzer {
     }
 
     // Consume possible FLAT
-    if (rep.rep->tag >= FLAT) {
+    if (rep.tag() >= FLAT) {
       size_t size = rep.rep->flat()->AllocatedSize();
       CountFlat(size);
       memory_usage.Add(size, rep.refcount);
@@ -176,7 +189,7 @@ class CordRepAnalyzer {
     }
 
     // Consume possible external
-    if (rep.rep->tag == EXTERNAL) {
+    if (rep.tag() == EXTERNAL) {
       statistics_.node_count++;
       statistics_.node_counts.external++;
       size_t size = rep.rep->length + sizeof(CordRepExternalImpl<intptr_t>);
@@ -187,56 +200,21 @@ class CordRepAnalyzer {
     return rep;
   }
 
-  // Analyzes the provided concat node in a flattened recursive way.
-  void AnalyzeConcat(RepRef rep) {
-    absl::InlinedVector<RepRef, 47> pending;
-
-    while (rep.rep != nullptr) {
-      const CordRepConcat* concat = rep.rep->concat();
-      RepRef left = rep.Child(concat->left);
-      RepRef right = rep.Child(concat->right);
-
-      statistics_.node_count++;
-      statistics_.node_counts.concat++;
-      memory_usage_.Add(sizeof(CordRepConcat), rep.refcount);
-
-      right = AssertConcat(CountLinearReps(right, memory_usage_));
-      rep = AssertConcat(CountLinearReps(left, memory_usage_));
-      if (rep.rep != nullptr) {
-        if (right.rep != nullptr) {
-          pending.push_back(right);
-        }
-      } else if (right.rep != nullptr) {
-        rep = right;
-      } else if (!pending.empty()) {
-        rep = pending.back();
-        pending.pop_back();
+  // Analyzes the provided btree.
+  void AnalyzeBtree(RepRef rep) {
+    statistics_.node_count++;
+    statistics_.node_counts.btree++;
+    memory_usage_.Add(sizeof(CordRepBtree), rep.refcount);
+    const CordRepBtree* tree = rep.rep->btree();
+    if (tree->height() > 0) {
+      for (CordRep* edge : tree->Edges()) {
+        AnalyzeBtree(rep.Child(edge));
+      }
+    } else {
+      for (CordRep* edge : tree->Edges()) {
+        CountLinearReps(rep.Child(edge), memory_usage_);
       }
     }
-  }
-
-  // Counts the provided ring buffer child into `child_usage`.
-  void CountRingChild(const CordRep* child, MemoryUsage& child_usage) {
-    RepRef rep{child, static_cast<size_t>(child->refcount.Get())};
-    rep = CountLinearReps(rep, child_usage);
-    assert(rep.rep == nullptr);
-  }
-
-  // Analyzes the provided ring. As ring buffers can have many child nodes, the
-  // effect of rounding errors can become non trivial, so we compute the totals
-  // first at the ring level, and then divide the fair share of the total
-  // including children fair share totals.
-  void AnalyzeRing(RepRef rep) {
-    statistics_.node_count++;
-    statistics_.node_counts.ring++;
-    MemoryUsage ring_usage;
-    const CordRepRing* ring = rep.rep->ring();
-    ring_usage.Add(CordRepRing::AllocSize(ring->capacity()), 1);
-    ring->ForEach([&](CordRepRing::index_type pos) {
-      CountRingChild(ring->entry_child(pos), ring_usage);
-    });
-    memory_usage_.total += ring_usage.total;
-    memory_usage_.fair_share += ring_usage.fair_share / rep.refcount;
   }
 
   CordzStatistics& statistics_;
@@ -309,7 +287,7 @@ CordzInfo::MethodIdentifier CordzInfo::GetParentMethod(const CordzInfo* src) {
                                                            : src->method_;
 }
 
-int CordzInfo::FillParentStack(const CordzInfo* src, void** stack) {
+size_t CordzInfo::FillParentStack(const CordzInfo* src, void** stack) {
   assert(stack);
   if (src == nullptr) return 0;
   if (src->parent_stack_depth_) {
@@ -320,11 +298,14 @@ int CordzInfo::FillParentStack(const CordzInfo* src, void** stack) {
   return src->stack_depth_;
 }
 
-CordzInfo::CordzInfo(CordRep* rep, const CordzInfo* src,
+CordzInfo::CordzInfo(CordRep* rep,
+                     const CordzInfo* src,
                      MethodIdentifier method)
     : rep_(rep),
-      stack_depth_(absl::GetStackTrace(stack_, /*max_depth=*/kMaxStackDepth,
-                                       /*skip_count=*/1)),
+      stack_depth_(
+          static_cast<size_t>(absl::GetStackTrace(stack_,
+                                                  /*max_depth=*/kMaxStackDepth,
+                                                  /*skip_count=*/1))),
       parent_stack_depth_(FillParentStack(src, parent_stack_)),
       method_(method),
       parent_method_(GetParentMethod(src)),

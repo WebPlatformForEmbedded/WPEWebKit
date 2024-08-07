@@ -38,31 +38,47 @@ rtc::scoped_refptr<PeerConnectionFactoryInterface> CreatePeerConnectionFactory(
     std::unique_ptr<VideoDecoderFactory> video_decoder_factory,
     rtc::scoped_refptr<AudioMixer> audio_mixer,
     rtc::scoped_refptr<AudioProcessing> audio_processing,
-    AudioFrameProcessor* audio_frame_processor
+    AudioFrameProcessor* audio_frame_processor,
+    std::unique_ptr<AudioFrameProcessor> owned_audio_frame_processor,
+    std::unique_ptr<FieldTrialsView> field_trials
 #if defined(WEBRTC_WEBKIT_BUILD)
-    , std::unique_ptr<TaskQueueFactory> task_queue_factory
+    , std::unique_ptr<TaskQueueFactory> task_queue_factory = nullptr
 #endif
-    ) {
+  ) {
+  if (!field_trials) {
+    field_trials = std::make_unique<webrtc::FieldTrialBasedConfig>();
+  }
+
   PeerConnectionFactoryDependencies dependencies;
   dependencies.network_thread = network_thread;
   dependencies.worker_thread = worker_thread;
   dependencies.signaling_thread = signaling_thread;
 #if defined(WEBRTC_WEBKIT_BUILD)
-  dependencies.task_queue_factory = task_queue_factory ? std::move(task_queue_factory) : CreateDefaultTaskQueueFactory();
+  dependencies.task_queue_factory = task_queue_factory ? std::move(task_queue_factory) : CreateDefaultTaskQueueFactory(field_trials.get());
 #else
-  dependencies.task_queue_factory = CreateDefaultTaskQueueFactory();
+  dependencies.task_queue_factory =
+      CreateDefaultTaskQueueFactory(field_trials.get());
 #endif
   dependencies.call_factory = CreateCallFactory();
   dependencies.event_log_factory = std::make_unique<RtcEventLogFactory>(
       dependencies.task_queue_factory.get());
-  dependencies.trials = std::make_unique<webrtc::FieldTrialBasedConfig>();
+  dependencies.trials = std::move(field_trials);
 
+  if (network_thread) {
+    // TODO(bugs.webrtc.org/13145): Add an rtc::SocketFactory* argument.
+    dependencies.socket_factory = network_thread->socketserver();
+  }
   cricket::MediaEngineDependencies media_dependencies;
   media_dependencies.task_queue_factory = dependencies.task_queue_factory.get();
   media_dependencies.adm = std::move(default_adm);
   media_dependencies.audio_encoder_factory = std::move(audio_encoder_factory);
   media_dependencies.audio_decoder_factory = std::move(audio_decoder_factory);
-  media_dependencies.audio_frame_processor = audio_frame_processor;
+  if (audio_frame_processor) {
+    media_dependencies.audio_frame_processor = audio_frame_processor;
+  } else if (owned_audio_frame_processor) {
+    media_dependencies.owned_audio_frame_processor =
+        std::move(owned_audio_frame_processor);
+  }
   if (audio_processing) {
     media_dependencies.audio_processing = std::move(audio_processing);
   } else {
@@ -76,6 +92,55 @@ rtc::scoped_refptr<PeerConnectionFactoryInterface> CreatePeerConnectionFactory(
       cricket::CreateMediaEngine(std::move(media_dependencies));
 
   return CreateModularPeerConnectionFactory(std::move(dependencies));
+}
+
+rtc::scoped_refptr<PeerConnectionFactoryInterface> CreatePeerConnectionFactory(
+    rtc::Thread* network_thread,
+    rtc::Thread* worker_thread,
+    rtc::Thread* signaling_thread,
+    rtc::scoped_refptr<AudioDeviceModule> default_adm,
+    rtc::scoped_refptr<AudioEncoderFactory> audio_encoder_factory,
+    rtc::scoped_refptr<AudioDecoderFactory> audio_decoder_factory,
+    std::unique_ptr<VideoEncoderFactory> video_encoder_factory,
+    std::unique_ptr<VideoDecoderFactory> video_decoder_factory,
+    rtc::scoped_refptr<AudioMixer> audio_mixer,
+    rtc::scoped_refptr<AudioProcessing> audio_processing,
+    AudioFrameProcessor* audio_frame_processor,
+    std::unique_ptr<FieldTrialsView> field_trials
+#if defined(WEBRTC_WEBKIT_BUILD)
+    , std::unique_ptr<TaskQueueFactory> task_queue_factory
+#endif
+  ) {
+  return CreatePeerConnectionFactory(
+      network_thread, worker_thread, signaling_thread, default_adm,
+      audio_encoder_factory, audio_decoder_factory,
+      std::move(video_encoder_factory), std::move(video_decoder_factory),
+      audio_mixer, audio_processing, audio_frame_processor, nullptr, std::move(field_trials)
+#if defined(WEBRTC_WEBKIT_BUILD)
+      , std::move(task_queue_factory)
+#endif
+  );
+}
+
+rtc::scoped_refptr<PeerConnectionFactoryInterface> CreatePeerConnectionFactory(
+    rtc::Thread* network_thread,
+    rtc::Thread* worker_thread,
+    rtc::Thread* signaling_thread,
+    rtc::scoped_refptr<AudioDeviceModule> default_adm,
+    rtc::scoped_refptr<AudioEncoderFactory> audio_encoder_factory,
+    rtc::scoped_refptr<AudioDecoderFactory> audio_decoder_factory,
+    std::unique_ptr<VideoEncoderFactory> video_encoder_factory,
+    std::unique_ptr<VideoDecoderFactory> video_decoder_factory,
+    rtc::scoped_refptr<AudioMixer> audio_mixer,
+    rtc::scoped_refptr<AudioProcessing> audio_processing,
+    std::unique_ptr<AudioFrameProcessor> owned_audio_frame_processor,
+    std::unique_ptr<FieldTrialsView> field_trials) {
+  return CreatePeerConnectionFactory(
+      network_thread, worker_thread, signaling_thread, default_adm,
+      audio_encoder_factory, audio_decoder_factory,
+      std::move(video_encoder_factory), std::move(video_decoder_factory),
+      audio_mixer, audio_processing, nullptr,
+      std::move(owned_audio_frame_processor), std::move(field_trials));
 }
 
 }  // namespace webrtc

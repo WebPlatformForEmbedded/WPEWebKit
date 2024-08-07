@@ -18,7 +18,9 @@
 #include <vector>
 
 #include "absl/types/optional.h"
+#include "api/task_queue/task_queue_base.h"
 #include "net/dcsctp/public/timeout.h"
+#include "net/dcsctp/public/types.h"
 #include "rtc_base/checks.h"
 #include "rtc_base/containers/flat_set.h"
 
@@ -27,8 +29,8 @@ namespace dcsctp {
 // A timeout used in tests.
 class FakeTimeout : public Timeout {
  public:
-  explicit FakeTimeout(std::function<TimeMs()> get_time,
-                       std::function<void(FakeTimeout*)> on_delete)
+  FakeTimeout(std::function<TimeMs()> get_time,
+              std::function<void(FakeTimeout*)> on_delete)
       : get_time_(std::move(get_time)), on_delete_(std::move(on_delete)) {}
 
   ~FakeTimeout() override { on_delete_(this); }
@@ -52,6 +54,7 @@ class FakeTimeout : public Timeout {
   }
 
   TimeoutID timeout_id() const { return timeout_id_; }
+  TimeMs expiry() const { return expiry_; }
 
  private:
   const std::function<TimeMs()> get_time_;
@@ -68,11 +71,16 @@ class FakeTimeoutManager {
   explicit FakeTimeoutManager(std::function<TimeMs()> get_time)
       : get_time_(std::move(get_time)) {}
 
-  std::unique_ptr<Timeout> CreateTimeout() {
+  std::unique_ptr<FakeTimeout> CreateTimeout() {
     auto timer = std::make_unique<FakeTimeout>(
         get_time_, [this](FakeTimeout* timer) { timers_.erase(timer); });
     timers_.insert(timer.get());
     return timer;
+  }
+  std::unique_ptr<FakeTimeout> CreateTimeout(
+      webrtc::TaskQueueBase::DelayPrecision precision) {
+    // FakeTimeout does not support implement |precision|.
+    return CreateTimeout();
   }
 
   // NOTE: This can't return a vector, as calling EvaluateHasExpired requires
@@ -91,7 +99,18 @@ class FakeTimeoutManager {
     return absl::nullopt;
   }
 
-  void Reset() { timers_.clear(); }
+  DurationMs GetTimeToNextTimeout() const {
+    TimeMs next_expiry = TimeMs::InfiniteFuture();
+    for (const FakeTimeout* timer : timers_) {
+      if (timer->expiry() < next_expiry) {
+        next_expiry = timer->expiry();
+      }
+    }
+    TimeMs now = get_time_();
+    return next_expiry != TimeMs::InfiniteFuture() && next_expiry >= now
+               ? next_expiry - now
+               : DurationMs::InfiniteDuration();
+  }
 
  private:
   const std::function<TimeMs()> get_time_;

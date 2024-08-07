@@ -51,7 +51,10 @@ absl::optional<AudioDecoderOpus::Config> AudioDecoderOpus::SdpToConfig(
       num_channels) {
     Config config;
     config.num_channels = *num_channels;
-    RTC_DCHECK(config.IsOk());
+    if (!config.IsOk()) {
+      RTC_DCHECK_NOTREACHED();
+      return absl::nullopt;
+    }
     return config;
   } else {
     return absl::nullopt;
@@ -64,14 +67,18 @@ void AudioDecoderOpus::AppendSupportedDecoders(
   opus_info.allow_comfort_noise = false;
   opus_info.supports_network_adaption = true;
   SdpAudioFormat opus_format(
-      {"opus", 48000, 2, {{"minptime", "10"}, {"useinbandfec", "1"}, {"stereo", "1"}}});
+      {"opus", 48000, 2, {{"minptime", "10"}, {"useinbandfec", "1"}}});
   specs->push_back({std::move(opus_format), opus_info});
 }
 
 std::unique_ptr<AudioDecoder> AudioDecoderOpus::MakeAudioDecoder(
     Config config,
-    absl::optional<AudioCodecPairId> /*codec_pair_id*/) {
-  RTC_DCHECK(config.IsOk());
+    absl::optional<AudioCodecPairId> /*codec_pair_id*/,
+    const FieldTrialsView* field_trials) {
+  if (!config.IsOk()) {
+    RTC_DCHECK_NOTREACHED();
+    return nullptr;
+  }
   return std::make_unique<AudioDecoderOpusImpl>(config.num_channels,
                                                 config.sample_rate_hz);
 }

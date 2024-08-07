@@ -13,7 +13,7 @@
 #include <utility>
 #include <vector>
 
-#include "modules/video_coding/frame_object.h"
+#include "modules/rtp_rtcp/source/frame_object.h"
 #include "test/gmock.h"
 #include "test/gtest.h"
 
@@ -355,6 +355,16 @@ TEST_F(RtpVp8RefFinderTest, Vp8DetectMissingFrame_0212) {
   EXPECT_THAT(frames_, HasFrameWithIdAndRefs(6, {3, 4, 5}));
   EXPECT_THAT(frames_, HasFrameWithIdAndRefs(7, {3, 5}));
   EXPECT_THAT(frames_, HasFrameWithIdAndRefs(8, {5, 6, 7}));
+}
+
+TEST_F(RtpVp8RefFinderTest, StashedFramesDoNotWrapTl0Backwards) {
+  Insert(Frame().Pid(0).Tid(0).Tl0(0));
+  EXPECT_THAT(frames_, SizeIs(0));
+
+  Insert(Frame().Pid(128).Tid(0).Tl0(128).AsKeyFrame());
+  EXPECT_THAT(frames_, SizeIs(1));
+  Insert(Frame().Pid(129).Tid(0).Tl0(129));
+  EXPECT_THAT(frames_, SizeIs(2));
 }
 
 }  // namespace webrtc

@@ -118,10 +118,9 @@ class AndroidVoipClient : public webrtc::Transport,
   void Delete(JNIEnv* env);
 
   // Implementation for Transport.
-  bool SendRtp(const uint8_t* packet,
-               size_t length,
+  bool SendRtp(rtc::ArrayView<const uint8_t> packet,
                const webrtc::PacketOptions& options) override;
-  bool SendRtcp(const uint8_t* packet, size_t length) override;
+  bool SendRtcp(rtc::ArrayView<const uint8_t> packet) override;
 
   // Slots for sockets to connect to.
   void OnSignalReadRTPPacket(rtc::AsyncPacketSocket* socket,
@@ -147,8 +146,8 @@ class AndroidVoipClient : public webrtc::Transport,
   // Overloaded methods having native C++ variables as arguments.
   void SetEncoder(const std::string& encoder);
   void SetDecoders(const std::vector<std::string>& decoders);
-  void SetLocalAddress(const std::string& ip_address, const int port_number);
-  void SetRemoteAddress(const std::string& ip_address, const int port_number);
+  void SetLocalAddress(const std::string& ip_address, int port_number);
+  void SetRemoteAddress(const std::string& ip_address, int port_number);
 
   // Methods to send and receive RTP/RTCP packets. Takes in a
   // copy of a packet as a vector to prolong the lifetime of

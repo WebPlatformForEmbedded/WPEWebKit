@@ -15,8 +15,8 @@
 
 #include <string>
 
+#include "absl/types/optional.h"
 #include "rtc_base/checks.h"
-#include "rtc_base/constructor_magic.h"
 
 namespace webrtc {
 namespace test {
@@ -39,10 +39,16 @@ class RtpDumpWriter : public RtpFileWriter {
     }
   }
 
+  RtpDumpWriter(const RtpDumpWriter&) = delete;
+  RtpDumpWriter& operator=(const RtpDumpWriter&) = delete;
+
   bool WritePacket(const RtpPacket* packet) override {
+    if (!first_packet_time_) {
+      first_packet_time_ = packet->time_ms;
+    }
     uint16_t len = static_cast<uint16_t>(packet->length + kPacketHeaderSize);
     uint16_t plen = static_cast<uint16_t>(packet->original_length);
-    uint32_t offset = packet->time_ms;
+    uint32_t offset = packet->time_ms - *first_packet_time_;
     RTC_CHECK(WriteUint16(len));
     RTC_CHECK(WriteUint16(plen));
     RTC_CHECK(WriteUint32(offset));
@@ -86,8 +92,7 @@ class RtpDumpWriter : public RtpFileWriter {
   }
 
   FILE* file_;
-
-  RTC_DISALLOW_COPY_AND_ASSIGN(RtpDumpWriter);
+  absl::optional<uint32_t> first_packet_time_;
 };
 
 RtpFileWriter* RtpFileWriter::Create(FileFormat format,

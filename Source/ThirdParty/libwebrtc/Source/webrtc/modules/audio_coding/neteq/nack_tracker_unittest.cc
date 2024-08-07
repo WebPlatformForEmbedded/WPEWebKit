@@ -238,19 +238,6 @@ TEST(NackTrackerTest, EstimateTimestampAndTimeToPlay) {
       EXPECT_EQ((index + 2) * kPacketSizeMs, it->second.time_to_play_ms);
       ++it;
     }
-
-    // Pretend 10 ms is passed, and we had pulled audio from NetEq, it still
-    // reports the same sequence number as decoded, time-to-play should be
-    // updated by 10 ms.
-    nack.UpdateLastDecodedPacket(first_seq_num, first_timestamp);
-    nack_list = nack.GetNackList();
-    it = nack_list.begin();
-    while (it != nack_list.end()) {
-      seq_num = it->first - seq_num_offset;
-      int index = seq_num - kLostPackets[0];
-      EXPECT_EQ((index + 2) * kPacketSizeMs - 10, it->second.time_to_play_ms);
-      ++it;
-    }
   }
 }
 
@@ -480,19 +467,19 @@ TEST(NackTrackerTest, PacketLossRateCorrect) {
   nack.SetMaxNackListSize(kNackListSize);
   uint16_t seq_num = 0;
   uint32_t timestamp = 0x87654321;
-  auto add_packet = [&nack, &seq_num, &timestamp] {
-    nack.UpdateLastReceivedPacket(seq_num, timestamp);
+  auto add_packet = [&nack, &seq_num, &timestamp](bool received) {
+    if (received) {
+      nack.UpdateLastReceivedPacket(seq_num, timestamp);
+    }
     seq_num++;
     timestamp += kTimestampIncrement;
   };
   // Add some packets, but every fourth packet is lost.
   for (int i = 0; i < 300; i++) {
-    add_packet();
-    add_packet();
-    add_packet();
-    // The next packet is lost.
-    seq_num++;
-    timestamp += kTimestampIncrement;
+    add_packet(true);
+    add_packet(true);
+    add_packet(true);
+    add_packet(false);
   }
   // 1 << 28 is 0.25 in Q30. We expect the packet loss estimate to be within
   // 0.01 of that.
@@ -512,6 +499,54 @@ TEST(NackTrackerTest, DoNotNackAfterDtx) {
   nack.UpdateLastReceivedPacket(seq_num + 2,
                                 timestamp + kDtxPeriod * kSampleRateHz / 1000);
   EXPECT_TRUE(nack.GetNackList(0).empty());
+}
+
+TEST(NackTrackerTest, DoNotNackIfLossRateIsTooHigh) {
+  test::ScopedFieldTrials field_trials(
+      "WebRTC-Audio-NetEqNackTrackerConfig/max_loss_rate:0.4/");
+  const int kNackListSize = 200;
+  NackTracker nack;
+  nack.UpdateSampleRate(kSampleRateHz);
+  nack.SetMaxNackListSize(kNackListSize);
+  uint16_t seq_num = 0;
+  uint32_t timestamp = 0x87654321;
+  auto add_packet = [&nack, &seq_num, &timestamp](bool received) {
+    if (received) {
+      nack.UpdateLastReceivedPacket(seq_num, timestamp);
+    }
+    seq_num++;
+    timestamp += kTimestampIncrement;
+  };
+  for (int i = 0; i < 500; i++) {
+    add_packet(true);
+    add_packet(false);
+  }
+  // Expect 50% loss rate which is higher that the configured maximum 40%.
+  EXPECT_NEAR(nack.GetPacketLossRateForTest(), 1 << 29, (1 << 30) / 100);
+  EXPECT_TRUE(nack.GetNackList(0).empty());
+}
+
+TEST(NackTrackerTest, OnlyNackIfRttIsValid) {
+  test::ScopedFieldTrials field_trials(
+      "WebRTC-Audio-NetEqNackTrackerConfig/require_valid_rtt:true/");
+  const int kNackListSize = 200;
+  NackTracker nack;
+  nack.UpdateSampleRate(kSampleRateHz);
+  nack.SetMaxNackListSize(kNackListSize);
+  uint16_t seq_num = 0;
+  uint32_t timestamp = 0x87654321;
+  auto add_packet = [&nack, &seq_num, &timestamp](bool received) {
+    if (received) {
+      nack.UpdateLastReceivedPacket(seq_num, timestamp);
+    }
+    seq_num++;
+    timestamp += kTimestampIncrement;
+  };
+  add_packet(true);
+  add_packet(false);
+  add_packet(true);
+  EXPECT_TRUE(nack.GetNackList(0).empty());
+  EXPECT_FALSE(nack.GetNackList(10).empty());
 }
 
 }  // namespace webrtc

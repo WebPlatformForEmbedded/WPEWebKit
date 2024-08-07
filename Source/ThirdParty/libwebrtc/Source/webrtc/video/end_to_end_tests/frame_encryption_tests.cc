@@ -15,6 +15,7 @@
 #include "modules/video_coding/codecs/vp8/include/vp8.h"
 #include "test/call_test.h"
 #include "test/gtest.h"
+#include "test/video_test_constants.h"
 
 namespace webrtc {
 namespace {
@@ -29,29 +30,30 @@ class DecryptedFrameObserver : public test::EndToEndTest,
                                public rtc::VideoSinkInterface<VideoFrame> {
  public:
   DecryptedFrameObserver()
-      : EndToEndTest(test::CallTest::kDefaultTimeoutMs),
+      : EndToEndTest(test::VideoTestConstants::kDefaultTimeout),
         encoder_factory_([] { return VP8Encoder::Create(); }) {}
 
  private:
   void ModifyVideoConfigs(
       VideoSendStream::Config* send_config,
-      std::vector<VideoReceiveStream::Config>* receive_configs,
+      std::vector<VideoReceiveStreamInterface::Config>* receive_configs,
       VideoEncoderConfig* encoder_config) override {
     // Use VP8 instead of FAKE.
     send_config->encoder_settings.encoder_factory = &encoder_factory_;
     send_config->rtp.payload_name = "VP8";
-    send_config->rtp.payload_type = test::CallTest::kVideoSendPayloadType;
+    send_config->rtp.payload_type =
+        test::VideoTestConstants::kVideoSendPayloadType;
     send_config->frame_encryptor = new FakeFrameEncryptor();
     send_config->crypto_options.sframe.require_frame_encryption = true;
     encoder_config->codec_type = kVideoCodecVP8;
-    VideoReceiveStream::Decoder decoder =
+    VideoReceiveStreamInterface::Decoder decoder =
         test::CreateMatchingDecoder(*send_config);
     for (auto& recv_config : *receive_configs) {
       recv_config.decoder_factory = &decoder_factory_;
       recv_config.decoders.clear();
       recv_config.decoders.push_back(decoder);
       recv_config.renderer = this;
-      recv_config.frame_decryptor = new FakeFrameDecryptor();
+      recv_config.frame_decryptor = rtc::make_ref_counted<FakeFrameDecryptor>();
       recv_config.crypto_options.sframe.require_frame_encryption = true;
     }
   }

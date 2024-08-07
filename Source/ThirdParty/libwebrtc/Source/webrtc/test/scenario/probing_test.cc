@@ -39,7 +39,7 @@ TEST(ProbingTest, MidCallProbingRampupTriggeredByUpdatedBitrateConstraints) {
 
   const DataRate kStartRate = DataRate::KilobitsPerSec(300);
   const DataRate kConstrainedRate = DataRate::KilobitsPerSec(100);
-  const DataRate kHighRate = DataRate::KilobitsPerSec(2500);
+  const DataRate kHighRate = DataRate::KilobitsPerSec(1500);
 
   VideoStreamConfig video_config;
   video_config.encoder.codec =
@@ -86,7 +86,9 @@ TEST(ProbingTest, ProbesRampsUpWhenVideoEncoderConfigChanges) {
   VideoStreamConfig video_config;
   video_config.encoder.codec =
       VideoStreamConfig::Encoder::Codec::kVideoCodecVP8;
-  video_config.encoder.layers.spatial = 3;
+  video_config.encoder.simulcast_streams = {webrtc::ScalabilityMode::kL1T3,
+                                            webrtc::ScalabilityMode::kL1T3,
+                                            webrtc::ScalabilityMode::kL1T3};
   video_config.source.generator.width = 1280;
   video_config.source.generator.height = 720;
 

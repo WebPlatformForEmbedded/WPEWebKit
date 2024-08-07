@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "absl/types/optional.h"
+#include "api/task_queue/task_queue_base.h"
 #include "api/units/time_delta.h"
 #include "api/units/timestamp.h"
 #include "rtc_base/synchronization/mutex.h"
@@ -33,7 +34,8 @@ class TestActivitiesExecutor {
   // Starts scheduled activities according to their schedule. All activities
   // that will be scheduled after Start(...) was invoked will be executed
   // immediately according to their schedule.
-  void Start(TaskQueueForTest* task_queue);
+  void Start(TaskQueueForTest* task_queue) { Start(task_queue->Get()); }
+  void Start(TaskQueueBase* task_queue);
   void Stop();
 
   // Schedule activity to be executed. If test isn't started yet, then activity
@@ -61,17 +63,17 @@ class TestActivitiesExecutor {
 
   Clock* const clock_;
 
-  TaskQueueForTest* task_queue_;
+  TaskQueueBase* task_queue_;
 
   Mutex lock_;
   // Time when test was started. Minus infinity means that it wasn't started
   // yet.
   Timestamp start_time_ RTC_GUARDED_BY(lock_) = Timestamp::MinusInfinity();
   // Queue of activities that were added before test was started.
-  // Activities from this queue will be posted on the |task_queue_| after test
+  // Activities from this queue will be posted on the `task_queue_` after test
   // will be set up and then this queue will be unused.
   std::queue<ScheduledActivity> scheduled_activities_ RTC_GUARDED_BY(lock_);
-  // List of task handles for activities, that are posted on |task_queue_| as
+  // List of task handles for activities, that are posted on `task_queue_` as
   // repeated during the call.
   std::vector<RepeatingTaskHandle> repeating_task_handles_
       RTC_GUARDED_BY(lock_);

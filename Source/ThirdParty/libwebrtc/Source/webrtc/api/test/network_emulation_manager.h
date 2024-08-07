@@ -14,12 +14,14 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "api/array_view.h"
 #include "api/packet_socket_factory.h"
 #include "api/test/network_emulation/cross_traffic.h"
 #include "api/test/network_emulation/network_emulation_interfaces.h"
+#include "api/test/peer_network_dependencies.h"
 #include "api/test/simulated_network.h"
 #include "api/test/time_controller.h"
 #include "api/units/timestamp.h"
@@ -47,15 +49,18 @@ class EmulatedNetworkNode;
 // peer device to another network interface on another peer device.
 class EmulatedRoute;
 
+enum class EmulatedNetworkStatsGatheringMode {
+  // Gather main network stats counters. See more details on which particular
+  // metrics are collected in the `EmulatedNetworkStats` and
+  // `EmulatedNetworkNodeStats` documentation.
+  kDefault,
+  // kDefault + also gather per packet statistics. In this mode more memory
+  // will be used.
+  kDebug
+};
+
 struct EmulatedEndpointConfig {
   enum class IpAddressFamily { kIpv4, kIpv6 };
-  enum class StatsGatheringMode {
-    // Gather main network stats counters.
-    kDefault,
-    // kDefault + also gather per packet statistics. In this mode more memory
-    // will be used.
-    kDebug
-  };
 
   // If specified will be used to name endpoint for logging purposes.
   absl::optional<std::string> name = absl::nullopt;
@@ -68,7 +73,6 @@ struct EmulatedEndpointConfig {
   bool start_as_enabled = true;
   // Network type which will be used to represent endpoint to WebRTC.
   rtc::AdapterType type = rtc::AdapterType::ADAPTER_TYPE_UNKNOWN;
-  StatsGatheringMode stats_gathering_mode = StatsGatheringMode::kDefault;
   // Allow endpoint to send packets specifying source IP address different to
   // the current endpoint IP address. If false endpoint will crash if attempt
   // to send such packet will be done.
@@ -130,6 +134,9 @@ class EmulatedNetworkManagerInterface {
   // into WebRTC to properly setup network emulation. Returned factory is owned
   // by EmulatedNetworkManagerInterface implementation.
   virtual rtc::PacketSocketFactory* packet_socket_factory() = 0;
+  webrtc::webrtc_pc_e2e::PeerNetworkDependencies network_dependencies() {
+    return {network_thread(), network_manager(), packet_socket_factory()};
+  }
   // Returns list of endpoints that are associated with this instance. Pointers
   // are guaranteed to be non-null and are owned by NetworkEmulationManager.
   virtual std::vector<EmulatedEndpoint*> endpoints() const = 0;
@@ -138,11 +145,20 @@ class EmulatedNetworkManagerInterface {
   // specified `stats_callback`. Callback will be executed on network emulation
   // internal task queue.
   virtual void GetStats(
-      std::function<void(std::unique_ptr<EmulatedNetworkStats>)> stats_callback)
-      const = 0;
+      std::function<void(EmulatedNetworkStats)> stats_callback) const = 0;
 };
 
 enum class TimeMode { kRealTime, kSimulated };
+
+// Called implicitly when parsing an ABSL_FLAG of type TimeMode.
+// from the command line flag value `text`.
+// Returns `true` and sets `*mode` on success;
+// returns `false` and sets `*error` on failure.
+bool AbslParseFlag(absl::string_view text, TimeMode* mode, std::string* error);
+
+// AbslUnparseFlag returns a textual flag value corresponding to the TimeMode
+// `mode`.
+std::string AbslUnparseFlag(TimeMode mode);
 
 // Provides an API for creating and configuring emulated network layer.
 // All objects returned by this API are owned by NetworkEmulationManager itself
@@ -168,6 +184,10 @@ class NetworkEmulationManager {
       Builder& capacity_Mbps(int link_capacity_Mbps);
       Builder& loss(double loss_rate);
       Builder& packet_queue_length(int max_queue_length_in_packets);
+      Builder& delay_standard_deviation_ms(int delay_standard_deviation_ms);
+      Builder& allow_reordering();
+      Builder& avg_burst_loss_length(int avg_burst_loss_length);
+      Builder& packet_overhead(int packet_overhead);
       SimulatedNetworkNode Build(uint64_t random_seed = 1) const;
       SimulatedNetworkNode Build(NetworkEmulationManager* net,
                                  uint64_t random_seed = 1) const;
@@ -183,6 +203,11 @@ class NetworkEmulationManager {
   // Returns a mode in which underlying time controller operates.
   virtual TimeMode time_mode() const = 0;
 
+  // Creates an emulated network node, which represents ideal network with
+  // unlimited capacity, no delay and no packet loss.
+  EmulatedNetworkNode* CreateUnconstrainedEmulatedNode() {
+    return CreateEmulatedNode(BuiltInNetworkBehaviorConfig());
+  }
   // Creates an emulated network node, which represents single network in
   // the emulated network layer. Uses default implementation on network behavior
   // which can be configured with `config`. `random_seed` can be provided to
@@ -304,13 +329,19 @@ class NetworkEmulationManager {
   CreateEmulatedNetworkManagerInterface(
       const std::vector<EmulatedEndpoint*>& endpoints) = 0;
 
-  // Passes summarized network stats for specified `endpoints` into specified
+  // Passes combined network stats for all specified `endpoints` into specified
   // `stats_callback`. Callback will be executed on network emulation
   // internal task queue.
   virtual void GetStats(
       rtc::ArrayView<EmulatedEndpoint* const> endpoints,
-      std::function<void(std::unique_ptr<EmulatedNetworkStats>)>
-          stats_callback) = 0;
+      std::function<void(EmulatedNetworkStats)> stats_callback) = 0;
+
+  // Passes combined network stats for all specified `nodes` into specified
+  // `stats_callback`. Callback will be executed on network emulation
+  // internal task queue.
+  virtual void GetStats(
+      rtc::ArrayView<EmulatedNetworkNode* const> nodes,
+      std::function<void(EmulatedNetworkNodeStats)> stats_callback) = 0;
 
   // Create a EmulatedTURNServer.
   // The TURN server has 2 endpoints that need to be connected with routes,
@@ -318,6 +349,11 @@ class NetworkEmulationManager {
   // - GetPeerEndpoint() - the endpoint that is "connected to the internet".
   virtual EmulatedTURNServerInterface* CreateTURNServer(
       EmulatedTURNServerConfig config) = 0;
+
+  // Create a pair of EmulatedNetworkManagerInterfaces connected to each other.
+  std::pair<EmulatedNetworkManagerInterface*, EmulatedNetworkManagerInterface*>
+  CreateEndpointPairWithTwoWayRoutes(
+      const BuiltInNetworkBehaviorConfig& config);
 };
 
 }  // namespace webrtc

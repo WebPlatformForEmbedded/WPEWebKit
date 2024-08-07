@@ -21,11 +21,11 @@ namespace test {
 RtcpPacketParser::RtcpPacketParser() = default;
 RtcpPacketParser::~RtcpPacketParser() = default;
 
-bool RtcpPacketParser::Parse(const void* data, size_t length) {
+bool RtcpPacketParser::Parse(rtc::ArrayView<const uint8_t> data) {
   ++processed_rtcp_packets_;
 
-  const uint8_t* const buffer = static_cast<const uint8_t*>(data);
-  const uint8_t* const buffer_end = buffer + length;
+  const uint8_t* const buffer = data.data();
+  const uint8_t* const buffer_end = buffer + data.size();
 
   rtcp::CommonHeader header;
   for (const uint8_t* next_packet = buffer; next_packet != buffer_end;
@@ -46,9 +46,6 @@ bool RtcpPacketParser::Parse(const void* data, size_t length) {
         break;
       case rtcp::ExtendedReports::kPacketType:
         xr_.Parse(header, &sender_ssrc_);
-        break;
-      case rtcp::ExtendedJitterReport::kPacketType:
-        ij_.Parse(header);
         break;
       case rtcp::Psfb::kPacketType:
         switch (header.fmt()) {

@@ -18,7 +18,6 @@
 #include "rtc_base/arraysize.h"
 #include "rtc_base/byte_order.h"
 #include "rtc_base/checks.h"
-#include "rtc_base/logging.h"
 #include "rtc_base/string_utils.h"
 
 namespace rtc {
@@ -310,29 +309,5 @@ int inet_pton_v6(const char* src, void* dst) {
   memcpy(dst, &an_addr, sizeof(an_addr));
   return 1;
 }
-
-// Windows UWP applications cannot obtain versioning information from
-// the sandbox with intention (as behehaviour based on OS versioning rather
-// than feature discovery / compilation flags is discoraged and Windows
-// 10 is living continously updated version unlike previous versions
-// of Windows).
-#if !defined(WINUWP)
-
-bool GetOsVersion(int* major, int* minor, int* build) {
-  OSVERSIONINFO info = {0};
-  info.dwOSVersionInfoSize = sizeof(info);
-  if (GetVersionEx(&info)) {
-    if (major)
-      *major = info.dwMajorVersion;
-    if (minor)
-      *minor = info.dwMinorVersion;
-    if (build)
-      *build = info.dwBuildNumber;
-    return true;
-  }
-  return false;
-}
-
-#endif  // !defined(WINUWP)
 
 }  // namespace rtc

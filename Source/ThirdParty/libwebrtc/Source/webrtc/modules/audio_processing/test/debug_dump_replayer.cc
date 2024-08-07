@@ -10,6 +10,9 @@
 
 #include "modules/audio_processing/test/debug_dump_replayer.h"
 
+#include <string>
+
+#include "absl/strings/string_view.h"
 #include "modules/audio_processing/test/audio_processing_builder_for_testing.h"
 #include "modules/audio_processing/test/protobuf_utils.h"
 #include "modules/audio_processing/test/runtime_setting_util.h"
@@ -44,8 +47,8 @@ DebugDumpReplayer::~DebugDumpReplayer() {
     fclose(debug_file_);
 }
 
-bool DebugDumpReplayer::SetDumpFile(const std::string& filename) {
-  debug_file_ = fopen(filename.c_str(), "rb");
+bool DebugDumpReplayer::SetDumpFile(absl::string_view filename) {
+  debug_file_ = fopen(std::string(filename).c_str(), "rb");
   LoadNextMessage();
   return debug_file_;
 }
@@ -118,7 +121,9 @@ void DebugDumpReplayer::OnStreamEvent(const audioproc::Stream& msg) {
   // APM should have been created.
   RTC_CHECK(apm_.get());
 
-  apm_->set_stream_analog_level(msg.level());
+  if (msg.has_applied_input_volume()) {
+    apm_->set_stream_analog_level(msg.applied_input_volume());
+  }
   RTC_CHECK_EQ(AudioProcessing::kNoError,
                apm_->set_stream_delay_ms(msg.delay()));
 

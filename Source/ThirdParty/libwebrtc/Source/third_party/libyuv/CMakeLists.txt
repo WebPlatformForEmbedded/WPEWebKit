@@ -3,8 +3,8 @@
 # Run with -DTEST=ON to build unit tests
 
 PROJECT ( YUV C CXX )	# "C" is required even for C++ projects
-CMAKE_MINIMUM_REQUIRED( VERSION 2.8 )
-OPTION( TEST "Built unit tests" OFF )
+CMAKE_MINIMUM_REQUIRED( VERSION 2.8.12 )
+OPTION( UNIT_TEST "Built unit tests" OFF )
 
 SET ( ly_base_dir	${PROJECT_SOURCE_DIR} )
 SET ( ly_src_dir	${ly_base_dir}/source )
@@ -22,6 +22,10 @@ LIST ( SORT			ly_unittest_sources )
 
 INCLUDE_DIRECTORIES( BEFORE ${ly_inc_dir} )
 
+if(MSVC)
+  ADD_DEFINITIONS ( -D_CRT_SECURE_NO_WARNINGS )
+endif()
+
 # this creates the static library (.a)
 ADD_LIBRARY				( ${ly_lib_static} STATIC ${ly_source_files} )
 
@@ -29,23 +33,32 @@ ADD_LIBRARY				( ${ly_lib_static} STATIC ${ly_source_files} )
 ADD_LIBRARY				( ${ly_lib_shared} SHARED ${ly_source_files} )
 SET_TARGET_PROPERTIES	( ${ly_lib_shared} PROPERTIES OUTPUT_NAME "${ly_lib_name}" )
 SET_TARGET_PROPERTIES	( ${ly_lib_shared} PROPERTIES PREFIX "lib" )
+if(WIN32)
+  SET_TARGET_PROPERTIES	( ${ly_lib_shared} PROPERTIES IMPORT_PREFIX "lib" )
+endif()
 
 # this creates the conversion tool
 ADD_EXECUTABLE			( yuvconvert ${ly_base_dir}/util/yuvconvert.cc )
 TARGET_LINK_LIBRARIES	( yuvconvert ${ly_lib_static} )
 
+# this creates the yuvconstants tool
+ADD_EXECUTABLE      ( yuvconstants ${ly_base_dir}/util/yuvconstants.c )
+TARGET_LINK_LIBRARIES  ( yuvconstants ${ly_lib_static} )
 
-INCLUDE ( FindJPEG )
+find_package ( JPEG )
 if (JPEG_FOUND)
   include_directories( ${JPEG_INCLUDE_DIR} )
-  target_link_libraries( yuvconvert ${JPEG_LIBRARY} )
+  target_link_libraries( ${ly_lib_shared} ${JPEG_LIBRARY} )
   add_definitions( -DHAVE_JPEG )
 endif()
 
-if(TEST)
+if(UNIT_TEST)
   find_library(GTEST_LIBRARY gtest)
   if(GTEST_LIBRARY STREQUAL "GTEST_LIBRARY-NOTFOUND")
     set(GTEST_SRC_DIR /usr/src/gtest CACHE STRING "Location of gtest sources")
+    if (CMAKE_CROSSCOMPILING)
+      set(GTEST_SRC_DIR third_party/googletest/src/googletest)
+    endif()
     if(EXISTS ${GTEST_SRC_DIR}/src/gtest-all.cc)
       message(STATUS "building gtest from sources in ${GTEST_SRC_DIR}")
       set(gtest_sources ${GTEST_SRC_DIR}/src/gtest-all.cc)
@@ -54,7 +67,7 @@ if(TEST)
       include_directories(${GTEST_SRC_DIR}/include)
       set(GTEST_LIBRARY gtest)
     else()
-      message(FATAL_ERROR "TEST is set but unable to find gtest library")
+      message(FATAL_ERROR "UNIT_TEST is set but unable to find gtest library")
     endif()
   endif()
 
@@ -70,6 +83,12 @@ if(TEST)
 
   if(NACL AND NACL_LIBC STREQUAL "newlib")
     target_link_libraries(libyuv_unittest glibc-compat)
+  endif()
+
+  find_library(GFLAGS_LIBRARY gflags)
+  if(NOT GFLAGS_LIBRARY STREQUAL "GFLAGS_LIBRARY-NOTFOUND")
+    target_link_libraries(libyuv_unittest gflags)
+    add_definitions(-DLIBYUV_USE_GFLAGS)
   endif()
 endif()
 

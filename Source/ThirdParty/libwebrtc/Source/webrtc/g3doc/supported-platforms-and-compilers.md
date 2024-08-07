@@ -1,7 +1,7 @@
-# WebRTC supported plaftorms and compilers
+<!-- go/cmark -->
+<!--* freshness: {owner: 'mbonadei' reviewed: '2021-06-25'} *-->
 
-<?% config.freshness.owner = 'mbonadei' %?>
-<?% config.freshness.reviewed = '2021-06-25' %?>
+# WebRTC supported plaftorms and compilers
 
 ## Operating systems and CPUs
 
@@ -28,8 +28,6 @@ by looking at the value of `CLANG_REVISION`).
 See also
 [here](https://source.chromium.org/chromium/chromium/src/+/main:docs/clang.md)
 for some clang related documentation from Chromium.
-
-MSVC is also supported at version VS 2019 16.61.
 
 Other compilers are not officially supported (which means there is no CI
 coverage for them) but patches to keep WebRTC working with them are welcomed by

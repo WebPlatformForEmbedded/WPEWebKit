@@ -19,9 +19,9 @@ namespace webrtc {
 
 void FuzzOneInput(const uint8_t* data, size_t size) {
   auto stream_state = std::make_unique<test::RtpReplayer::StreamState>();
-  VideoReceiveStream::Config vp8_config(&(stream_state->transport));
+  VideoReceiveStreamInterface::Config vp8_config(&(stream_state->transport));
 
-  VideoReceiveStream::Decoder vp8_decoder;
+  VideoReceiveStreamInterface::Decoder vp8_decoder;
   vp8_decoder.video_format = SdpVideoFormat("VP8");
   vp8_decoder.payload_type = 125;
   vp8_config.decoders.push_back(std::move(vp8_decoder));
@@ -29,11 +29,10 @@ void FuzzOneInput(const uint8_t* data, size_t size) {
   vp8_config.rtp.local_ssrc = 7731;
   vp8_config.rtp.remote_ssrc = 1337;
   vp8_config.rtp.rtx_ssrc = 100;
-  vp8_config.rtp.transport_cc = true;
   vp8_config.rtp.nack.rtp_history_ms = 1000;
   vp8_config.rtp.lntf.enabled = true;
 
-  std::vector<VideoReceiveStream::Config> replay_configs;
+  std::vector<VideoReceiveStreamInterface::Config> replay_configs;
   replay_configs.push_back(std::move(vp8_config));
 
   test::RtpReplayer::Replay(std::move(stream_state), std::move(replay_configs),

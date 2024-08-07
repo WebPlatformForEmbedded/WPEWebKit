@@ -11,16 +11,15 @@
 #ifndef RTC_TOOLS_RTC_EVENT_LOG_VISUALIZER_ANALYZER_H_
 #define RTC_TOOLS_RTC_EVENT_LOG_VISUALIZER_ANALYZER_H_
 
+#include <cstdint>
+#include <cstdio>
 #include <map>
-#include <memory>
-#include <set>
 #include <string>
-#include <utility>
 #include <vector>
 
+#include "api/function_view.h"
 #include "logging/rtc_event_log/rtc_event_log_parser.h"
-#include "modules/audio_coding/neteq/tools/neteq_stats_getter.h"
-#include "rtc_base/strings/string_builder.h"
+#include "modules/rtp_rtcp/source/rtcp_packet/report_block.h"
 #include "rtc_tools/rtc_event_log_visualizer/analyzer_common.h"
 #include "rtc_tools/rtc_event_log_visualizer/plot_base.h"
 
@@ -46,6 +45,8 @@ class EventLogAnalyzer {
 
   void CreatePlayoutGraph(Plot* plot);
 
+  void CreateNetEqSetMinimumDelay(Plot* plot);
+
   void CreateAudioLevelGraph(PacketDirection direction, Plot* plot);
 
   void CreateSequenceNumberGraph(Plot* plot);
@@ -59,11 +60,13 @@ class EventLogAnalyzer {
   void CreateTotalIncomingBitrateGraph(Plot* plot);
   void CreateTotalOutgoingBitrateGraph(Plot* plot,
                                        bool show_detector_state = false,
-                                       bool show_alr_state = false);
+                                       bool show_alr_state = false,
+                                       bool show_link_capacity = false);
 
   void CreateStreamBitrateGraph(PacketDirection direction, Plot* plot);
   void CreateBitrateAllocationGraph(PacketDirection direction, Plot* plot);
 
+  void CreateOutgoingTWCCLossRateGraph(Plot* plot);
   void CreateGoogCcSimulationGraph(Plot* plot);
   void CreateSendSideBweSimulationGraph(Plot* plot);
   void CreateReceiveSideBweSimulationGraph(Plot* plot);

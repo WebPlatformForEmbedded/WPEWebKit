@@ -11,6 +11,7 @@
 #ifndef CALL_VIDEO_RECEIVE_STREAM_H_
 #define CALL_VIDEO_RECEIVE_STREAM_H_
 
+#include <cstdint>
 #include <limits>
 #include <map>
 #include <set>
@@ -33,13 +34,14 @@
 #include "common_video/frame_counts.h"
 #include "modules/rtp_rtcp/include/rtcp_statistics.h"
 #include "modules/rtp_rtcp/include/rtp_rtcp_defines.h"
+#include "rtc_base/checks.h"
 
 namespace webrtc {
 
 class RtpPacketSinkInterface;
 class VideoDecoderFactory;
 
-class VideoReceiveStream : public MediaReceiveStream {
+class VideoReceiveStreamInterface : public MediaReceiveStreamInterface {
  public:
   // Class for handling moving in/out recording state.
   struct RecordingState {
@@ -48,11 +50,11 @@ class VideoReceiveStream : public MediaReceiveStream {
         std::function<void(const RecordableEncodedFrame&)> callback)
         : callback(std::move(callback)) {}
 
-    // Callback stored from the VideoReceiveStream. The VideoReceiveStream
-    // client should not interpret the attribute.
+    // Callback stored from the VideoReceiveStreamInterface. The
+    // VideoReceiveStreamInterface client should not interpret the attribute.
     std::function<void(const RecordableEncodedFrame&)> callback;
-    // Memento of when a keyframe request was last sent. The VideoReceiveStream
-    // client should not interpret the attribute.
+    // Memento of when a keyframe request was last sent. The
+    // VideoReceiveStreamInterface client should not interpret the attribute.
     absl::optional<int64_t> last_keyframe_request_ms;
   };
 
@@ -86,17 +88,22 @@ class VideoReceiveStream : public MediaReceiveStream {
     uint32_t frames_rendered = 0;
 
     // Decoder stats.
-    std::string decoder_implementation_name = "unknown";
+    absl::optional<std::string> decoder_implementation_name;
+    absl::optional<bool> power_efficient_decoder;
     FrameCounts frame_counts;
     int decode_ms = 0;
     int max_decode_ms = 0;
     int current_delay_ms = 0;
     int target_delay_ms = 0;
     int jitter_buffer_ms = 0;
-    // https://w3c.github.io/webrtc-stats/#dom-rtcvideoreceiverstats-jitterbufferdelay
-    double jitter_buffer_delay_seconds = 0;
-    // https://w3c.github.io/webrtc-stats/#dom-rtcvideoreceiverstats-jitterbufferemittedcount
+    // https://w3c.github.io/webrtc-stats/#dom-rtcinboundrtpstreamstats-jitterbufferdelay
+    TimeDelta jitter_buffer_delay = TimeDelta::Zero();
+    // https://w3c.github.io/webrtc-stats/#dom-rtcinboundrtpstreamstats-jitterbuffertargetdelay
+    TimeDelta jitter_buffer_target_delay = TimeDelta::Zero();
+    // https://w3c.github.io/webrtc-stats/#dom-rtcinboundrtpstreamstats-jitterbufferemittedcount
     uint64_t jitter_buffer_emitted_count = 0;
+    // https://w3c.github.io/webrtc-stats/#dom-rtcinboundrtpstreamstats-jitterbufferminimumdelay
+    TimeDelta jitter_buffer_minimum_delay = TimeDelta::Zero();
     int min_playout_delay_ms = 0;
     int render_delay_ms = 10;
     int64_t interframe_delay_max_ms = -1;
@@ -105,7 +112,12 @@ class VideoReceiveStream : public MediaReceiveStream {
     uint32_t frames_dropped = 0;
     uint32_t frames_decoded = 0;
     // https://w3c.github.io/webrtc-stats/#dom-rtcinboundrtpstreamstats-totaldecodetime
-    uint64_t total_decode_time_ms = 0;
+    TimeDelta total_decode_time = TimeDelta::Zero();
+    // https://w3c.github.io/webrtc-stats/#dom-rtcinboundrtpstreamstats-totalprocessingdelay
+    TimeDelta total_processing_delay = TimeDelta::Zero();
+    // TODO(bugs.webrtc.org/13986): standardize
+    TimeDelta total_assembly_time = TimeDelta::Zero();
+    uint32_t frames_assembled_from_multiple_packets = 0;
     // Total inter frame delay in seconds.
     // https://w3c.github.io/webrtc-stats/#dom-rtcinboundrtpstreamstats-totalinterframedelay
     double total_inter_frame_delay = 0;
@@ -126,8 +138,6 @@ class VideoReceiveStream : public MediaReceiveStream {
     uint32_t pause_count = 0;
     uint32_t total_freezes_duration_ms = 0;
     uint32_t total_pauses_duration_ms = 0;
-    uint32_t total_frames_duration_ms = 0;
-    double sum_squared_frame_durations = 0.0;
 
     VideoContentType content_type = VideoContentType::UNSPECIFIED;
 
@@ -139,6 +149,7 @@ class VideoReceiveStream : public MediaReceiveStream {
     std::string c_name;
     RtpReceiveStats rtp_stats;
     RtcpPacketTypeCounter rtcp_packet_type_counts;
+    absl::optional<RtpReceiveStats> rtx_rtp_stats;
 
     // Timing frame info: all important timestamps for a full lifetime of a
     // single 'timing frame'.
@@ -172,7 +183,7 @@ class VideoReceiveStream : public MediaReceiveStream {
     VideoDecoderFactory* decoder_factory = nullptr;
 
     // Receive-stream specific RTP settings.
-    struct Rtp : public RtpConfig {
+    struct Rtp : public ReceiveStreamRtpConfig {
       Rtp();
       Rtp(const Rtp&);
       ~Rtp();
@@ -191,6 +202,10 @@ class VideoReceiveStream : public MediaReceiveStream {
         bool receiver_reference_time_report = false;
       } rtcp_xr;
 
+      // How to request keyframes from a remote sender. Applies only if lntf is
+      // disabled.
+      KeyFrameReqMethod keyframe_method = KeyFrameReqMethod::kPliRtcp;
+
       // See LntfConfig for description.
       LntfConfig lntf;
 
@@ -204,7 +219,7 @@ class VideoReceiveStream : public MediaReceiveStream {
       // Set if the stream is protected using FlexFEC.
       bool protected_by_flexfec = false;
 
-      // Optional callback sink to support additional packet handlsers such as
+      // Optional callback sink to support additional packet handlers such as
       // FlexFec.
       RtpPacketSinkInterface* packet_sink_ = nullptr;
 
@@ -237,10 +252,6 @@ class VideoReceiveStream : public MediaReceiveStream {
     // TODO(pbos): Synchronize streams in a sync group, not just video streams
     // to one of the audio streams.
     std::string sync_group;
-
-    // Target delay in milliseconds. A positive value indicates this stream is
-    // used for streaming instead of a real-time call.
-    int target_delay_ms = 0;
 
     // An optional custom frame decryptor that allows the entire frame to be
     // decrypted in whatever way the caller choses. This is not required by
@@ -280,18 +291,36 @@ class VideoReceiveStream : public MediaReceiveStream {
   // Cause eventual generation of a key frame from the sender.
   virtual void GenerateKeyFrame() = 0;
 
- protected:
-  virtual ~VideoReceiveStream() {}
-};
+  virtual void SetRtcpMode(RtcpMode mode) = 0;
 
-class DEPRECATED_VideoReceiveStream : public VideoReceiveStream {
- public:
-  // RtpDemuxer only forwards a given RTP packet to one sink. However, some
-  // sinks, such as FlexFEC, might wish to be informed of all of the packets
-  // a given sink receives (or any set of sinks). They may do so by registering
-  // themselves as secondary sinks.
-  virtual void AddSecondarySink(RtpPacketSinkInterface* sink) = 0;
-  virtual void RemoveSecondarySink(const RtpPacketSinkInterface* sink) = 0;
+  // Sets or clears a flexfec RTP sink. This affects `rtp.packet_sink_` and
+  // `rtp.protected_by_flexfec` parts of the configuration. Must be called on
+  // the packet delivery thread.
+  // TODO(bugs.webrtc.org/11993): Packet delivery thread today means `worker
+  // thread` but will be `network thread`.
+  virtual void SetFlexFecProtection(RtpPacketSinkInterface* flexfec_sink) = 0;
+
+  // Turns on/off loss notifications. Must be called on the packet delivery
+  // thread.
+  virtual void SetLossNotificationEnabled(bool enabled) = 0;
+
+  // Modify `rtp.nack.rtp_history_ms` post construction. Setting this value
+  // to 0 disables nack.
+  // Must be called on the packet delivery thread.
+  virtual void SetNackHistory(TimeDelta history) = 0;
+
+  virtual void SetProtectionPayloadTypes(int red_payload_type,
+                                         int ulpfec_payload_type) = 0;
+
+  virtual void SetRtcpXr(Config::Rtp::RtcpXr rtcp_xr) = 0;
+
+  virtual void SetAssociatedPayloadTypes(
+      std::map<int, int> associated_payload_types) = 0;
+
+  virtual void UpdateRtxSsrc(uint32_t ssrc) = 0;
+
+ protected:
+  virtual ~VideoReceiveStreamInterface() {}
 };
 
 }  // namespace webrtc

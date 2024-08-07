@@ -13,6 +13,7 @@
 #include <utility>
 #include <vector>
 
+#include "api/task_queue/task_queue_base.h"
 #include "net/dcsctp/packet/chunk/heartbeat_ack_chunk.h"
 #include "net/dcsctp/packet/chunk/heartbeat_request_chunk.h"
 #include "net/dcsctp/packet/parameter/heartbeat_info_parameter.h"
@@ -36,6 +37,7 @@ DcSctpOptions MakeOptions(DurationMs heartbeat_interval) {
   DcSctpOptions options;
   options.heartbeat_interval_include_rtt = false;
   options.heartbeat_interval = heartbeat_interval;
+  options.enable_zero_checksum = false;
   return options;
 }
 
@@ -44,7 +46,9 @@ class HeartbeatHandlerTestBase : public testing::Test {
   explicit HeartbeatHandlerTestBase(DurationMs heartbeat_interval)
       : options_(MakeOptions(heartbeat_interval)),
         context_(&callbacks_),
-        timer_manager_([this]() { return callbacks_.CreateTimeout(); }),
+        timer_manager_([this](webrtc::TaskQueueBase::DelayPrecision precision) {
+          return callbacks_.CreateTimeout(precision);
+        }),
         handler_("log: ", options_, &context_, &timer_manager_) {}
 
   void AdvanceTime(DurationMs duration) {
@@ -80,7 +84,8 @@ TEST_F(HeartbeatHandlerTest, HasRunningHeartbeatIntervalTimer) {
 
   // Validate that a heartbeat request was sent.
   std::vector<uint8_t> payload = callbacks_.ConsumeSentPacket();
-  ASSERT_HAS_VALUE_AND_ASSIGN(SctpPacket packet, SctpPacket::Parse(payload));
+  ASSERT_HAS_VALUE_AND_ASSIGN(SctpPacket packet,
+                              SctpPacket::Parse(payload, options_));
   ASSERT_THAT(packet.descriptors(), SizeIs(1));
 
   ASSERT_HAS_VALUE_AND_ASSIGN(
@@ -98,7 +103,8 @@ TEST_F(HeartbeatHandlerTest, RepliesToHeartbeatRequests) {
   handler_.HandleHeartbeatRequest(std::move(request));
 
   std::vector<uint8_t> payload = callbacks_.ConsumeSentPacket();
-  ASSERT_HAS_VALUE_AND_ASSIGN(SctpPacket packet, SctpPacket::Parse(payload));
+  ASSERT_HAS_VALUE_AND_ASSIGN(SctpPacket packet,
+                              SctpPacket::Parse(payload, options_));
   ASSERT_THAT(packet.descriptors(), SizeIs(1));
 
   ASSERT_HAS_VALUE_AND_ASSIGN(
@@ -117,7 +123,8 @@ TEST_F(HeartbeatHandlerTest, SendsHeartbeatRequestsOnIdleChannel) {
 
   // Grab the request, and make a response.
   std::vector<uint8_t> payload = callbacks_.ConsumeSentPacket();
-  ASSERT_HAS_VALUE_AND_ASSIGN(SctpPacket packet, SctpPacket::Parse(payload));
+  ASSERT_HAS_VALUE_AND_ASSIGN(SctpPacket packet,
+                              SctpPacket::Parse(payload, options_));
   ASSERT_THAT(packet.descriptors(), SizeIs(1));
 
   ASSERT_HAS_VALUE_AND_ASSIGN(
@@ -140,7 +147,8 @@ TEST_F(HeartbeatHandlerTest, DoesntObserveInvalidHeartbeats) {
 
   // Grab the request, and make a response.
   std::vector<uint8_t> payload = callbacks_.ConsumeSentPacket();
-  ASSERT_HAS_VALUE_AND_ASSIGN(SctpPacket packet, SctpPacket::Parse(payload));
+  ASSERT_HAS_VALUE_AND_ASSIGN(SctpPacket packet,
+                              SctpPacket::Parse(payload, options_));
   ASSERT_THAT(packet.descriptors(), SizeIs(1));
 
   ASSERT_HAS_VALUE_AND_ASSIGN(

@@ -8,11 +8,12 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#include "libyuv/rotate.h"
+#include "libyuv/rotate_argb.h"
 
 #include "libyuv/convert.h"
 #include "libyuv/cpu_id.h"
 #include "libyuv/planar_functions.h"
+#include "libyuv/rotate.h"
 #include "libyuv/row.h"
 #include "libyuv/scale_row.h" /* for ScaleARGBRowDownEven_ */
 
@@ -52,20 +53,25 @@ static int ARGBTranspose(const uint8_t* src_argb,
     }
   }
 #endif
-#if defined(HAS_SCALEARGBROWDOWNEVEN_MMI)
-  if (TestCpuFlag(kCpuHasMMI)) {
-    ScaleARGBRowDownEven = ScaleARGBRowDownEven_Any_MMI;
-    if (IS_ALIGNED(height, 4)) {  // Width of dest.
-      ScaleARGBRowDownEven = ScaleARGBRowDownEven_MMI;
-    }
-  }
-#endif
 #if defined(HAS_SCALEARGBROWDOWNEVEN_MSA)
   if (TestCpuFlag(kCpuHasMSA)) {
     ScaleARGBRowDownEven = ScaleARGBRowDownEven_Any_MSA;
     if (IS_ALIGNED(height, 4)) {  // Width of dest.
       ScaleARGBRowDownEven = ScaleARGBRowDownEven_MSA;
     }
+  }
+#endif
+#if defined(HAS_SCALEARGBROWDOWNEVEN_LSX)
+  if (TestCpuFlag(kCpuHasLSX)) {
+    ScaleARGBRowDownEven = ScaleARGBRowDownEven_Any_LSX;
+    if (IS_ALIGNED(height, 4)) {  // Width of dest.
+      ScaleARGBRowDownEven = ScaleARGBRowDownEven_LSX;
+    }
+  }
+#endif
+#if defined(HAS_SCALEARGBROWDOWNEVEN_RVV)
+  if (TestCpuFlag(kCpuHasRVV)) {
+    ScaleARGBRowDownEven = ScaleARGBRowDownEven_RVV;
   }
 #endif
 
@@ -147,19 +153,27 @@ static int ARGBRotate180(const uint8_t* src_argb,
     }
   }
 #endif
-#if defined(HAS_ARGBMIRRORROW_MMI)
-  if (TestCpuFlag(kCpuHasMMI)) {
-    ARGBMirrorRow = ARGBMirrorRow_Any_MMI;
-    if (IS_ALIGNED(width, 2)) {
-      ARGBMirrorRow = ARGBMirrorRow_MMI;
-    }
-  }
-#endif
 #if defined(HAS_ARGBMIRRORROW_MSA)
   if (TestCpuFlag(kCpuHasMSA)) {
     ARGBMirrorRow = ARGBMirrorRow_Any_MSA;
     if (IS_ALIGNED(width, 16)) {
       ARGBMirrorRow = ARGBMirrorRow_MSA;
+    }
+  }
+#endif
+#if defined(HAS_ARGBMIRRORROW_LSX)
+  if (TestCpuFlag(kCpuHasLSX)) {
+    ARGBMirrorRow = ARGBMirrorRow_Any_LSX;
+    if (IS_ALIGNED(width, 8)) {
+      ARGBMirrorRow = ARGBMirrorRow_LSX;
+    }
+  }
+#endif
+#if defined(HAS_ARGBMIRRORROW_LASX)
+  if (TestCpuFlag(kCpuHasLASX)) {
+    ARGBMirrorRow = ARGBMirrorRow_Any_LASX;
+    if (IS_ALIGNED(width, 16)) {
+      ARGBMirrorRow = ARGBMirrorRow_LASX;
     }
   }
 #endif
@@ -181,6 +195,11 @@ static int ARGBRotate180(const uint8_t* src_argb,
 #if defined(HAS_COPYROW_NEON)
   if (TestCpuFlag(kCpuHasNEON)) {
     CopyRow = IS_ALIGNED(width * 4, 32) ? CopyRow_NEON : CopyRow_Any_NEON;
+  }
+#endif
+#if defined(HAS_COPYROW_RVV)
+  if (TestCpuFlag(kCpuHasRVV)) {
+    CopyRow = CopyRow_RVV;
   }
 #endif
 

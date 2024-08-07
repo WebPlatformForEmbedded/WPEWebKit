@@ -8,21 +8,68 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#include <memory>
+#include <stddef.h>
 
+#include <cstdint>
+#include <memory>
+#include <ostream>
+#include <string>
+#include <tuple>
+#include <type_traits>
+#include <utility>
+#include <vector>
+
+#include "api/audio/audio_mixer.h"
 #include "api/audio_codecs/builtin_audio_decoder_factory.h"
 #include "api/audio_codecs/builtin_audio_encoder_factory.h"
+#include "api/candidate.h"
 #include "api/create_peerconnection_factory.h"
-#include "api/video_codecs/builtin_video_decoder_factory.h"
-#include "api/video_codecs/builtin_video_encoder_factory.h"
-#include "p2p/base/fake_port_allocator.h"
-#include "p2p/base/test_stun_server.h"
+#include "api/jsep.h"
+#include "api/media_types.h"
+#include "api/peer_connection_interface.h"
+#include "api/rtp_receiver_interface.h"
+#include "api/rtp_sender_interface.h"
+#include "api/rtp_transceiver_interface.h"
+#include "api/scoped_refptr.h"
+#include "api/stats/rtc_stats.h"
+#include "api/stats/rtc_stats_report.h"
+#include "api/stats/rtcstats_objects.h"
+#include "api/video_codecs/video_decoder_factory_template.h"
+#include "api/video_codecs/video_decoder_factory_template_dav1d_adapter.h"
+#include "api/video_codecs/video_decoder_factory_template_libvpx_vp8_adapter.h"
+#include "api/video_codecs/video_decoder_factory_template_libvpx_vp9_adapter.h"
+#include "api/video_codecs/video_decoder_factory_template_open_h264_adapter.h"
+#include "api/video_codecs/video_encoder_factory_template.h"
+#include "api/video_codecs/video_encoder_factory_template_libaom_av1_adapter.h"
+#include "api/video_codecs/video_encoder_factory_template_libvpx_vp8_adapter.h"
+#include "api/video_codecs/video_encoder_factory_template_libvpx_vp9_adapter.h"
+#include "api/video_codecs/video_encoder_factory_template_open_h264_adapter.h"
+#include "media/base/stream_params.h"
+#include "modules/audio_device/include/audio_device.h"
+#include "modules/audio_processing/include/audio_processing.h"
+#include "p2p/base/p2p_constants.h"
+#include "p2p/base/port.h"
+#include "p2p/base/port_allocator.h"
+#include "p2p/base/transport_info.h"
 #include "p2p/client/basic_port_allocator.h"
-#include "pc/media_session.h"
+#include "pc/channel.h"
 #include "pc/peer_connection.h"
 #include "pc/peer_connection_proxy.h"
 #include "pc/peer_connection_wrapper.h"
+#include "pc/rtp_transceiver.h"
+#include "pc/rtp_transport_internal.h"
 #include "pc/sdp_utils.h"
+#include "pc/session_description.h"
+#include "pc/test/integration_test_helpers.h"
+#include "pc/test/mock_peer_connection_observers.h"
+#include "rtc_base/checks.h"
+#include "rtc_base/logging.h"
+#include "rtc_base/net_helper.h"
+#include "rtc_base/network.h"
+#include "rtc_base/rtc_certificate_generator.h"
+#include "rtc_base/socket_address.h"
+#include "rtc_base/thread.h"
+#include "test/gtest.h"
 #ifdef WEBRTC_ANDROID
 #include "pc/test/android_test_initializer.h"
 #endif
@@ -44,8 +91,6 @@ using ::testing::ElementsAre;
 using ::testing::UnorderedElementsAre;
 using ::testing::Values;
 
-constexpr int kDefaultTimeout = 10000;
-
 // TODO(steveanton): These tests should be rewritten to use the standard
 // RtpSenderInterface/DtlsTransportInterface objects once they're available in
 // the API. The RtpSender can be used to determine which transport a given media
@@ -54,13 +99,14 @@ constexpr int kDefaultTimeout = 10000;
 
 class FakeNetworkManagerWithNoAnyNetwork : public rtc::FakeNetworkManager {
  public:
-  void GetAnyAddressNetworks(NetworkList* networks) override {
+  std::vector<const rtc::Network*> GetAnyAddressNetworks() override {
     // This function allocates networks that are owned by the
     // NetworkManager. But some tests assume that they can release
     // all networks independent of the network manager.
     // In order to prevent use-after-free issues, don't allow this
     // function to have any effect when run in tests.
     RTC_LOG(LS_INFO) << "FakeNetworkManager::GetAnyAddressNetworks ignored";
+    return {};
   }
 };
 
@@ -80,7 +126,7 @@ class PeerConnectionWrapperForBundleTest : public PeerConnectionWrapper {
         return pc()->AddIceCandidate(jsep_candidate.get());
       }
     }
-    RTC_NOTREACHED();
+    RTC_DCHECK_NOTREACHED();
     return false;
   }
 
@@ -143,8 +189,8 @@ class PeerConnectionWrapperForBundleTest : public PeerConnectionWrapper {
     for (auto* pair_stats :
          report->GetStatsOfType<RTCIceCandidatePairStats>()) {
       if (*pair_stats->remote_candidate_id == matching_candidate_id) {
-        if (*pair_stats->state == RTCStatsIceCandidatePairState::kInProgress ||
-            *pair_stats->state == RTCStatsIceCandidatePairState::kSucceeded) {
+        if (*pair_stats->state == "in-progress" ||
+            *pair_stats->state == "succeeded") {
           return true;
         }
       }
@@ -166,6 +212,7 @@ class PeerConnectionBundleBaseTest : public ::testing::Test {
 
   explicit PeerConnectionBundleBaseTest(SdpSemantics sdp_semantics)
       : vss_(new rtc::VirtualSocketServer()),
+        socket_factory_(new rtc::BasicPacketSocketFactory(vss_.get())),
         main_(vss_.get()),
         sdp_semantics_(sdp_semantics) {
 #ifdef WEBRTC_ANDROID
@@ -175,7 +222,12 @@ class PeerConnectionBundleBaseTest : public ::testing::Test {
         rtc::Thread::Current(), rtc::Thread::Current(), rtc::Thread::Current(),
         rtc::scoped_refptr<AudioDeviceModule>(FakeAudioCaptureModule::Create()),
         CreateBuiltinAudioEncoderFactory(), CreateBuiltinAudioDecoderFactory(),
-        CreateBuiltinVideoEncoderFactory(), CreateBuiltinVideoDecoderFactory(),
+        std::make_unique<VideoEncoderFactoryTemplate<
+            LibvpxVp8EncoderTemplateAdapter, LibvpxVp9EncoderTemplateAdapter,
+            OpenH264EncoderTemplateAdapter, LibaomAv1EncoderTemplateAdapter>>(),
+        std::make_unique<VideoDecoderFactoryTemplate<
+            LibvpxVp8DecoderTemplateAdapter, LibvpxVp9DecoderTemplateAdapter,
+            OpenH264DecoderTemplateAdapter, Dav1dDecoderTemplateAdapter>>(),
         nullptr /* audio_mixer */, nullptr /* audio_processing */);
   }
 
@@ -185,22 +237,24 @@ class PeerConnectionBundleBaseTest : public ::testing::Test {
 
   WrapperPtr CreatePeerConnection(const RTCConfiguration& config) {
     auto* fake_network = NewFakeNetwork();
-    auto port_allocator =
-        std::make_unique<cricket::BasicPortAllocator>(fake_network);
+    auto port_allocator = std::make_unique<cricket::BasicPortAllocator>(
+        fake_network, socket_factory_.get());
     port_allocator->set_flags(cricket::PORTALLOCATOR_DISABLE_TCP |
                               cricket::PORTALLOCATOR_DISABLE_RELAY);
     port_allocator->set_step_delay(cricket::kMinimumStepDelay);
     auto observer = std::make_unique<MockPeerConnectionObserver>();
     RTCConfiguration modified_config = config;
     modified_config.sdp_semantics = sdp_semantics_;
-    auto pc = pc_factory_->CreatePeerConnection(
-        modified_config, std::move(port_allocator), nullptr, observer.get());
-    if (!pc) {
+    PeerConnectionDependencies pc_dependencies(observer.get());
+    pc_dependencies.allocator = std::move(port_allocator);
+    auto result = pc_factory_->CreatePeerConnectionOrError(
+        modified_config, std::move(pc_dependencies));
+    if (!result.ok()) {
       return nullptr;
     }
 
     auto wrapper = std::make_unique<PeerConnectionWrapperForBundleTest>(
-        pc_factory_, pc, std::move(observer));
+        pc_factory_, result.MoveValue(), std::move(observer));
     wrapper->set_network(fake_network);
     return wrapper;
   }
@@ -242,6 +296,7 @@ class PeerConnectionBundleBaseTest : public ::testing::Test {
   }
 
   std::unique_ptr<rtc::VirtualSocketServer> vss_;
+  std::unique_ptr<rtc::BasicPacketSocketFactory> socket_factory_;
   rtc::AutoSocketServerThread main_;
   rtc::scoped_refptr<PeerConnectionFactoryInterface> pc_factory_;
   std::vector<std::unique_ptr<rtc::FakeNetworkManager>> fake_networks_;
@@ -450,7 +505,7 @@ TEST_P(PeerConnectionBundleMatrixTest,
 INSTANTIATE_TEST_SUITE_P(
     PeerConnectionBundleTest,
     PeerConnectionBundleMatrixTest,
-    Combine(Values(SdpSemantics::kPlanB, SdpSemantics::kUnifiedPlan),
+    Combine(Values(SdpSemantics::kPlanB_DEPRECATED, SdpSemantics::kUnifiedPlan),
             Values(std::make_tuple(BundlePolicy::kBundlePolicyBalanced,
                                    BundleIncluded::kBundleInAnswer,
                                    false,
@@ -675,41 +730,64 @@ TEST_P(PeerConnectionBundleTest, BundleOnFirstMidInAnswer) {
 }
 
 // This tests that applying description with conflicted RTP demuxing criteria
-// will fail.
+// will fail when using BUNDLE.
+TEST_P(PeerConnectionBundleTest, ApplyDescriptionWithSameSsrcsBundledFails) {
+  auto caller = CreatePeerConnectionWithAudioVideo();
+  auto callee = CreatePeerConnectionWithAudioVideo();
+
+  RTCOfferAnswerOptions options;
+  options.use_rtp_mux = true;
+  auto offer = caller->CreateOffer(options);
+  EXPECT_TRUE(
+      caller->SetLocalDescription(CloneSessionDescription(offer.get())));
+  // Modify the remote SDP to make two m= sections have the same SSRC.
+  ASSERT_GE(offer->description()->contents().size(), 2U);
+  ReplaceFirstSsrc(offer->description()
+                       ->contents()[0]
+                       .media_description()
+                       ->mutable_streams()[0],
+                   1111222);
+  ReplaceFirstSsrc(offer->description()
+                       ->contents()[1]
+                       .media_description()
+                       ->mutable_streams()[0],
+                   1111222);
+
+  EXPECT_TRUE(callee->SetRemoteDescription(std::move(offer)));
+  // When BUNDLE is enabled, applying the description is expected to fail
+  // because the demuxing criteria can not be satisfied.
+  auto answer = callee->CreateAnswer(options);
+  EXPECT_FALSE(callee->SetLocalDescription(std::move(answer)));
+}
+
+// A variant of the above, without BUNDLE duplicate SSRCs are allowed.
 TEST_P(PeerConnectionBundleTest,
-       ApplyDescriptionWithConflictedDemuxCriteriaFail) {
+       ApplyDescriptionWithSameSsrcsUnbundledSucceeds) {
   auto caller = CreatePeerConnectionWithAudioVideo();
   auto callee = CreatePeerConnectionWithAudioVideo();
 
   RTCOfferAnswerOptions options;
   options.use_rtp_mux = false;
   auto offer = caller->CreateOffer(options);
-  // Modified the SDP to make two m= sections have the same SSRC.
-  ASSERT_GE(offer->description()->contents().size(), 2U);
-  offer->description()
-      ->contents()[0]
-      .media_description()
-      ->mutable_streams()[0]
-      .ssrcs[0] = 1111222;
-  offer->description()
-      ->contents()[1]
-      .media_description()
-      ->mutable_streams()[0]
-      .ssrcs[0] = 1111222;
   EXPECT_TRUE(
       caller->SetLocalDescription(CloneSessionDescription(offer.get())));
+  // Modify the remote SDP to make two m= sections have the same SSRC.
+  ASSERT_GE(offer->description()->contents().size(), 2U);
+  ReplaceFirstSsrc(offer->description()
+                       ->contents()[0]
+                       .media_description()
+                       ->mutable_streams()[0],
+                   1111222);
+  ReplaceFirstSsrc(offer->description()
+                       ->contents()[1]
+                       .media_description()
+                       ->mutable_streams()[0],
+                   1111222);
   EXPECT_TRUE(callee->SetRemoteDescription(std::move(offer)));
-  EXPECT_TRUE(callee->CreateAnswerAndSetAsLocal(options));
 
-  // Enable BUNDLE in subsequent offer/answer exchange and two m= sections are
-  // expectd to use one RtpTransport underneath.
-  options.use_rtp_mux = true;
-  EXPECT_TRUE(
-      callee->SetRemoteDescription(caller->CreateOfferAndSetAsLocal(options)));
+  // Without BUNDLE, demuxing is done per-transport.
   auto answer = callee->CreateAnswer(options);
-  // When BUNDLE is enabled, applying the description is expected to fail
-  // because the demuxing criteria is conflicted.
-  EXPECT_FALSE(callee->SetLocalDescription(std::move(answer)));
+  EXPECT_TRUE(callee->SetLocalDescription(std::move(answer)));
 }
 
 // This tests that changing the pre-negotiated BUNDLE tag is not supported.
@@ -853,7 +931,7 @@ TEST_P(PeerConnectionBundleTest, RemoveContentFromBundleGroup) {
 
 INSTANTIATE_TEST_SUITE_P(PeerConnectionBundleTest,
                          PeerConnectionBundleTest,
-                         Values(SdpSemantics::kPlanB,
+                         Values(SdpSemantics::kPlanB_DEPRECATED,
                                 SdpSemantics::kUnifiedPlan));
 
 // According to RFC5888, if an endpoint understands the semantics of an

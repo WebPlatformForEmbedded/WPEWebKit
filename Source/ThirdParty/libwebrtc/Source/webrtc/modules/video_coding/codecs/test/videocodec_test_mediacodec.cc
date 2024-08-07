@@ -17,6 +17,7 @@
 #include "media/base/media_constants.h"
 #include "modules/video_coding/codecs/test/android_codec_factory_helper.h"
 #include "modules/video_coding/codecs/test/videocodec_test_fixture_impl.h"
+#include "rtc_base/strings/string_builder.h"
 #include "test/gtest.h"
 #include "test/testsupport/file_utils.h"
 
@@ -26,6 +27,49 @@ namespace test {
 namespace {
 const int kForemanNumFrames = 300;
 const int kForemanFramerateFps = 30;
+
+struct RateProfileData {
+  std::string name;
+  std::vector<webrtc::test::RateProfile> rate_profile;
+};
+
+const size_t kConstRateIntervalSec = 10;
+
+const RateProfileData kBitRateHighLowHigh = {
+    /*name=*/"BitRateHighLowHigh",
+    /*rate_profile=*/{
+        {/*target_kbps=*/3000, /*input_fps=*/30, /*frame_num=*/0},
+        {/*target_kbps=*/1500, /*input_fps=*/30, /*frame_num=*/300},
+        {/*target_kbps=*/750, /*input_fps=*/30, /*frame_num=*/600},
+        {/*target_kbps=*/1500, /*input_fps=*/30, /*frame_num=*/900},
+        {/*target_kbps=*/3000, /*input_fps=*/30, /*frame_num=*/1200}}};
+
+const RateProfileData kBitRateLowHighLow = {
+    /*name=*/"BitRateLowHighLow",
+    /*rate_profile=*/{
+        {/*target_kbps=*/750, /*input_fps=*/30, /*frame_num=*/0},
+        {/*target_kbps=*/1500, /*input_fps=*/30, /*frame_num=*/300},
+        {/*target_kbps=*/3000, /*input_fps=*/30, /*frame_num=*/600},
+        {/*target_kbps=*/1500, /*input_fps=*/30, /*frame_num=*/900},
+        {/*target_kbps=*/750, /*input_fps=*/30, /*frame_num=*/1200}}};
+
+const RateProfileData kFrameRateHighLowHigh = {
+    /*name=*/"FrameRateHighLowHigh",
+    /*rate_profile=*/{
+        {/*target_kbps=*/2000, /*input_fps=*/30, /*frame_num=*/0},
+        {/*target_kbps=*/2000, /*input_fps=*/15, /*frame_num=*/300},
+        {/*target_kbps=*/2000, /*input_fps=*/7.5, /*frame_num=*/450},
+        {/*target_kbps=*/2000, /*input_fps=*/15, /*frame_num=*/525},
+        {/*target_kbps=*/2000, /*input_fps=*/30, /*frame_num=*/675}}};
+
+const RateProfileData kFrameRateLowHighLow = {
+    /*name=*/"FrameRateLowHighLow",
+    /*rate_profile=*/{
+        {/*target_kbps=*/2000, /*input_fps=*/7.5, /*frame_num=*/0},
+        {/*target_kbps=*/2000, /*input_fps=*/15, /*frame_num=*/75},
+        {/*target_kbps=*/2000, /*input_fps=*/30, /*frame_num=*/225},
+        {/*target_kbps=*/2000, /*input_fps=*/15, /*frame_num=*/525},
+        {/*target_kbps=*/2000, /*input_fps=*/7.5, /*frame_num=*/775}}};
 
 VideoCodecTestFixture::Config CreateConfig() {
   VideoCodecTestFixture::Config config;
@@ -120,7 +164,7 @@ TEST(VideoCodecTestMediaCodec, ForemanMixedRes100kbpsVp8H264) {
   const std::vector<std::string> codecs = {cricket::kVp8CodecName,
                                            cricket::kH264CodecName};
   const std::vector<std::tuple<int, int>> resolutions = {
-      {128, 96}, {160, 120}, {176, 144}, {240, 136}, {320, 240}, {480, 272}};
+      {128, 96}, {176, 144}, {320, 240}, {480, 272}};
   const std::vector<RateProfile> rate_profiles = {
       {100, kForemanFramerateFps, 0}};
   const std::vector<QualityThresholds> quality_thresholds = {
@@ -143,6 +187,81 @@ TEST(VideoCodecTestMediaCodec, ForemanMixedRes100kbpsVp8H264) {
     }
   }
 }
+
+class VideoCodecTestMediaCodecRateAdaptation
+    : public ::testing::TestWithParam<
+          std::tuple<RateProfileData, std::string>> {
+ public:
+  static std::string ParamInfoToStr(
+      const ::testing::TestParamInfo<
+          VideoCodecTestMediaCodecRateAdaptation::ParamType>& info) {
+    char buf[512];
+    rtc::SimpleStringBuilder ss(buf);
+    ss << std::get<0>(info.param).name << "_" << std::get<1>(info.param);
+    return ss.str();
+  }
+};
+
+TEST_P(VideoCodecTestMediaCodecRateAdaptation, DISABLED_RateAdaptation) {
+  const std::vector<webrtc::test::RateProfile> rate_profile =
+      std::get<0>(GetParam()).rate_profile;
+  const std::string codec_name = std::get<1>(GetParam());
+
+  VideoCodecTestFixture::Config config;
+  config.filename = "FourPeople_1280x720_30";
+  config.filepath = ResourcePath(config.filename, "yuv");
+  config.num_frames = rate_profile.back().frame_num +
+                      static_cast<size_t>(kConstRateIntervalSec *
+                                          rate_profile.back().input_fps);
+  config.encode_in_real_time = true;
+  config.SetCodecSettings(codec_name, 1, 1, 1, false, false, false, 1280, 720);
+
+  auto fixture = CreateTestFixtureWithConfig(config);
+  fixture->RunTest(rate_profile, nullptr, nullptr, nullptr);
+
+  for (size_t i = 0; i < rate_profile.size(); ++i) {
+    const size_t num_frames =
+        static_cast<size_t>(rate_profile[i].input_fps * kConstRateIntervalSec);
+
+    auto stats = fixture->GetStats().SliceAndCalcLayerVideoStatistic(
+        rate_profile[i].frame_num, rate_profile[i].frame_num + num_frames - 1);
+    ASSERT_EQ(stats.size(), 1u);
+
+    // Bitrate mismatch is <= 10%.
+    EXPECT_LE(stats[0].avg_bitrate_mismatch_pct, 10);
+    EXPECT_GE(stats[0].avg_bitrate_mismatch_pct, -10);
+
+    // Avg frame transmission delay and processing latency is <=100..250ms
+    // depending on frame rate.
+    const double expected_delay_sec =
+        std::min(std::max(1 / rate_profile[i].input_fps, 0.1), 0.25);
+    EXPECT_LE(stats[0].avg_delay_sec, expected_delay_sec);
+    EXPECT_LE(stats[0].avg_encode_latency_sec, expected_delay_sec);
+    EXPECT_LE(stats[0].avg_decode_latency_sec, expected_delay_sec);
+
+    // Frame drops are not expected.
+    EXPECT_EQ(stats[0].num_encoded_frames, num_frames);
+    EXPECT_EQ(stats[0].num_decoded_frames, num_frames);
+
+    // Periodic keyframes are not expected.
+    EXPECT_EQ(stats[0].num_key_frames, i == 0 ? 1u : 0);
+
+    // Ensure codec delivers a reasonable spatial quality.
+    EXPECT_GE(stats[0].avg_psnr_y, 35);
+  }
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    RateAdaptation,
+    VideoCodecTestMediaCodecRateAdaptation,
+    ::testing::Combine(::testing::Values(kBitRateLowHighLow,
+                                         kBitRateHighLowHigh,
+                                         kFrameRateLowHighLow,
+                                         kFrameRateHighLowHigh),
+                       ::testing::Values(cricket::kVp8CodecName,
+                                         cricket::kVp9CodecName,
+                                         cricket::kH264CodecName)),
+    VideoCodecTestMediaCodecRateAdaptation::ParamInfoToStr);
 
 }  // namespace test
 }  // namespace webrtc

@@ -13,22 +13,23 @@
 
 #include <map>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "api/fec_controller.h"
+#include "api/field_trials_view.h"
 #include "api/sequence_checker.h"
-#include "api/video/video_stream_encoder_interface.h"
+#include "api/task_queue/pending_task_safety_flag.h"
 #include "call/bitrate_allocator.h"
 #include "call/video_receive_stream.h"
 #include "call/video_send_stream.h"
 #include "rtc_base/event.h"
 #include "rtc_base/system/no_unique_address.h"
-#include "rtc_base/task_queue.h"
-#include "rtc_base/task_utils/pending_task_safety_flag.h"
 #include "video/encoder_rtcp_feedback.h"
 #include "video/send_delay_stats.h"
 #include "video/send_statistics_proxy.h"
 #include "video/video_send_stream_impl.h"
+#include "video/video_stream_encoder_interface.h"
 
 namespace webrtc {
 namespace test {
@@ -58,6 +59,7 @@ class VideoSendStream : public webrtc::VideoSendStream {
       Clock* clock,
       int num_cpu_cores,
       TaskQueueFactory* task_queue_factory,
+      TaskQueueBase* network_queue,
       RtcpRttStats* call_stats,
       RtpTransportControllerSendInterface* transport,
       BitrateAllocatorInterface* bitrate_allocator,
@@ -67,16 +69,16 @@ class VideoSendStream : public webrtc::VideoSendStream {
       VideoEncoderConfig encoder_config,
       const std::map<uint32_t, RtpState>& suspended_ssrcs,
       const std::map<uint32_t, RtpPayloadState>& suspended_payload_states,
-      std::unique_ptr<FecController> fec_controller);
+      std::unique_ptr<FecController> fec_controller,
+      const FieldTrialsView& field_trials);
 
   ~VideoSendStream() override;
 
   void DeliverRtcp(const uint8_t* packet, size_t length);
 
   // webrtc::VideoSendStream implementation.
-  void UpdateActiveSimulcastLayers(
-      const std::vector<bool> active_layers) override;
   void Start() override;
+  void StartPerRtpStream(std::vector<bool> active_layers) override;
   void Stop() override;
   bool started() override;
 
@@ -86,28 +88,44 @@ class VideoSendStream : public webrtc::VideoSendStream {
   void SetSource(rtc::VideoSourceInterface<webrtc::VideoFrame>* source,
                  const DegradationPreference& degradation_preference) override;
 
-  void ReconfigureVideoEncoder(VideoEncoderConfig) override;
+  void ReconfigureVideoEncoder(VideoEncoderConfig config) override;
+  void ReconfigureVideoEncoder(VideoEncoderConfig config,
+                               SetParametersCallback callback) override;
   Stats GetStats() override;
-#if defined(WEBRTC_WEBKIT_BUILD)
-  void GenerateKeyFrame() override;
-#endif
 
   void StopPermanentlyAndGetRtpStates(RtpStateMap* rtp_state_map,
                                       RtpPayloadStateMap* payload_state_map);
+  void GenerateKeyFrame(const std::vector<std::string>& rids) override;
 
  private:
   friend class test::VideoSendStreamPeer;
+  class OnSendPacketObserver : public SendPacketObserver {
+   public:
+    OnSendPacketObserver(SendStatisticsProxy* stats_proxy,
+                         SendDelayStats* send_delay_stats)
+        : stats_proxy_(*stats_proxy), send_delay_stats_(*send_delay_stats) {}
+
+    void OnSendPacket(absl::optional<uint16_t> packet_id,
+                      Timestamp capture_time,
+                      uint32_t ssrc) override {
+      stats_proxy_.OnSendPacket(ssrc, capture_time);
+      if (packet_id.has_value()) {
+        send_delay_stats_.OnSendPacket(*packet_id, capture_time, ssrc);
+      }
+    }
+
+   private:
+    SendStatisticsProxy& stats_proxy_;
+    SendDelayStats& send_delay_stats_;
+  };
 
   absl::optional<float> GetPacingFactorOverride() const;
 
   RTC_NO_UNIQUE_ADDRESS SequenceChecker thread_checker_;
-  rtc::TaskQueue* const rtp_transport_queue_;
   RtpTransportControllerSendInterface* const transport_;
-  rtc::Event thread_sync_event_;
-  rtc::scoped_refptr<PendingTaskSafetyFlag> transport_queue_safety_ =
-      PendingTaskSafetyFlag::CreateDetached();
 
   SendStatisticsProxy stats_proxy_;
+  OnSendPacketObserver send_packet_observer_;
   const VideoSendStream::Config config_;
   const VideoEncoderConfig::ContentType content_type_;
   std::unique_ptr<VideoStreamEncoderInterface> video_stream_encoder_;

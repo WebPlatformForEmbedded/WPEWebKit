@@ -13,6 +13,7 @@
 
 #include <string>
 
+#include "absl/strings/string_view.h"
 #include "modules/audio_coding/test/EncodeDecodeTest.h"
 
 namespace webrtc {
@@ -20,9 +21,9 @@ namespace webrtc {
 class ReceiverWithPacketLoss : public Receiver {
  public:
   ReceiverWithPacketLoss();
-  void Setup(AudioCodingModule* acm,
+  void Setup(acm2::AcmReceiver* acm_receiver,
              RTPStream* rtpStream,
-             std::string out_file_name,
+             absl::string_view out_file_name,
              int channels,
              int file_num,
              int loss_rate,
@@ -43,7 +44,7 @@ class SenderWithFEC : public Sender {
   SenderWithFEC();
   void Setup(AudioCodingModule* acm,
              RTPStream* rtpStream,
-             std::string in_file_name,
+             absl::string_view in_file_name,
              int payload_type,
              SdpAudioFormat format,
              int expected_loss_rate);

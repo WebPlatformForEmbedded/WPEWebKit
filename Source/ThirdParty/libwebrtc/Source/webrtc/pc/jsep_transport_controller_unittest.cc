@@ -11,16 +11,28 @@
 #include "pc/jsep_transport_controller.h"
 
 #include <map>
-#include <memory>
+#include <string>
+#include <utility>
 
 #include "api/dtls_transport_interface.h"
+#include "api/transport/enums.h"
+#include "p2p/base/candidate_pair_interface.h"
 #include "p2p/base/dtls_transport_factory.h"
 #include "p2p/base/fake_dtls_transport.h"
 #include "p2p/base/fake_ice_transport.h"
+#include "p2p/base/p2p_constants.h"
 #include "p2p/base/transport_info.h"
+#include "rtc_base/fake_ssl_identity.h"
 #include "rtc_base/gunit.h"
+#include "rtc_base/logging.h"
+#include "rtc_base/net_helper.h"
+#include "rtc_base/socket_address.h"
+#include "rtc_base/ssl_fingerprint.h"
+#include "rtc_base/ssl_identity.h"
+#include "rtc_base/task_queue_for_test.h"
 #include "rtc_base/thread.h"
 #include "test/gtest.h"
+#include "test/scoped_key_value_config.h"
 
 using cricket::Candidate;
 using cricket::Candidates;
@@ -82,15 +94,17 @@ class JsepTransportControllerTest : public JsepTransportController::Observer,
       cricket::PortAllocator* port_allocator = nullptr) {
     config.transport_observer = this;
     config.rtcp_handler = [](const rtc::CopyOnWriteBuffer& packet,
-                             int64_t packet_time_us) { RTC_NOTREACHED(); };
+                             int64_t packet_time_us) {
+      RTC_DCHECK_NOTREACHED();
+    };
     config.ice_transport_factory = fake_ice_transport_factory_.get();
     config.dtls_transport_factory = fake_dtls_transport_factory_.get();
     config.on_dtls_handshake_error_ = [](rtc::SSLHandshakeError s) {};
+    config.field_trials = &field_trials_;
     transport_controller_ = std::make_unique<JsepTransportController>(
         network_thread, port_allocator, nullptr /* async_resolver_factory */,
-        config);
-    network_thread->Invoke<void>(RTC_FROM_HERE,
-                                 [&] { ConnectTransportControllerSignals(); });
+        std::move(config));
+    SendTask(network_thread, [&] { ConnectTransportControllerSignals(); });
   }
 
   void ConnectTransportControllerSignals() {
@@ -244,7 +258,7 @@ class JsepTransportControllerTest : public JsepTransportController::Observer,
 
   void CreateLocalDescriptionAndCompleteConnectionOnNetworkThread() {
     if (!network_thread_->IsCurrent()) {
-      network_thread_->Invoke<void>(RTC_FROM_HERE, [&] {
+      SendTask(network_thread_.get(), [&] {
         CreateLocalDescriptionAndCompleteConnectionOnNetworkThread();
       });
       return;
@@ -330,6 +344,7 @@ class JsepTransportControllerTest : public JsepTransportController::Observer,
     return true;
   }
 
+  rtc::AutoThread main_thread_;
   // Information received from signals from transport controller.
   cricket::IceConnectionState connection_state_ =
       cricket::kIceConnectionConnecting;
@@ -364,6 +379,7 @@ class JsepTransportControllerTest : public JsepTransportController::Observer,
   // Transport controller needs to be destroyed first, because it may issue
   // callbacks that modify the changed_*_by_mid in the destructor.
   std::unique_ptr<JsepTransportController> transport_controller_;
+  webrtc::test::ScopedKeyValueConfig field_trials_;
 };
 
 TEST_F(JsepTransportControllerTest, GetRtpTransport) {
@@ -384,7 +400,7 @@ TEST_F(JsepTransportControllerTest, GetRtpTransport) {
 TEST_F(JsepTransportControllerTest, GetDtlsTransport) {
   JsepTransportController::Config config;
   config.rtcp_mux_policy = PeerConnectionInterface::kRtcpMuxPolicyNegotiate;
-  CreateJsepTransportController(config);
+  CreateJsepTransportController(std::move(config));
   auto description = CreateSessionDescriptionWithoutBundle();
   EXPECT_TRUE(transport_controller_
                   ->SetLocalDescription(SdpType::kOffer, description.get())
@@ -419,7 +435,7 @@ TEST_F(JsepTransportControllerTest, GetDtlsTransport) {
 TEST_F(JsepTransportControllerTest, GetDtlsTransportWithRtcpMux) {
   JsepTransportController::Config config;
   config.rtcp_mux_policy = PeerConnectionInterface::kRtcpMuxPolicyRequire;
-  CreateJsepTransportController(config);
+  CreateJsepTransportController(std::move(config));
   auto description = CreateSessionDescriptionWithoutBundle();
   EXPECT_TRUE(transport_controller_
                   ->SetLocalDescription(SdpType::kOffer, description.get())
@@ -848,7 +864,7 @@ TEST_F(JsepTransportControllerTest,
                   ->SetRemoteDescription(SdpType::kAnswer, description.get())
                   .ok());
   // The BUNDLE should be enabled, the incomplete video transport should be
-  // deleted and the states shoud be updated.
+  // deleted and the states should be updated.
   fake_video_dtls = static_cast<FakeDtlsTransport*>(
       transport_controller_->GetDtlsTransport(kVideoMid1));
   EXPECT_EQ(fake_audio_dtls, fake_video_dtls);
@@ -961,8 +977,7 @@ TEST_F(JsepTransportControllerTest, IceSignalingOccursOnNetworkThread) {
 
   EXPECT_EQ(ice_signaled_on_thread_, network_thread_.get());
 
-  network_thread_->Invoke<void>(RTC_FROM_HERE,
-                                [&] { transport_controller_.reset(); });
+  SendTask(network_thread_.get(), [&] { transport_controller_.reset(); });
 }
 
 // Test that if the TransportController was created with the
@@ -972,7 +987,7 @@ TEST_F(JsepTransportControllerTest, IceRoleNotRedetermined) {
   JsepTransportController::Config config;
   config.redetermine_role_on_ice_restart = false;
 
-  CreateJsepTransportController(config);
+  CreateJsepTransportController(std::move(config));
   // Let the `transport_controller_` be the controlled side initially.
   auto remote_offer = std::make_unique<cricket::SessionDescription>();
   AddAudioSection(remote_offer.get(), kAudioMid1, kIceUfrag1, kIcePwd1,
@@ -2302,7 +2317,7 @@ TEST_F(JsepTransportControllerTest, RejectFirstContentInBundleGroup) {
 TEST_F(JsepTransportControllerTest, ApplyNonRtcpMuxOfferWhenMuxingRequired) {
   JsepTransportController::Config config;
   config.rtcp_mux_policy = PeerConnectionInterface::kRtcpMuxPolicyRequire;
-  CreateJsepTransportController(config);
+  CreateJsepTransportController(std::move(config));
   auto local_offer = std::make_unique<cricket::SessionDescription>();
   AddAudioSection(local_offer.get(), kAudioMid1, kIceUfrag1, kIcePwd1,
                   cricket::ICEMODE_FULL, cricket::CONNECTIONROLE_ACTPASS,
@@ -2320,7 +2335,7 @@ TEST_F(JsepTransportControllerTest, ApplyNonRtcpMuxOfferWhenMuxingRequired) {
 TEST_F(JsepTransportControllerTest, ApplyNonRtcpMuxAnswerWhenMuxingRequired) {
   JsepTransportController::Config config;
   config.rtcp_mux_policy = PeerConnectionInterface::kRtcpMuxPolicyRequire;
-  CreateJsepTransportController(config);
+  CreateJsepTransportController(std::move(config));
   auto local_offer = std::make_unique<cricket::SessionDescription>();
   AddAudioSection(local_offer.get(), kAudioMid1, kIceUfrag1, kIcePwd1,
                   cricket::ICEMODE_FULL, cricket::CONNECTIONROLE_ACTPASS,
@@ -2684,6 +2699,48 @@ TEST_F(JsepTransportControllerTest, RollbackAndAddToDifferentBundleGroup) {
   mid3_transport = transport_controller_->GetRtpTransport(kMid3Audio);
   EXPECT_NE(mid1_transport, mid2_transport);
   EXPECT_EQ(mid2_transport, mid3_transport);
+}
+
+// Test that a bundle-only offer without rtcp-mux in the bundle-only section
+// is accepted.
+TEST_F(JsepTransportControllerTest, BundleOnlySectionDoesNotNeedRtcpMux) {
+  CreateJsepTransportController(JsepTransportController::Config());
+  cricket::ContentGroup bundle_group(cricket::GROUP_TYPE_BUNDLE);
+  bundle_group.AddContentName(kAudioMid1);
+  bundle_group.AddContentName(kVideoMid1);
+
+  auto offer = std::make_unique<cricket::SessionDescription>();
+  AddAudioSection(offer.get(), kAudioMid1, kIceUfrag1, kIcePwd1,
+                  cricket::ICEMODE_FULL, cricket::CONNECTIONROLE_ACTPASS,
+                  nullptr);
+  AddVideoSection(offer.get(), kVideoMid1, kIceUfrag1, kIcePwd1,
+                  cricket::ICEMODE_FULL, cricket::CONNECTIONROLE_ACTPASS,
+                  nullptr);
+  offer->AddGroup(bundle_group);
+
+  // Remove rtcp-mux and set bundle-only on the second content.
+  offer->contents()[1].media_description()->set_rtcp_mux(false);
+  offer->contents()[1].bundle_only = true;
+
+  EXPECT_TRUE(
+      transport_controller_->SetRemoteDescription(SdpType::kOffer, offer.get())
+          .ok());
+}
+
+// Test that with max-bundle a single unbundled m-line is accepted.
+TEST_F(JsepTransportControllerTest,
+       MaxBundleDoesNotRequireBundleForFirstMline) {
+  auto config = JsepTransportController::Config();
+  config.bundle_policy = PeerConnectionInterface::kBundlePolicyMaxBundle;
+  CreateJsepTransportController(std::move(config));
+
+  auto offer = std::make_unique<cricket::SessionDescription>();
+  AddAudioSection(offer.get(), kAudioMid1, kIceUfrag1, kIcePwd1,
+                  cricket::ICEMODE_FULL, cricket::CONNECTIONROLE_ACTPASS,
+                  nullptr);
+  EXPECT_TRUE(
+      transport_controller_->SetRemoteDescription(SdpType::kOffer, offer.get())
+          .ok());
 }
 
 }  // namespace webrtc

@@ -96,14 +96,16 @@ class DcSctpSocket : public DcSctpSocketInterface {
   SocketState state() const override;
   const DcSctpOptions& options() const override { return options_; }
   void SetMaxMessageSize(size_t max_message_size) override;
+  void SetStreamPriority(StreamID stream_id, StreamPriority priority) override;
+  StreamPriority GetStreamPriority(StreamID stream_id) const override;
   size_t buffered_amount(StreamID stream_id) const override;
   size_t buffered_amount_low_threshold(StreamID stream_id) const override;
   void SetBufferedAmountLowThreshold(StreamID stream_id, size_t bytes) override;
-  Metrics GetMetrics() const override;
+  absl::optional<Metrics> GetMetrics() const override;
   HandoverReadinessStatus GetHandoverReadiness() const override;
   absl::optional<DcSctpSocketHandoverState> GetHandoverStateAndClose() override;
   SctpImplementation peer_implementation() const override {
-    return peer_implementation_;
+    return metrics_.peer_implementation;
   }
   // Returns this socket's verification tag, or zero if not yet connected.
   VerificationTag verification_tag() const {
@@ -136,6 +138,14 @@ class DcSctpSocket : public DcSctpSocketInterface {
   bool IsConsistent() const;
   static constexpr absl::string_view ToString(DcSctpSocket::State state);
 
+  void CreateTransmissionControlBlock(const Capabilities& capabilities,
+                                      VerificationTag my_verification_tag,
+                                      TSN my_initial_tsn,
+                                      VerificationTag peer_verification_tag,
+                                      TSN peer_initial_tsn,
+                                      size_t a_rwnd,
+                                      TieTag tie_tag);
+
   // Changes the socket state, given a `reason` (for debugging/logging).
   void SetState(State state, absl::string_view reason);
   // Fills in `connect_params` with random verification tag and initial TSN.
@@ -155,6 +165,8 @@ class DcSctpSocket : public DcSctpSocketInterface {
   void MaybeSendShutdownOrAck();
   // If the socket is shutting down, responds SHUTDOWN to any incoming DATA.
   void MaybeSendShutdownOnPacketReceived(const SctpPacket& packet);
+  // If there are streams pending to be reset, send a request to reset them.
+  void MaybeSendResetStreamsRequest();
   // Sends a INIT chunk.
   void SendInit();
   // Sends a SHUTDOWN chunk.
@@ -167,8 +179,9 @@ class DcSctpSocket : public DcSctpSocketInterface {
   // Parses `payload`, which is a serialized packet that is just going to be
   // sent and prints all chunks.
   void DebugPrintOutgoing(rtc::ArrayView<const uint8_t> payload);
-  // Called whenever there may be reassembled messages, and delivers those.
-  void DeliverReassembledMessages();
+  // Called whenever data has been received, or the cumulative acknowledgment
+  // TSN has moved, that may result in delivering messages.
+  void MaybeDeliverMessages();
   // Returns true if there is a TCB, and false otherwise (and reports an error).
   bool ValidateHasTCB();
 
@@ -280,8 +293,6 @@ class DcSctpSocket : public DcSctpSocketInterface {
   State state_ = State::kClosed;
   // If the connection is established, contains a transmission control block.
   std::unique_ptr<TransmissionControlBlock> tcb_;
-
-  SctpImplementation peer_implementation_ = SctpImplementation::kUnknown;
 };
 }  // namespace dcsctp
 

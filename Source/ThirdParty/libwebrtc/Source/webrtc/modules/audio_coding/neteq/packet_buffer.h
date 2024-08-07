@@ -15,7 +15,6 @@
 #include "modules/audio_coding/neteq/decoder_database.h"
 #include "modules/audio_coding/neteq/packet.h"
 #include "modules/include/module_common_types_public.h"  // IsNewerTimestamp
-#include "rtc_base/constructor_magic.h"
 
 namespace webrtc {
 
@@ -50,6 +49,9 @@ class PacketBuffer {
 
   // Deletes all packets in the buffer before destroying the buffer.
   virtual ~PacketBuffer();
+
+  PacketBuffer(const PacketBuffer&) = delete;
+  PacketBuffer& operator=(const PacketBuffer&) = delete;
 
   // Flushes the buffer and deletes all packets in it.
   virtual void Flush(StatisticsCalculator* stats);
@@ -148,7 +150,7 @@ class PacketBuffer {
   // across.
   virtual size_t GetSpanSamples(size_t last_decoded_length,
                                 size_t sample_rate,
-                                bool count_dtx_waiting_time) const;
+                                bool count_waiting_time) const;
 
   // Returns true if the packet buffer contains any DTX or CNG packets.
   virtual bool ContainsDtxOrCngPacket(
@@ -173,7 +175,6 @@ class PacketBuffer {
   size_t max_number_of_packets_;
   PacketList buffer_;
   const TickTimer* tick_timer_;
-  RTC_DISALLOW_COPY_AND_ASSIGN(PacketBuffer);
 };
 
 }  // namespace webrtc

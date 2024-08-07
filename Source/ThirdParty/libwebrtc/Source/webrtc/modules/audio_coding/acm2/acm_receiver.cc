@@ -48,15 +48,25 @@ std::unique_ptr<NetEq> CreateNetEq(
 
 }  // namespace
 
-AcmReceiver::AcmReceiver(const AudioCodingModule::Config& config)
+AcmReceiver::Config::Config(
+    rtc::scoped_refptr<AudioDecoderFactory> decoder_factory)
+    : clock(*Clock::GetRealTimeClock()), decoder_factory(decoder_factory) {
+  // Post-decode VAD is disabled by default in NetEq, however, Audio
+  // Conference Mixer relies on VAD decisions and fails without them.
+  neteq_config.enable_post_decode_vad = true;
+}
+
+AcmReceiver::Config::Config(const Config&) = default;
+AcmReceiver::Config::~Config() = default;
+
+AcmReceiver::AcmReceiver(const Config& config)
     : last_audio_buffer_(new int16_t[AudioFrame::kMaxDataSizeSamples]),
       neteq_(CreateNetEq(config.neteq_factory,
                          config.neteq_config,
-                         config.clock,
+                         &config.clock,
                          config.decoder_factory)),
       clock_(config.clock),
       resampled_last_output_frame_(true) {
-  RTC_DCHECK(clock_);
   memset(last_audio_buffer_.get(), 0,
          sizeof(int16_t) * AudioFrame::kMaxDataSizeSamples);
 }
@@ -66,14 +76,14 @@ AcmReceiver::~AcmReceiver() = default;
 int AcmReceiver::SetMinimumDelay(int delay_ms) {
   if (neteq_->SetMinimumDelay(delay_ms))
     return 0;
-  RTC_LOG(LERROR) << "AcmReceiver::SetExtraDelay " << delay_ms;
+  RTC_LOG(LS_ERROR) << "AcmReceiver::SetExtraDelay " << delay_ms;
   return -1;
 }
 
 int AcmReceiver::SetMaximumDelay(int delay_ms) {
   if (neteq_->SetMaximumDelay(delay_ms))
     return 0;
-  RTC_LOG(LERROR) << "AcmReceiver::SetExtraDelay " << delay_ms;
+  RTC_LOG(LS_ERROR) << "AcmReceiver::SetExtraDelay " << delay_ms;
   return -1;
 }
 
@@ -134,9 +144,9 @@ int AcmReceiver::InsertPacket(const RTPHeader& rtp_header,
   }  // `mutex_` is released.
 
   if (neteq_->InsertPacket(rtp_header, incoming_payload) < 0) {
-    RTC_LOG(LERROR) << "AcmReceiver::InsertPacket "
-                    << static_cast<int>(rtp_header.payloadType)
-                    << " Failed to insert packet";
+    RTC_LOG(LS_ERROR) << "AcmReceiver::InsertPacket "
+                      << static_cast<int>(rtp_header.payloadType)
+                      << " Failed to insert packet";
     return -1;
   }
   return 0;
@@ -150,7 +160,7 @@ int AcmReceiver::GetAudio(int desired_freq_hz,
   int current_sample_rate_hz = 0;
   if (neteq_->GetAudio(audio_frame, muted, &current_sample_rate_hz) !=
       NetEq::kOK) {
-    RTC_LOG(LERROR) << "AcmReceiver::GetAudio - NetEq Failed.";
+    RTC_LOG(LS_ERROR) << "AcmReceiver::GetAudio - NetEq Failed.";
     return -1;
   }
 
@@ -170,8 +180,8 @@ int AcmReceiver::GetAudio(int desired_freq_hz,
         audio_frame->num_channels_, AudioFrame::kMaxDataSizeSamples,
         temp_output);
     if (samples_per_channel_int < 0) {
-      RTC_LOG(LERROR) << "AcmReceiver::GetAudio - "
-                         "Resampling last_audio_buffer_ failed.";
+      RTC_LOG(LS_ERROR) << "AcmReceiver::GetAudio - "
+                           "Resampling last_audio_buffer_ failed.";
       return -1;
     }
   }
@@ -185,7 +195,7 @@ int AcmReceiver::GetAudio(int desired_freq_hz,
         audio_frame->num_channels_, AudioFrame::kMaxDataSizeSamples,
         audio_frame->mutable_data());
     if (samples_per_channel_int < 0) {
-      RTC_LOG(LERROR)
+      RTC_LOG(LS_ERROR)
           << "AcmReceiver::GetAudio - Resampling audio_buffer_ failed.";
       return -1;
     }
@@ -287,6 +297,8 @@ void AcmReceiver::GetNetworkStatistics(
   acm_stat->jitterBufferDelayMs = neteq_lifetime_stat.jitter_buffer_delay_ms;
   acm_stat->jitterBufferTargetDelayMs =
       neteq_lifetime_stat.jitter_buffer_target_delay_ms;
+  acm_stat->jitterBufferMinimumDelayMs =
+      neteq_lifetime_stat.jitter_buffer_minimum_delay_ms;
   acm_stat->jitterBufferEmittedCount =
       neteq_lifetime_stat.jitter_buffer_emitted_count;
   acm_stat->delayedPacketOutageSamples =
@@ -302,13 +314,12 @@ void AcmReceiver::GetNetworkStatistics(
       neteq_lifetime_stat.removed_samples_for_acceleration;
   acm_stat->fecPacketsReceived = neteq_lifetime_stat.fec_packets_received;
   acm_stat->fecPacketsDiscarded = neteq_lifetime_stat.fec_packets_discarded;
+  acm_stat->packetsDiscarded = neteq_lifetime_stat.packets_discarded;
 
   NetEqOperationsAndState neteq_operations_and_state =
       neteq_->GetOperationsAndState();
   acm_stat->packetBufferFlushes =
       neteq_operations_and_state.packet_buffer_flushes;
-  acm_stat->packetsDiscarded =
-      neteq_operations_and_state.discarded_primary_packets;
 }
 
 int AcmReceiver::EnableNack(size_t max_nack_list_size) {
@@ -336,7 +347,7 @@ uint32_t AcmReceiver::NowInTimestamp(int decoder_sampling_rate) const {
   // We masked 6 most significant bits of 32-bit so there is no overflow in
   // the conversion from milliseconds to timestamp.
   const uint32_t now_in_ms =
-      static_cast<uint32_t>(clock_->TimeInMilliseconds() & 0x03ffffff);
+      static_cast<uint32_t>(clock_.TimeInMilliseconds() & 0x03ffffff);
   return static_cast<uint32_t>((decoder_sampling_rate / 1000) * now_in_ms);
 }
 

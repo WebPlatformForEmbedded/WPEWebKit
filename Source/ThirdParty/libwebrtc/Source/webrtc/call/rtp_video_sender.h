@@ -21,9 +21,11 @@
 #include "api/call/transport.h"
 #include "api/fec_controller.h"
 #include "api/fec_controller_override.h"
+#include "api/field_trials_view.h"
 #include "api/rtc_event_log/rtc_event_log.h"
 #include "api/sequence_checker.h"
-#include "api/transport/field_trial_based_config.h"
+#include "api/task_queue/task_queue_base.h"
+#include "api/task_queue/task_queue_factory.h"
 #include "api/video_codecs/video_encoder.h"
 #include "call/rtp_config.h"
 #include "call/rtp_payload_params.h"
@@ -35,7 +37,6 @@
 #include "modules/rtp_rtcp/source/rtp_sender_video.h"
 #include "modules/rtp_rtcp/source/rtp_sequence_number_map.h"
 #include "modules/rtp_rtcp/source/rtp_video_header.h"
-#include "rtc_base/constructor_magic.h"
 #include "rtc_base/rate_limiter.h"
 #include "rtc_base/synchronization/mutex.h"
 #include "rtc_base/thread_annotations.h"
@@ -74,7 +75,7 @@ class RtpVideoSender : public RtpVideoSenderInterface,
   // Rtp modules are assumed to be sorted in simulcast index order.
   RtpVideoSender(
       Clock* clock,
-      std::map<uint32_t, RtpState> suspended_ssrcs,
+      const std::map<uint32_t, RtpState>& suspended_ssrcs,
       const std::map<uint32_t, RtpPayloadState>& states,
       const RtpConfig& rtp_config,
       int rtcp_report_interval_ms,
@@ -86,16 +87,19 @@ class RtpVideoSender : public RtpVideoSenderInterface,
       std::unique_ptr<FecController> fec_controller,
       FrameEncryptorInterface* frame_encryptor,
       const CryptoOptions& crypto_options,  // move inside RtpTransport
-      rtc::scoped_refptr<FrameTransformerInterface> frame_transformer);
+      rtc::scoped_refptr<FrameTransformerInterface> frame_transformer,
+      const FieldTrialsView& field_trials,
+      TaskQueueFactory* task_queue_factory);
   ~RtpVideoSender() override;
 
-  // RtpVideoSender will only route packets if being active, all packets will be
-  // dropped otherwise.
-  void SetActive(bool active) RTC_LOCKS_EXCLUDED(mutex_) override;
+  RtpVideoSender(const RtpVideoSender&) = delete;
+  RtpVideoSender& operator=(const RtpVideoSender&) = delete;
+
   // Sets the sending status of the rtp modules and appropriately sets the
   // payload router to active if any rtp modules are active.
-  void SetActiveModules(const std::vector<bool> active_modules)
+  void SetActiveModules(const std::vector<bool>& active_modules)
       RTC_LOCKS_EXCLUDED(mutex_) override;
+  void Stop() RTC_LOCKS_EXCLUDED(mutex_) override;
   bool IsActive() RTC_LOCKS_EXCLUDED(mutex_) override;
 
   void OnNetworkAvailability(bool network_available)
@@ -114,6 +118,11 @@ class RtpVideoSender : public RtpVideoSenderInterface,
                         uint32_t* sent_video_rate_bps,
                         uint32_t* sent_nack_rate_bps,
                         uint32_t* sent_fec_rate_bps)
+      RTC_LOCKS_EXCLUDED(mutex_) override;
+
+  // 'retransmission_mode' is either a value of enum RetransmissionMode, or
+  // computed with bitwise operators on values of enum RetransmissionMode.
+  void SetRetransmissionMode(int retransmission_mode)
       RTC_LOCKS_EXCLUDED(mutex_) override;
 
   // Implements FecControllerOverride.
@@ -151,32 +160,31 @@ class RtpVideoSender : public RtpVideoSenderInterface,
 
  private:
   bool IsActiveLocked() RTC_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
-  void SetActiveModulesLocked(const std::vector<bool> active_modules)
+  void SetActiveModulesLocked(const std::vector<bool>& active_modules)
       RTC_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
   void UpdateModuleSendingState() RTC_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
   void ConfigureProtection();
-  void ConfigureSsrcs();
-  void ConfigureRids();
+  void ConfigureSsrcs(const std::map<uint32_t, RtpState>& suspended_ssrcs);
   bool NackEnabled() const;
-  uint32_t GetPacketizationOverheadRate() const;
+  DataRate GetPostEncodeOverhead() const;
   DataRate CalculateOverheadRate(DataRate data_rate,
                                  DataSize packet_size,
                                  DataSize overhead_per_packet,
                                  Frequency framerate) const;
 
-  const FieldTrialBasedConfig field_trials_;
-  const bool send_side_bwe_with_overhead_;
+  const FieldTrialsView& field_trials_;
   const bool use_frame_rate_for_overhead_;
   const bool has_packet_feedback_;
-  const bool simulate_vp9_structure_;
-  const bool simulate_generic_structure_;
 
-  // TODO(holmer): Remove mutex_ once RtpVideoSender runs on the
+  // Semantically equivalent to checking for `transport_->GetWorkerQueue()`
+  // but some tests need to be updated to call from the correct context.
+  RTC_NO_UNIQUE_ADDRESS SequenceChecker transport_checker_;
+
+  // TODO(bugs.webrtc.org/13517): Remove mutex_ once RtpVideoSender runs on the
   // transport task queue.
   mutable Mutex mutex_;
   bool active_ RTC_GUARDED_BY(mutex_);
-
-  std::map<uint32_t, RtpState> suspended_ssrcs_;
+  bool registered_for_feedback_ RTC_GUARDED_BY(transport_checker_) = false;
 
   const std::unique_ptr<FecController> fec_controller_;
   bool fec_allowed_ RTC_GUARDED_BY(mutex_);
@@ -208,8 +216,6 @@ class RtpVideoSender : public RtpVideoSenderInterface,
   // This map is set at construction time and never changed, but it's
   // non-trivial to make it properly const.
   std::map<uint32_t, RtpRtcpInterface*> ssrc_to_rtp_module_;
-
-  RTC_DISALLOW_COPY_AND_ASSIGN(RtpVideoSender);
 };
 
 }  // namespace webrtc

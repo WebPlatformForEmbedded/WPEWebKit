@@ -52,8 +52,7 @@ class UsedIds {
 
     if (IsIdUsed(original_id)) {
       new_id = FindUnusedId();
-      RTC_LOG(LS_WARNING) << "Duplicate id found. Reassigning from "
-                          << original_id << " to " << new_id;
+      // Duplicate id found. Reassign from the original id to the new.
       idstruct->id = new_id;
     }
     SetIdUsed(new_id);
@@ -96,6 +95,16 @@ class UsedPayloadTypes : public UsedIds<Codec> {
   UsedPayloadTypes()
       : UsedIds<Codec>(kFirstDynamicPayloadTypeLowerRange,
                        kLastDynamicPayloadTypeUpperRange) {}
+
+  // Check if a payload type is valid. The range [64-95] is forbidden
+  // when rtcp-mux is used.
+  static bool IsIdValid(Codec codec, bool rtcp_mux) {
+    if (rtcp_mux && (codec.id > kLastDynamicPayloadTypeLowerRange &&
+                     codec.id < kFirstDynamicPayloadTypeUpperRange)) {
+      return false;
+    }
+    return codec.id >= 0 && codec.id <= kLastDynamicPayloadTypeUpperRange;
+  }
 
  protected:
   bool IsIdUsed(int new_id) override {

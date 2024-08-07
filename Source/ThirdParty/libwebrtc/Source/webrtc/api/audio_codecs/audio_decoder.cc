@@ -10,7 +10,6 @@
 
 #include "api/audio_codecs/audio_decoder.h"
 
-
 #include <memory>
 #include <utility>
 
@@ -161,9 +160,10 @@ AudioDecoder::SpeechType AudioDecoder::ConvertSpeechType(int16_t type) {
     case 2:
       return kComfortNoise;
     default:
-      RTC_NOTREACHED();
+      RTC_DCHECK_NOTREACHED();
       return kSpeech;
   }
 }
 
+constexpr int AudioDecoder::kMaxNumberOfChannels;
 }  // namespace webrtc

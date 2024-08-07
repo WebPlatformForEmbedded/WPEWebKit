@@ -18,6 +18,7 @@
 #include <string>
 #include <vector>
 
+#include "absl/strings/string_view.h"
 #include "absl/types/optional.h"
 #include "api/crypto/crypto_options.h"
 #include "api/fec_controller.h"
@@ -45,7 +46,6 @@ class TargetTransferRateObserver;
 class Transport;
 class PacketRouter;
 class RtpVideoSenderInterface;
-class RtcpBandwidthObserver;
 class RtpPacketSender;
 
 struct RtpSenderObservers {
@@ -57,7 +57,6 @@ struct RtpSenderObservers {
   BitrateStatisticsObserver* bitrate_observer;
   FrameCountObserver* frame_count_observer;
   RtcpPacketTypeCounterObserver* rtcp_type_observer;
-  SendSideDelayObserver* send_delay_observer;
   SendPacketObserver* send_packet_observer;
 };
 
@@ -92,11 +91,10 @@ struct RtpSenderFrameEncryptionConfig {
 class RtpTransportControllerSendInterface {
  public:
   virtual ~RtpTransportControllerSendInterface() {}
-  virtual rtc::TaskQueue* GetWorkerQueue() = 0;
   virtual PacketRouter* packet_router() = 0;
 
   virtual RtpVideoSenderInterface* CreateRtpVideoSender(
-      std::map<uint32_t, RtpState> suspended_ssrcs,
+      const std::map<uint32_t, RtpState>& suspended_ssrcs,
       // TODO(holmer): Move states into RtpTransportControllerSend.
       const std::map<uint32_t, RtpPayloadState>& states,
       const RtpConfig& rtp_config,
@@ -127,10 +125,10 @@ class RtpTransportControllerSendInterface {
   virtual void RegisterTargetTransferRateObserver(
       TargetTransferRateObserver* observer) = 0;
   virtual void OnNetworkRouteChanged(
-      const std::string& transport_name,
+      absl::string_view transport_name,
       const rtc::NetworkRoute& network_route) = 0;
   virtual void OnNetworkAvailability(bool network_available) = 0;
-  virtual RtcpBandwidthObserver* GetBandwidthObserver() = 0;
+  virtual NetworkLinkRtcpObserver* GetRtcpObserver() = 0;
   virtual int64_t GetPacerQueuingDelayMs() const = 0;
   virtual absl::optional<Timestamp> GetFirstPacketTime() const = 0;
   virtual void EnablePeriodicAlrProbing(bool enable) = 0;

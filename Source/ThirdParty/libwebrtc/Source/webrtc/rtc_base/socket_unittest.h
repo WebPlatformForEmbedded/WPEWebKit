@@ -11,6 +11,7 @@
 #ifndef RTC_BASE_SOCKET_UNITTEST_H_
 #define RTC_BASE_SOCKET_UNITTEST_H_
 
+#include "absl/strings/string_view.h"
 #include "rtc_base/gunit.h"
 #include "rtc_base/thread.h"
 
@@ -61,6 +62,8 @@ class SocketTest : public ::testing::Test {
   void TestGetSetOptionsIPv6();
   void TestSocketRecvTimestampIPv4();
   void TestSocketRecvTimestampIPv6();
+  void TestUdpSocketRecvTimestampUseRtcEpochIPv4();
+  void TestUdpSocketRecvTimestampUseRtcEpochIPv6();
 
   static const int kTimeout = 5000;  // ms
   const IPAddress kIPv4Loopback;
@@ -74,7 +77,7 @@ class SocketTest : public ::testing::Test {
  private:
   void ConnectInternal(const IPAddress& loopback);
   void ConnectWithDnsLookupInternal(const IPAddress& loopback,
-                                    const std::string& host);
+                                    absl::string_view host);
   void ConnectFailInternal(const IPAddress& loopback);
 
   void ConnectWithDnsLookupFailInternal(const IPAddress& loopback);
@@ -91,6 +94,7 @@ class SocketTest : public ::testing::Test {
   void UdpReadyToSend(const IPAddress& loopback);
   void GetSetOptionsInternal(const IPAddress& loopback);
   void SocketRecvTimestamp(const IPAddress& loopback);
+  void UdpSocketRecvTimestampUseRtcEpoch(const IPAddress& loopback);
 
   SocketFactory* socket_factory_;
 };

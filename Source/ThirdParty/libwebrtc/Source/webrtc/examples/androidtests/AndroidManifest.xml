@@ -14,13 +14,12 @@
       package="org.appspot.apprtc.test">
 
     <uses-permission android:name="android.permission.RUN_INSTRUMENTATION" />
-    <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="21" />
 
     <application>
         <uses-library android:name="android.test.runner" />
     </application>
 
-    <instrumentation android:name="android.support.test.runner.AndroidJUnitRunner"
+    <instrumentation android:name="androidx.test.runner.AndroidJUnitRunner"
         tools:ignore="MissingPrefix"
         android:targetPackage="org.appspot.apprtc"
         android:label="Tests for AppRTCMobile"/>

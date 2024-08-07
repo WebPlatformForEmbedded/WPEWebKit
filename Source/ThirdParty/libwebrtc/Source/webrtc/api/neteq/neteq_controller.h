@@ -13,7 +13,6 @@
 
 #include <cstddef>
 #include <cstdint>
-
 #include <functional>
 #include <memory>
 
@@ -81,7 +80,7 @@ class NetEqController {
     bool dtx_or_cng;
     size_t num_samples;
     size_t span_samples;
-    size_t span_samples_no_dtx;
+    size_t span_samples_wait_time;
     size_t num_packets;
   };
 
@@ -144,13 +143,6 @@ class NetEqController {
   virtual bool SetBaseMinimumDelay(int delay_ms) = 0;
   virtual int GetBaseMinimumDelay() const = 0;
 
-  // These methods test the `cng_state_` for different conditions.
-  virtual bool CngRfc3389On() const = 0;
-  virtual bool CngOff() const = 0;
-
-  // Resets the `cng_state_` to kCngOff.
-  virtual void SetCngOff() = 0;
-
   // Reports back to DecisionLogic whether the decision to do expand remains or
   // not. Note that this is necessary, since an expand decision can be changed
   // to kNormal in NetEqImpl::GetDecision if there is still enough data in the
@@ -163,6 +155,12 @@ class NetEqController {
   // Returns the target buffer level in ms.
   virtual int TargetLevelMs() const = 0;
 
+  // Returns the target buffer level in ms as it would be if no minimum or
+  // maximum delay was set.
+  // TODO(bugs.webrtc.org/14270): Make pure virtual once all implementations are
+  // updated.
+  virtual int UnlimitedTargetLevelMs() const { return 0; }
+
   // Notify the NetEqController that a packet has arrived. Returns the relative
   // arrival delay, if it can be computed.
   virtual absl::optional<int> PacketArrived(int fs_hz,
@@ -170,7 +168,7 @@ class NetEqController {
                                             const PacketArrivedInfo& info) = 0;
 
   // Notify the NetEqController that we are currently in muted state.
-  // TODO(ivoc): Make pure virtual when downstream is updated.
+  // TODO(bugs.webrtc.org/14270): Make pure virtual when downstream is updated.
   virtual void NotifyMutedState() {}
 
   // Returns true if a peak was found.

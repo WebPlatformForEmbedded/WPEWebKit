@@ -26,9 +26,9 @@
 #include "call/syncable.h"
 #include "call/video_receive_stream.h"
 #include "modules/rtp_rtcp/include/receive_statistics.h"
+#include "modules/rtp_rtcp/include/recovered_packet_receiver.h"
 #include "modules/rtp_rtcp/include/remote_ntp_time_estimator.h"
 #include "modules/rtp_rtcp/include/rtp_header_extension_map.h"
-#include "modules/rtp_rtcp/include/rtp_rtcp_defines.h"
 #include "modules/rtp_rtcp/source/absolute_capture_time_interpolator.h"
 #include "modules/rtp_rtcp/source/capture_clock_offset_updater.h"
 #include "modules/rtp_rtcp/source/rtp_dependency_descriptor_extension.h"
@@ -36,23 +36,22 @@
 #include "modules/rtp_rtcp/source/rtp_rtcp_impl2.h"
 #include "modules/rtp_rtcp/source/rtp_rtcp_interface.h"
 #include "modules/rtp_rtcp/source/rtp_video_header.h"
+#include "modules/rtp_rtcp/source/rtp_video_stream_receiver_frame_transformer_delegate.h"
 #include "modules/rtp_rtcp/source/video_rtp_depacketizer.h"
 #include "modules/video_coding/h264_sps_pps_tracker.h"
-#ifndef DISABLE_H265
+#ifdef WEBRTC_USE_H265
 #include "modules/video_coding/h265_vps_sps_pps_tracker.h"
 #endif
 #include "modules/video_coding/loss_notification_controller.h"
 #include "modules/video_coding/nack_requester.h"
 #include "modules/video_coding/packet_buffer.h"
 #include "modules/video_coding/rtp_frame_reference_finder.h"
-#include "modules/video_coding/unique_timestamp_counter.h"
-#include "rtc_base/constructor_magic.h"
 #include "rtc_base/experiments/field_trial_parser.h"
-#include "rtc_base/numerics/sequence_number_util.h"
+#include "rtc_base/numerics/sequence_number_unwrapper.h"
 #include "rtc_base/system/no_unique_address.h"
 #include "rtc_base/thread_annotations.h"
 #include "video/buffered_frame_decryptor.h"
-#include "video/rtp_video_stream_receiver_frame_transformer_delegate.h"
+#include "video/unique_timestamp_counter.h"
 
 namespace webrtc {
 
@@ -68,6 +67,7 @@ class RtpVideoStreamReceiver2 : public LossNotificationSender,
                                 public RecoveredPacketReceiver,
                                 public RtpPacketSinkInterface,
                                 public KeyFrameRequestSender,
+                                public NackSender,
                                 public OnDecryptedFrameCallback,
                                 public OnDecryptionStatusChangeCallback,
                                 public RtpVideoFrameReceiver {
@@ -89,24 +89,28 @@ class RtpVideoStreamReceiver2 : public LossNotificationSender,
       // stream is registered as a candidate for sending REMB and transport
       // feedback.
       PacketRouter* packet_router,
-      const VideoReceiveStream::Config* config,
+      const VideoReceiveStreamInterface::Config* config,
       ReceiveStatistics* rtp_receive_statistics,
       RtcpPacketTypeCounterObserver* rtcp_packet_type_counter_observer,
       RtcpCnameCallback* rtcp_cname_callback,
       NackPeriodicProcessor* nack_periodic_processor,
-      NackSender* nack_sender,
       // The KeyFrameRequestSender is optional; if not provided, key frame
       // requests are sent via the internal RtpRtcp module.
-      KeyFrameRequestSender* keyframe_request_sender,
       OnCompleteFrameCallback* complete_frame_callback,
       rtc::scoped_refptr<FrameDecryptorInterface> frame_decryptor,
-      rtc::scoped_refptr<FrameTransformerInterface> frame_transformer);
+      rtc::scoped_refptr<FrameTransformerInterface> frame_transformer,
+      const FieldTrialsView& field_trials,
+      RtcEventLog* event_log);
   ~RtpVideoStreamReceiver2() override;
 
   void AddReceiveCodec(uint8_t payload_type,
                        VideoCodecType video_codec,
                        const std::map<std::string, std::string>& codec_params,
                        bool raw_payload);
+  void RemoveReceiveCodec(uint8_t payload_type);
+
+  // Clears state for all receive codecs added via `AddReceiveCodec`.
+  void RemoveReceiveCodecs();
 
   void StartReceive();
   void StopReceive();
@@ -137,10 +141,14 @@ class RtpVideoStreamReceiver2 : public LossNotificationSender,
                              const RTPVideoHeader& video);
 
   // Implements RecoveredPacketReceiver.
-  void OnRecoveredPacket(const uint8_t* packet, size_t packet_length) override;
+  void OnRecoveredPacket(const RtpPacketReceived& packet) override;
 
   // Send an RTCP keyframe request.
   void RequestKeyFrame() override;
+
+  // Implements NackSender.
+  void SendNack(const std::vector<uint16_t>& sequence_numbers,
+                bool buffering_allowed) override;
 
   // Implements LossNotificationSender.
   void SendLossNotification(uint16_t last_decoded_seq_num,
@@ -148,19 +156,10 @@ class RtpVideoStreamReceiver2 : public LossNotificationSender,
                             bool decodability_flag,
                             bool buffering_allowed) override;
 
-  bool IsUlpfecEnabled() const;
-  bool IsRetransmissionsEnabled() const;
-
   // Returns true if a decryptor is attached and frames can be decrypted.
   // Updated by OnDecryptionStatusChangeCallback. Note this refers to Frame
   // Decryption not SRTP.
   bool IsDecryptable() const;
-
-  // Request packet retransmits via NACK. Called via
-  // VideoReceiveStream2::SendNack, which gets called when
-  // RtpVideoStreamReceiver2::RtcpFeedbackBuffer's SendNack and
-  // SendBufferedRtcpFeedback methods (see `rtcp_feedback_buffer_` below).
-  void RequestPacketRetransmit(const std::vector<uint16_t>& sequence_numbers);
 
   // Implements OnDecryptedFrameCallback.
   void OnDecryptedFrame(std::unique_ptr<RtpFrameObject> frame) override;
@@ -179,14 +178,36 @@ class RtpVideoStreamReceiver2 : public LossNotificationSender,
   void SetDepacketizerToDecoderFrameTransformer(
       rtc::scoped_refptr<FrameTransformerInterface> frame_transformer);
 
-  // Updates the rtp header extensions at runtime. Must be called on the
-  // `packet_sequence_checker_` thread.
-  void SetRtpExtensions(const std::vector<RtpExtension>& extensions);
-
-  // Called by VideoReceiveStream when stats are updated.
+  // Called by VideoReceiveStreamInterface when stats are updated.
   void UpdateRtt(int64_t max_rtt_ms);
 
+  // Called when the local_ssrc is changed to match with a sender.
+  void OnLocalSsrcChange(uint32_t local_ssrc);
+
+  // Forwards the call to set rtcp_sender_ to the RTCP mode of the rtcp sender.
+  void SetRtcpMode(RtcpMode mode);
+
+  void SetReferenceTimeReport(bool enabled);
+
+  // Sets or clears the callback sink that gets called for RTP packets. Used for
+  // packet handlers such as FlexFec. Must be called on the packet delivery
+  // thread (same context as `OnRtpPacket` is called on).
+  // TODO(bugs.webrtc.org/11993): Packet delivery thread today means `worker
+  // thread` but will be `network thread`.
+  void SetPacketSink(RtpPacketSinkInterface* packet_sink);
+
+  // Turns on/off loss notifications. Must be called on the packet delivery
+  // thread.
+  void SetLossNotificationEnabled(bool enabled);
+
+  void SetNackHistory(TimeDelta history);
+
+  int ulpfec_payload_type() const;
+  int red_payload_type() const;
+  void SetProtectionPayloadTypes(int red_payload_type, int ulpfec_payload_type);
+
   absl::optional<int64_t> LastReceivedPacketMs() const;
+  absl::optional<uint32_t> LastReceivedFrameRtpTimestamp() const;
   absl::optional<int64_t> LastReceivedKeyframePacketMs() const;
 
  private:
@@ -227,6 +248,8 @@ class RtpVideoStreamReceiver2 : public LossNotificationSender,
 
     // Send all RTCP feedback messages buffered thus far.
     void SendBufferedRtcpFeedback();
+
+    void ClearLossNotificationState();
 
    private:
     // LNTF-related state.
@@ -275,7 +298,6 @@ class RtpVideoStreamReceiver2 : public LossNotificationSender,
       RTC_RUN_ON(packet_sequence_checker_);
   void NotifyReceiverOfEmptyPacket(uint16_t seq_num)
       RTC_RUN_ON(packet_sequence_checker_);
-  void UpdateHistograms();
   bool IsRedEnabled() const;
   void InsertSpsPpsIntoTracker(uint8_t payload_type)
       RTC_RUN_ON(packet_sequence_checker_);
@@ -290,21 +312,24 @@ class RtpVideoStreamReceiver2 : public LossNotificationSender,
                                      bool is_keyframe)
       RTC_RUN_ON(packet_sequence_checker_);
 
+  const FieldTrialsView& field_trials_;
+  TaskQueueBase* const worker_queue_;
   Clock* const clock_;
-  // Ownership of this object lies with VideoReceiveStream, which owns `this`.
-  const VideoReceiveStream::Config& config_;
+  // Ownership of this object lies with VideoReceiveStreamInterface, which owns
+  // `this`.
+  const VideoReceiveStreamInterface::Config& config_;
   PacketRouter* const packet_router_;
 
   RemoteNtpTimeEstimator ntp_estimator_;
 
-  RtpHeaderExtensionMap rtp_header_extensions_
-      RTC_GUARDED_BY(packet_sequence_checker_);
   // Set by the field trial WebRTC-ForcePlayoutDelay to override any playout
   // delay that is specified in the received packets.
   FieldTrialOptional<int> forced_playout_delay_max_ms_;
   FieldTrialOptional<int> forced_playout_delay_min_ms_;
   ReceiveStatistics* const rtp_receive_statistics_;
-  std::unique_ptr<UlpfecReceiver> ulpfec_receiver_;
+  std::unique_ptr<UlpfecReceiver> ulpfec_receiver_
+      RTC_GUARDED_BY(packet_sequence_checker_);
+  int red_payload_type_ RTC_GUARDED_BY(packet_sequence_checker_);
 
   RTC_NO_UNIQUE_ADDRESS SequenceChecker worker_task_checker_;
   // TODO(bugs.webrtc.org/11993): This checker conceptually represents
@@ -315,17 +340,23 @@ class RtpVideoStreamReceiver2 : public LossNotificationSender,
   // that belong to the network thread. Once the packets are fully delivered
   // on the network thread, this comment will be deleted.
   RTC_NO_UNIQUE_ADDRESS SequenceChecker packet_sequence_checker_;
+  RtpPacketSinkInterface* packet_sink_ RTC_GUARDED_BY(packet_sequence_checker_);
   bool receiving_ RTC_GUARDED_BY(packet_sequence_checker_);
   int64_t last_packet_log_ms_ RTC_GUARDED_BY(packet_sequence_checker_);
 
   const std::unique_ptr<ModuleRtpRtcpImpl2> rtp_rtcp_;
 
+  NackPeriodicProcessor* const nack_periodic_processor_;
   OnCompleteFrameCallback* complete_frame_callback_;
-  KeyFrameRequestSender* const keyframe_request_sender_;
+  const KeyFrameReqMethod keyframe_request_method_;
 
   RtcpFeedbackBuffer rtcp_feedback_buffer_;
-  const std::unique_ptr<NackRequester> nack_module_;
-  std::unique_ptr<LossNotificationController> loss_notification_controller_;
+  // TODO(tommi): Consider absl::optional<NackRequester> instead of unique_ptr
+  // since nack is usually configured.
+  std::unique_ptr<NackRequester> nack_module_
+      RTC_GUARDED_BY(packet_sequence_checker_);
+  std::unique_ptr<LossNotificationController> loss_notification_controller_
+      RTC_GUARDED_BY(packet_sequence_checker_);
 
   video_coding::PacketBuffer packet_buffer_
       RTC_GUARDED_BY(packet_sequence_checker_);
@@ -343,6 +374,8 @@ class RtpVideoStreamReceiver2 : public LossNotificationSender,
   // absl::nullopt when `video_structure_ == nullptr`;
   absl::optional<int64_t> video_structure_frame_id_
       RTC_GUARDED_BY(packet_sequence_checker_);
+  Timestamp last_logged_failed_to_parse_dd_
+      RTC_GUARDED_BY(packet_sequence_checker_) = Timestamp::MinusInfinity();
 
   std::unique_ptr<RtpFrameReferenceFinder> reference_finder_
       RTC_GUARDED_BY(packet_sequence_checker_);
@@ -360,7 +393,7 @@ class RtpVideoStreamReceiver2 : public LossNotificationSender,
   std::map<uint8_t, std::unique_ptr<VideoRtpDepacketizer>> payload_type_map_
       RTC_GUARDED_BY(packet_sequence_checker_);
 
-#ifndef DISABLE_H265
+#ifdef WEBRTC_USE_H265
   video_coding::H265VpsSpsPpsTracker h265_tracker_;
 #endif
 
@@ -410,6 +443,9 @@ class RtpVideoStreamReceiver2 : public LossNotificationSender,
       RTC_GUARDED_BY(packet_sequence_checker_);
   std::map<int64_t, RtpPacketInfo> packet_infos_
       RTC_GUARDED_BY(packet_sequence_checker_);
+
+  Timestamp next_keyframe_request_for_missing_video_structure_ =
+      Timestamp::MinusInfinity();
 };
 
 }  // namespace webrtc

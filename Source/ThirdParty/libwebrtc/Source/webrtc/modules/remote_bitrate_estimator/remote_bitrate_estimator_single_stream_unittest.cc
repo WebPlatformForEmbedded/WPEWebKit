@@ -11,7 +11,6 @@
 #include "modules/remote_bitrate_estimator/remote_bitrate_estimator_single_stream.h"
 
 #include "modules/remote_bitrate_estimator/remote_bitrate_estimator_unittest_helper.h"
-#include "rtc_base/constructor_magic.h"
 #include "test/gtest.h"
 
 namespace webrtc {
@@ -19,13 +18,18 @@ namespace webrtc {
 class RemoteBitrateEstimatorSingleTest : public RemoteBitrateEstimatorTest {
  public:
   RemoteBitrateEstimatorSingleTest() {}
+
+  RemoteBitrateEstimatorSingleTest(const RemoteBitrateEstimatorSingleTest&) =
+      delete;
+  RemoteBitrateEstimatorSingleTest& operator=(
+      const RemoteBitrateEstimatorSingleTest&) = delete;
+
   virtual void SetUp() {
     bitrate_estimator_.reset(new RemoteBitrateEstimatorSingleStream(
         bitrate_observer_.get(), &clock_));
   }
 
  protected:
-  RTC_DISALLOW_COPY_AND_ASSIGN(RemoteBitrateEstimatorSingleTest);
 };
 
 TEST_F(RemoteBitrateEstimatorSingleTest, InitialBehavior) {
@@ -49,7 +53,7 @@ TEST_F(RemoteBitrateEstimatorSingleTest, CapacityDropOneStreamWrap) {
 }
 
 TEST_F(RemoteBitrateEstimatorSingleTest, CapacityDropTwoStreamsWrap) {
-  CapacityDropTestHelper(2, true, 767, 0);
+  CapacityDropTestHelper(2, true, 567, 0);
 }
 
 TEST_F(RemoteBitrateEstimatorSingleTest, CapacityDropThreeStreamsWrap) {
@@ -57,11 +61,11 @@ TEST_F(RemoteBitrateEstimatorSingleTest, CapacityDropThreeStreamsWrap) {
 }
 
 TEST_F(RemoteBitrateEstimatorSingleTest, CapacityDropThirteenStreamsWrap) {
-  CapacityDropTestHelper(13, true, 567, 0);
+  CapacityDropTestHelper(13, true, 767, 0);
 }
 
 TEST_F(RemoteBitrateEstimatorSingleTest, CapacityDropNineteenStreamsWrap) {
-  CapacityDropTestHelper(19, true, 700, 0);
+  CapacityDropTestHelper(19, true, 767, 0);
 }
 
 TEST_F(RemoteBitrateEstimatorSingleTest, CapacityDropThirtyStreamsWrap) {

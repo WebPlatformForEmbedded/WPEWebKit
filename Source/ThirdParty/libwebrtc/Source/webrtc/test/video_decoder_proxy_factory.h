@@ -30,7 +30,7 @@ class VideoDecoderProxyFactory final : public VideoDecoderFactory {
 
   // Unused by tests.
   std::vector<SdpVideoFormat> GetSupportedFormats() const override {
-    RTC_NOTREACHED();
+    RTC_DCHECK_NOTREACHED();
     return {};
   }
 
@@ -48,13 +48,11 @@ class VideoDecoderProxyFactory final : public VideoDecoderFactory {
 
    private:
     int32_t Decode(const EncodedImage& input_image,
-                   bool missing_frames,
                    int64_t render_time_ms) override {
-      return decoder_->Decode(input_image, missing_frames, render_time_ms);
+      return decoder_->Decode(input_image, render_time_ms);
     }
-    int32_t InitDecode(const VideoCodec* config,
-                       int32_t number_of_cores) override {
-      return decoder_->InitDecode(config, number_of_cores);
+    bool Configure(const Settings& settings) override {
+      return decoder_->Configure(settings);
     }
     int32_t RegisterDecodeCompleteCallback(
         DecodedImageCallback* callback) override {

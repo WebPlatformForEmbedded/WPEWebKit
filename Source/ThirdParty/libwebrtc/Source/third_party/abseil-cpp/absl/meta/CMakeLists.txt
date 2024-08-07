@@ -23,6 +23,7 @@ absl_cc_library(
     ${ABSL_DEFAULT_COPTS}
   DEPS
     absl::config
+    absl::core_headers
   PUBLIC
 )
 
@@ -34,8 +35,11 @@ absl_cc_test(
   COPTS
     ${ABSL_TEST_COPTS}
   DEPS
+    absl::config
+    absl::time
+    absl::core_headers
     absl::type_traits
-    gmock_main
+    GTest::gmock_main
 )
 
 # component target

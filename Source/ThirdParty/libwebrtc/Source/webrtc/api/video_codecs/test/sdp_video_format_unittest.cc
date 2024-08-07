@@ -23,14 +23,20 @@ typedef SdpVideoFormat::Parameters Params;
 TEST(SdpVideoFormatTest, SameCodecNameNoParameters) {
   EXPECT_TRUE(Sdp("H264").IsSameCodec(Sdp("h264")));
   EXPECT_TRUE(Sdp("VP8").IsSameCodec(Sdp("vp8")));
-  EXPECT_TRUE(Sdp("Vp9").IsSameCodec(Sdp("vp9")));
+  EXPECT_TRUE(Sdp("VP9").IsSameCodec(Sdp("vp9")));
   EXPECT_TRUE(Sdp("AV1").IsSameCodec(Sdp("Av1")));
+#ifdef RTC_ENABLE_H265
+  EXPECT_TRUE(Sdp("H265").IsSameCodec(Sdp("h265")));
+#endif
 }
 
 TEST(SdpVideoFormatTest, DifferentCodecNameNoParameters) {
   EXPECT_FALSE(Sdp("H264").IsSameCodec(Sdp("VP8")));
   EXPECT_FALSE(Sdp("VP8").IsSameCodec(Sdp("VP9")));
-  EXPECT_FALSE(Sdp("AV1").IsSameCodec(Sdp("")));
+  EXPECT_FALSE(Sdp("AV1").IsSameCodec(Sdp("VP8")));
+#ifdef RTC_ENABLE_H265
+  EXPECT_FALSE(Sdp("H265").IsSameCodec(Sdp("VP8")));
+#endif
 }
 
 TEST(SdpVideoFormatTest, SameCodecNameSameParameters) {
@@ -45,6 +51,22 @@ TEST(SdpVideoFormatTest, SameCodecNameSameParameters) {
   EXPECT_TRUE(
       Sdp("H264", Params{{"profile-level-id", "640c34"}})
           .IsSameCodec(Sdp("H264", Params{{"profile-level-id", "640c34"}})));
+  EXPECT_TRUE(Sdp("AV1").IsSameCodec(Sdp("AV1", Params{{"profile", "0"}})));
+  EXPECT_TRUE(Sdp("AV1", Params{{"profile", "0"}})
+                  .IsSameCodec(Sdp("AV1", Params{{"profile", "0"}})));
+  EXPECT_TRUE(Sdp("AV1", Params{{"profile", "2"}})
+                  .IsSameCodec(Sdp("AV1", Params{{"profile", "2"}})));
+#ifdef RTC_ENABLE_H265
+  EXPECT_TRUE(Sdp("H265").IsSameCodec(Sdp(
+      "H265",
+      Params{{"profile-id", "1"}, {"tier-flag", "0"}, {"level-id", "93"}})));
+  EXPECT_TRUE(
+      Sdp("H265",
+          Params{{"profile-id", "2"}, {"tier-flag", "0"}, {"level-id", "93"}})
+          .IsSameCodec(Sdp("H265", Params{{"profile-id", "2"},
+                                          {"tier-flag", "0"},
+                                          {"level-id", "93"}})));
+#endif
 }
 
 TEST(SdpVideoFormatTest, SameCodecNameDifferentParameters) {
@@ -59,6 +81,40 @@ TEST(SdpVideoFormatTest, SameCodecNameDifferentParameters) {
   EXPECT_FALSE(
       Sdp("H264", Params{{"profile-level-id", "640c34"}})
           .IsSameCodec(Sdp("H264", Params{{"profile-level-id", "42f00b"}})));
+  EXPECT_FALSE(Sdp("AV1").IsSameCodec(Sdp("AV1", Params{{"profile", "1"}})));
+  EXPECT_FALSE(Sdp("AV1", Params{{"profile", "0"}})
+                   .IsSameCodec(Sdp("AV1", Params{{"profile", "1"}})));
+  EXPECT_FALSE(Sdp("AV1", Params{{"profile", "1"}})
+                   .IsSameCodec(Sdp("AV1", Params{{"profile", "2"}})));
+#ifdef RTC_ENABLE_H265
+  EXPECT_FALSE(Sdp("H265").IsSameCodec(Sdp(
+      "H265",
+      Params{{"profile-id", "0"}, {"tier-flag", "0"}, {"level-id", "93"}})));
+  EXPECT_FALSE(Sdp("H265").IsSameCodec(Sdp(
+      "H265",
+      Params{{"profile-id", "1"}, {"tier-flag", "1"}, {"level-id", "93"}})));
+  EXPECT_FALSE(Sdp("H265").IsSameCodec(Sdp(
+      "H265",
+      Params{{"profile-id", "1"}, {"tier-flag", "0"}, {"level-id", "90"}})));
+  EXPECT_FALSE(
+      Sdp("H265",
+          Params{{"profile-id", "2"}, {"tier-flag", "0"}, {"level-id", "93"}})
+          .IsSameCodec(Sdp("H265", Params{{"profile-id", "1"},
+                                          {"tier-flag", "0"},
+                                          {"level-id", "93"}})));
+  EXPECT_FALSE(
+      Sdp("H265",
+          Params{{"profile-id", "1"}, {"tier-flag", "1"}, {"level-id", "120"}})
+          .IsSameCodec(Sdp("H265", Params{{"profile-id", "1"},
+                                          {"tier-flag", "0"},
+                                          {"level-id", "120"}})));
+  EXPECT_FALSE(
+      Sdp("H265",
+          Params{{"profile-id", "1"}, {"tier-flag", "0"}, {"level-id", "93"}})
+          .IsSameCodec(Sdp("H265", Params{{"profile-id", "1"},
+                                          {"tier-flag", "0"},
+                                          {"level-id", "90"}})));
+#endif
 }
 
 TEST(SdpVideoFormatTest, DifferentCodecNameSameParameters) {
@@ -72,6 +128,16 @@ TEST(SdpVideoFormatTest, DifferentCodecNameSameParameters) {
   EXPECT_FALSE(
       Sdp("H264", Params{{"profile-level-id", "640c34"}})
           .IsSameCodec(Sdp("VP8", Params{{"profile-level-id", "640c34"}})));
+  EXPECT_FALSE(Sdp("AV1", Params{{"profile", "0"}})
+                   .IsSameCodec(Sdp("H264", Params{{"profile", "0"}})));
+  EXPECT_FALSE(Sdp("AV1", Params{{"profile", "2"}})
+                   .IsSameCodec(Sdp("VP9", Params{{"profile", "2"}})));
+#ifdef RTC_ENABLE_H265
+  EXPECT_FALSE(Sdp("H265", Params{{"profile-id", "0"}})
+                   .IsSameCodec(Sdp("H264", Params{{"profile-id", "0"}})));
+  EXPECT_FALSE(Sdp("H265", Params{{"profile-id", "2"}})
+                   .IsSameCodec(Sdp("VP9", Params{{"profile-id", "2"}})));
+#endif
 }
 
 TEST(SdpVideoFormatTest, H264PacketizationMode) {
