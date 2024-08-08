@@ -2928,6 +2928,14 @@ void MediaPlayerPrivateGStreamer::createGSTPlayBin(const URL& url)
 
     ASSERT(!m_pipeline);
 
+    GRefPtr<GstPluginFeature> ac3parse = gst_registry_lookup_feature(registry, "ac3parse");
+    //Making ac3parser lowest rank so as to not get it included in pipeline, else will cause packet drop
+    //for ac3 encrypted content, especially after a seek
+    if (ac3parse) {
+        GST_DEBUG_OBJECT(pipeline(),"Making ac3pasre lowest rank to not get it included in gst pipeline");
+        gst_plugin_feature_set_rank(ac3parse.get(), 0);
+    }
+
     auto elementId = m_player->elementId();
     if (elementId.isEmpty())
         elementId = "media-player"_s;
