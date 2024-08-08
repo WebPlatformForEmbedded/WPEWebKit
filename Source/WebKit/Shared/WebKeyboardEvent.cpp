@@ -222,5 +222,17 @@ bool WebKeyboardEvent::isKeyboardEventType(Type type)
 {
     return type == RawKeyDown || type == KeyDown || type == KeyUp || type == Char;
 }
-
+bool operator==(const WebKeyboardEvent& a, const WebKeyboardEvent& b)
+{
+    return a.type() == b.type()
+        && a.modifiers() == b.modifiers()
+        && a.text() == b.text()
+        && a.unmodifiedText() == b.unmodifiedText()
+        && a.key() == b.key()
+        && a.code() == b.code()
+        && a.keyIdentifier() == b.keyIdentifier()
+        && a.windowsVirtualKeyCode() == b.windowsVirtualKeyCode()
+        && a.nativeVirtualKeyCode() == b.nativeVirtualKeyCode()
+        && a.macCharCode() == b.macCharCode();
+}
 } // namespace WebKit

@@ -82,6 +82,7 @@ public:
 
     static bool isKeyboardEventType(Type);
 
+    friend bool operator==(const WebKeyboardEvent&, const WebKeyboardEvent&);
 private:
     String m_text;
     String m_unmodifiedText;
