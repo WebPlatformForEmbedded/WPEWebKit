@@ -264,6 +264,7 @@ private:
             VideoTrigger |
             PluginTrigger|
             CanvasTrigger |
+            FilterTrigger |
 #if PLATFORM(COCOA) || USE(NICOSIA)
             ScrollableNonMainFrameTrigger |
 #endif
