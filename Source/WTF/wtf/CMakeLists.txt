@@ -46,6 +46,7 @@ set(WTF_PUBLIC_HEADERS
     ConcurrentPtrHashSet.h
     ConcurrentVector.h
     Condition.h
+    ConservativeScanStackGuards.h
     CountingLock.h
     CrossThreadCopier.h
     CrossThreadQueue.h
@@ -420,6 +421,7 @@ set(WTF_SOURCES
     CompilationThread.cpp
     ConcurrentBuffer.cpp
     ConcurrentPtrHashSet.cpp
+    ConservativeScanStackGuards.cpp
     CountingLock.cpp
     CrossThreadCopier.cpp
     CrossThreadTaskHandler.cpp
