@@ -4221,6 +4221,9 @@ bool MediaPlayerPrivateGStreamer::updateVideoSinkStatistics()
     uint64_t totalVideoFrames = 0;
     uint64_t droppedVideoFrames = 0;
     if (webkitGstCheckVersion(1, 18, 0)) {
+        if (!m_videoSink)
+            return false;
+
         GUniqueOutPtr<GstStructure> stats;
         g_object_get(m_videoSink.get(), "stats", &stats.outPtr(), nullptr);
 
