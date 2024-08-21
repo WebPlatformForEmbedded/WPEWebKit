@@ -3453,7 +3453,9 @@ MediaTime HTMLMediaElement::currentMediaTime() const
     if (!m_player)
         return MediaTime::zeroTime();
 
-    if (m_defaultPlaybackStartPosition != MediaTime::zeroTime())
+    // Based on the commit : https://github.com/LibertyGlobal/WPEWebKit/commit/a7f9b178bfe7382a495943cd57efac7023df8eae,
+    // m_defaultPlaybackStartPosition needs to be higher than zero
+    if (m_defaultPlaybackStartPosition > MediaTime::zeroTime())
         return m_defaultPlaybackStartPosition;
 
     if (m_seeking) {
