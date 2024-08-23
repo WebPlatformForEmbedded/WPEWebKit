@@ -429,6 +429,9 @@ void MediaPlayerPrivateGStreamerMSE::updateStates()
     } else if (!isSeeking && !shouldBePlaying && m_isPipelinePlaying) {
         if (changePipelineState(GST_STATE_PAUSED) == ChangePipelineStateResult::Failed)
             GST_ERROR_OBJECT(pipeline(), "Setting the pipeline to PAUSED failed");
+    } else if (m_isEosWithNoBuffers) {
+        // Trigger playback end detection in HTMLMediaElement.
+        m_player->timeChanged();
     }
 }
 
@@ -474,6 +477,17 @@ void MediaPlayerPrivateGStreamerMSE::startSource(const Vector<RefPtr<MediaSource
 {
     m_tracks = filterOutRepeatingTracks(tracks);
     webKitMediaSrcEmitStreams(WEBKIT_MEDIA_SRC(m_source.get()), m_tracks);
+}
+
+void MediaPlayerPrivateGStreamerMSE::setEosWithNoBuffers(bool eosWithNoBuffers)
+{
+    m_isEosWithNoBuffers = eosWithNoBuffers;
+    // Parsebin will trigger an error, instruct MediaPlayerPrivateGStreamer to ignore it.
+    if (eosWithNoBuffers) {
+        m_ignoreErrors = true;
+        changePipelineState(GST_STATE_READY);
+        m_ignoreErrors = false;
+    }
 }
 
 void MediaPlayerPrivateGStreamerMSE::getSupportedTypes(HashSet<String, ASCIICaseInsensitiveHash>& types)

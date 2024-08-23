@@ -449,6 +449,7 @@ protected:
 #endif
 
     std::optional<GstVideoDecoderPlatform> m_videoDecoderPlatform;
+    bool m_ignoreErrors { false };
 
     String errorMessage() const override { return m_errorMessage; }
 
