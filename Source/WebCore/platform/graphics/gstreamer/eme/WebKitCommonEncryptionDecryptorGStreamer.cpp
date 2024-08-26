@@ -312,6 +312,9 @@ static GstFlowReturn transformInPlace(GstBaseTransform* base, GstBuffer* buffer)
             GST_ELEMENT_ERROR(self, STREAM, FAILED, ("There is no subsamples buffer, but a positive subsample count"), (nullptr));
             return GST_FLOW_NOT_SUPPORTED;
         }
+    } else if (isCbcs) {
+        GST_TRACE_OBJECT(self, "cbcs without subsample_count, skipping decryption");
+        return GST_FLOW_OK;
     }
 
     value = gst_structure_get_value(protectionMeta->info, "kid");
