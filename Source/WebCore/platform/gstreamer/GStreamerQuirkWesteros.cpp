@@ -51,17 +51,6 @@ GStreamerQuirkWesteros::GStreamerQuirkWesteros()
     }
 }
 
-void GStreamerQuirkWesteros::configureElement(GstElement* element, const OptionSet<ElementRuntimeCharacteristics>& characteristics)
-{
-    if (!characteristics.contains(ElementRuntimeCharacteristics::IsMediaStream))
-        return;
-
-    if (!g_strcmp0(G_OBJECT_TYPE_NAME(G_OBJECT(element)), "GstWesterosSink") && gstObjectHasProperty(element, "immediate-output")) {
-        GST_INFO("Enable 'immediate-output' in WesterosSink");
-        g_object_set(element, "immediate-output", TRUE, nullptr);
-    }
-}
-
 std::optional<bool> GStreamerQuirkWesteros::isHardwareAccelerated(GstElementFactory* factory)
 {
     if (g_str_has_prefix(GST_OBJECT_NAME(factory), "westeros"))
