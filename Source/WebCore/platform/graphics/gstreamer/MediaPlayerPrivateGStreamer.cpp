@@ -2152,6 +2152,7 @@ void MediaPlayerPrivateGStreamer::updateMaxTimeLoaded(double percentage)
 void MediaPlayerPrivateGStreamer::updateBufferingStatus(GstBufferingMode mode, double percentage)
 {
     bool wasBuffering = m_isBuffering;
+    bool wasDownloadFinished = m_didDownloadFinish;
 
 #ifndef GST_DISABLE_GST_DEBUG
     GUniquePtr<char> modeString(g_enum_to_string(GST_TYPE_BUFFERING_MODE, mode));
@@ -2159,7 +2160,6 @@ void MediaPlayerPrivateGStreamer::updateBufferingStatus(GstBufferingMode mode, d
 #endif
 
     m_didDownloadFinish = percentage == 100;
-
     if (!m_didDownloadFinish)
         m_isBuffering = true;
     else
@@ -2170,7 +2170,19 @@ void MediaPlayerPrivateGStreamer::updateBufferingStatus(GstBufferingMode mode, d
     case GST_BUFFERING_STREAM: {
         updateMaxTimeLoaded(percentage);
 
-        m_bufferingPercentage = percentage;
+        if (!m_didDownloadFinish) {
+            if (wasDownloadFinished && m_underflowSignalConnected.load() && !m_hasUnderflow) {
+                // wait for buffers draining before starting buffering again
+                // ignoring this message
+                m_didDownloadFinish = true;
+                m_isBuffering = wasBuffering;
+                return;
+            }
+        } else {
+            // reset undeflow flag is stream is buffered again
+            m_hasUnderflow = false;
+        }
+
         if (m_didDownloadFinish || !wasBuffering)
             updateStates();
 
@@ -2187,6 +2199,17 @@ void MediaPlayerPrivateGStreamer::updateBufferingStatus(GstBufferingMode mode, d
 #endif
         break;
     }
+}
+
+void MediaPlayerPrivateGStreamer::handleBufferUnderflow()
+{
+    ASSERT(isMainThread());
+    // looks like upper elements in pipelie have some data that haven't reached the sink yet
+    if (m_bufferingPercentage == 100)
+        return;
+
+    m_hasUnderflow = true;
+    updateBufferingStatus(GST_BUFFERING_STREAM, m_bufferingPercentage);
 }
 
 #if USE(GSTREAMER_MPEGTS)
@@ -2309,7 +2332,10 @@ void MediaPlayerPrivateGStreamer::configureElement(GstElement* element)
 
     if (classifiers.contains("Decoder"_s) && classifiers.contains("Video"_s)) {
         configureVideoDecoder(element);
-        return;
+    }
+
+    if (classifiers.contains("Sink"_s) && classifiers.contains("Video"_s)) {
+        configureVideoSink(element);
     }
 
     if (isMediaStreamPlayer())
@@ -3069,6 +3095,25 @@ void MediaPlayerPrivateGStreamer::configureVideoDecoder(GstElement* decoder)
 
         return GST_PAD_PROBE_OK;
     }, this, nullptr);
+}
+
+void MediaPlayerPrivateGStreamer::configureVideoSink(GstElement* element)
+{
+    if (isMediaSource() || isMediaStreamPlayer())
+        return;
+
+    // progressive playback only
+    GUniquePtr<char> elementName(gst_element_get_name(element));
+    if (g_str_has_prefix(elementName.get(), "rialtomsesink") || g_str_has_prefix(elementName.get(), "westerossink")) {
+        g_signal_connect(element, "buffer-underflow-callback", G_CALLBACK(+[](GstElement* sink, guint, guint, MediaPlayerPrivateGStreamer* player) {
+            RunLoop::main().dispatch([player, sink] {
+                GST_DEBUG_OBJECT(player->pipeline(), "buffer-underlow-callback signal from %s", GST_ELEMENT_NAME(sink));
+                player->handleBufferUnderflow();
+            });
+        }), this);
+        m_underflowSignalConnected.store(true);
+        GST_DEBUG_OBJECT(pipeline(), "buffer-undeflow-callback signal connected to video sink %s", GST_ELEMENT_NAME(element));
+    }
 }
 
 bool MediaPlayerPrivateGStreamer::didPassCORSAccessCheck() const

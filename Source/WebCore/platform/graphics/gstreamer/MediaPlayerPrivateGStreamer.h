@@ -389,6 +389,8 @@ protected:
     bool m_canFallBackToLastFinishedSeekPosition { false };
     bool m_isChangingRate { false };
     bool m_didDownloadFinish { false };
+    bool m_hasUnderflow { false };
+    Atomic<bool> m_underflowSignalConnected { false };
     bool m_didErrorOccur { false };
     mutable bool m_isEndReached { false };
     mutable std::optional<bool> m_isLiveStream;
@@ -523,6 +525,7 @@ private:
     void processBufferingStats(GstMessage*);
     void updateBufferingStatus(GstBufferingMode, double percentage);
     void updateMaxTimeLoaded(double percentage);
+    void handleBufferUnderflow();
 
 #if USE(GSTREAMER_MPEGTS)
     void processMpegTsSection(GstMpegtsSection*);
@@ -540,6 +543,7 @@ private:
     static void downloadBufferFileCreatedCallback(MediaPlayerPrivateGStreamer*);
 
     void configureVideoDecoder(GstElement*);
+    void configureVideoSink(GstElement*);
     void configureElement(GstElement*);
 
     void configureElementPlatformQuirks(GstElement*);
