@@ -186,25 +186,114 @@ void PeerConnectionBackend::setLocalDescription(const RTCSessionDescription* ses
 {
     ASSERT(!m_peerConnection.isClosed());
 
+    m_isProcessingLocalDescriptionAnswer = sessionDescription && (sessionDescription->type() == RTCSdpType::Answer || sessionDescription->type() == RTCSdpType::Pranswer);
     m_setDescriptionCallback = WTFMove(callback);
     doSetLocalDescription(sessionDescription);
 }
 
-void PeerConnectionBackend::setLocalDescriptionSucceeded(std::optional<DescriptionStates>&& descriptionStates, std::unique_ptr<RTCSctpTransportBackend>&& sctpBackend)
+struct MediaStreamAndTrackItem {
+    Ref<MediaStream> stream;
+    Ref<MediaStreamTrack> track;
+};
+
+// https://w3c.github.io/webrtc-pc/#set-associated-remote-streams
+static void setAssociatedRemoteStreams(RTCRtpReceiver& receiver, const PeerConnectionBackend::TransceiverState& state, Vector<MediaStreamAndTrackItem>& addList, Vector<MediaStreamAndTrackItem>& removeList)
+{
+    for (auto& currentStream : receiver.associatedStreams()) {
+        if (currentStream && !anyOf(state.receiverStreams, [&currentStream](auto& stream) { return stream->id() == currentStream->id(); }))
+            removeList.append({ Ref { *currentStream }, Ref { receiver.track() } });
+    }
+
+    for (auto& stream : state.receiverStreams) {
+        if (!anyOf(receiver.associatedStreams(), [&stream](auto& currentStream) { return stream->id() == currentStream->id(); }))
+            addList.append({ *stream, Ref { receiver.track() } });
+    }
+
+    receiver.setAssociatedStreams(WTF::map(state.receiverStreams, [](auto& stream) { return WeakPtr { stream.get() }; }));
+}
+
+static bool isDirectionReceiving(RTCRtpTransceiverDirection direction)
+{
+    return direction == RTCRtpTransceiverDirection::Sendrecv || direction == RTCRtpTransceiverDirection::Recvonly;
+}
+
+// https://w3c.github.io/webrtc-pc/#process-remote-tracks
+static void processRemoteTracks(RTCRtpTransceiver& transceiver, PeerConnectionBackend::TransceiverState&& state, Vector<MediaStreamAndTrackItem>& addList, Vector<MediaStreamAndTrackItem>& removeList, Vector<Ref<RTCTrackEvent>>& trackEventList, Vector<Ref<MediaStreamTrack>>& muteTrackList)
+{
+    auto addListSize = addList.size();
+    auto& receiver = transceiver.receiver();
+    setAssociatedRemoteStreams(receiver, state, addList, removeList);
+    if ((state.firedDirection && isDirectionReceiving(*state.firedDirection) && (!transceiver.firedDirection() || !isDirectionReceiving(*transceiver.firedDirection()))) || addListSize != addList.size()) {
+        // https://w3c.github.io/webrtc-pc/#process-remote-track-addition
+        trackEventList.append(RTCTrackEvent::create(eventNames().trackEvent, Event::CanBubble::No, Event::IsCancelable::No, &receiver, &receiver.track(), WTFMove(state.receiverStreams), &transceiver));
+    }
+    if (!(state.firedDirection && isDirectionReceiving(*state.firedDirection)) && transceiver.firedDirection() && isDirectionReceiving(*transceiver.firedDirection())) {
+        // https://w3c.github.io/webrtc-pc/#process-remote-track-removal
+        muteTrackList.append(receiver.track());
+    }
+    transceiver.setFiredDirection(state.firedDirection);
+}
+
+void PeerConnectionBackend::setLocalDescriptionSucceeded(std::optional<DescriptionStates>&& descriptionStates, std::optional<TransceiverStates>&& transceiverStates, std::unique_ptr<RTCSctpTransportBackend>&& sctpBackend, std::optional<double> maxMessageSize)
 {
     ASSERT(isMainThread());
     ALWAYS_LOG(LOGIDENTIFIER);
-
+    if (transceiverStates)
+        DEBUG_LOG(LOGIDENTIFIER, "Transceiver states: ", *transceiverStates);
     ASSERT(m_setDescriptionCallback);
-    m_peerConnection.queueTaskKeepingObjectAlive(m_peerConnection, TaskSource::Networking, [this, callback = WTFMove(m_setDescriptionCallback), descriptionStates = WTFMove(descriptionStates), sctpBackend = WTFMove(sctpBackend)]() mutable {
+    m_peerConnection.queueTaskKeepingObjectAlive(m_peerConnection, TaskSource::Networking, [this, callback = WTFMove(m_setDescriptionCallback), descriptionStates = WTFMove(descriptionStates), transceiverStates = WTFMove(transceiverStates), sctpBackend = WTFMove(sctpBackend), maxMessageSize]() mutable {
         if (m_peerConnection.isClosed())
             return;
 
-        if (descriptionStates)
-            m_peerConnection.updateDescriptions(WTFMove(*descriptionStates));
         m_peerConnection.updateTransceiversAfterSuccessfulLocalDescription();
-        m_peerConnection.updateSctpBackend(WTFMove(sctpBackend));
+        m_peerConnection.updateSctpBackend(WTFMove(sctpBackend), maxMessageSize);
+
+        if (descriptionStates) {
+            m_peerConnection.updateDescriptions(WTFMove(*descriptionStates));
+            if (m_peerConnection.isClosed())
+                return;
+        }
+
         m_peerConnection.processIceTransportChanges();
+        if (m_peerConnection.isClosed())
+            return;
+
+        if (m_isProcessingLocalDescriptionAnswer && transceiverStates) {
+            // Compute track related events.
+            Vector<MediaStreamAndTrackItem> removeList;
+            Vector<Ref<MediaStreamTrack>> muteTrackList;
+            Vector<MediaStreamAndTrackItem> addListNoOp;
+            for (auto& transceiverState : *transceiverStates) {
+                RefPtr<RTCRtpTransceiver> transceiver;
+                for (auto& item : m_peerConnection.currentTransceivers()) {
+                    if (item->mid() == transceiverState.mid) {
+                        transceiver = item;
+                        break;
+                    }
+                }
+                if (transceiver) {
+                    if (!(transceiverState.firedDirection && isDirectionReceiving(*transceiverState.firedDirection)) && transceiver->firedDirection() && isDirectionReceiving(*transceiver->firedDirection())) {
+                        setAssociatedRemoteStreams(transceiver->receiver(), transceiverState, addListNoOp, removeList);
+                        muteTrackList.append(transceiver->receiver().track());
+                    }
+                }
+                transceiver->setFiredDirection(transceiverState.firedDirection);
+            }
+            for (auto& track : muteTrackList) {
+                track->setShouldFireMuteEventImmediately(true);
+                track->source().setMuted(true);
+                track->setShouldFireMuteEventImmediately(false);
+                if (m_peerConnection.isClosed())
+                    return;
+            }
+
+            for (auto& pair : removeList) {
+                pair.stream->privateStream().removeTrack(pair.track->privateTrack());
+                if (m_peerConnection.isClosed())
+                    return;
+            }
+        }
+
         callback({ });
     });
 }
@@ -231,53 +320,98 @@ void PeerConnectionBackend::setRemoteDescription(const RTCSessionDescription& se
     doSetRemoteDescription(sessionDescription);
 }
 
-void PeerConnectionBackend::setRemoteDescriptionSucceeded(std::optional<DescriptionStates>&& descriptionStates, std::unique_ptr<RTCSctpTransportBackend>&& sctpBackend)
+void PeerConnectionBackend::setRemoteDescriptionSucceeded(std::optional<DescriptionStates>&& descriptionStates, std::optional<TransceiverStates>&& transceiverStates, std::unique_ptr<RTCSctpTransportBackend>&& sctpBackend, std::optional<double> maxMessageSize)
 {
     ASSERT(isMainThread());
     ALWAYS_LOG(LOGIDENTIFIER, "Set remote description succeeded");
+    if (transceiverStates)
+        DEBUG_LOG(LOGIDENTIFIER, "Transceiver states: ", *transceiverStates);
     ASSERT(m_setDescriptionCallback);
 
-    m_peerConnection.queueTaskKeepingObjectAlive(m_peerConnection, TaskSource::Networking, [this, callback = WTFMove(m_setDescriptionCallback), descriptionStates = WTFMove(descriptionStates), sctpBackend = WTFMove(sctpBackend), events = WTFMove(m_pendingTrackEvents)]() mutable {
+    m_peerConnection.queueTaskKeepingObjectAlive(m_peerConnection, TaskSource::Networking, [this, callback = WTFMove(m_setDescriptionCallback), descriptionStates = WTFMove(descriptionStates), transceiverStates = WTFMove(transceiverStates), sctpBackend = WTFMove(sctpBackend), maxMessageSize]() mutable {
         if (m_peerConnection.isClosed())
             return;
 
-        if (descriptionStates)
-            m_peerConnection.updateDescriptions(WTFMove(*descriptionStates));
-
-        for (auto& event : events)
-            dispatchTrackEvent(event);
-
-        if (m_peerConnection.isClosed())
-            return;
+        Vector<MediaStreamAndTrackItem> removeList;
+        if (transceiverStates) {
+            for (auto& transceiver : m_peerConnection.currentTransceivers()) {
+                if (!anyOf(*transceiverStates, [&transceiver](auto& state) { return state.mid == transceiver->mid(); })) {
+                    for (auto& stream : transceiver->receiver().associatedStreams()) {
+                        if (stream)
+                            removeList.append({ Ref { *stream }, Ref { transceiver->receiver().track() } });
+                    }
+                }
+            }
+        }
 
         m_peerConnection.updateTransceiversAfterSuccessfulRemoteDescription();
-        m_peerConnection.updateSctpBackend(WTFMove(sctpBackend));
+        m_peerConnection.updateSctpBackend(WTFMove(sctpBackend), maxMessageSize);
+
+        if (descriptionStates) {
+            m_peerConnection.updateDescriptions(WTFMove(*descriptionStates));
+            if (m_peerConnection.isClosed())
+                return;
+        }
+
         m_peerConnection.processIceTransportChanges();
+        if (m_peerConnection.isClosed())
+            return;
+
+        if (transceiverStates) {
+            // Compute track related events.
+            Vector<Ref<MediaStreamTrack>> muteTrackList;
+            Vector<MediaStreamAndTrackItem> addList;
+            Vector<Ref<RTCTrackEvent>> trackEventList;
+            for (auto& transceiverState : *transceiverStates) {
+                RefPtr<RTCRtpTransceiver> transceiver;
+                for (auto& item : m_peerConnection.currentTransceivers()) {
+                    if (item->mid() == transceiverState.mid) {
+                        transceiver = item;
+                        break;
+                    }
+                }
+                if (transceiver)
+                    processRemoteTracks(*transceiver, WTFMove(transceiverState), addList, removeList, trackEventList, muteTrackList);
+            }
+
+            for (auto& track : muteTrackList) {
+                track->setShouldFireMuteEventImmediately(true);
+                track->source().setMuted(true);
+                track->setShouldFireMuteEventImmediately(false);
+                if (m_peerConnection.isClosed())
+                    return;
+            }
+
+            for (auto& pair : removeList) {
+                pair.stream->privateStream().removeTrack(pair.track->privateTrack());
+                if (m_peerConnection.isClosed())
+                    return;
+            }
+
+            for (auto& pair : addList) {
+                pair.stream->addTrackFromPlatform(pair.track.copyRef());
+                if (m_peerConnection.isClosed())
+                    return;
+            }
+
+            for (auto& event : trackEventList) {
+                RefPtr track = event->track();
+                m_peerConnection.dispatchEvent(event);
+                if (m_peerConnection.isClosed())
+                    return;
+
+                track->source().setMuted(false);
+            }
+        }
+
         callback({ });
     });
-}
-
-void PeerConnectionBackend::dispatchTrackEvent(PendingTrackEvent& event)
-{
-    auto& track = event.track.get();
-
-    m_peerConnection.dispatchEvent(RTCTrackEvent::create(eventNames().trackEvent, Event::CanBubble::No, Event::IsCancelable::No, WTFMove(event.receiver), WTFMove(event.track), WTFMove(event.streams), WTFMove(event.transceiver)));
-    ALWAYS_LOG(LOGIDENTIFIER, "Dispatched if feasible track of type ", track.source().type());
-
-    if (m_peerConnection.isClosed())
-        return;
-
-    // FIXME: As per spec, we should set muted to 'false' when starting to receive the content from network.
-    track.source().setMuted(false);
 }
 
 void PeerConnectionBackend::setRemoteDescriptionFailed(Exception&& exception)
 {
     ASSERT(isMainThread());
     ALWAYS_LOG(LOGIDENTIFIER, "Set remote description failed:", exception.message());
-
-    ASSERT(m_pendingTrackEvents.isEmpty());
-    m_pendingTrackEvents.clear();
 
     ASSERT(m_setDescriptionCallback);
     m_peerConnection.queueTaskKeepingObjectAlive(m_peerConnection, TaskSource::Networking, [this, callback = WTFMove(m_setDescriptionCallback), exception = WTFMove(exception)]() mutable {
@@ -297,12 +431,6 @@ void PeerConnectionBackend::iceGatheringStateChanged(RTCIceGatheringState state)
         }
         m_peerConnection.updateIceGatheringState(state);
     });
-}
-
-void PeerConnectionBackend::addPendingTrackEvent(PendingTrackEvent&& event)
-{
-    ASSERT(!m_peerConnection.isStopped());
-    m_pendingTrackEvents.append(WTFMove(event));
 }
 
 static String extractIPAddress(StringView sdp)
@@ -435,8 +563,6 @@ void PeerConnectionBackend::stop()
     m_offerAnswerCallback = nullptr;
     m_setDescriptionCallback = nullptr;
 
-    m_pendingTrackEvents.clear();
-
     doStop();
 }
 
@@ -498,6 +624,55 @@ WTFLogChannel& PeerConnectionBackend::logChannel() const
 }
 #endif
 
+static Ref<JSON::Object> toJSONObject(const PeerConnectionBackend::TransceiverState& transceiverState)
+{
+    auto object = JSON::Object::create();
+    object->setString("mid"_s, transceiverState.mid);
+
+    auto receiverStreams = JSON::Array::create();
+    for (auto receiverStream : transceiverState.receiverStreams)
+        receiverStreams->pushString(receiverStream->id());
+    object->setArray("receiverStreams"_s, WTFMove(receiverStreams));
+
+    if (auto firedDirection = transceiverState.firedDirection)
+        object->setString("firedDirection"_s, convertEnumerationToString(*firedDirection));
+
+    return object;
+}
+
+static Ref<JSON::Array> toJSONArray(const PeerConnectionBackend::TransceiverStates& transceiverStates)
+{
+    auto array = JSON::Array::create();
+    for (auto transceiverState : transceiverStates)
+        array->pushObject(toJSONObject(transceiverState));
+
+    return array;
+}
+
+static String toJSONString(const PeerConnectionBackend::TransceiverState& transceiverState)
+{
+    return toJSONObject(transceiverState)->toJSONString();
+}
+
+static String toJSONString(const PeerConnectionBackend::TransceiverStates& transceiverStates)
+{
+    return toJSONArray(transceiverStates)->toJSONString();
+}
+
 } // namespace WebCore
+
+namespace WTF {
+
+String LogArgument<WebCore::PeerConnectionBackend::TransceiverState>::toString(const WebCore::PeerConnectionBackend::TransceiverState& transceiverState)
+{
+    return toJSONString(transceiverState);
+}
+
+String LogArgument<WebCore::PeerConnectionBackend::TransceiverStates>::toString(const WebCore::PeerConnectionBackend::TransceiverStates& transceiverStates)
+{
+    return toJSONString(transceiverStates);
+}
+
+}
 
 #endif // ENABLE(WEB_RTC)

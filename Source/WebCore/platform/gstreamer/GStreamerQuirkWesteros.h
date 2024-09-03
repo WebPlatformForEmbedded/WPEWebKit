@@ -31,7 +31,6 @@ public:
     GStreamerQuirkWesteros();
     const char* identifier() final { return "Westeros"; }
 
-    void configureElement(GstElement*, const OptionSet<ElementRuntimeCharacteristics>&) final;
     std::optional<bool> isHardwareAccelerated(GstElementFactory*) final;
 
 private:
