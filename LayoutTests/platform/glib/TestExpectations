@@ -804,6 +804,7 @@ webkit.org/b/240782 fast/text/install-font-style-recalc.html [ Skip ]
 # GStreamer-related bugs
 #////////////////////////////////////////////////////////////////////////////////////////
 
+webkit.org/b/278913 imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/seeking/seek-to-max-value.htm [ Failure ]
 webkit.org/b/213699 http/wpt/mediarecorder/mimeType.html [ Failure ]
 webkit.org/b/213699 http/wpt/mediarecorder/mute-tracks.html [ Failure ]
 webkit.org/b/213699 http/wpt/mediarecorder/video-rotation.html [ Failure ]
