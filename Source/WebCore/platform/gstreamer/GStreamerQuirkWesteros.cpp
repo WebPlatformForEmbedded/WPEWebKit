@@ -70,6 +70,11 @@ std::optional<bool> GStreamerQuirkWesteros::isHardwareAccelerated(GstElementFact
     return std::nullopt;
 }
 
+Vector<String> GStreamerQuirkWesteros::extraSystemPlugins() const
+{
+    return { "gstwesterossink"_s };
+}
+
 #undef GST_CAT_DEFAULT
 
 } // namespace WebCore

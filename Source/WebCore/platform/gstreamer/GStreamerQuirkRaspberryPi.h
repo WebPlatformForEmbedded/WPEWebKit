@@ -26,17 +26,12 @@
 
 namespace WebCore {
 
-class GStreamerQuirkWesteros final : public GStreamerQuirk {
+// FIXME: We should remove this quirk with OMX and instead rely on V4L2 for the Raspberry Pi.
+class GStreamerQuirkRaspberryPi final : public GStreamerQuirk {
 public:
-    GStreamerQuirkWesteros();
-    const ASCIILiteral identifier() const final { return "Westeros"_s; }
+    const ASCIILiteral identifier() const final { return "RaspberryPi"_s; }
 
-    void configureElement(GstElement*, const OptionSet<ElementRuntimeCharacteristics>&) final;
-    std::optional<bool> isHardwareAccelerated(GstElementFactory*) final;
-    Vector<String> extraSystemPlugins() const final;
-
-private:
-    GRefPtr<GstCaps> m_sinkCaps;
+    Vector<String> extraSystemPlugins() const final { return { "gstomx"_s }; }
 };
 
 } // namespace WebCore
