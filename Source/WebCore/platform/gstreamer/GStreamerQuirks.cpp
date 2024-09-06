@@ -37,6 +37,7 @@
 #include <wtf/NeverDestroyed.h>
 #include <wtf/OptionSet.h>
 #include <wtf/text/StringView.h>
+#include <wtf/FileSystem.h>
 
 namespace WebCore {
 
@@ -307,6 +308,54 @@ bool GStreamerQuirksManager::shouldParseIncomingLibWebRTCBitStream() const
             return false;
     }
     return true;
+}
+
+void GStreamerQuirksManager::loadExtraSystemPlugins() const
+{
+    static std::once_flag onceFlag;
+    std::call_once(onceFlag, [&]() {
+        auto systemPluginsPathEnv = g_getenv("GST_PLUGIN_SYSTEM_PATH_1_0");
+        if (!systemPluginsPathEnv)
+            systemPluginsPathEnv = g_getenv("GST_PLUGIN_SYSTEM_PATH");
+        if (!systemPluginsPathEnv) {
+            GST_ERROR("Unable to load extra system plugins without GST_PLUGIN_SYSTEM_PATH_1_0 or GST_PLUGIN_SYSTEM_PATH set.");
+            return;
+        }
+
+        auto systemPluginsPaths = makeString(systemPluginsPathEnv).split(':');
+
+        auto loadPlugin = [&](const String& pluginName) {
+            auto plugin = adoptGRef(gst_registry_find_plugin(gst_registry_get(), pluginName.utf8().data()));
+            if (plugin) {
+                GST_ERROR("Plugin %s already in the registry. Will not load a duplicate.", pluginName.utf8().data());
+                return;
+            }
+
+            // FIXME: It would be nice to have some helpers from GStreamer here to avoid doing this, but I didn't find any unless registry is enabled.
+            #if !OS(LINUX)
+                static_assert(false, "Extra loading of plugins only tested on Linux");
+            #endif
+            auto sharedLibraryFilename = makeString("lib"_s, pluginName, ".so"_s);
+
+            for (const auto& path : systemPluginsPaths) {
+                auto pluginPath = FileSystem::pathByAppendingComponent(path, sharedLibraryFilename);
+                GST_DEBUG("Trying to load %s", pluginPath.utf8().data());
+
+                GUniqueOutPtr<GError> error;
+                plugin = adoptGRef(gst_plugin_load_file(pluginPath.utf8().data(), &error.outPtr()));
+                if (plugin) {
+                    GST_INFO("Loaded %s successfully.", pluginPath.utf8().data());
+                    return;
+                }
+            }
+            GST_ERROR("Failed to load plugin %s. Check whether it's installed in GST_PLUGIN_SYSTEM_PATH_1_0 or GST_PLUGIN_SYSTEM_PATH.", pluginName.utf8().data());
+        };
+
+        for (auto& quirk : m_quirks) {
+            for (auto& pluginName : quirk->extraSystemPlugins())
+                loadPlugin(pluginName);
+        }
+    });
 }
 
 #undef GST_CAT_DEFAULT

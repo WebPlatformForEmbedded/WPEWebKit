@@ -83,11 +83,9 @@ macro(FIND_GSTREAMER_COMPONENT _component_prefix _pkgconfig_name _library)
     string(REGEX MATCH "(.*)/gstreamer-1.0" _dummy "${_include_dir}")
 
     if ("${CMAKE_MATCH_1}" STREQUAL "")
-        find_path(${_component_prefix}_RESOLVED_INCLUDEDIR NAMES "${_include_dir}/gstreamer-1.0")
-        # Only add the resolved path from `_INCLUDEDIR` if found.
-        if (${_component_prefix}_RESOLVED_INCLUDEDIR)
+        if (EXISTS "${_include_dir}/gstreamer-1.0")
             list(APPEND ${_component_prefix}_INCLUDE_DIRS
-                 "${${_component_prefix}_RESOLVED_INCLUDEDIR}")
+                 "${_include_dir}/gstreamer-1.0")
         endif ()
     endif ()
 

@@ -64,6 +64,19 @@ std::optional<bool> GStreamerQuirkBroadcom::isHardwareAccelerated(GstElementFact
     return std::nullopt;
 }
 
+Vector<String> GStreamerQuirkBroadcom::extraSystemPlugins() const
+{
+    return {
+        "brcmaudfilter"_s,
+        "brcmaudiodecoder"_s,
+        "brcmaudiosink"_s,
+        "brcmpcmsink"_s,
+        "brcmvideodecoder"_s,
+        "brcmvideosink"_s,
+        "brcmvidfilter"_s,
+    };
+}
+
 #undef GST_CAT_DEFAULT
 
 } // namespace WebCore

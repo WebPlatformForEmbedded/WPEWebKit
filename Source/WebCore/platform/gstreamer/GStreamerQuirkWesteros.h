@@ -33,6 +33,7 @@ public:
 
     void configureElement(GstElement*, const OptionSet<ElementRuntimeCharacteristics>&) final;
     std::optional<bool> isHardwareAccelerated(GstElementFactory*) final;
+    Vector<String> extraSystemPlugins() const final;
 
 private:
     GRefPtr<GstCaps> m_sinkCaps;
