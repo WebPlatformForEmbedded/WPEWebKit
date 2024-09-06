@@ -39,6 +39,7 @@ public:
     Vector<String> disallowedWebAudioDecoders() const final { return m_disallowedWebAudioDecoders; }
     unsigned getAdditionalPlaybinFlags() const final { return getGstPlayFlag("text") | getGstPlayFlag("native-audio"); }
     bool shouldParseIncomingLibWebRTCBitStream() const final { return false; }
+    Vector<String> extraSystemPlugins() const final;
 
 private:
     Vector<String> m_disallowedWebAudioDecoders;

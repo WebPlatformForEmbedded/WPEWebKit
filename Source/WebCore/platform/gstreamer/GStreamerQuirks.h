@@ -86,6 +86,7 @@ public:
     virtual int correctBufferingPercentage(MediaPlayerPrivateGStreamer*, int originalBufferingPercentage, GstBufferingMode) const { return originalBufferingPercentage; }
     virtual void resetBufferingPercentage(MediaPlayerPrivateGStreamer*, int) const { };
     virtual void setupBufferingPercentageCorrection(MediaPlayerPrivateGStreamer*, GstState, GstState, GRefPtr<GstElement>&&) const { }
+    virtual Vector<String> extraSystemPlugins() const { return { }; }
 };
 
 class GStreamerHolePunchQuirk : public GStreamerQuirkBase {
@@ -137,6 +138,7 @@ public:
     int correctBufferingPercentage(MediaPlayerPrivateGStreamer*, int originalBufferingPercentage, GstBufferingMode) const;
     void resetBufferingPercentage(MediaPlayerPrivateGStreamer*, int bufferingPercentage) const;
     void setupBufferingPercentageCorrection(MediaPlayerPrivateGStreamer*, GstState currentState, GstState newState, GRefPtr<GstElement>&&) const;
+    void loadExtraSystemPlugins() const;
 
 private:
     GStreamerQuirksManager(bool, bool);

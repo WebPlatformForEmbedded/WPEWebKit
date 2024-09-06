@@ -421,6 +421,10 @@ void registerWebKitGStreamerElements()
     // we need to reset the internal state of the registry scanner.
     if (registryWasUpdated && GStreamerRegistryScanner::singletonWasInitialized())
         GStreamerRegistryScanner::singleton().refresh();
+
+#if USE(GSTREAMER_FULL)
+    GStreamerQuirksManager::singleton().loadExtraSystemPlugins();
+#endif
 }
 
 void registerWebKitGStreamerVideoEncoder()
