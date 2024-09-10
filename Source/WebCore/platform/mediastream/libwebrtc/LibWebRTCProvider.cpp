@@ -403,6 +403,22 @@ rtc::scoped_refptr<webrtc::PeerConnectionInterface> LibWebRTCProvider::createPee
     factoryAndThreads.signalingThread->Invoke<void>(RTC_FROM_HERE, [&]() {
         auto basicPortAllocator = makeUniqueWithoutFastMallocCheck<cricket::BasicPortAllocator>(&networkManager, &packetSocketFactory);
 
+        // WEBRTC_PEER_PORT_RANGE defines from:to port range for peer connections, example WEBRTC_PEER_PORT_RANGE=6050:6055
+        char * portLimit = getenv("WEBRTC_PEER_PORT_RANGE");
+        if (portLimit) {
+            std::string min, max;
+            std::istringstream iss(portLimit);
+            if (std::getline(iss, min, ':') && std::getline(iss, max, ':')) {
+                char * endPtrMin;
+                char * endPtrMax;
+                long portMin = strtol(min.c_str(), &endPtrMin, 10);
+                long portMax = strtol(max.c_str(), &endPtrMax, 10);
+                if (*endPtrMin == '\0' && *endPtrMax == '\0' && portMin >= 0 && portMin <= USHRT_MAX && portMax >= 0 && portMax <= USHRT_MAX && portMin < portMax) {
+                    basicPortAllocator->SetPortRange((int)portMin, (int)portMax);
+                }
+            }
+        }
+
         basicPortAllocator->set_allow_tcp_listen(false);
         portAllocator = WTFMove(basicPortAllocator);
     });
