@@ -173,6 +173,8 @@ enum {
 
     QUERY_PERMISSION_STATE,
 
+    DOCUMENT_LOADED,
+
     LAST_SIGNAL
 };
 
@@ -2426,6 +2428,15 @@ static void webkit_web_view_class_init(WebKitWebViewClass* webViewClass)
         g_cclosure_marshal_generic,
         G_TYPE_BOOLEAN, 1, /* number of parameters */
         WEBKIT_TYPE_PERMISSION_STATE_QUERY);
+
+    signals[DOCUMENT_LOADED] = g_signal_new(
+        "document-loaded",
+        G_TYPE_FROM_CLASS(webViewClass),
+        G_SIGNAL_RUN_LAST,
+        0,
+        nullptr, nullptr,
+        nullptr,
+        G_TYPE_NONE, 0);
 }
 
 static void webkitWebViewCompleteAuthenticationRequest(WebKitWebView* webView)
@@ -2523,6 +2534,11 @@ void webkitWebViewLoadChanged(WebKitWebView* webView, WebKitLoadEvent loadEvent)
     }
 
     g_signal_emit(webView, signals[LOAD_CHANGED], 0, loadEvent);
+}
+
+void webkitWebViewDocumentLoaded(WebKitWebView* webView)
+{
+    g_signal_emit(webView, signals[DOCUMENT_LOADED], 0);
 }
 
 void webkitWebViewLoadFailed(WebKitWebView* webView, WebKitLoadEvent loadEvent, const char* failingURI, GError *error)

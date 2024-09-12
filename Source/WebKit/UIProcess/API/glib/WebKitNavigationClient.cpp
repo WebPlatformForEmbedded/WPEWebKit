@@ -153,6 +153,11 @@ private:
         webkitWebViewMakePolicyDecision(m_webView, WEBKIT_POLICY_DECISION_TYPE_RESPONSE, decision.get());
     }
 
+    void didFinishDocumentLoad(WebKit::WebPageProxy&, API::Navigation*, API::Object*)
+    {
+        webkitWebViewDocumentLoaded(m_webView);
+    }
+
     WebKitWebView* m_webView;
 };
 
