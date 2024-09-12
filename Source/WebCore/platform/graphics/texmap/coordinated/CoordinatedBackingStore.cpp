@@ -139,8 +139,10 @@ void CoordinatedBackingStore::paintToTextureMapper(TextureMapper& textureMapper,
 void CoordinatedBackingStore::drawBorder(TextureMapper& textureMapper, const Color& borderColor, float borderWidth, const FloatRect& targetRect, const TransformationMatrix& transform)
 {
     TransformationMatrix adjustedTransform = transform * adjustedTransformForRect(targetRect);
-    for (auto& tile : m_tiles.values())
+    for (auto& tile : m_tiles.values()) {
+        fprintf(stdout, "CoordinatedBackingStore::drawBorder tile.rect() w: %f, h: %f\n", tile.rect().width(), tile.rect().height());
         textureMapper.drawBorder(borderColor, borderWidth, tile.rect(), adjustedTransform);
+    }
 }
 
 void CoordinatedBackingStore::drawRepaintCounter(TextureMapper& textureMapper, int repaintCount, const Color& borderColor, const FloatRect& targetRect, const TransformationMatrix& transform)

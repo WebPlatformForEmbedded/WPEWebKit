@@ -144,6 +144,7 @@ void GraphicsContextCairo::drawRect(const FloatRect& rect, float borderThickness
 
 void GraphicsContextCairo::drawNativeImage(NativeImage& nativeImage, const FloatSize&, const FloatRect& destRect, const FloatRect& srcRect, const ImagePaintingOptions& options)
 {
+    fprintf(stdout, "GraphicsContextCairo::drawNativeImage\n");
     auto& state = this->state();
     Cairo::drawPlatformImage(*this, nativeImage.platformImage().get(), destRect, srcRect, { options, state.imageInterpolationQuality() }, state.alpha(), Cairo::ShadowState(state));
 }

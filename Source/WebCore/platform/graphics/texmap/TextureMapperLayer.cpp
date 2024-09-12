@@ -169,10 +169,24 @@ void TextureMapperLayer::paintSelf(TextureMapperPaintOptions& options)
     options.textureMapper.setWrapMode(TextureMapper::StretchWrap);
     options.textureMapper.setPatternTransform(TransformationMatrix());
 
+    TextStream out;
+    out << transform;
+    fprintf(stdout, "TextureMapperLayer::paintSelf targetRect w: %f, h: %f, color: %s, transform: %s\n", targetRect.width(), targetRect.height(), m_state.debugBorderColor.debugDescription().utf8().data(), out.release().utf8().data());
+    // WTFReportBacktrace();
     if (backingStore) {
         backingStore->paintToTextureMapper(options.textureMapper, targetRect, transform, options.opacity);
-        if (m_state.showDebugBorders)
-            backingStore->drawBorder(options.textureMapper, m_state.debugBorderColor, m_state.debugBorderWidth, targetRect, transform);
+        if (m_state.showDebugBorders) {
+            if (targetRect.width() == 701.0)
+                backingStore->drawBorder(options.textureMapper, Color::red, m_state.debugBorderWidth+5, targetRect, transform);
+            else if (targetRect.width() == 704.0)
+                backingStore->drawBorder(options.textureMapper, Color::green, m_state.debugBorderWidth+5, targetRect, transform);
+            else if (targetRect.width() < 1000.0 && targetRect.width() > 700.0)
+                backingStore->drawBorder(options.textureMapper, m_state.debugBorderColor, m_state.debugBorderWidth+5, targetRect, transform);
+            else if (targetRect.height() == 380.0)
+                backingStore->drawBorder(options.textureMapper, Color::blue, m_state.debugBorderWidth+5, targetRect, transform);
+            else
+                backingStore->drawBorder(options.textureMapper, m_state.debugBorderColor, m_state.debugBorderWidth, targetRect, transform);
+        }
         // Only draw repaint count for the main backing store.
         if (m_state.showRepaintCounter)
             backingStore->drawRepaintCounter(options.textureMapper, m_state.repaintCount, m_state.debugBorderColor, targetRect, transform);
@@ -204,6 +218,7 @@ void TextureMapperLayer::paintSelf(TextureMapperPaintOptions& options)
     if (shouldClip)
         options.textureMapper.endClip();
 
+    fprintf(stdout, "TextureMapperLayer::paintSelf m_state.contentsRect w: %f, h: %f\n", m_state.contentsRect.width(), m_state.contentsRect.height());
     if (m_state.showDebugBorders)
         contentsLayer->drawBorder(options.textureMapper, m_state.debugBorderColor, m_state.debugBorderWidth, m_state.contentsRect, transform);
 }

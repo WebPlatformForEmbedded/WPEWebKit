@@ -57,7 +57,14 @@ void TiledBackingStore::createTilesIfNeeded(const IntRect& unscaledVisibleRect, 
 {
     IntRect scaledContentsRect = mapFromContents(contentsRect);
     IntRect visibleRect = mapFromContents(unscaledVisibleRect);
+    if (visibleRect.x() == -1917) {
+        fprintf(stdout, "PGPGPG\n");
+        WTFReportBacktrace();
+    }
     float coverAreaMultiplier = MemoryPressureHandler::singleton().isUnderMemoryPressure() ? 1.0f : 2.0f;
+    fprintf(stdout, "TiledBackingStore::createTilesIfNeeded coverAreaMultiplier: %f\n", coverAreaMultiplier);
+    fprintf(stdout, "TiledBackingStore::createTilesIfNeeded visibleRect x: %d, y: %d, h: %d, w: %d\n", visibleRect.x(), visibleRect.y(), visibleRect.height(), visibleRect.width());
+    fprintf(stdout, "TiledBackingStore::createTilesIfNeeded scaledContentsRect x: %d, y: %d, h: %d, w: %d\n", scaledContentsRect.x(), scaledContentsRect.y(), scaledContentsRect.height(), scaledContentsRect.width());
 
     bool didChange = m_trajectoryVector != m_pendingTrajectoryVector || m_visibleRect != visibleRect || m_rect != scaledContentsRect || m_coverAreaMultiplier != coverAreaMultiplier;
     if (didChange || m_pendingTileCreation)
@@ -141,7 +148,15 @@ void TiledBackingStore::createTiles(const IntRect& visibleRect, const IntRect& s
     // Update our backing store geometry.
     m_rect = scaledContentsRect;
     m_trajectoryVector = m_pendingTrajectoryVector;
+    // WTFReportBacktrace();
+    fprintf(stdout, "[%p] TiledBackingStore::createTiles m_pendingTrajectoryVector.x(): %f, m_pendingTrajectoryVector.y(): %f\n", this, m_pendingTrajectoryVector.x(), m_pendingTrajectoryVector.y());
     m_visibleRect = visibleRect;
+    // if (m_visibleRect.x() == -1917) {
+    //     fprintf(stdout, "TiledBackingStore::createTiles m_visibleRect.x() == -1917\n");
+    //     m_visibleRect.setX(416);
+    // } else {
+    //     fprintf(stdout, "TiledBackingStore::createTiles m_visibleRect.x(): %d\n", m_visibleRect.x());
+    // }
     m_coverAreaMultiplier = coverAreaMultiplier;
 
     if (m_rect.isEmpty()) {
@@ -194,11 +209,15 @@ void TiledBackingStore::createTiles(const IntRect& visibleRect, const IntRect& s
     Vector<Tile::Coordinate> tilesToCreate;
     unsigned requiredTileCount = 0;
 
+    fprintf(stdout, "TiledBackingStore::createTiles m_rect x: %d,  y: %d,  maxX: %d,  maxY: %d\n", m_rect.x(), m_rect.y(), m_rect.maxX(), m_rect.maxY());
+    fprintf(stdout, "TiledBackingStore::createTiles coverRect x: %d,  y: %d,  maxX: %d,  maxY: %d\n", coverRect.x(), coverRect.y(), coverRect.maxX(), coverRect.maxY());
+    fprintf(stdout, "TiledBackingStore::createTiles m_visibleRect x: %d,  y: %d,  maxX: %d,  maxY: %d\n", m_visibleRect.x(), m_visibleRect.y(), m_visibleRect.maxX(), m_visibleRect.maxY());
     // Cover areas (in tiles) with minimum distance from the visible rect. If the visible rect is
     // not covered already it will be covered first in one go, due to the distance being 0 for tiles
     // inside the visible rect.
     Tile::Coordinate topLeft = tileCoordinateForPoint(coverRect.location());
     Tile::Coordinate bottomRight = tileCoordinateForPoint(innerBottomRight(coverRect));
+    fprintf(stdout, "TiledBackingStore::createTiles topLeft.x(): %d,  topLeft.y(): %d,  bottomRight.x(): %d,  bottomRight.y(): %d\n", topLeft.x(), topLeft.y(), bottomRight.x(), bottomRight.y());
     for (int yCoordinate = topLeft.y(); yCoordinate <= bottomRight.y(); ++yCoordinate) {
         for (int xCoordinate = topLeft.x(); xCoordinate <= bottomRight.x(); ++xCoordinate) {
             Tile::Coordinate currentCoordinate(xCoordinate, yCoordinate);
@@ -206,6 +225,11 @@ void TiledBackingStore::createTiles(const IntRect& visibleRect, const IntRect& s
                 continue;
             ++requiredTileCount;
             double distance = tileDistance(m_visibleRect, currentCoordinate);
+            auto tile = tileRectForCoordinate(currentCoordinate);
+            fprintf(stdout, "TiledBackingStore::createTiles tileRectForCoordinate(tileCoordinate) x: %d,  y: %d,  maxX: %d,  maxY: %d\n", tile.x(), tile.y(), tile.maxX(), tile.maxY());
+            fprintf(stdout, "TiledBackingStore::createTiles distance: %f, shortestDistance: %f\n", distance, shortestDistance);
+            if (m_rect.maxX() == 670)
+                distance = 0;
             if (distance > shortestDistance)
                 continue;
             if (distance < shortestDistance) {
@@ -218,9 +242,12 @@ void TiledBackingStore::createTiles(const IntRect& visibleRect, const IntRect& s
 
     // Now construct the tile(s) within the shortest distance.
     unsigned tilesToCreateCount = tilesToCreate.size();
+    fprintf(stdout, "TiledBackingStore::createTiles tilesToCreateCount: %d\n", tilesToCreateCount);
+
     for (unsigned n = 0; n < tilesToCreateCount; ++n) {
         Tile::Coordinate coordinate = tilesToCreate[n];
         m_tiles.add(coordinate, makeUnique<Tile>(*this, coordinate));
+        fprintf(stdout, "TiledBackingStore::createTiles newTile h: %d, w: %d\n", m_tiles.get(coordinate)->rect().height(), m_tiles.get(coordinate)->rect().width());
     }
     requiredTileCount -= tilesToCreateCount;
 
@@ -306,7 +333,9 @@ void TiledBackingStore::computeCoverAndKeepRect(const IntRect& visibleRect, IntR
         ASSERT(keepRect.contains(coverRect));
     }
 
+    fprintf(stdout, "TiledBackingStore::createTiles before adjustForContentsRect coverRect x: %d,  y: %d,  maxX: %d,  maxY: %d\n", coverRect.x(), coverRect.y(), coverRect.maxX(), coverRect.maxY());
     adjustForContentsRect(coverRect);
+    fprintf(stdout, "TiledBackingStore::createTiles after adjustForContentsRect coverRect x: %d,  y: %d,  maxX: %d,  maxY: %d\n", coverRect.x(), coverRect.y(), coverRect.maxX(), coverRect.maxY());
 
     // The keep rect is an inflated version of the cover rect, inflated in tile dimensions.
     keepRect.unite(coverRect);

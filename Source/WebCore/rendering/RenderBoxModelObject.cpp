@@ -1089,6 +1089,7 @@ LayoutSize RenderBoxModelObject::calculateImageIntrinsicDimensions(StyleImage* i
 
 LayoutSize RenderBoxModelObject::calculateFillTileSize(const FillLayer& fillLayer, const LayoutSize& positioningAreaSize) const
 {
+    fprintf(stdout, "RenderBoxModelObject::calculateFillTileSize positioningAreaSize h: %d, w: %d\n", positioningAreaSize.height().toInt(), positioningAreaSize.width().toInt());
     StyleImage* image = fillLayer.image();
     FillSizeType type = fillLayer.size().type;
     auto devicePixelSize = LayoutUnit { 1.0 / document().deviceScaleFactor() };
@@ -1137,6 +1138,7 @@ LayoutSize RenderBoxModelObject::calculateFillTileSize(const FillLayer& fillLaye
         }
 
         tileSize.clampNegativeToZero();
+        fprintf(stdout, "RenderBoxModelObject::calculateFillTileSize tileSize h: %d, w: %d\n", tileSize.height().toInt(), tileSize.width().toInt());
         return tileSize;
     }
     case FillSizeType::None: {
@@ -1161,7 +1163,9 @@ LayoutSize RenderBoxModelObject::calculateFillTileSize(const FillLayer& fillLaye
         if (localImageIntrinsicSize.isEmpty())
             return { };
         
-        return LayoutSize(localImageIntrinsicSize.scaled(scaleFactor).expandedTo({ devicePixelSize, devicePixelSize }));
+        auto retLayoutSize = LayoutSize(localImageIntrinsicSize.scaled(scaleFactor).expandedTo({ devicePixelSize, devicePixelSize }));
+        fprintf(stdout, "RenderBoxModelObject::calculateFillTileSize retLayoutSize h: %d, w: %d\n", retLayoutSize.height().toInt(), retLayoutSize.width().toInt());
+        return retLayoutSize;
     }
     }
 
