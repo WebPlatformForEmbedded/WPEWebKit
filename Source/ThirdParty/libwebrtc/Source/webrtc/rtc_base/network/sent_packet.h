@@ -31,6 +31,7 @@ enum class PacketType {
 enum class PacketInfoProtocolType {
   kUnknown,
   kUdp,
+  kDtls,
   kTcp,
   kSsltcp,
   kTls,

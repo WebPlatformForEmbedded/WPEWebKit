@@ -52,6 +52,58 @@ AsyncPacketSocket* BasicPacketSocketFactory::CreateUdpSocket(
   return new AsyncUDPSocket(socket);
 }
 
+AsyncPacketSocket* BasicPacketSocketFactory::CreateClientUdpSocket(
+    const SocketAddress& local_address,
+    const SocketAddress& remote_address,
+    uint16_t min_port,
+    uint16_t max_port,
+    const PacketSocketOptions& udp_options) {
+
+  Socket* socket = socket_factory_->CreateSocket(local_address.family(), SOCK_DGRAM);
+  if (!socket) {
+    return NULL;
+  }
+  if (BindSocket(socket, local_address, min_port, max_port) < 0) {
+    RTC_LOG(LS_ERROR) << "UDP bind failed with error " << socket->GetError();
+    delete socket;
+    return NULL;
+  }
+  // Assert that at most one DTLS option is used.
+  int udpOpts = udp_options.opts & (PacketSocketFactory::OPT_DTLS |
+                                    PacketSocketFactory::OPT_DTLS_INSECURE);
+
+  RTC_DCHECK((udpOpts & (udpOpts - 0x10)) == 0);
+  if ((udpOpts & PacketSocketFactory::OPT_DTLS) ||
+      (udpOpts & PacketSocketFactory::OPT_DTLS_INSECURE)) {
+    if (socket->Connect(remote_address) < 0) {
+      RTC_LOG(LS_ERROR) << "UDP connect failed with error "
+                        << socket->GetError();
+      delete socket;
+      return NULL;
+    }
+    // Using TLS, wrap the socket in an SSL adapter.
+    SSLAdapter* ssl_adapter = SSLAdapter::Create(socket);
+    if (!ssl_adapter) {
+      return NULL;
+    }
+
+    ssl_adapter->SetMode(rtc::SSL_MODE_DTLS);
+    if (udpOpts & PacketSocketFactory::OPT_DTLS_INSECURE) {
+      ssl_adapter->SetIgnoreBadCert(true);
+    }
+
+    ssl_adapter->SetAlpnProtocols(udp_options.tls_alpn_protocols);
+    ssl_adapter->SetEllipticCurves(udp_options.tls_elliptic_curves);
+    ssl_adapter->SetCertVerifier(udp_options.tls_cert_verifier);
+    socket = ssl_adapter;
+    if (ssl_adapter->StartSSL(remote_address.hostname().c_str()) != 0) {
+      delete ssl_adapter;
+      return NULL;
+    }
+  }
+  return new AsyncUDPSocket(socket);
+}
+
 AsyncListenSocket* BasicPacketSocketFactory::CreateServerTcpSocket(
     const SocketAddress& local_address,
     uint16_t min_port,
@@ -89,7 +141,7 @@ AsyncPacketSocket* BasicPacketSocketFactory::CreateClientTcpSocket(
     const SocketAddress& remote_address,
     const ProxyInfo& proxy_info,
     const std::string& user_agent,
-    const PacketSocketTcpOptions& tcp_options) {
+    const PacketSocketOptions& tcp_options) {
   Socket* socket =
       socket_factory_->CreateSocket(local_address.family(), SOCK_STREAM);
   if (!socket) {

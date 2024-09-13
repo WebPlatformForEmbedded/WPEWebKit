@@ -178,6 +178,23 @@ void NetworkRTCProvider::createUDPSocket(LibWebRTCSocketIdentifier identifier, c
     createSocket(identifier, WTFMove(socket), Socket::Type::UDP, m_ipcConnection.copyRef());
 }
 
+void NetworkRTCProvider::createClientUDPSocket(LibWebRTCSocketIdentifier identifier, const RTCNetwork::SocketAddress& localAddress, const RTCNetwork::SocketAddress& remoteAddress, uint16_t minPort, uint16_t maxPort, int options, WebPageProxyIdentifier pageIdentifier, bool isFirstParty, bool isRelayDisabled, WebCore::RegistrableDomain&& domain)
+{
+    ASSERT(m_rtcNetworkThread.IsCurrent());
+    
+#if PLATFORM(COCOA)
+    if (m_platformUDPSocketsEnabled) {
+        auto socket = makeUnique<NetworkRTCUDPSocketCocoa>(identifier, *this, remoteAddress.value, m_ipcConnection.copyRef(), String(attributedBundleIdentifierFromPageIdentifier(pageIdentifier)), isFirstParty, isRelayDisabled, WTFMove(domain));
+        addSocket(identifier, WTFMove(socket));
+        return;
+    }
+#endif
+    rtc::PacketSocketOptions udpOptions;
+    udpOptions.opts = options;
+    std::unique_ptr<rtc::AsyncPacketSocket> socket(m_packetSocketFactory->CreateClientUdpSocket(localAddress.value, remoteAddress.value, minPort, maxPort, udpOptions));
+    createSocket(identifier, WTFMove(socket), Socket::Type::UDP, m_ipcConnection.copyRef());
+}
+
 #if !PLATFORM(COCOA)
 rtc::ProxyInfo NetworkRTCProvider::proxyInfoFromSession(const RTCNetwork::SocketAddress&, NetworkSession&)
 {
@@ -211,7 +228,7 @@ void NetworkRTCProvider::createClientTCPSocket(LibWebRTCSocketIdentifier identif
         }
         callOnRTCNetworkThread([this, identifier, localAddress = RTCNetwork::isolatedCopy(localAddress.value), remoteAddress = RTCNetwork::isolatedCopy(remoteAddress.value), proxyInfo = proxyInfoFromSession(remoteAddress, *session), userAgent = WTFMove(userAgent).isolatedCopy(), options]() mutable {
 
-            rtc::PacketSocketTcpOptions tcpOptions;
+            rtc::PacketSocketOptions tcpOptions;
             tcpOptions.opts = options;
             std::unique_ptr<rtc::AsyncPacketSocket> socket(m_packetSocketFactory->CreateClientTcpSocket(localAddress, remoteAddress, proxyInfo, userAgent.utf8().data(), tcpOptions));
             createSocket(identifier, WTFMove(socket), Socket::Type::ClientTCP, m_ipcConnection.copyRef());

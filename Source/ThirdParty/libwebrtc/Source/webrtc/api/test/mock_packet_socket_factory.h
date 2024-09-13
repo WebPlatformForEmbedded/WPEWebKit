@@ -34,7 +34,7 @@ class MockPacketSocketFactory : public PacketSocketFactory {
                const SocketAddress&,
                const ProxyInfo&,
                const std::string&,
-               const PacketSocketTcpOptions&),
+               const PacketSocketOptions&),
               (override));
   MOCK_METHOD(std::unique_ptr<webrtc::AsyncDnsResolverInterface>,
               CreateAsyncDnsResolver,

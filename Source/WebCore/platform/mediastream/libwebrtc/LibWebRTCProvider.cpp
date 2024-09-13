@@ -114,12 +114,17 @@ public:
         return m_socketFactory->CreateUdpSocket(prepareSocketAddress(address, m_disableNonLocalhostConnections), minPort, maxPort);
     }
 
+    rtc::AsyncPacketSocket* CreateClientUdpSocket(const rtc::SocketAddress& localAddress, const rtc::SocketAddress& remoteAddress, uint16_t minPort, uint16_t maxPort, const rtc::PacketSocketOptions& options)
+    {
+        return m_socketFactory->CreateClientUdpSocket(prepareSocketAddress(localAddress, m_disableNonLocalhostConnections), remoteAddress, minPort, maxPort, options);
+    }
+
     rtc::AsyncListenSocket* CreateServerTcpSocket(const rtc::SocketAddress&, uint16_t, uint16_t, int) final
     {
         return nullptr;
     }
 
-    rtc::AsyncPacketSocket* CreateClientTcpSocket(const rtc::SocketAddress& localAddress, const rtc::SocketAddress& remoteAddress, const rtc::ProxyInfo& info, const std::string& name, const rtc::PacketSocketTcpOptions& options)
+    rtc::AsyncPacketSocket* CreateClientTcpSocket(const rtc::SocketAddress& localAddress, const rtc::SocketAddress& remoteAddress, const rtc::ProxyInfo& info, const std::string& name, const rtc::PacketSocketOptions& options)
     {
         return m_socketFactory->CreateClientTcpSocket(prepareSocketAddress(localAddress, m_disableNonLocalhostConnections), remoteAddress, info, name, options);
     }

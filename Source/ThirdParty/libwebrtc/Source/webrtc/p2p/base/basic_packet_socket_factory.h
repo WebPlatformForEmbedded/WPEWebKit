@@ -37,6 +37,14 @@ class RTC_EXPORT BasicPacketSocketFactory : public PacketSocketFactory {
   AsyncPacketSocket* CreateUdpSocket(const SocketAddress& local_address,
                                      uint16_t min_port,
                                      uint16_t max_port) override;
+
+  AsyncPacketSocket* CreateClientUdpSocket(
+      const SocketAddress& local_address,
+      const SocketAddress& remote_address,
+      uint16_t min_port,
+      uint16_t max_port,
+      const PacketSocketOptions& options) override;
+
   AsyncListenSocket* CreateServerTcpSocket(const SocketAddress& local_address,
                                            uint16_t min_port,
                                            uint16_t max_port,
@@ -46,7 +54,7 @@ class RTC_EXPORT BasicPacketSocketFactory : public PacketSocketFactory {
       const SocketAddress& remote_address,
       const ProxyInfo& proxy_info,
       const std::string& user_agent,
-      const PacketSocketTcpOptions& tcp_options) override;
+      const PacketSocketOptions& tcp_options) override;
 
   // TODO(bugs.webrtc.org/12598) Remove when downstream stops using it.
   ABSL_DEPRECATED("Use CreateAsyncDnsResolver")
