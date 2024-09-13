@@ -1141,6 +1141,7 @@ private:
     bool m_elementIsHidden : 1;
     bool m_elementWasRemovedFromDOM : 1;
     bool m_creatingControls : 1;
+    bool m_partiallyDeinitialized : 1;
     bool m_receivedLayoutSizeChanged : 1;
     bool m_hasEverNotifiedAboutPlaying : 1;
 
