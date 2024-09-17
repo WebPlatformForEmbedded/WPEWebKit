@@ -1749,7 +1749,7 @@ static void webkit_settings_class_init(WebKitSettingsClass* klass)
         "enable-ice-candidate-filtering",
         _("Enable ICE candidate filtering"),
         _("Whether ICE candidate filtering should be enabled."),
-        TRUE,
+        FALSE,
         readWriteConstructParamFlags);
 
     g_object_class_install_properties(gObjectClass, N_PROPERTIES, sObjProperties);
