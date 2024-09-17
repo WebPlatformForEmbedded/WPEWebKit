@@ -63,39 +63,10 @@ GStreamerVideoCaptureDeviceManager& GStreamerVideoCaptureDeviceManager::singleto
     return manager;
 }
 
-void teardownGStreamerCaptureDeviceManagers()
-{
-    auto& audioManager = GStreamerAudioCaptureDeviceManager::singleton();
-    audioManager.teardown();
-
-    auto& videoManager = GStreamerVideoCaptureDeviceManager::singleton();
-    videoManager.teardown();
-}
-
 GStreamerCaptureDeviceManager::~GStreamerCaptureDeviceManager()
 {
-    teardown();
-}
-
-void GStreamerCaptureDeviceManager::teardown()
-{
-    GST_DEBUG_OBJECT(m_deviceMonitor.get(), "Tearing down");
-    m_isTearingDown = true;
-    stopMonitor();
-    RealtimeMediaSourceCenter::singleton().removeDevicesChangedObserver(*this);
-    m_devices.clear();
-    m_gstreamerDevices.clear();
-}
-
-void GStreamerCaptureDeviceManager::stopMonitor()
-{
-    if (!m_deviceMonitor)
-        return;
-
-    auto bus = adoptGRef(gst_device_monitor_get_bus(m_deviceMonitor.get()));
-    gst_bus_remove_watch(bus.get());
-    gst_device_monitor_stop(m_deviceMonitor.get());
-    m_deviceMonitor.clear();
+    if (m_deviceMonitor)
+        gst_device_monitor_stop(m_deviceMonitor.get());
 }
 
 std::optional<GStreamerCaptureDevice> GStreamerCaptureDeviceManager::gstreamerDeviceWithUID(const String& deviceID)
@@ -116,7 +87,7 @@ const Vector<CaptureDevice>& GStreamerCaptureDeviceManager::captureDevices()
     std::call_once(onceFlag, [] {
         GST_DEBUG_CATEGORY_INIT(webkitGStreamerCaptureDeviceManagerDebugCategory, "webkitcapturedevicemanager", 0, "WebKit Capture Device Manager");
     });
-    if (m_devices.isEmpty() && !m_isTearingDown)
+    if (m_devices.isEmpty())
         refreshCaptureDevices();
 
     return m_devices;
@@ -158,12 +129,7 @@ void GStreamerCaptureDeviceManager::addDevice(GRefPtr<GstDevice>&& device)
 
 void GStreamerCaptureDeviceManager::refreshCaptureDevices()
 {
-    GST_DEBUG_OBJECT(m_deviceMonitor.get(), "Refreshing capture devices");
     m_devices.clear();
-    m_gstreamerDevices.clear();
-    if (m_isTearingDown)
-        return;
-
     if (!m_deviceMonitor) {
         m_deviceMonitor = adoptGRef(gst_device_monitor_new());
 
