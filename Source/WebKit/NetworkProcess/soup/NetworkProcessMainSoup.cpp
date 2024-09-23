@@ -52,6 +52,13 @@ public:
         // FIXME: Is this still needed? We should probably destroy all existing sessions at this point instead.
         // Needed to destroy the SoupSession and SoupCookieJar, e.g. to avoid
         // leaking SQLite temporary journaling files.
+        Vector<PAL::SessionID> sessionIDs;
+        process().forEachNetworkSession([&sessionIDs](auto& session) {
+            sessionIDs.append(session.sessionID());
+        });
+        for (auto& sessionID : sessionIDs) {
+            process().destroySession(sessionID);
+        }
         process().destroySession(PAL::SessionID::defaultSessionID());
     }
 };
