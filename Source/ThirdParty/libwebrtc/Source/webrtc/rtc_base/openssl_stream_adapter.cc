@@ -61,6 +61,13 @@
 namespace rtc {
 namespace {
 using ::webrtc::SafeTask;
+
+static FILE *g_keylog_file = nullptr;
+static void KeyLogCallback(const SSL *ssl, const char *line) {
+  fprintf(g_keylog_file, "%s\n", line);
+  fflush(g_keylog_file);
+}
+
 // SRTP cipher suite table. `internal_name` is used to construct a
 // colon-separated profile strings which is needed by
 // SSL_CTX_set_tlsext_use_srtp().
@@ -1034,6 +1041,14 @@ SSL_CTX* OpenSSLStreamAdapter::SetupSSLContext() {
 #endif
   if (ctx == nullptr) {
     return nullptr;
+  }
+
+  const char *keylog_filepath = getenv("SSLKEYLOGFILE");
+  if (keylog_filepath) {
+    g_keylog_file = fopen(keylog_filepath, "a");
+    if (g_keylog_file) {
+      SSL_CTX_set_keylog_callback(ctx, KeyLogCallback);
+    }
   }
 
   if (support_legacy_tls_protocols_flag_) {
