@@ -433,6 +433,11 @@ void MediaPlayerPrivateGStreamer::play()
         return;
     }
 
+    if(m_isBuffering) {
+        GST_DEBUG_OBJECT(pipeline(), "Ignoring play from app while buffering");
+        return;
+    }
+
     if (isMediaStreamPlayer()) {
         m_pausedTime = MediaTime::invalidTime();
         if (m_startTime.isInvalid())
