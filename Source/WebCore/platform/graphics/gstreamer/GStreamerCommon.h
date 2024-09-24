@@ -334,6 +334,61 @@ GstBuffer* gstBufferNewWrappedFast(void* data, size_t length);
 GstElement* makeGStreamerElement(const char* factoryName, const char* name);
 GstElement* makeGStreamerBin(const char* description, bool ghostUnlinkedPads);
 
+template<typename T>
+inline std::optional<T> gstStructureGet(const GstStructure* structure, ASCIILiteral key)
+{
+    static_assert(std::is_same_v<T, int> || std::is_same_v<T, int64_t> || std::is_same_v<T, unsigned> || std::is_same_v<T, uint64_t> || std::is_same_v<T, double>);
+
+    T value;
+    if constexpr(std::is_same_v<T, int>) {
+        if (gst_structure_get_int(structure, key.characters(), &value))
+            return value;
+    } else if constexpr(std::is_same_v<T, int64_t>) {
+        if (gst_structure_get_int64(structure, key.characters(), &value))
+            return value;
+    } else if constexpr(std::is_same_v<T, unsigned>) {
+        if (gst_structure_get_uint(structure, key.characters(), &value))
+            return value;
+    } else if constexpr(std::is_same_v<T, uint64_t>) {
+        if (gst_structure_get_uint64(structure, key.characters(), &value))
+            return value;
+    } else if constexpr(std::is_same_v<T, double>) {
+        if (gst_structure_get_double(structure, key.characters(), &value))
+            return value;
+    }
+    return std::nullopt;
+}
+
+template<typename T>
+inline Vector<T> gstStructureGetArray(const GstStructure* structure, ASCIILiteral key)
+{
+    static_assert(std::is_same_v<T, int> || std::is_same_v<T, int64_t> || std::is_same_v<T, unsigned>
+        || std::is_same_v<T, uint64_t> || std::is_same_v<T, double> || std::is_same_v<T, const GstStructure*>);
+    Vector<T> result;
+    if (!structure)
+        return result;
+    const GValue* array = gst_structure_get_value(structure, key.characters());
+    if (!GST_VALUE_HOLDS_ARRAY (array))
+        return result;
+    unsigned size = gst_value_array_get_size(array);
+    for (unsigned i = 0; i < size; i++) {
+        const GValue* item = gst_value_array_get_value(array, i);
+        if constexpr(std::is_same_v<T, int>)
+            result.append(g_value_get_int(item));
+        else if constexpr(std::is_same_v<T, int64_t>)
+            result.append(g_value_get_int64(item));
+        else if constexpr(std::is_same_v<T, unsigned>)
+            result.append(g_value_get_uint(item));
+        else if constexpr(std::is_same_v<T, uint64_t>)
+            result.append(g_value_get_uint64(item));
+        else if constexpr(std::is_same_v<T, double>)
+            result.append(g_value_get_double(item));
+        else if constexpr(std::is_same_v<T, const GstStructure*>)
+            result.append(gst_value_get_structure(item));
+    }
+    return result;
+}
+
 String gstStructureToJSONString(const GstStructure*);
 
 // gst_element_get_current_running_time() is GStreamer 1.18 API, so for older versions we use a local
