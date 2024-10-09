@@ -164,8 +164,8 @@ WTF_MAKE_ISO_ALLOCATED_IMPL(WebGLRenderingContextBase);
 static constexpr Seconds secondsBetweenRestoreAttempts { 1_s };
 static constexpr int maxGLErrorsAllowedToConsole = 256;
 static constexpr Seconds checkContextLossHandlingDelay { 3_s };
-static constexpr size_t maxActiveContexts = 16;
-static constexpr size_t maxActiveWorkerContexts = 4;
+static constexpr size_t maxActiveContexts = 1;
+static constexpr size_t maxActiveWorkerContexts = 1;
 
 namespace {
     
