@@ -48,7 +48,7 @@ static const double s_conservativeThresholdFraction = 0.8;
 static const double s_strictThresholdFraction = 0.9;
 #endif
 static const std::optional<double> s_killThresholdFraction;
-static const Seconds s_pollInterval = 30_s;
+static const Seconds s_pollInterval = 5_s;
 
 // This file contains the amount of video memory used, and will be filled by some other
 // platform component. It's a text file containing an unsigned integer value.

@@ -807,7 +807,7 @@ void VM::shrinkFootprintWhenIdle()
 {
     whenIdle([=, this] () {
         sanitizeStackForVM(*this);
-        deleteAllCode(DeleteAllCodeIfNotCollecting);
+        deleteAllCode(PreventCollectionAndDeleteAllCode);
         heap.collectNow(Synchronousness::Sync, CollectionScope::Full);
         // FIXME: Consider stopping various automatic threads here.
         // https://bugs.webkit.org/show_bug.cgi?id=185447
