@@ -606,7 +606,7 @@ void WorkerGlobalScope::deleteJSCodeAndGC(Synchronous synchronous)
             return;
         }
     }
-#if PLATFORM(IOS_FAMILY)
+#if PLATFORM(IOS_FAMILY) || PLATFORM(BROADCOM)
     if (!vm().heap.currentThreadIsDoingGCWork()) {
         vm().heap.collectNowFullIfNotDoneRecently(JSC::Async);
         return;

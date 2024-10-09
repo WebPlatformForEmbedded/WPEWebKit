@@ -126,7 +126,7 @@ static void releaseCriticalMemory(Synchronous synchronous, MaintainBackForwardCa
         GCController::singleton().deleteAllCode(JSC::DeleteAllCodeIfNotCollecting);
         GCController::singleton().garbageCollectNow();
     } else {
-#if PLATFORM(IOS_FAMILY)
+#if PLATFORM(IOS_FAMILY) || PLATFORM(BROADCOM)
         GCController::singleton().garbageCollectNowIfNotDoneRecently();
 #else
         GCController::singleton().garbageCollectSoon();
