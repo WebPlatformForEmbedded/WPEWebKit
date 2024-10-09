@@ -1238,6 +1238,13 @@ void WebGLRenderingContextBase::removeActivityStateChangeObserver()
 
 WebGLRenderingContextBase::~WebGLRenderingContextBase()
 {
+    if (!m_isPendingPolicyResolution) {
+        // need to remove from the group first, before we destroy the graphics context
+        // othwerwise, in case this is the last context in the group, when the context group tries
+        // to cleanup the remaining objects, it will not call deleteImpl (see WebGLObject::deleteObject)
+        // since the context is no longer available
+        m_contextGroup->removeContext(*this);
+    }
     // Remove all references to WebGLObjects so if they are the last reference
     // they will be freed before the last context is removed from the context group.
     m_boundArrayBuffer = nullptr;
@@ -1262,7 +1269,6 @@ WebGLRenderingContextBase::~WebGLRenderingContextBase()
         detachAndRemoveAllObjects();
         loseExtensions(LostContextMode::RealLostContext);
         destroyGraphicsContextGL();
-        m_contextGroup->removeContext(*this);
     }
 
     {
@@ -1299,6 +1305,8 @@ void WebGLRenderingContextBase::destroyGraphicsContextGL()
     removeActivityStateChangeObserver();
 
     if (m_context) {
+        // first release the big textures allocated for the FBOs
+        m_context->reshape(0,0);
         m_context->setClient(nullptr);
         m_context = nullptr;
         removeActiveContext(*this);
