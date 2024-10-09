@@ -251,10 +251,6 @@ bool InjectedBundle::isProcessingUserGesture()
 void InjectedBundle::garbageCollectJavaScriptObjects()
 {
     GCController::singleton().garbageCollectNow();
-    WTF::releaseFastMallocFreeMemory();
-
-    JSLockHolder lock(commonVM());
-    commonVM().shrinkFootprintWhenIdle();
 }
 
 void InjectedBundle::garbageCollectJavaScriptObjectsOnAlternateThreadForDebugging(bool waitUntilDone)

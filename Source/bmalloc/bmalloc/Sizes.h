@@ -68,9 +68,7 @@ static constexpr size_t largeAlignmentMask = largeAlignment - 1;
 static constexpr size_t deallocatorLogCapacity = 512;
 static constexpr size_t bumpRangeCacheCapacity = 3;
 
-// can be overriden with WPE_BMALLOC_SCAVENGER_BYTES_PER_MEMORY_PRESSURE_CHECK env
 static constexpr size_t scavengerBytesPerMemoryPressureCheck = 16 * MB;
-// can be overriden with WPE_BMALLOC_MEMORY_PRESSURE_THRESHOLD env
 static constexpr double memoryPressureThreshold = 0.75;
 
 static constexpr size_t maskSizeClassCount = maskSizeClassMax / alignment;

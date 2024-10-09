@@ -50,8 +50,6 @@ namespace bmalloc {
 
 static constexpr bool verbose = false;
 
-double from_env_or_default(const char *envname, size_t defaultValue);
-
 struct PrintTime {
     PrintTime(const char* str) 
         : string(str)
@@ -128,9 +126,8 @@ void Scavenger::scheduleIfUnderMemoryPressure(size_t bytes)
 
 void Scavenger::scheduleIfUnderMemoryPressure(const LockHolder& lock, size_t bytes)
 {
-    static const size_t effective_scavengerBytesPerMemoryPressureCheck = (size_t) from_env_or_default("WPE_BMALLOC_SCAVENGER_BYTES_PER_MEMORY_PRESSURE_CHECK", scavengerBytesPerMemoryPressureCheck);
     m_scavengerBytes += bytes;
-    if (m_scavengerBytes < effective_scavengerBytesPerMemoryPressureCheck)
+    if (m_scavengerBytes < scavengerBytesPerMemoryPressureCheck)
         return;
 
     m_scavengerBytes = 0;

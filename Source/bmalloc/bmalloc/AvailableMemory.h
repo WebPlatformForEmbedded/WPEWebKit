@@ -32,8 +32,6 @@ namespace bmalloc {
 
 BEXPORT size_t availableMemory();
 
-double from_env_or_default(const char *envname, size_t defaultValue);
-
 #if BPLATFORM(IOS_FAMILY) || BOS(LINUX) || BOS(FREEBSD)
 struct MemoryStatus {
     MemoryStatus(size_t memoryFootprint, double percentAvailableMemoryInUse)
@@ -64,8 +62,7 @@ inline double percentAvailableMemoryInUse()
 inline bool isUnderMemoryPressure()
 {
 #if BPLATFORM(IOS_FAMILY) || BOS(LINUX) || BOS(FREEBSD)
-    static const double effective_memoryPressureThreshold = from_env_or_default("WPE_BMALLOC_MEMORY_PRESSURE_THRESHOLD", memoryPressureThreshold);
-    return percentAvailableMemoryInUse() > effective_memoryPressureThreshold;
+    return percentAvailableMemoryInUse() > memoryPressureThreshold;
 #else
     return false;
 #endif

@@ -63,15 +63,6 @@ namespace bmalloc {
 
 static constexpr size_t availableMemoryGuess = 512 * bmalloc::MB;
 
-double from_env_or_default(const char *envname, size_t defaultValue) {
-    double val = defaultValue;
-    const char *ev = getenv(envname);
-    if (ev) {
-        val = atof(ev);
-    }
-    return val;
-}
-
 #if BOS(DARWIN)
 static size_t memorySizeAccordingToKernel()
 {
@@ -158,29 +149,6 @@ struct LinuxMemory {
 };
 #endif
 
-static size_t customRAMSize()
-{
-    // Syntax: Case insensitive, unit multipliers (M=Mb, K=Kb, <empty>=bytes).
-    // Example: WPE_RAM_SIZE='500M'
-
-    size_t customSize = 0;
-
-    const char *s = getenv("WPE_RAM_SIZE");
-    if (s) {
-        size_t len = strlen(s);
-        size_t val = atoi(s);
-        size_t units = 1;
-        if (s[len-1] == 'k' || s[len-1] == 'K')
-            units = 1024;
-        else if (s[len-1] == 'm' || s[len-1] == 'M')
-            units = 1024*1024;
-        return units * val;
-    }
-
-    return customSize;
-}
-
-
 static size_t computeAvailableMemory()
 {
 #if BOS(DARWIN)
@@ -194,10 +162,6 @@ static size_t computeAvailableMemory()
     // (for example) and we have code that depends on those boundaries.
     return ((sizeAccordingToKernel + multiple - 1) / multiple) * multiple;
 #elif BOS(FREEBSD) || BOS(LINUX)
-    size_t customRamSize = customRAMSize();
-    if (customRamSize) {
-        return customRamSize;
-    }
     struct sysinfo info;
     if (!sysinfo(&info))
         return info.totalram * info.mem_unit;

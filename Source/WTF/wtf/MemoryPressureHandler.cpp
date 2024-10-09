@@ -40,7 +40,7 @@ namespace WTF {
 
 WTF_EXPORT_PRIVATE bool MemoryPressureHandler::ReliefLogger::s_loggingEnabled = false;
 
-#if PLATFORM(IOS_FAMILY) || PLATFORM(BROADCOM)
+#if PLATFORM(IOS_FAMILY)
 static const double s_conservativeThresholdFraction = 0.5;
 static const double s_strictThresholdFraction = 0.65;
 #else
@@ -48,21 +48,12 @@ static const double s_conservativeThresholdFraction = 0.8;
 static const double s_strictThresholdFraction = 0.9;
 #endif
 static const std::optional<double> s_killThresholdFraction;
-static const Seconds s_pollInterval = 5_s;
+static const Seconds s_pollInterval = 30_s;
 
 // This file contains the amount of video memory used, and will be filled by some other
 // platform component. It's a text file containing an unsigned integer value.
 static String s_GPUMemoryFile;
 static ssize_t s_envBaseThresholdVideo = 0;
-
-static double from_env_or_default(const char *envname, double defaultValue) {
-    double val = defaultValue;
-    const char *ev = getenv(envname);
-    if (ev) {
-        val = atof(ev);
-    }
-    return val;
-}
 
 static bool isWebProcess()
 {
@@ -460,8 +451,8 @@ void MemoryPressureHandler::setDispatchQueue(OSObjectPtr<dispatch_queue_t>&& que
 MemoryPressureHandler::Configuration::Configuration()
     : baseThreshold(std::min(3 * GB, ramSize()))
     , baseThresholdVideo(1 * GB)
-    , conservativeThresholdFraction(from_env_or_default("WPE_MEMORY_PRESSURE_HANDLER_CONSERVATIVE_THRESHOLD_FRACTION",s_conservativeThresholdFraction))
-    , strictThresholdFraction(from_env_or_default("WPE_MEMORY_PRESSURE_HANDLER_STRICT_THRESHOLD_FRACTION", s_strictThresholdFraction))
+    , conservativeThresholdFraction(s_conservativeThresholdFraction)
+    , strictThresholdFraction(s_strictThresholdFraction)
     , killThresholdFraction(s_killThresholdFraction)
     , pollInterval(s_pollInterval)
 {
