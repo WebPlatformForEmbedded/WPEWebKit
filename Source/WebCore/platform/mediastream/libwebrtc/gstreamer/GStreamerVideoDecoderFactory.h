@@ -26,6 +26,8 @@
 #include "api/video_codecs/video_decoder_factory.h"
 #include <wtf/Forward.h>
 
+#include <gst/gst.h>
+
 namespace WebCore {
 
 class GStreamerVideoDecoderFactory : public webrtc::VideoDecoderFactory {
@@ -40,6 +42,8 @@ private:
     bool m_isSupportingVP9Profile0;
     bool m_isSupportingVP9Profile2;
 };
+
+void MediaStreamDecodingErrorCallback(GstElement*, guint, gpointer, gpointer);
 }
 
 #endif
