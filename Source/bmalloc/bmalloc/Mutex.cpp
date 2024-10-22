@@ -31,6 +31,8 @@
 #include <mach/mach_traps.h>
 #include <mach/thread_switch.h>
 #endif
+#include <unistd.h>
+
 #include <thread>
 
 namespace bmalloc {
@@ -41,7 +43,10 @@ static inline void yield()
     constexpr mach_msg_timeout_t timeoutInMS = 1;
     thread_switch(MACH_PORT_NULL, SWITCH_OPTION_DEPRESS, timeoutInMS);
 #else
-    sched_yield();
+    // The use of sched_yield() can lead to a system hang when real time
+    // thread priorities are used, so use sleep in the absence of a better
+    // alternative.
+    usleep(150);
 #endif
 }
 
