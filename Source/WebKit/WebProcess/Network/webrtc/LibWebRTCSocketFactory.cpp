@@ -86,7 +86,26 @@ rtc::AsyncPacketSocket* LibWebRTCSocketFactory::createUdpSocket(const void* sock
     return socket.release();
 }
 
-rtc::AsyncPacketSocket* LibWebRTCSocketFactory::createClientTcpSocket(const void* socketGroup, const rtc::SocketAddress& localAddress, const rtc::SocketAddress& remoteAddress, String&& userAgent, const rtc::PacketSocketTcpOptions& options, WebPageProxyIdentifier pageIdentifier, bool isFirstParty, bool isRelayDisabled, const WebCore::RegistrableDomain& domain)
+rtc::AsyncPacketSocket* LibWebRTCSocketFactory::createClientUdpSocket(const void* socketGroup, const rtc::SocketAddress& localAddress, const rtc::SocketAddress& remoteAddress, uint16_t minPort, uint16_t maxPort, const rtc::PacketSocketOptions& options, WebPageProxyIdentifier pageIdentifier, bool isFirstParty, bool isRelayDisabled, const WebCore::RegistrableDomain& domain)
+{
+    ASSERT(!WTF::isMainRunLoop());
+    auto socket = makeUnique<LibWebRTCSocket>(*this, socketGroup, LibWebRTCSocket::Type::UDP, localAddress, remoteAddress);
+
+    if (m_connection) {
+        m_connection->send(Messages::NetworkRTCProvider::CreateClientUDPSocket(socket->identifier(), RTCNetwork::SocketAddress(localAddress), RTCNetwork::SocketAddress(remoteAddress), minPort, maxPort, options.opts, pageIdentifier, isFirstParty, isRelayDisabled, domain), 0);
+    } else {
+        callOnMainRunLoop([] {
+            WebProcess::singleton().ensureNetworkProcessConnection();
+        });
+        m_pendingMessageTasks.append([identifier = socket->identifier(), localAddress = RTCNetwork::SocketAddress(localAddress), remoteAddress = RTCNetwork::SocketAddress(remoteAddress), minPort, maxPort, opts = options.opts, pageIdentifier, isFirstParty, isRelayDisabled, domain](auto& connection) {
+            connection.send(Messages::NetworkRTCProvider::CreateClientUDPSocket(identifier, localAddress, remoteAddress, minPort, maxPort, opts, pageIdentifier, isFirstParty, isRelayDisabled, domain), 0);
+        });
+    }
+
+    return socket.release();
+}
+
+rtc::AsyncPacketSocket* LibWebRTCSocketFactory::createClientTcpSocket(const void* socketGroup, const rtc::SocketAddress& localAddress, const rtc::SocketAddress& remoteAddress, String&& userAgent, const rtc::PacketSocketOptions& options, WebPageProxyIdentifier pageIdentifier, bool isFirstParty, bool isRelayDisabled, const WebCore::RegistrableDomain& domain)
 {
     ASSERT(!WTF::isMainRunLoop());
 

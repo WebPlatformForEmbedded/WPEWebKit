@@ -322,6 +322,9 @@ struct RTC_EXPORT PortConfiguration {
   // Helper method returns the server addresses for the matching RelayType and
   // Protocol type.
   ServerAddresses GetRelayServerAddresses(ProtocolType type) const;
+
+  // Insert into stun_servers extra TURN servers that could be used as STUN servers
+  void InsertStunServersForProtocol(ProtocolType type);
 };
 
 class UDPPort;

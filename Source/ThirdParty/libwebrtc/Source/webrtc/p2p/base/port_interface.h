@@ -36,6 +36,7 @@ class StunStats;
 
 enum ProtocolType {
   PROTO_UDP,
+  PROTO_DTLS,
   PROTO_TCP,
   PROTO_SSLTCP,  // Pseudo-TLS.
   PROTO_TLS,

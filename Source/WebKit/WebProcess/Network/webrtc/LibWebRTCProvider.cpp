@@ -111,8 +111,9 @@ public:
 private:
     // SuspendableSocketFactory
     rtc::AsyncPacketSocket* CreateUdpSocket(const rtc::SocketAddress&, uint16_t minPort, uint16_t maxPort) final;
+    rtc::AsyncPacketSocket* CreateClientUdpSocket(const rtc::SocketAddress&, const rtc::SocketAddress&, uint16_t minPort, uint16_t maxPort, const rtc::PacketSocketOptions&) final;
     rtc::AsyncListenSocket* CreateServerTcpSocket(const rtc::SocketAddress&, uint16_t minPort, uint16_t maxPort, int options) final { return nullptr; }
-    rtc::AsyncPacketSocket* CreateClientTcpSocket(const rtc::SocketAddress& localAddress, const rtc::SocketAddress& remoteAddress, const rtc::ProxyInfo&, const std::string&, const rtc::PacketSocketTcpOptions&) final;
+    rtc::AsyncPacketSocket* CreateClientTcpSocket(const rtc::SocketAddress& localAddress, const rtc::SocketAddress& remoteAddress, const rtc::ProxyInfo&, const std::string&, const rtc::PacketSocketOptions&) final;
 ALLOW_DEPRECATED_DECLARATIONS_BEGIN
     // FIXME: https://bugs.webkit.org/show_bug.cgi?id=265791
     rtc::AsyncResolverInterface* CreateAsyncResolver() final;
@@ -141,7 +142,12 @@ rtc::AsyncPacketSocket* RTCSocketFactory::CreateUdpSocket(const rtc::SocketAddre
     return WebProcess::singleton().libWebRTCNetwork().socketFactory().createUdpSocket(this, address, minPort, maxPort, m_pageIdentifier, m_isFirstParty, m_isRelayDisabled, m_domain);
 }
 
-rtc::AsyncPacketSocket* RTCSocketFactory::CreateClientTcpSocket(const rtc::SocketAddress& localAddress, const rtc::SocketAddress& remoteAddress, const rtc::ProxyInfo&, const std::string&, const rtc::PacketSocketTcpOptions& options)
+rtc::AsyncPacketSocket* RTCSocketFactory::CreateClientUdpSocket(const rtc::SocketAddress& local, const rtc::SocketAddress& remote, uint16_t minPort, uint16_t maxPort, const rtc::PacketSocketOptions& options)
+{
+    return WebProcess::singleton().libWebRTCNetwork().socketFactory().createClientUdpSocket(this, local, remote, minPort, maxPort, options, m_pageIdentifier, m_isFirstParty, m_isRelayDisabled, m_domain);
+}
+
+rtc::AsyncPacketSocket* RTCSocketFactory::CreateClientTcpSocket(const rtc::SocketAddress& localAddress, const rtc::SocketAddress& remoteAddress, const rtc::ProxyInfo&, const std::string&, const rtc::PacketSocketOptions& options)
 {
     return WebProcess::singleton().libWebRTCNetwork().socketFactory().createClientTcpSocket(this, localAddress, remoteAddress, String { m_userAgent }, options, m_pageIdentifier, m_isFirstParty, m_isRelayDisabled, m_domain);
 }
