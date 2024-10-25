@@ -48,6 +48,7 @@ public:
 private:
     void buttonPressedOrReleased(unsigned, bool);
     void absoluteAxisChanged(unsigned, double);
+    void analogButtonChanged(unsigned, double);
 
     Vector<SharedGamepadValue> m_buttonValues;
     Vector<SharedGamepadValue> m_axisValues;
