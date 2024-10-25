@@ -184,7 +184,7 @@ Animation::Animation(const String& name, const KeyframeValueList& keyframes, con
 }
 
 Animation::Animation(const Animation& other)
-    : m_name(other.m_name.isSafeToSendToAnotherThread() ? other.m_name : other.m_name.isolatedCopy())
+    : m_name(other.m_name.isolatedCopy())
     , m_keyframes(other.m_keyframes)
     , m_boxSize(other.m_boxSize)
     , m_timingFunction(other.m_timingFunction->clone())
@@ -202,7 +202,7 @@ Animation::Animation(const Animation& other)
 
 Animation& Animation::operator=(const Animation& other)
 {
-    m_name = other.m_name.isSafeToSendToAnotherThread() ? other.m_name : other.m_name.isolatedCopy();
+    m_name = other.m_name.isolatedCopy();
     m_keyframes = other.m_keyframes;
     m_boxSize = other.m_boxSize;
     m_timingFunction = other.m_timingFunction->clone();

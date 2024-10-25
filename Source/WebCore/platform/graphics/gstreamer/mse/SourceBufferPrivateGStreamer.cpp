@@ -185,12 +185,12 @@ void SourceBufferPrivateGStreamer::notifyClientWhenReadyForMoreSamples(const Ato
     ASSERT(isMainThread());
     ASSERT(m_tracks.contains(trackId));
     MediaSourceTrackGStreamer* track = m_tracks.get(trackId);
-    track->notifyWhenReadyForMoreSamples([weakPtr = WeakPtr { *this }, this, trackId]() mutable {
-        RunLoop::main().dispatch([weakPtr = WTFMove(weakPtr), this, trackId]() {
+    track->notifyWhenReadyForMoreSamples([weakPtr = WeakPtr { *this }, this, trackId = trackId.string().isolatedCopy()]() mutable {
+        RunLoop::main().dispatch([weakPtr = WTFMove(weakPtr), this, trackId = WTFMove(trackId)]() {
             if (!weakPtr)
                 return;
             if (!m_hasBeenRemovedFromMediaSource)
-                provideMediaData(trackId);
+                provideMediaData(AtomString{ trackId });
         });
     });
 }
