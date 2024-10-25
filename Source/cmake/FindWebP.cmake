@@ -72,17 +72,6 @@ find_library(WebP_LIBRARY
     HINTS ${PC_WEBP_LIBDIR} ${PC_WEBP_LIBRARY_DIRS}
 )
 
-# There's nothing in the WebP headers that could be used to detect the exact
-# WebP version being used so don't attempt to do so. A version can only be found
-# through pkg-config
-if ("${WebP_FIND_VERSION}" VERSION_GREATER "${WebP_VERSION}")
-    if (WebP_VERSION)
-        message(FATAL_ERROR "Required version (" ${WebP_FIND_VERSION} ") is higher than found version (" ${WebP_VERSION} ")")
-    else ()
-        message(WARNING "Cannot determine WebP version without pkg-config")
-    endif ()
-endif ()
-
 # Find components
 if (WebP_INCLUDE_DIR AND WebP_LIBRARY)
     set(_WebP_REQUIRED_LIBS_FOUND ON)

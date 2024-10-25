@@ -5,7 +5,7 @@ SET_PROJECT_VERSION(2 38 6)
 
 # This is required because we use the DEPFILE argument to add_custom_command().
 # Remove after upgrading cmake_minimum_required() to 3.20.
-if (${CMAKE_VERSION} VERSION_LESS "3.20" AND NOT ${CMAKE_GENERATOR} STREQUAL "Ninja")
+if (CMAKE_VERSION VERSION_LESS "3.20" AND NOT CMAKE_GENERATOR STREQUAL "Ninja")
     message(FATAL_ERROR "Building with Makefiles requires CMake 3.20 or newer. Either enable Ninja by passing -GNinja, or upgrade CMake.")
 endif ()
 
@@ -132,10 +132,10 @@ if (ENABLE_DEVELOPER_MODE)
 endif ()
 
 # Enable variation fonts when cairo >= 1.16, fontconfig >= 2.13.0, freetype >= 2.9.0 and harfbuzz >= 1.4.2.
-if (("${PC_CAIRO_VERSION}" VERSION_GREATER "1.16.0" OR "${PC_CAIRO_VERSION}" STREQUAL "1.16.0")
-    AND ("${PC_FONTCONFIG_VERSION}" VERSION_GREATER "2.13.0" OR "${PC_FONTCONFIG_VERSION}" STREQUAL "2.13.0")
-    AND ("${FREETYPE_VERSION_STRING}" VERSION_GREATER "2.9.0" OR "${FREETYPE_VERSION_STRING}" STREQUAL "2.9.0")
-    AND ("${PC_HARFBUZZ_VERSION}" VERSION_GREATER "1.4.2" OR "${PC_HARFBUZZ_VERSION}" STREQUAL "1.4.2"))
+if ((CAIRO_VERSION VERSION_GREATER_EQUAL "1.16.0")
+    AND (Fontconfig_VERSION VERSION_GREATER_EQUAL "2.13.0")
+    AND (FREETYPE_VERSION_STRING VERSION_GREATER_EQUAL "2.9.0")
+    AND (HarfBuzz_VERSION VERSION_GREATER_EQUAL "1.4.2"))
     WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_VARIATION_FONTS PRIVATE ON)
 endif ()
 
@@ -375,7 +375,7 @@ if (USE_LIBBACKTRACE)
 endif ()
 
 # GUri is available in GLib since version 2.66, but we only want to use it if version is >= 2.67.1.
-if (PC_GLIB_VERSION VERSION_GREATER "2.67.1" OR PC_GLIB_VERSION STREQUAL "2.67.1")
+if (GLIB_VERSION VERSION_GREATER_EQUAL "2.67.1")
     SET_AND_EXPOSE_TO_BUILD(HAVE_GURI 1)
 endif ()
 
