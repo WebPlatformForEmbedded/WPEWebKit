@@ -47,6 +47,13 @@
 #include "rtc_base/strings/string_builder.h"
 #include "rtc_base/thread.h"
 
+
+static FILE *g_keylog_file = nullptr;
+static void KeyLogCallback(const SSL *ssl, const char *line) {
+  fprintf(g_keylog_file, "%s\n", line);
+  fflush(g_keylog_file);
+}
+
 //////////////////////////////////////////////////////////////////////
 // SocketBIO
 //////////////////////////////////////////////////////////////////////
@@ -1029,6 +1036,14 @@ SSL_CTX* OpenSSLAdapter::CreateContext(SSLMode mode, bool enable_cache) {
   if (enable_cache) {
     SSL_CTX_set_session_cache_mode(ctx, SSL_SESS_CACHE_CLIENT);
     SSL_CTX_sess_set_new_cb(ctx, &OpenSSLAdapter::NewSSLSessionCallback);
+  }
+
+  const char *keylog_filepath = getenv("SSLKEYLOGFILE");
+  if (keylog_filepath) {
+    g_keylog_file = fopen(keylog_filepath, "a");
+    if (g_keylog_file) {
+      SSL_CTX_set_keylog_callback(ctx, KeyLogCallback);
+    }
   }
 
   return ctx;
