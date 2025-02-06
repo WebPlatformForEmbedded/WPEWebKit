@@ -283,6 +283,9 @@ public:
 
     void* softStackLimit() const { return m_softStackLimit; }
 
+    void setFaultPC(void* pc) { m_faultPC = pc; };
+    void* faultPC() const { return m_faultPC; }
+
 private:
     JSWebAssemblyInstance(VM&, Structure*, JSWebAssemblyModule*, WebAssemblyModuleRecord*);
     ~JSWebAssemblyInstance();
@@ -317,6 +320,7 @@ private:
     BitVector m_passiveDataSegments;
     FixedVector<RefPtr<const Wasm::Tag>> m_tags;
     Vector<Ref<Wasm::WasmToJSCallee>> importCallees;
+    void* m_faultPC { nullptr };
 };
 
 } // namespace JSC

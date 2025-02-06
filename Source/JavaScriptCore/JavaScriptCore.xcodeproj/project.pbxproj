@@ -5562,7 +5562,6 @@
 		E32D4DE426DAFD4300D4533A /* TemporalCalendarConstructor.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = TemporalCalendarConstructor.h; sourceTree = "<group>"; };
 		E32D4DE526DAFD4300D4533A /* TemporalCalendarConstructor.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = TemporalCalendarConstructor.cpp; sourceTree = "<group>"; };
 		E32D51A52C6D0FD600B013D1 /* WasmCompilationContext.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = WasmCompilationContext.h; sourceTree = "<group>"; };
-		E32D51A62C6D0FD600B013D1 /* WasmCompilationContext.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = WasmCompilationContext.cpp; sourceTree = "<group>"; };
 		E32D51A72C6D0FD600B013D1 /* WasmOpcodeCounter.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = WasmOpcodeCounter.h; sourceTree = "<group>"; };
 		E32D51A82C6D0FD600B013D1 /* WasmOpcodeCounter.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = WasmOpcodeCounter.cpp; sourceTree = "<group>"; };
 		E32D51A92C6D0FD600B013D1 /* WasmSourceMappingURLSectionParser.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = WasmSourceMappingURLSectionParser.h; sourceTree = "<group>"; };
@@ -7783,7 +7782,6 @@
 				53FD04D11D7AB187003287D3 /* WasmCallingConvention.cpp */,
 				53FD04D21D7AB187003287D3 /* WasmCallingConvention.h */,
 				E337B966224324E50093A820 /* WasmCapabilities.h */,
-				E32D51A62C6D0FD600B013D1 /* WasmCompilationContext.cpp */,
 				E32D51A52C6D0FD600B013D1 /* WasmCompilationContext.h */,
 				E37CFB2D22F27C57009A7B38 /* WasmCompilationMode.cpp */,
 				E3BD2B7522F275020011765C /* WasmCompilationMode.h */,

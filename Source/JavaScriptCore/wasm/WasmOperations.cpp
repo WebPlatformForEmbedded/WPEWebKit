@@ -1893,7 +1893,7 @@ JSC_DEFINE_NOEXCEPT_JIT_OPERATION(operationWasmArrayInitData, UCPUStrictInt32, (
     return toUCPUStrictInt32(arrayInitData(instance, dst, dstOffset, srcDataIndex, srcOffset, size));
 }
 
-JSC_DEFINE_NOEXCEPT_JIT_OPERATION(operationWasmIsSubRTT, bool, (RTT * maybeSubRTT, RTT* targetRTT))
+JSC_DEFINE_NOEXCEPT_JIT_OPERATION(operationWasmIsSubRTT, bool, (RTT* maybeSubRTT, RTT* targetRTT))
 {
     ASSERT(maybeSubRTT && targetRTT);
     return maybeSubRTT->isSubRTT(*targetRTT);

@@ -1396,7 +1396,7 @@ OMGIRGenerator::OMGIRGenerator(CalleeGroup& calleeGroup, const ModuleInformation
         m_proc.pinRegister(GPRInfo::wasmBoundsCheckingSizeRegister);
 #endif
     if (info.memory) {
-        m_proc.setWasmBoundsCheckGenerator([=, this] (CCallHelpers& jit, GPRReg pinnedGPR) {
+        m_proc.setWasmBoundsCheckGenerator([=, this](CCallHelpers& jit, WasmBoundsCheckValue*, GPRReg pinnedGPR) {
             AllowMacroScratchRegisterUsage allowScratch(jit);
             switch (m_mode) {
             case MemoryMode::BoundsChecking:
@@ -6296,15 +6296,7 @@ Expected<std::unique_ptr<InternalFunction>, String> parseAndCompileOMG(Compilati
     if (shouldDumpIRFor(functionIndex + info.importFunctionCount()))
         procedure.setShouldDumpIR();
 
-
-    if (Options::useSamplingProfiler()) {
-        // FIXME: We should do this based on VM relevant info.
-        // But this is good enough for our own profiling for now.
-        // When we start to show this data in web inspector, we'll
-        // need other hooks into this besides the JSC option.
-        procedure.setNeedsPCToOriginMap();
-    }
-
+    procedure.setNeedsPCToOriginMap();
     procedure.setOriginPrinter([] (PrintStream& out, Origin origin) {
         if (origin.data())
             out.print("Wasm: ", OpcodeOrigin(origin));

@@ -1199,7 +1199,7 @@ void testWasmBoundsCheck(unsigned offset)
     GPRReg pinned = GPRInfo::argumentGPR1;
     proc.pinRegister(pinned);
 
-    proc.setWasmBoundsCheckGenerator([=] (CCallHelpers& jit, GPRReg pinnedGPR) {
+    proc.setWasmBoundsCheckGenerator([=](CCallHelpers& jit, WasmBoundsCheckValue*, GPRReg pinnedGPR) {
         CHECK_EQ(pinnedGPR, pinned);
 
         // This should always work because a function this simple should never have callee
