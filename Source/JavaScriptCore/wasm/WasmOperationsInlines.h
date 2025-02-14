@@ -433,7 +433,12 @@ inline bool arrayInitElem(JSWebAssemblyInstance* instance, EncodedJSValue dst, u
     if (lastSrcElementIndexChecked > lengthOfElementSegment)
         return false;
 
-    instance->copyElementSegment(dstObject, *instance->elementAt(srcElementIndex), srcOffset, size, dstObject->reftypeData() + dstOffset);
+    auto* elementSegment = instance->elementAt(srcElementIndex);
+    if (elementSegment)
+        instance->copyElementSegment(dstObject, *elementSegment, srcOffset, size, dstObject->reftypeData() + dstOffset);
+    else
+        ASSERT(!lastSrcElementIndexChecked);
+
     return true;
 }
 
