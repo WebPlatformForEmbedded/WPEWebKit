@@ -148,7 +148,7 @@ void GenerateAndAllocateRegisters::insertBlocksForFlushAfterTerminalPatchpoints(
     blockInsertionSet.execute();
 }
 
-static ALWAYS_INLINE Air::Arg callFrameAddr(Air::Opcode opcode, CCallHelpers& jit, intptr_t offsetFromFP, intptr_t frameSize, Width width)
+ALWAYS_INLINE std::pair<Air::Arg, std::optional<Air::Arg>> GenerateAndAllocateRegisters::callFrameAddr(Air::Opcode opcode, CCallHelpers& jit, intptr_t offsetFromFP, intptr_t frameSize, Width width)
 {
     if (isX86()) {
         ASSERT(Arg::addr(Air::Tmp(GPRInfo::callFrameRegister), offsetFromFP).isValidForm(opcode, width));
@@ -156,26 +156,43 @@ static ALWAYS_INLINE Air::Arg callFrameAddr(Air::Opcode opcode, CCallHelpers& ji
 
     auto addr = Arg::addr(Air::Tmp(GPRInfo::callFrameRegister), offsetFromFP);
     if (addr.isValidForm(opcode, width))
-        return addr;
+        return { addr, { } };
 
     // Try finding a valid offset from the stack pointer register instead.
     auto offsetFromSP = offsetFromFP + frameSize;
     addr = Arg::addr(Air::Tmp(MacroAssembler::stackPointerRegister), offsetFromSP);
     if (addr.isValidForm(opcode, width))
-        return addr;
+        return { addr, { } };
     
     // Try finding a valid indexing of extendedOffsetAddrRegister
     // into the frame pointer register.
     // (Have to materialze the offset into extendedOffsetAddrRegister.)
     GPRReg reg = extendedOffsetAddrRegister();
+
+    // The extendedOffsetAddrRegister() may be live (from lowerStackArgs) so we
+    // need to spill it here. We allocate its slot first, so we know that it's
+    // addressable from FP.
+    auto spillAddr = Arg::addr(Air::Tmp(GPRInfo::callFrameRegister), wideCallFrameOffsetSpillSlot->offsetFromFP());
+    ASSERT(spillAddr.isValidForm(Move, is32Bit() ? Width32 : Width64));
+    jit.storeRegWord(reg, spillAddr.asAddress());
+
     jit.move(CCallHelpers::TrustedImmPtr(offsetFromFP), reg);
     auto index = Arg::index(Air::Tmp(GPRInfo::callFrameRegister), Air::Tmp(reg), 1, 0);
     if (index.isValidForm(opcode, width))
-        return index;
+        return { index, spillAddr };
     
     // Resort to computing the absolute address in extendedOffsetAddrRegister.
     jit.addPtr(GPRInfo::callFrameRegister, reg);
-    return Arg::addr(Air::Tmp(reg));
+    return { Arg::addr(Air::Tmp(reg)), spillAddr };
+}
+
+template<typename Functor>
+void GenerateAndAllocateRegisters::withCallFrameAddr(Air::Opcode opcode, CCallHelpers& jit, intptr_t offsetFromFP, intptr_t frameSize, Width width, const Functor& functor)
+{
+    auto [addr, spillAddr] = callFrameAddr(opcode, jit, offsetFromFP, frameSize, width);
+    functor(addr);
+    if (spillAddr)
+        jit.loadRegWord(spillAddr->asAddress(), extendedOffsetAddrRegister());
 }
 
 ALWAYS_INLINE void GenerateAndAllocateRegisters::release(Tmp tmp, Reg reg)
@@ -196,25 +213,28 @@ ALWAYS_INLINE void GenerateAndAllocateRegisters::flush(Tmp tmp, Reg reg)
     intptr_t offset = m_map[tmp].spillSlot->offsetFromFP();
     JIT_COMMENT(*m_jit, "Flush(", tmp, ", ", reg, ", offset=", offset, ")");
     if (tmp.isGP()) {
-        auto dest = callFrameAddr(Air::Move, *m_jit, offset, m_code.frameSize(), registerWidth());
-        if (dest.isAddr())
-            m_jit->storeRegWord(reg.gpr(), dest.asAddress());
-        else
-            m_jit->storeRegWord(reg.gpr(), dest.asBaseIndex());
+        withCallFrameAddr(Air::Move, *m_jit, offset, m_code.frameSize(), registerWidth(), [&](Air::Arg dest) {
+            if (dest.isAddr())
+                m_jit->storeRegWord(reg.gpr(), dest.asAddress());
+            else
+                m_jit->storeRegWord(reg.gpr(), dest.asBaseIndex());
+        });
     } else if (B3::conservativeRegisterBytes(B3::FP) == sizeof(double) || !m_code.usesSIMD()) {
         ASSERT(m_map[tmp].spillSlot->byteSize() == bytesForWidth(Width64));
-        auto dest = callFrameAddr(Air::MoveDouble, *m_jit, offset, m_code.frameSize(), Width64);
-        if (dest.isAddr())
-            m_jit->storeDouble(reg.fpr(), dest.asAddress());
-        else
-            m_jit->storeDouble(reg.fpr(), dest.asBaseIndex());
+        withCallFrameAddr(Air::MoveDouble, *m_jit, offset, m_code.frameSize(), Width64, [&](Air::Arg dest) {
+            if (dest.isAddr())
+                m_jit->storeDouble(reg.fpr(), dest.asAddress());
+            else
+                m_jit->storeDouble(reg.fpr(), dest.asBaseIndex());
+        });
     } else {
         ASSERT(m_map[tmp].spillSlot->byteSize() == bytesForWidth(Width128));
-        auto dest = callFrameAddr(Air::MoveVector, *m_jit, offset, m_code.frameSize(), Width128);
-        if (dest.isAddr())
-            m_jit->storeVector(reg.fpr(), dest.asAddress());
-        else
-            m_jit->storeVector(reg.fpr(), dest.asBaseIndex());
+        withCallFrameAddr(Air::MoveVector, *m_jit, offset, m_code.frameSize(), Width128, [&](Air::Arg dest) {
+            if (dest.isAddr())
+                m_jit->storeVector(reg.fpr(), dest.asAddress());
+            else
+                m_jit->storeVector(reg.fpr(), dest.asBaseIndex());
+        });
     }
 }
 
@@ -244,25 +264,28 @@ ALWAYS_INLINE void GenerateAndAllocateRegisters::alloc(Tmp tmp, Reg reg, Arg::Ro
         JIT_COMMENT(*m_jit, "Alloc(", tmp, ", ", reg, ", role=", role, ")");
         intptr_t offset = m_map[tmp].spillSlot->offsetFromFP();
         if (tmp.bank() == GP) {
-            auto src = callFrameAddr(Air::Move, *m_jit, offset, m_code.frameSize(), registerWidth());
-            if (src.isAddr())
-                m_jit->loadRegWord(src.asAddress(), reg.gpr());
-            else
-                m_jit->loadRegWord(src.asBaseIndex(), reg.gpr());
+            withCallFrameAddr(Air::Move, *m_jit, offset, m_code.frameSize(), registerWidth(), [&](Air::Arg src) {
+                if (src.isAddr())
+                    m_jit->loadRegWord(src.asAddress(), reg.gpr());
+                else
+                    m_jit->loadRegWord(src.asBaseIndex(), reg.gpr());
+            });
         } else if (B3::conservativeRegisterBytes(B3::FP) == sizeof(double) || !m_code.usesSIMD()) {
             ASSERT(m_map[tmp].spillSlot->byteSize() == bytesForWidth(Width64));
-            auto src = callFrameAddr(Air::MoveDouble, *m_jit, offset, m_code.frameSize(), Width64);
-            if (src.isAddr())
-                m_jit->loadDouble(src.asAddress(), reg.fpr());
-            else
-                m_jit->loadDouble(src.asBaseIndex(), reg.fpr());
+            withCallFrameAddr(Air::MoveDouble, *m_jit, offset, m_code.frameSize(), Width64, [&](Air::Arg src) {
+                if (src.isAddr())
+                    m_jit->loadDouble(src.asAddress(), reg.fpr());
+                else
+                    m_jit->loadDouble(src.asBaseIndex(), reg.fpr());
+            });
         } else {
             ASSERT(m_map[tmp].spillSlot->byteSize() == bytesForWidth(Width128));
-            auto src = callFrameAddr(Air::MoveVector, *m_jit, offset, m_code.frameSize(), Width128);
-            if (src.isAddr())
-                m_jit->loadVector(src.asAddress(), reg.fpr());
-            else
-                m_jit->loadVector(src.asBaseIndex(), reg.fpr());
+            withCallFrameAddr(Air::MoveVector, *m_jit, offset, m_code.frameSize(), Width128, [&](Air::Arg src) {
+                if (src.isAddr())
+                    m_jit->loadVector(src.asAddress(), reg.fpr());
+                else
+                    m_jit->loadVector(src.asBaseIndex(), reg.fpr());
+            });
         }
     }
 }
@@ -383,8 +406,15 @@ ALWAYS_INLINE bool GenerateAndAllocateRegisters::isDisallowedRegister(Reg reg)
     return !m_allowedRegisters.contains(reg, IgnoreVectors);
 }
 
+
 void GenerateAndAllocateRegisters::prepareForGeneration()
 {
+    // We may need to use extendedOffsetAddrRegister() to access a wide
+    // callframe offset in alloc/flush. But extendedOffsetAddrRegister() may be
+    // live, since we run lowerStackArgs first, so we need a way to spill it.
+    // Allocate the stack slot for it first, so that we can be sure it's not at
+    // a "wide" offset (i.e. that it's addressable with an immediate offset).
+    wideCallFrameOffsetSpillSlot = m_code.addStackSlot(conservativeRegisterBytes(GP), StackSlotKind::Spill);
     // We pessimistically assume we use all callee saves.
     handleCalleeSaves(m_code, RegisterSetBuilder::calleeSaveRegisters());
     allocateEscapedStackSlots(m_code);
@@ -870,18 +900,6 @@ void GenerateAndAllocateRegisters::generate(CCallHelpers& jit)
                                 spill(tmp, reg);
 
                             arg = Arg::addr(Tmp(GPRInfo::callFrameRegister), entry.spillSlot->offsetFromFP());
-                        }
-                    });
-                    int pinnedRegisterUses = 0;
-                    inst.forEachArg([&] (Arg& arg, Arg::Role role, Bank, Width) {
-                        if (arg.isAddr() && arg.isAnyUse(role) && !arg.isValidForm(inst.kind.opcode)) {
-                            GPRReg reg = extendedOffsetAddrRegister();
-                            m_jit->move(CCallHelpers::TrustedImmPtr(arg.offset()), reg);
-                            m_jit->addPtr(arg.base().gpr(), reg);
-                            arg = Arg::addr(Tmp(reg));
-                            ++pinnedRegisterUses;
-                            RELEASE_ASSERT(pinnedRegisterUses < 2);
-                            return;
                         }
                     });
                     --instIndex;
