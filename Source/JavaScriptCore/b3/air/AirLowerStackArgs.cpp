@@ -129,17 +129,13 @@ void lowerStackArgs(Code& code)
                         if (inst.kind.opcode == Patch)
                             return Arg::extendedOffsetAddr(offsetFromFP);
 
-#if CPU(ARM64) || CPU(RISCV64)
+#if CPU(ARM64) || CPU(RISCV64) || CPU(ARM)
                         Air::Tmp tmp = Air::Tmp(extendedOffsetAddrRegister());
 
                         Arg largeOffset = Arg::isValidImmForm(offsetFromSP) ? Arg::imm(offsetFromSP) : Arg::bigImm(offsetFromSP);
                         insertionSet.insert(instIndex, Move, inst.origin, largeOffset, tmp);
-                        insertionSet.insert(instIndex, Add64, inst.origin, Air::Tmp(MacroAssembler::stackPointerRegister), tmp);
+                        insertionSet.insert(instIndex, is64Bit() ? Add64 : Add32, inst.origin, Air::Tmp(MacroAssembler::stackPointerRegister), tmp);
                         result = Arg::addr(tmp, 0);
-                        return result;
-#elif CPU(ARM)
-                        // We solve this in AirAllocateRegistersAndStackAndGenerateCode.cpp.
-                        UNUSED_PARAM(instIndex);
                         return result;
 #elif CPU(X86_64)
                         UNUSED_PARAM(instIndex);

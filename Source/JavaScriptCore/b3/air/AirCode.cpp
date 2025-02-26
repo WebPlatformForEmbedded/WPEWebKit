@@ -93,6 +93,7 @@ Code::Code(Procedure& proc)
             }
 #endif
             all.remove(MacroAssembler::fpTempRegister);
+            all.remove(MacroAssembler::dataTempRegister);
             // FIXME We should allow this to be used. See the note
             // in https://commits.webkit.org/257808@main for more
             // info about why masm is using scratch registers on
@@ -120,10 +121,6 @@ Code::Code(Procedure& proc)
             setRegsInPriorityOrder(bank, result);
         });
 
-#if CPU(ARM_THUMB2)
-    if (auto reg = extendedOffsetAddrRegister())
-        pinRegister(reg);
-#endif
     m_pinnedRegs.add(MacroAssembler::framePointerRegister, IgnoreVectors);
 }
 

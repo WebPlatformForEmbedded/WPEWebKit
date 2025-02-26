@@ -57,6 +57,9 @@ public:
 
 private:
     void insertBlocksForFlushAfterTerminalPatchpoints();
+    ALWAYS_INLINE std::pair<Air::Arg, std::optional<Air::Arg>> callFrameAddr(Air::Opcode, CCallHelpers&, intptr_t, intptr_t, Width);
+    template<typename Functor>
+    void withCallFrameAddr(Air::Opcode, CCallHelpers&, intptr_t, intptr_t, Width, const Functor&);
     void release(Tmp, Reg);
     void flush(Tmp, Reg);
     void spill(Tmp, Reg);
@@ -91,6 +94,7 @@ private:
     RegisterSetBuilder m_clobberedToClear;
     RegisterSet m_allowedRegisters;
     std::unique_ptr<UnifiedTmpLiveness> m_liveness;
+    StackSlot* wideCallFrameOffsetSpillSlot;
 
     struct PatchSpillData {
         MacroAssembler::Jump jump;
