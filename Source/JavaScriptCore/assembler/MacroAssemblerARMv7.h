@@ -2574,10 +2574,24 @@ public:
 
     Jump branch32(RelationalCondition cond, RegisterID left, RegisterID right)
     {
-        if (left == ARMRegisters::sp) {
+        if (left == ARMRegisters::sp && right == addressTempRegister && cond == Equal) {
+            m_assembler.sub_S(addressTempRegister, left, addressTempRegister);
+            return Jump(makeBranch(Zero));
+        } else if (left == ARMRegisters::sp && right == addressTempRegister && cond == NotEqual) {
+            m_assembler.sub_S(addressTempRegister, left, addressTempRegister);
+            return Jump(makeBranch(NonZero));
+        } else if (right == ARMRegisters::sp && left == addressTempRegister && cond == Equal) {
+            m_assembler.sub_S(addressTempRegister, right, addressTempRegister);
+            return Jump(makeBranch(Zero));
+        } else if (right == ARMRegisters::sp && left == addressTempRegister && cond == NotEqual) {
+            m_assembler.sub_S(addressTempRegister, right, addressTempRegister);
+            return Jump(makeBranch(NonZero));
+        } else if (left == ARMRegisters::sp) {
+            ASSERT(right != addressTempRegister);
             move(left, addressTempRegister);
             m_assembler.cmp(addressTempRegister, right);
         } else if (right == ARMRegisters::sp) {
+            ASSERT(left != addressTempRegister);
             move(right, addressTempRegister);
             m_assembler.cmp(left, addressTempRegister);
         } else
