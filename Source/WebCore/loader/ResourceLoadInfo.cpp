@@ -84,8 +84,10 @@ OptionSet<ResourceType> toResourceType(CachedResource::Type type, ResourceReques
 #endif
         return { ResourceType::Other };
 
+#if ENABLE(VIDEO)
     case CachedResource::Type::TextTrackResource:
         return { ResourceType::Media };
+#endif
 
     };
     ASSERT_NOT_REACHED();
