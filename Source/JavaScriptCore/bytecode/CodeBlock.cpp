@@ -2169,6 +2169,15 @@ void CodeBlock::jettison(Profiler::JettisonReason reason, ReoptimizationMode mod
     CODEBLOCK_LOG_EVENT(codeBlock, "jettison", ("due to ", reason, ", counting = ", mode == CountReoptimization, ", detail = ", pointerDump(detail)));
 
     RELEASE_ASSERT(reason != Profiler::NotJettisoned);
+
+#if ENABLE(JIT)
+    ConcurrentJSLocker locker(m_lock);
+    forEachStructureStubInfo([&](StructureStubInfo& stubInfo) {
+        stubInfo.reset(locker, this);
+        return IterationStatus::Continue;
+    });
+#endif
+
     
 #if ENABLE(DFG_JIT)
     if (DFG::shouldDumpDisassembly()) {
