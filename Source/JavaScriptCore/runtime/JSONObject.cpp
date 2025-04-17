@@ -220,8 +220,7 @@ inline PropertyNameForFunctionCall::PropertyNameForFunctionCall(PropertyName pro
 }
 
 inline PropertyNameForFunctionCall::PropertyNameForFunctionCall(unsigned number)
-    : m_propertyName(nullptr)
-    , m_number(number)
+    : m_number(number)
 {
 }
 
@@ -604,7 +603,7 @@ bool Stringifier::Holder::appendNextProperty(Stringifier& stringifier, StringBui
         stringifyResult = stringifier.appendStringifiedValue(builder, value, *this, index);
         ASSERT(stringifyResult != StringifyFailedDueToUndefinedOrSymbolValue);
     } else {
-        PropertyName propertyName { nullptr };
+        PropertyName propertyName;
         JSValue value;
         if (m_hasFastObjectProperties) {
             propertyName = std::get<0>(m_propertiesAndOffsets[index]);

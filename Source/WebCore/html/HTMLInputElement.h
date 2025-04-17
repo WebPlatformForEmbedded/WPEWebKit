@@ -26,6 +26,7 @@
 
 #include "HTMLTextFormControlElement.h"
 #include <memory>
+#include <wtf/ValueOrReference.h>
 
 namespace WebCore {
 
@@ -83,7 +84,7 @@ public:
     WEBCORE_EXPORT const AtomString& defaultValue() const;
     WEBCORE_EXPORT void setDefaultValue(const AtomString&);
     WEBCORE_EXPORT void setType(const AtomString&);
-    WEBCORE_EXPORT String value() const final;
+    WEBCORE_EXPORT ValueOrReference<String> value() const final;
     WEBCORE_EXPORT ExceptionOr<void> setValue(const String&, TextFieldEventBehavior = DispatchNoEvent, TextControlSetValueSelection = TextControlSetValueSelection::SetSelectionToEnd) final;
     void setValueForUser(const String& value) { setValue(value, DispatchInputAndChangeEvent); }
     WEBCORE_EXPORT WallTime valueAsDate() const;
@@ -207,7 +208,7 @@ public:
 
     String placeholder() const;
 
-    String sanitizeValue(const String&) const;
+    ValueOrReference<String> sanitizeValue(const String& value LIFETIME_BOUND) const;
 
     String localizeValue(const String&) const;
 

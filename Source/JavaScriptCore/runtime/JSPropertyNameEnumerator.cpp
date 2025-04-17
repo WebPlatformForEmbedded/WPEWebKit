@@ -181,7 +181,7 @@ JSString* JSPropertyNameEnumerator::computeNext(JSGlobalObject* globalObject, JS
         scope.assertNoException();
 
         if (index < indexedLength())
-            return shouldAllocateIndexedNameString ? jsString(vm, Identifier::from(vm, index).string()) : nullptr;
+            return shouldAllocateIndexedNameString ? jsString(vm, Identifier::from(vm, index).releaseImpl()) : nullptr;
 
         if (!sizeOfPropertyNames())
             return nullptr;
@@ -202,9 +202,9 @@ JSString* JSPropertyNameEnumerator::computeNext(JSGlobalObject* globalObject, JS
                 break;
             if (index < endStructurePropertyIndex() && base->structureID() == cachedStructureID())
                 break;
-            auto id = name->toIdentifier(globalObject);
+            auto id = name->toAtomString(globalObject);
             RETURN_IF_EXCEPTION(scope, nullptr);
-            if (base->hasEnumerableProperty(globalObject, id))
+            if (base->hasEnumerableProperty(globalObject, id.data))
                 break;
             RETURN_IF_EXCEPTION(scope, nullptr);
             name = nullptr;

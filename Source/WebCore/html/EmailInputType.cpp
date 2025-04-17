@@ -99,7 +99,7 @@ void EmailInputType::attributeChanged(const QualifiedName& name)
     BaseTextInputType::attributeChanged(name);
 }
 
-String EmailInputType::sanitizeValue(const String& proposedValue) const
+ValueOrReference<String> EmailInputType::sanitizeValue(const String& proposedValue LIFETIME_BOUND) const
 {
     // Passing a lambda instead of a function name helps the compiler inline isHTMLLineBreak.
     String noLineBreakValue = proposedValue;

@@ -5140,7 +5140,7 @@ void WebPage::requestDocumentEditingContext(DocumentEditingContextRequest&& requ
             rangeOfInterest.end = closestEditablePositionInElementForAbsolutePoint(*element, roundedIntPoint(request.rect.maxXMaxYCorner()));
         } else if (RefPtr textFormControlElement = dynamicDowncast<HTMLTextFormControlElement>(element)) {
             rangeOfInterest.start = textFormControlElement->visiblePositionForIndex(0);
-            rangeOfInterest.end = textFormControlElement->visiblePositionForIndex(textFormControlElement->value().length());
+            rangeOfInterest.end = textFormControlElement->visiblePositionForIndex(textFormControlElement->value()->length());
         } else {
             rangeOfInterest.start = firstPositionInOrBeforeNode(element.get());
             rangeOfInterest.end = lastPositionInOrAfterNode(element.get());

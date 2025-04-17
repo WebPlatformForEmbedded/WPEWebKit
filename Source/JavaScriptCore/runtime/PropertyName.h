@@ -37,6 +37,17 @@ namespace JSC {
 
 class PropertyName {
 public:
+    PropertyName()
+        : m_impl(nullptr)
+    {
+    }
+
+    // FIXME: Make PropertyName const-correct.
+    PropertyName(const UniquedStringImpl* propertyName)
+        : m_impl(const_cast<UniquedStringImpl*>(propertyName))
+    {
+    }
+
     PropertyName(UniquedStringImpl* propertyName)
         : m_impl(propertyName)
     {

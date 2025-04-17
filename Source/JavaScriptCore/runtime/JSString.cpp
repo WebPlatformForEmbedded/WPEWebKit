@@ -147,14 +147,14 @@ void JSRopeString::resolveRopeInternalNoSubstring(std::span<CharacterType> buffe
     resolveToBuffer(fiber0(), fiber1(), fiber2(), buffer, stackLimit);
 }
 
-AtomString JSRopeString::resolveRopeToAtomString(JSGlobalObject* globalObject) const
+GCOwnedDataScope<AtomStringImpl*> JSRopeString::resolveRopeToAtomString(JSGlobalObject* globalObject) const
 {
     VM& vm = globalObject->vm();
     auto scope = DECLARE_THROW_SCOPE(vm);
 
-    auto convertToAtomString = [](const String& string) -> AtomString {
+    auto convertToAtomString = [this](const String& string) -> GCOwnedDataScope<AtomStringImpl*> {
         ASSERT(!string.impl() || string.impl()->isAtom());
-        return static_cast<AtomStringImpl*>(string.impl());
+        return { this, static_cast<AtomStringImpl*>(string.impl()) };
     };
 
     if (length() > maxLengthForOnStackResolve) {
@@ -181,13 +181,13 @@ AtomString JSRopeString::resolveRopeToAtomString(JSGlobalObject* globalObject) c
         atomString = StringView { substringBase()->valueInternal() }.substring(substringOffset(), length()).toAtomString();
 
     size_t sizeToReport = atomString.impl()->hasOneRef() ? atomString.impl()->cost() : 0;
-    convertToNonRope(String { atomString });
+    convertToNonRope(String { atomString.releaseImpl() });
     // If we resolved a string that didn't previously exist, notify the heap that we've grown.
     vm.heap.reportExtraMemoryAllocated(this, sizeToReport);
-    return atomString;
+    return { this, static_cast<AtomStringImpl*>(valueInternal().impl()) };
 }
 
-RefPtr<AtomStringImpl> JSRopeString::resolveRopeToExistingAtomString(JSGlobalObject* globalObject) const
+GCOwnedDataScope<AtomStringImpl*> JSRopeString::resolveRopeToExistingAtomString(JSGlobalObject* globalObject) const
 {
     VM& vm = globalObject->vm();
     auto scope = DECLARE_THROW_SCOPE(vm);
@@ -201,8 +201,8 @@ RefPtr<AtomStringImpl> JSRopeString::resolveRopeToExistingAtomString(JSGlobalObj
                 return Ref { *existingAtomString };
             return WTFMove(newImpl);
         });
-        RETURN_IF_EXCEPTION(scope, nullptr);
-        return existingAtomString;
+        RETURN_IF_EXCEPTION(scope, { });
+        return { this, existingAtomString.get() };
     }
     
     RefPtr<AtomStringImpl> existingAtomString;
@@ -222,7 +222,7 @@ RefPtr<AtomStringImpl> JSRopeString::resolveRopeToExistingAtomString(JSGlobalObj
 
     if (existingAtomString)
         convertToNonRope(*existingAtomString);
-    return existingAtomString;
+    return { this, existingAtomString.get() };
 }
 
 template<bool reportAllocation, typename Function>

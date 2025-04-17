@@ -40,6 +40,8 @@
 #include <wtf/OptionSet.h>
 #include <wtf/RefCounted.h>
 #include <wtf/RefPtr.h>
+#include <wtf/TZoneMalloc.h>
+#include <wtf/ValueOrReference.h>
 
 namespace WebCore {
 
@@ -226,7 +228,7 @@ public:
 
     // DOM property functions.
 
-    virtual String fallbackValue() const; // Checked last, if both internal storage and value attribute are missing.
+    virtual ValueOrReference<String> fallbackValue() const; // Checked last, if both internal storage and value attribute are missing.
     virtual String defaultValue() const; // Checked after even fallbackValue, only when the valueWithDefault function is called.
     virtual WallTime valueAsDate() const;
     virtual ExceptionOr<void> setValueAsDate(WallTime) const;
@@ -269,9 +271,8 @@ public:
     // though typeMismatchFor() does something for them because of value sanitization.
     virtual bool typeMismatch() const { return false; }
 
-    // Return value of null string means "use the default value".
     // This function must be called only by HTMLInputElement::sanitizeValue().
-    virtual String sanitizeValue(const String&) const;
+    virtual ValueOrReference<String> sanitizeValue(const String& value LIFETIME_BOUND) const;
 
     // Event handlers.
 

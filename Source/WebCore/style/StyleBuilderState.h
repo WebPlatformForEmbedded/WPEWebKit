@@ -28,19 +28,28 @@
 #include "CSSToLengthConversionData.h"
 #include "CSSToStyleMap.h"
 #include "CascadeLevel.h"
+#include "FontTaggedSettings.h"
 #include "PropertyCascade.h"
 #include "RuleSet.h"
 #include "SelectorChecker.h"
+#include "TextFlags.h"
 #include <wtf/BitSet.h>
+#include <wtf/RefCountedFixedVector.h>
 
 namespace WebCore {
 
 class FilterOperations;
 class FontCascadeDescription;
+class FontSelectionValue;
 class RenderStyle;
 class StyleColor;
 class StyleImage;
 class StyleResolver;
+class TextAutospace;
+class TextSpacingTrim;
+
+struct FontPalette;
+struct FontSizeAdjust;
 
 namespace Style {
 
@@ -53,7 +62,7 @@ enum class ForVisitedLink : bool { No, Yes };
 enum class ApplyValueType : uint8_t { Value, Initial, Inherit };
 
 struct BuilderContext {
-    Ref<const Document> document;
+    const Ref<const Document> document;
     const RenderStyle& parentStyle;
     const RenderStyle* rootElementStyle = nullptr;
     RefPtr<const Element> element = nullptr;
@@ -74,8 +83,6 @@ public:
     const Document& document() const { return m_context.document.get(); }
     const Element* element() const { return m_context.element.get(); }
 
-    inline void setFontDescription(FontCascadeDescription&&);
-    void setFontSize(FontCascadeDescription&, float size);
     inline void setZoom(float);
     inline void setUsedZoom(float);
     inline void setWritingMode(WritingMode);
@@ -114,6 +121,51 @@ public:
     }
 
     CSSPropertyID cssPropertyID() const;
+
+    // FIXME: Copying a FontCascadeDescription is really inefficient. Migrate all callers to
+    // setFontDescriptionXXX() variants below, then remove these functions.
+    inline void setFontDescription(FontCascadeDescription&&);
+    void setFontSize(FontCascadeDescription&, float size);
+
+    void setFontDescriptionKeywordSizeFromIdentifier(CSSValueID);
+    void setFontDescriptionIsAbsoluteSize(bool);
+    void setFontDescriptionFontSize(float);
+    void setFontDescriptionFamilies(RefCountedFixedVector<AtomString>&);
+    void setFontDescriptionFamilies(Vector<AtomString>&);
+    void setFontDescriptionIsSpecifiedFont(bool);
+    void setFontDescriptionFeatureSettings(FontFeatureSettings&&);
+    void setFontDescriptionFontPalette(const FontPalette&);
+    void setFontDescriptionFontSizeAdjust(FontSizeAdjust);
+    void setFontDescriptionFontSmoothing(FontSmoothingMode);
+    void setFontDescriptionFontSynthesisSmallCaps(FontSynthesisLonghandValue);
+    void setFontDescriptionFontSynthesisStyle(FontSynthesisLonghandValue);
+    void setFontDescriptionFontSynthesisWeight(FontSynthesisLonghandValue);
+    void setFontDescriptionKerning(Kerning);
+    void setFontDescriptionOpticalSizing(FontOpticalSizing);
+    void setFontDescriptionSpecifiedLocale(const AtomString&);
+    void setFontDescriptionTextAutospace(TextAutospace);
+    void setFontDescriptionTextRenderingMode(TextRenderingMode);
+    void setFontDescriptionTextSpacingTrim(TextSpacingTrim);
+    void setFontDescriptionVariantCaps(FontVariantCaps);
+    void setFontDescriptionVariantEmoji(FontVariantEmoji);
+    void setFontDescriptionVariantPosition(FontVariantPosition);
+    void setFontDescriptionVariationSettings(FontVariationSettings&&);
+    void setFontDescriptionWeight(FontSelectionValue);
+    void setFontDescriptionWidth(FontSelectionValue);
+    void setFontDescriptionVariantAlternates(const FontVariantAlternates&);
+    void setFontDescriptionVariantEastAsianVariant(FontVariantEastAsianVariant);
+    void setFontDescriptionVariantEastAsianWidth(FontVariantEastAsianWidth);
+    void setFontDescriptionVariantEastAsianRuby(FontVariantEastAsianRuby);
+    void setFontDescriptionKeywordSize(unsigned);
+    void setFontDescriptionVariantCommonLigatures(FontVariantLigatures);
+    void setFontDescriptionVariantDiscretionaryLigatures(FontVariantLigatures);
+    void setFontDescriptionVariantHistoricalLigatures(FontVariantLigatures);
+    void setFontDescriptionVariantContextualAlternates(FontVariantLigatures);
+    void setFontDescriptionVariantNumericFigure(FontVariantNumericFigure);
+    void setFontDescriptionVariantNumericSpacing(FontVariantNumericSpacing);
+    void setFontDescriptionVariantNumericFraction(FontVariantNumericFraction);
+    void setFontDescriptionVariantNumericOrdinal(FontVariantNumericOrdinal);
+    void setFontDescriptionVariantNumericSlashedZero(FontVariantNumericSlashedZero);
 
 private:
     // See the comment in maybeUpdateFontForLetterSpacing() about why this needs to be a friend.

@@ -146,6 +146,28 @@ bool LiteralParser<CharType, reviverMode>::tryJSONPParse(Vector<JSONPData>& resu
 }
 
 template<typename CharType, JSONReviverMode reviverMode>
+ALWAYS_INLINE bool LiteralParser<CharType, reviverMode>::equalIdentifier(UniquedStringImpl* rep, typename Lexer::LiteralParserTokenPtr token)
+{
+    if (token->type == TokIdentifier)
+        return WTF::equal(rep, token->identifier());
+    ASSERT(token->type == TokString);
+    if (token->stringIs8Bit)
+        return WTF::equal(rep, token->string8());
+    return WTF::equal(rep, token->string16());
+}
+
+template<typename CharType, JSONReviverMode reviverMode>
+ALWAYS_INLINE AtomStringImpl* LiteralParser<CharType, reviverMode>::existingIdentifier(VM& vm, typename Lexer::LiteralParserTokenPtr token)
+{
+    if (token->type == TokIdentifier)
+        return vm.jsonAtomStringCache.existingIdentifier(token->identifier());
+    ASSERT(token->type == TokString);
+    if (token->stringIs8Bit)
+        return vm.jsonAtomStringCache.existingIdentifier(token->string8());
+    return vm.jsonAtomStringCache.existingIdentifier(token->string16());
+}
+
+template<typename CharType, JSONReviverMode reviverMode>
 ALWAYS_INLINE Identifier LiteralParser<CharType, reviverMode>::makeIdentifier(VM& vm, typename Lexer::LiteralParserTokenPtr token)
 {
     if (token->type == TokIdentifier)
@@ -163,11 +185,11 @@ ALWAYS_INLINE JSString* LiteralParser<CharType, reviverMode>::makeJSString(VM& v
     if (token->stringIs8Bit) {
         if (token->stringOrIdentifierLength > maxAtomizeStringLength)
             return jsNontrivialString(vm, String({ token->stringStart8, token->stringOrIdentifierLength }));
-        return jsString(vm, Identifier::fromString(vm, token->string8()).string());
+        return jsString(vm, Identifier::fromString(vm, token->string8()).releaseImpl());
     }
     if (token->stringOrIdentifierLength > maxAtomizeStringLength)
         return jsNontrivialString(vm, String({ token->stringStart16, token->stringOrIdentifierLength }));
-    return jsString(vm, Identifier::fromString(vm, token->string16()).string());
+    return jsString(vm, Identifier::fromString(vm, token->string16()).releaseImpl());
 }
 
 [[maybe_unused]] static ALWAYS_INLINE bool cannotBeIdentPartOrEscapeStart(LChar)
@@ -1325,7 +1347,33 @@ JSValue LiteralParser<CharType, reviverMode>::parseRecursively(VM& vm, uint8_t* 
         type = m_lexer.next();
     if (type == TokString) {
         while (true) {
-            Identifier ident = makeIdentifier(vm, m_lexer.currentToken());
+            struct ExistingProperty {
+                Structure* structure;
+                PropertyOffset offset;
+            };
+
+            auto* structure = object->structure();
+            auto property = [&, &vm = vm] ALWAYS_INLINE_LAMBDA -> std::variant<ExistingProperty, Identifier> {
+                if (Structure* transition = structure->trySingleTransition()) {
+                    // This check avoids hash lookup and refcount churn in the common case of a matching single transition.
+                    SUPPRESS_UNCOUNTED_ARG if (transition->transitionKind() == TransitionKind::PropertyAddition
+                        && !transition->transitionPropertyAttributes()
+                        && equalIdentifier(transition->transitionPropertyName(), m_lexer.currentToken())
+                        && (m_mode == StrictJSON || transition->transitionPropertyName() != vm.propertyNames->underscoreProto))
+                        return ExistingProperty { transition, transition->transitionOffset() };
+                } else if (!structure->isDictionary()) {
+                    // This check avoids refcount churn in the common case of a cached Identifier.
+                    if (SUPPRESS_UNCOUNTED_LOCAL AtomStringImpl* ident = existingIdentifier(vm, m_lexer.currentToken())) {
+                        PropertyOffset offset = 0;
+                        Structure* newStructure = Structure::addPropertyTransitionToExistingStructure(structure, ident, 0, offset);
+                        if (LIKELY(newStructure && (m_mode == StrictJSON || newStructure->transitionPropertyName() != vm.propertyNames->underscoreProto)))
+                            return ExistingProperty { newStructure, offset };
+                        return Identifier::fromString(vm, ident);
+                    }
+                }
+
+                return makeIdentifier(vm, m_lexer.currentToken());
+            }();
 
             if (UNLIKELY(m_lexer.next() != TokColon)) {
                 setErrorMessageForToken(TokColon);
@@ -1342,37 +1390,46 @@ JSValue LiteralParser<CharType, reviverMode>::parseRecursively(VM& vm, uint8_t* 
             if (UNLIKELY(!value))
                 return { };
 
-            if (std::optional<uint32_t> index = parseIndex(ident)) {
-                object->putDirectIndex(m_globalObject, index.value(), value);
-                RETURN_IF_EXCEPTION(scope, { });
+            // When creating JSON object in this fast path, we know the following.
+            //   1. The object is definitely JSFinalObject.
+            //   2. The object rarely has duplicate properties.
+            //   3. Many same-shaped objects would be created from JSON. Thus very likely, there is already an existing Structure.
+            // Let's make the above case super fast, and fallback to the normal implementation when it is not true.
+            if (std::holds_alternative<ExistingProperty>(property)) {
+                auto& [newStructure, offset] = std::get<ExistingProperty>(property);
+
+                Butterfly* newButterfly = object->butterfly();
+                if (structure->outOfLineCapacity() != newStructure->outOfLineCapacity()) {
+                    ASSERT(newStructure != structure);
+                    newButterfly = object->allocateMoreOutOfLineStorage(vm, structure->outOfLineCapacity(), newStructure->outOfLineCapacity());
+                    object->nukeStructureAndSetButterfly(vm, structure->id(), newButterfly);
+                }
+
+                validateOffset(offset);
+                ASSERT(newStructure->isValidOffset(offset));
+
+                // This assertion verifies that the concurrent GC won't read garbage if the concurrentGC
+                // is running at the same time we put without transitioning.
+                ASSERT(!object->getDirect(offset) || !JSValue::encode(object->getDirect(offset)));
+                object->putDirectOffset(vm, offset, value);
+                object->setStructure(vm, newStructure);
+                ASSERT(!newStructure->mayBePrototype()); // There is no way to make it prototype object.
             } else {
-                // When creating JSON object in this fast path, we know the following.
-                //   1. The object is definitely JSFinalObject.
-                //   2. The object rarely has duplicate properties.
-                //   3. Many same-shaped objects would be created from JSON. Thus very likely, there is already an existing Structure.
-                // Let's make the above case super fast, and fallback to the normal implementation when it is not true.
-                auto* structure = object->structure();
-                PropertyOffset offset = 0;
-                Structure* newStructure = nullptr;
-                if (LIKELY(!structure->isDictionary() && (newStructure = Structure::addPropertyTransitionToExistingStructure(structure, ident, 0, offset)))) {
-                    Butterfly* newButterfly = object->butterfly();
-                    if (structure->outOfLineCapacity() != newStructure->outOfLineCapacity()) {
-                        ASSERT(newStructure != structure);
-                        newButterfly = object->allocateMoreOutOfLineStorage(vm, structure->outOfLineCapacity(), newStructure->outOfLineCapacity());
-                        object->nukeStructureAndSetButterfly(vm, structure->id(), newButterfly);
+                ASSERT(std::holds_alternative<Identifier>(property));
+                auto& ident = std::get<Identifier>(property);
+                if (UNLIKELY(m_mode != StrictJSON && ident == vm.propertyNames->underscoreProto)) {
+                    if (UNLIKELY(!m_visitedUnderscoreProto.add(object).isNewEntry)) {
+                        m_parseErrorMessage = "Attempted to redefine __proto__ property"_s;
+                        return { };
                     }
-
-                    validateOffset(offset);
-                    ASSERT(newStructure->isValidOffset(offset));
-
-                    // This assertion verifies that the concurrent GC won't read garbage if the concurrentGC
-                    // is running at the same time we put without transitioning.
-                    ASSERT(!object->getDirect(offset) || !JSValue::encode(object->getDirect(offset)));
-                    object->putDirectOffset(vm, offset, value);
-                    object->setStructure(vm, newStructure);
-                    ASSERT(!newStructure->mayBePrototype()); // There is no way to make it prototype object.
+                    PutPropertySlot slot(object, m_nullOrCodeBlock ? m_nullOrCodeBlock->ownerExecutable()->isInStrictContext() : false);
+                    JSValue(object).put(m_globalObject, ident, value, slot);
+                    RETURN_IF_EXCEPTION(scope, { });
+                } else if (std::optional<uint32_t> index = parseIndex(ident)) {
+                    object->putDirectIndex(m_globalObject, index.value(), value);
+                    RETURN_IF_EXCEPTION(scope, { });
                 } else
-                    object->putDirectForJSONSlow(vm, ident, value);
+                    object->putDirect(vm, ident, value);
             }
 
             type = m_lexer.currentToken()->type;

@@ -240,9 +240,9 @@ void Builder::applyCustomPropertyImpl(const AtomString& name, const PropertyCasc
     SetForScope scopedLinkMatchMutation(m_state.m_linkMatch, SelectorChecker::MatchDefault);
     applyProperty(CSSPropertyCustom, *resolvedValue, SelectorChecker::MatchDefault);
 
-    m_state.m_inProgressCustomProperties.remove(name);
-    m_state.m_appliedCustomProperties.add(name);
-    m_state.m_inCycleCustomProperties.formUnion(WTFMove(savedInCycleProperties));
+    AtomString takenName = m_state.m_inProgressCustomProperties.take(name);
+    m_state.m_appliedCustomProperties.add(WTFMove(takenName));
+    m_state.m_inCycleCustomProperties.formUnion(savedInCycleProperties);
 }
 
 inline void Builder::applyCascadeProperty(const PropertyCascade::Property& property)

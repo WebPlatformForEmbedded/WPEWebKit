@@ -44,11 +44,6 @@ namespace WebCore {
 
 WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(Text);
 
-Ref<Text> Text::create(Document& document, String&& data)
-{
-    return adoptRef(*new Text(document, WTFMove(data), TEXT_NODE, { }));
-}
-
 Ref<Text> Text::createEditingText(Document& document, String&& data)
 {
     auto node = adoptRef(*new Text(document, WTFMove(data), TEXT_NODE, { TypeFlag::IsSpecialInternalNode }));

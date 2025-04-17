@@ -100,7 +100,7 @@ JSC_DEFINE_HOST_FUNCTION(objectProtoFuncValueOf, (JSGlobalObject* globalObject, 
     return JSValue::encode(valueObj);
 }
 
-bool objectPrototypeHasOwnProperty(JSGlobalObject* globalObject, JSObject* thisObject, const Identifier& propertyName)
+bool objectPrototypeHasOwnProperty(JSGlobalObject* globalObject, JSObject* thisObject, PropertyName propertyName)
 {
     VM& vm = globalObject->vm();
     auto scope = DECLARE_THROW_SCOPE(vm);
@@ -126,11 +126,23 @@ JSC_DEFINE_HOST_FUNCTION(objectProtoFuncHasOwnProperty, (JSGlobalObject* globalO
     auto scope = DECLARE_THROW_SCOPE(vm);
 
     JSValue base = callFrame->thisValue();
-    auto propertyName = callFrame->argument(0).toPropertyKey(globalObject);
+    auto subscript = callFrame->argument(0);
+
+    GCOwnedDataScope<AtomStringImpl*> propertyName;
+    Identifier propertyKey;
+    SUPPRESS_UNCOUNTED_LOCAL UniquedStringImpl* uid = nullptr;
+    if (subscript.isString()) {
+        propertyName = asString(subscript)->toAtomString(globalObject);
+        uid = propertyName.data;
+    } else {
+        propertyKey = subscript.toPropertyKey(globalObject);
+        uid = propertyKey.impl();
+    }
     RETURN_IF_EXCEPTION(scope, encodedJSValue());
+
     JSObject* thisObject = base.toThis(globalObject, ECMAMode::strict()).toObject(globalObject);
     RETURN_IF_EXCEPTION(scope, { });
-    RELEASE_AND_RETURN(scope, JSValue::encode(jsBoolean(objectPrototypeHasOwnProperty(globalObject, thisObject, propertyName))));
+    RELEASE_AND_RETURN(scope, JSValue::encode(jsBoolean(objectPrototypeHasOwnProperty(globalObject, thisObject, uid))));
 }
 
 JSC_DEFINE_HOST_FUNCTION(objectProtoFuncIsPrototypeOf, (JSGlobalObject* globalObject, CallFrame* callFrame))

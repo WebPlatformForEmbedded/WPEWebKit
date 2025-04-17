@@ -70,17 +70,6 @@ public:
         return create(Base::begin(), Base::end());
     }
 
-    bool operator==(const RefCountedFixedVectorBase& other) const
-    {
-        if (Base::size() != other.size())
-            return false;
-        for (unsigned i = 0; i < Base::size(); ++i) {
-            if (Base::at(i) != other.at(i))
-                return false;
-        }
-        return true;
-    }
-
 private:
     explicit RefCountedFixedVectorBase(unsigned size)
         : Base(size)
@@ -93,6 +82,18 @@ private:
     {
     }
 };
+
+template<typename T, bool isThreadSafe, typename U>
+inline bool operator==(const RefCountedFixedVectorBase<T, isThreadSafe>& a, const U& b)
+{
+    if (a.size() != b.size())
+        return false;
+    for (size_t i = 0; i < a.size(); ++i) {
+        if (a.at(i) != b.at(i))
+            return false;
+    }
+    return true;
+}
 
 template<typename T>
 using RefCountedFixedVector = RefCountedFixedVectorBase<T, false>;

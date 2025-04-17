@@ -92,6 +92,17 @@
 
 namespace JSC {
 
+static inline DirectEvalCodeCache::CacheLookupKey directEvalCacheKey(JSGlobalObject* globalObject, JSString* string, BytecodeIndex bytecodeIndex)
+{
+    if (string->isRope()) {
+        auto rope = string->asRope();
+        if (auto source = rope->tryGetLHS("()"_s))
+            return DirectEvalCodeCache::CacheLookupKey(source, bytecodeIndex, DirectEvalCodeCache::RopeSuffix::FunctionCall);
+        return DirectEvalCodeCache::CacheLookupKey(rope->resolveRope(globalObject).impl(), bytecodeIndex, DirectEvalCodeCache::RopeSuffix::None);
+    }
+    return DirectEvalCodeCache::CacheLookupKey(string->getValueImpl(), bytecodeIndex, DirectEvalCodeCache::RopeSuffix::None);
+}
+
 JSValue eval(CallFrame* callFrame, JSValue thisValue, JSScope* callerScopeChain, LexicallyScopedFeatures lexicallyScopedFeatures)
 {
     CallFrame* callerFrame = callFrame->callerFrame();
@@ -123,32 +134,31 @@ JSValue eval(CallFrame* callFrame, JSValue thisValue, JSScope* callerScopeChain,
         return jsUndefined();
 
     JSValue program = callFrame->argument(0);
-    String programSource;
+    JSString* programString = nullptr;
     bool isTrusted = false;
-    if (LIKELY(program.isString())) {
-        programSource = program.toWTFString(globalObject);
-        RETURN_IF_EXCEPTION(scope, JSValue());
-    } else if (Options::useTrustedTypes() && program.isObject()) {
+    if (LIKELY(program.isString()))
+        programString = asString(program);
+    else if (Options::useTrustedTypes() && program.isObject()) {
         auto* structure = globalObject->trustedScriptStructure();
         if (structure == asObject(program)->structure()) {
-            programSource = program.toWTFString(globalObject);
+            programString = program.toString(globalObject);
             RETURN_IF_EXCEPTION(scope, { });
             isTrusted = true;
         } else {
             auto code = globalObject->globalObjectMethodTable()->codeForEval(globalObject, program);
             RETURN_IF_EXCEPTION(scope, { });
             if (!code.isNull()) {
-                programSource = code;
+                programString = jsString(vm, code);
                 isTrusted = true;
             }
         }
     }
 
-    if (programSource.isNull())
+    if (!programString)
         return program;
 
     if (Options::useTrustedTypes() && globalObject->requiresTrustedTypes() && !isTrusted) {
-        bool canCompileStrings = globalObject->globalObjectMethodTable()->canCompileStrings(globalObject, CompilationType::DirectEval, programSource, *vm.emptyList);
+        bool canCompileStrings = globalObject->globalObjectMethodTable()->canCompileStrings(globalObject, CompilationType::DirectEval, programString->value(globalObject).data, *vm.emptyList);
         RETURN_IF_EXCEPTION(scope, { });
         if (!canCompileStrings) {
             throwException(globalObject, scope, createEvalError(globalObject, "Refused to evaluate a string as JavaScript because this document requires a 'Trusted Type' assignment."_s));
@@ -158,7 +168,7 @@ JSValue eval(CallFrame* callFrame, JSValue thisValue, JSScope* callerScopeChain,
 
     TopCallFrameSetter topCallFrame(vm, callFrame);
     if (!globalObject->evalEnabled()) {
-        globalObject->globalObjectMethodTable()->reportViolationForUnsafeEval(globalObject, programSource);
+        globalObject->globalObjectMethodTable()->reportViolationForUnsafeEval(globalObject, programString->value(globalObject).data);
         throwException(globalObject, scope, createEvalError(globalObject, globalObject->evalDisabledErrorMessage()));
         return { };
     }
@@ -182,8 +192,11 @@ JSValue eval(CallFrame* callFrame, JSValue thisValue, JSScope* callerScopeChain,
     else
         evalContextType = EvalContextType::None;
 
-    DirectEvalExecutable* eval = callerBaselineCodeBlock->directEvalCodeCache().tryGet(programSource, bytecodeIndex);
+    auto cacheKey = directEvalCacheKey(globalObject, programString, bytecodeIndex);
+    RETURN_IF_EXCEPTION(scope, { });
+    DirectEvalExecutable* eval = callerBaselineCodeBlock->directEvalCodeCache().get(cacheKey);
     if (!eval) {
+        auto programSource = programString->value(globalObject).data;
         if (!(lexicallyScopedFeatures & StrictModeLexicallyScopedFeature)) {
             if (programSource.is8Bit()) {
                 LiteralParser<LChar, JSONReviverMode::Disabled> preparser(globalObject, programSource.span8(), SloppyJSON, callerBaselineCodeBlock);
@@ -210,7 +223,7 @@ JSValue eval(CallFrame* callFrame, JSValue thisValue, JSScope* callerScopeChain,
 
         // Skip the eval cache if tainted since another eval call could have a different taintedness.
         if (sourceTaintedOrigin == SourceTaintedOrigin::Untainted)
-            callerBaselineCodeBlock->directEvalCodeCache().set(globalObject, callerBaselineCodeBlock, programSource, bytecodeIndex, eval);
+            callerBaselineCodeBlock->directEvalCodeCache().set(globalObject, callerBaselineCodeBlock, cacheKey, eval);
     }
 
     RELEASE_AND_RETURN(scope, vm.interpreter.executeEval(eval, thisValue, callerScopeChain));

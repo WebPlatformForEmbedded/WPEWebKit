@@ -66,7 +66,7 @@ private:
     String localizeValue(const String&) const final;
     String visibleValue() const final;
     String convertFromVisibleValue(const String&) const final;
-    String sanitizeValue(const String&) const final;
+    ValueOrReference<String> sanitizeValue(const String& value LIFETIME_BOUND) const final;
     String badInputText() const final;
     bool supportsPlaceholder() const final;
     void attributeChanged(const QualifiedName&) final;

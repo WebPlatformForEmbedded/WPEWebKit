@@ -228,17 +228,20 @@ inline void AtomHTMLToken::initializeAttributes(const HTMLToken::AttributeList& 
     if (!size)
         return;
 
-    HashSet<AtomString> addedAttributes;
+    Vector<AtomStringImpl*, 8> addedAttributes;
     addedAttributes.reserveInitialCapacity(size);
+
     m_attributes = WTF::compactMap(attributes, [&](auto& attribute) -> std::optional<Attribute> {
         if (attribute.name.isEmpty())
             return std::nullopt;
 
         auto qualifiedName = HTMLNameCache::makeAttributeQualifiedName(attribute.name);
-        if (addedAttributes.add(qualifiedName.localName()).isNewEntry)
-            return Attribute(WTFMove(qualifiedName), HTMLNameCache::makeAttributeValue(attribute.value));
-        m_hasDuplicateAttribute = true;
-        return std::nullopt;
+        if (UNLIKELY(!insertInUniquedSortedVector(addedAttributes, qualifiedName.localName().impl()))) {
+            m_hasDuplicateAttribute = true;
+            return std::nullopt;
+        }
+
+        return Attribute(WTFMove(qualifiedName), HTMLNameCache::makeAttributeValue(attribute.value));
     });
 }
 

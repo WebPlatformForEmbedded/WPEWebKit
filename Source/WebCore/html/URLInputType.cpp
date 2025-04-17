@@ -60,9 +60,9 @@ String URLInputType::typeMismatchText() const
     return validationMessageTypeMismatchForURLText();
 }
 
-String URLInputType::sanitizeValue(const String& proposedValue) const
+ValueOrReference<String> URLInputType::sanitizeValue(const String& proposedValue LIFETIME_BOUND) const
 {
-    return BaseTextInputType::sanitizeValue(proposedValue).trim(isASCIIWhitespace);
+    return BaseTextInputType::sanitizeValue(proposedValue)->trim(isASCIIWhitespace);
 }
 
 } // namespace WebCore

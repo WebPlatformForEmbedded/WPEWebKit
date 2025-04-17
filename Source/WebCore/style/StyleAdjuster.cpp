@@ -950,7 +950,7 @@ void Adjuster::adjustForSiteSpecificQuirks(RenderStyle& style) const
     if (m_document.quirks().needsWeChatScrollingQuirk()) {
         static MainThreadNeverDestroyed<const AtomString> class1("tree-select"_s);
         static MainThreadNeverDestroyed<const AtomString> class2("v-tree-select"_s);
-        const auto& flexBasis = style.flexBasis();
+        auto& flexBasis = style.flexBasis();
         if (style.minHeight().isAuto()
             && style.display() == DisplayType::Flex
             && style.flexGrow() == 1
@@ -1114,7 +1114,7 @@ auto Adjuster::adjustmentForTextAutosizing(const RenderStyle& style, const Eleme
         adjustmentForTextAutosizing.newLineHeight = minimumLineHeight;
     };
 
-    auto fontDescription = style.fontDescription();
+    auto& fontDescription = style.fontDescription();
     auto initialComputedFontSize = fontDescription.computedSize();
     auto specifiedFontSize = fontDescription.specifiedSize();
     bool isCandidate = style.isIdempotentTextAutosizingCandidate(newStatus);

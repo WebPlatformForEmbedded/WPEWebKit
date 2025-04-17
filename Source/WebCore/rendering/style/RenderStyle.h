@@ -549,6 +549,10 @@ public:
     WEBCORE_EXPORT const FontCascade& fontCascade() const;
     WEBCORE_EXPORT const FontMetrics& metricsOfPrimaryFont() const;
     WEBCORE_EXPORT const FontCascadeDescription& fontDescription() const;
+
+    WEBCORE_EXPORT FontCascade& mutableFontCascadeWithoutUpdate();
+    WEBCORE_EXPORT FontCascadeDescription& mutableFontDescriptionWithoutUpdate();
+
     float specifiedFontSize() const;
     float computedFontSize() const;
     std::pair<FontOrientation, NonCJKGlyphOrientation> fontAndGlyphOrientation();

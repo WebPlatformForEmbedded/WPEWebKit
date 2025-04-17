@@ -100,13 +100,15 @@ bool DateTimeLocalInputType::isValidFormat(OptionSet<DateTimeFormatValidationRes
     return results.containsAll({ DateTimeFormatValidationResults::HasYear, DateTimeFormatValidationResults::HasMonth, DateTimeFormatValidationResults::HasDay, DateTimeFormatValidationResults::HasHour, DateTimeFormatValidationResults::HasMinute, DateTimeFormatValidationResults::HasMeridiem });
 }
 
-String DateTimeLocalInputType::sanitizeValue(const String& proposedValue) const
+ValueOrReference<String> DateTimeLocalInputType::sanitizeValue(const String& proposedValue LIFETIME_BOUND) const
 {
     if (proposedValue.isEmpty())
         return proposedValue;
 
-    auto components = DateComponents::fromParsingDateTimeLocal(proposedValue);
-    return components ? components->toString() : emptyString();
+    if (auto components = DateComponents::fromParsingDateTimeLocal(proposedValue))
+        return components->toString();
+
+    return emptyString();
 }
 
 String DateTimeLocalInputType::formatDateTimeFieldsState(const DateTimeFieldsState& state) const

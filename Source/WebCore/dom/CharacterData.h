@@ -49,8 +49,11 @@ public:
 protected:
     CharacterData(Document& document, String&& text, NodeType type, OptionSet<TypeFlag> typeFlags = { })
         : Node(document, type, typeFlags | TypeFlag::IsCharacterData)
-        , m_data(!text.isNull() ? WTFMove(text) : emptyString())
+        , m_data(WTFMove(text))
     {
+        if (m_data.isNull())
+            m_data = emptyString();
+
         ASSERT(isCharacterDataNode());
         ASSERT(!isContainerNode());
     }

@@ -79,7 +79,7 @@ ALWAYS_INLINE std::optional<uint32_t> parseIndex(std::span<const CharType> chara
     return value;
 }
 
-ALWAYS_INLINE std::optional<uint32_t> parseIndex(StringImpl& impl)
+ALWAYS_INLINE std::optional<uint32_t> parseIndex(const StringImpl& impl)
 {
     return impl.is8Bit() ? parseIndex(impl.span8()) : parseIndex(impl.span16());
 }
@@ -93,7 +93,8 @@ public:
 
     const AtomString& string() const { return m_string; }
 
-    UniquedStringImpl* impl() const { return static_cast<UniquedStringImpl*>(m_string.impl()); }
+    UniquedStringImpl* impl() const { return m_string.impl(); }
+    RefPtr<AtomStringImpl> releaseImpl() { return m_string.releaseImpl(); }
 
     int length() const { return m_string.length(); }
 

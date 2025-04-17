@@ -139,6 +139,9 @@ public:
         }
     }
 
+    EncodedJSValue* begin() { return m_buffer; }
+    EncodedJSValue* end() { return m_buffer + m_size; }
+
     auto at(unsigned i) const -> decltype(auto)
     {
         if constexpr (std::is_same_v<T, JSValue>) {

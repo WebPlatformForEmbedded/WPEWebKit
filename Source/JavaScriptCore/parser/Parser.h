@@ -484,9 +484,9 @@ public:
         return hasDeclaredVariable(ident.impl());
     }
 
-    bool hasDeclaredVariable(const RefPtr<UniquedStringImpl>& ident)
+    bool hasDeclaredVariable(const UniquedStringImpl* ident)
     {
-        auto iter = m_declaredVariables.find(ident.get());
+        auto iter = m_declaredVariables.find(ident);
         if (iter == m_declaredVariables.end())
             return false;
         VariableEnvironmentEntry entry = iter->value;
@@ -498,9 +498,9 @@ public:
         return hasLexicallyDeclaredVariable(ident.impl());
     }
 
-    bool hasLexicallyDeclaredVariable(const RefPtr<UniquedStringImpl>& ident) const
+    bool hasLexicallyDeclaredVariable(const UniquedStringImpl* ident) const
     {
-        return m_lexicalVariables.contains(ident.get());
+        return m_lexicalVariables.contains(ident);
     }
 
     bool hasPrivateName(const Identifier& ident)
@@ -569,9 +569,9 @@ public:
         return hasDeclaredParameter(ident.impl());
     }
 
-    bool hasDeclaredParameter(const RefPtr<UniquedStringImpl>& ident)
+    bool hasDeclaredParameter(UniquedStringImpl* ident)
     {
-        return m_declaredParameters.contains(ident.get()) || hasDeclaredVariable(ident);
+        return m_declaredParameters.contains(ident) || hasDeclaredVariable(ident);
     }
     
     void preventAllVariableDeclarations()

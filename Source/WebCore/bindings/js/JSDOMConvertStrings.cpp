@@ -84,7 +84,7 @@ ConversionResult<IDLAtomStringAdaptor<IDLByteString>> valueToByteAtomString(JSC:
     VM& vm = lexicalGlobalObject.vm();
     auto scope = DECLARE_THROW_SCOPE(vm);
 
-    auto string = value.toString(&lexicalGlobalObject)->toAtomString(&lexicalGlobalObject);
+    AtomString string = value.toString(&lexicalGlobalObject)->toAtomString(&lexicalGlobalObject).data;
     RETURN_IF_EXCEPTION(scope, ConversionResult<IDLAtomStringAdaptor<IDLByteString>>::exception());
 
     if (UNLIKELY(throwIfInvalidByteString(lexicalGlobalObject, scope, string.string())))
@@ -117,7 +117,7 @@ ConversionResult<IDLAtomStringAdaptor<IDLUSVString>> valueToUSVAtomString(JSGlob
     auto string = value.toString(&lexicalGlobalObject)->toAtomString(&lexicalGlobalObject);
     RETURN_IF_EXCEPTION(scope, ConversionResult<IDLAtomStringAdaptor<IDLUSVString>>::exception());
 
-    return replaceUnpairedSurrogatesWithReplacementCharacter(WTFMove(string));
+    return replaceUnpairedSurrogatesWithReplacementCharacter(AtomString(string));
 }
 
 // https://w3c.github.io/trusted-types/dist/spec/#get-trusted-type-compliant-string-algorithm

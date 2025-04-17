@@ -105,7 +105,7 @@ inline auto WidthIterator::applyFontTransforms(GlyphBuffer& glyphBuffer, unsigne
         });
         if (iterator == charactersTreatedAsSpace.end() || iterator->stringOffset != characterIndex)
             continue;
-        const auto& originalAdvances = *iterator;
+        auto& originalAdvances = *iterator;
         setWidth(*glyphBuffer.advances(i), originalAdvances.advance);
     }
     charactersTreatedAsSpace.clear();
@@ -373,7 +373,7 @@ inline void WidthIterator::advanceInternal(TextIterator& textIterator, GlyphBuff
 {
     // The core logic here needs to match FontCascade::widthForTextUsingSimplifiedMeasuring()
     FloatRect bounds;
-    auto fontDescription = m_font->fontDescription();
+    auto& fontDescription = m_font->fontDescription();
     Ref primaryFont = m_font->primaryFont();
     AdvanceInternalState advanceInternalState(glyphBuffer, primaryFont, textIterator.currentIndex());
     SmallCapsState smallCapsState(fontDescription);

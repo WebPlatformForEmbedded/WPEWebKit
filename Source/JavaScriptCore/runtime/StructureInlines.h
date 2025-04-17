@@ -799,7 +799,7 @@ ALWAYS_INLINE Structure* Structure::addPropertyTransitionToExistingStructureConc
     return addPropertyTransitionToExistingStructureImpl(structure, uid, attributes, offset);
 }
 
-ALWAYS_INLINE StructureTransitionTable::Hash::Key StructureTransitionTable::Hash::createFromStructure(Structure* structure)
+ALWAYS_INLINE StructureTransitionTable::Hash::Key StructureTransitionTable::Hash::createKeyFromStructure(Structure* structure)
 {
     switch (structure->transitionKind()) {
     case TransitionKind::ChangePrototype:
@@ -821,7 +821,11 @@ inline Structure* StructureTransitionTable::get(PointerKey rep, unsigned attribu
 {
     if (isUsingSingleSlot()) {
         auto* transition = trySingleTransition();
-        return (transition && Hash::createFromStructure(transition) == Hash::createKey(rep, attributes, transitionKind)) ? transition : nullptr;
+        if (!transition)
+            return nullptr;
+        if (Hash::createKeyFromStructure(transition) != Hash::createKey(rep, attributes, transitionKind))
+            return nullptr;
+        return transition;
     }
     return map()->get(StructureTransitionTable::Hash::createKey(rep, attributes, transitionKind));
 }

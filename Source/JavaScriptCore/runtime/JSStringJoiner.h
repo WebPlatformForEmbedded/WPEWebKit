@@ -58,7 +58,7 @@ private:
     void append(JSString*, StringViewWithUnderlyingString&&);
     void append8Bit(const String&);
     unsigned joinedLength(JSGlobalObject*) const;
-    JSValue joinSlow(JSGlobalObject*);
+    JSValue joinImpl(JSGlobalObject*);
 
     StringView m_separator;
     Entries m_strings;
@@ -93,7 +93,7 @@ inline JSValue JSStringJoiner::join(JSGlobalObject* globalObject)
             return m_lastString;
         return jsString(globalObject->vm(), m_strings[0].m_view.toString());
     }
-    return joinSlow(globalObject);
+    return joinImpl(globalObject);
 }
 
 ALWAYS_INLINE void JSStringJoiner::append(JSString* jsString, StringViewWithUnderlyingString&& string)
@@ -216,5 +216,50 @@ ALWAYS_INLINE void JSStringJoiner::appendNumber(VM& vm, double value)
     else
         append8Bit(vm.numericStrings.add(value));
 }
+
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
+
+// Avoids the overhead of accumulating intermediate vectors of values when
+// we're only joining existing strings.
+class JSOnlyStringsJoiner {
+public:
+    JSOnlyStringsJoiner(StringView separator)
+        : m_separator(separator)
+        , m_isAll8Bit(m_separator.is8Bit())
+    {
+    }
+
+    JSValue tryJoin(JSGlobalObject* globalObject, const WriteBarrier<Unknown>* data, unsigned length)
+    {
+        if (length == 1) {
+            JSValue value = data[0].get();
+            if (!value || !value.isString())
+                return JSValue();
+            return value;
+        }
+
+        for (size_t i = 0; i < length; ++i) {
+            JSValue value = data[i].get();
+            if (!value || !value.isString())
+                return JSValue();
+
+            JSString* string = asString(value);
+
+            m_accumulatedStringsLength += string->length();
+            m_isAll8Bit &= string->is8Bit();
+        }
+
+        return joinImpl(globalObject, data, length);
+    }
+
+private:
+    JSValue joinImpl(JSGlobalObject*, const WriteBarrier<Unknown>*, unsigned);
+
+    StringView m_separator;
+    CheckedUint32 m_accumulatedStringsLength;
+    bool m_isAll8Bit { true };
+};
+
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 
 } // namespace JSC
