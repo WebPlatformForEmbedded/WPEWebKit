@@ -61,7 +61,7 @@ String URLInputType::typeMismatchText() const
     return validationMessageTypeMismatchForURLText();
 }
 
-String URLInputType::sanitizeValue(const String& proposedValue) const
+ValueOrReference<String> URLInputType::sanitizeValue(const String& proposedValue LIFETIME_BOUND) const
 {
     return stripLeadingAndTrailingHTMLSpaces(BaseTextInputType::sanitizeValue(proposedValue));
 }

@@ -48,7 +48,7 @@ private:
     const AtomString& formControlType() const final;
     bool typeMismatch() const final;
     String typeMismatchText() const final;
-    String sanitizeValue(const String&) const final;
+    ValueOrReference<String> sanitizeValue(const String& value LIFETIME_BOUND) const final;
 };
 
 } // namespace WebCore

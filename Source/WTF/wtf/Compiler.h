@@ -416,6 +416,16 @@
 #define WARN_UNUSED_RETURN
 #endif
 
+/* LIFETIME_BOUND */
+
+#if !defined(LIFETIME_BOUND) && COMPILER(CLANG)
+#define LIFETIME_BOUND [[clang::lifetimebound]]
+#endif
+
+#if !defined(LIFETIME_BOUND)
+#define LIFETIME_BOUND
+#endif
+
 /* DEBUGGER_ANNOTATION_MARKER */
 
 #if !defined(DEBUGGER_ANNOTATION_MARKER) && COMPILER(GCC)

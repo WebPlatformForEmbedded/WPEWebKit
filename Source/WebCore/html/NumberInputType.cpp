@@ -105,7 +105,7 @@ void NumberInputType::setValue(const String& sanitizedValue, bool valueChanged, 
 double NumberInputType::valueAsDouble() const
 {
     ASSERT(element());
-    return parseToDoubleForNumberType(element()->value());
+    return parseToDoubleForNumberType(element()->value().get());
 }
 
 ExceptionOr<void> NumberInputType::setValueAsDouble(double newValue, TextFieldEventBehavior eventBehavior) const
@@ -267,11 +267,13 @@ String NumberInputType::convertFromVisibleValue(const String& visibleValue) cons
     return element()->locale().convertFromLocalizedNumber(visibleValue);
 }
 
-String NumberInputType::sanitizeValue(const String& proposedValue) const
+ValueOrReference<String> NumberInputType::sanitizeValue(const String& proposedValue LIFETIME_BOUND) const
 {
     if (proposedValue.isEmpty())
         return proposedValue;
-    return std::isfinite(parseToDoubleForNumberType(proposedValue)) ? proposedValue : emptyString();
+    if (std::isfinite(parseToDoubleForNumberType(proposedValue)))
+        return proposedValue;
+    return emptyString();
 }
 
 bool NumberInputType::hasBadInput() const

@@ -818,7 +818,7 @@ TextDirection HTMLElement::directionality(Node** strongDirectionalityTextNode) c
         auto* inputElement = dynamicDowncast<HTMLInputElement>(textControl);
         if (!inputElement || (inputElement->isTextType() && !inputElement->isPasswordField())) {
             bool hasStrongDirectionality;
-            UCharDirection textDirection = textControl->value().defaultWritingDirection(&hasStrongDirectionality);
+            UCharDirection textDirection = textControl->value()->defaultWritingDirection(&hasStrongDirectionality);
             if (strongDirectionalityTextNode)
                 *strongDirectionalityTextNode = hasStrongDirectionality ? textControl : nullptr;
             return (textDirection == U_LEFT_TO_RIGHT) ? TextDirection::LTR : TextDirection::RTL;            

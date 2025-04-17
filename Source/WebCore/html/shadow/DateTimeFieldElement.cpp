@@ -182,7 +182,9 @@ AtomString DateTimeFieldElement::localeIdentifier() const
 
 String DateTimeFieldElement::visibleValue() const
 {
-    return hasValue() ? value() : placeholderValue();
+    if (hasValue())
+        return value();
+    return placeholderValue();
 }
 
 void DateTimeFieldElement::updateVisibleValue(EventBehavior eventBehavior)

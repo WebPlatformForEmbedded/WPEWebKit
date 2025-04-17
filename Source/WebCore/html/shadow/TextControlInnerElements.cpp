@@ -314,7 +314,7 @@ std::optional<Style::ElementStyle> SearchFieldCancelButtonElement::resolveCustom
 {
     auto elementStyle = resolveStyle(resolutionContext);
     auto& inputElement = downcast<HTMLInputElement>(*shadowHost());
-    elementStyle.renderStyle->setVisibility(elementStyle.renderStyle->visibility() == Visibility::Hidden || inputElement.value().isEmpty() ? Visibility::Hidden : Visibility::Visible);
+    elementStyle.renderStyle->setVisibility(elementStyle.renderStyle->visibility() == Visibility::Hidden || inputElement.value()->isEmpty() ? Visibility::Hidden : Visibility::Visible);
     return elementStyle;
 }
 

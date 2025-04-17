@@ -68,7 +68,7 @@ WTF_MAKE_ISO_ALLOCATED_IMPL(SliderContainerElement);
 inline static Decimal sliderPosition(HTMLInputElement& element)
 {
     const StepRange stepRange(element.createStepRange(AnyStepHandling::Reject));
-    const Decimal oldValue = parseToDecimalForNumberType(element.value(), stepRange.defaultValue());
+    const Decimal oldValue = parseToDecimalForNumberType(element.value().get(), stepRange.defaultValue());
     return stepRange.proportionFromValue(stepRange.clampValue(oldValue));
 }
 

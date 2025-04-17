@@ -225,9 +225,11 @@ String BaseDateAndTimeInputType::visibleValue() const
     return localizeValue(element()->value());
 }
 
-String BaseDateAndTimeInputType::sanitizeValue(const String& proposedValue) const
+ValueOrReference<String> BaseDateAndTimeInputType::sanitizeValue(const String& proposedValue LIFETIME_BOUND) const
 {
-    return typeMismatchFor(proposedValue) ? String() : proposedValue;
+    if (typeMismatchFor(proposedValue))
+        return String();
+    return proposedValue;
 }
 
 bool BaseDateAndTimeInputType::supportsReadOnly() const
@@ -355,7 +357,7 @@ void BaseDateAndTimeInputType::updateInnerTextValue()
 
     DateTimeEditElement::LayoutParameters layoutParameters(element()->locale());
 
-    auto date = parseToDateComponents(element()->value());
+    auto date = parseToDateComponents(element()->value().get());
     if (date)
         setupLayoutParameters(layoutParameters, *date);
     else {
@@ -553,7 +555,7 @@ bool BaseDateAndTimeInputType::setupDateTimeChooserParameters(DateTimeChooserPar
     parameters.isAnchorElementRTL = computedStyle->direction() == TextDirection::RTL;
     parameters.useDarkAppearance = document.useDarkAppearance(computedStyle);
 
-    auto date = valueOrDefault(parseToDateComponents(element.value()));
+    auto date = valueOrDefault(parseToDateComponents(element.value().get()));
     parameters.hasSecondField = shouldHaveSecondField(date);
     parameters.hasMillisecondField = shouldHaveMillisecondField(date);
 

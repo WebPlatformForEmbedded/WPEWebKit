@@ -25,6 +25,7 @@
 #include "config.h"
 #include <wtf/text/StringImpl.h>
 
+#include <atomic>
 #include <wtf/StdLibExtras.h>
 #include <wtf/text/AtomString.h>
 #include <wtf/text/CString.h>

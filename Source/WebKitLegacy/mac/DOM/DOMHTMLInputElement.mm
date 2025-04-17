@@ -451,7 +451,7 @@
 - (NSString *)value
 {
     WebCore::JSMainThreadNullState state;
-    return IMPL->value();
+    return IMPL->value().get();
 }
 
 - (void)setValue:(NSString *)newValue

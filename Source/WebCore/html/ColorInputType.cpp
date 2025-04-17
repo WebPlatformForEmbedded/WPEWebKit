@@ -116,12 +116,12 @@ bool ColorInputType::supportsRequired() const
     return false;
 }
 
-String ColorInputType::fallbackValue() const
+ValueOrReference<String> ColorInputType::fallbackValue() const
 {
-    return "#000000"_s;
+    return String { "#000000"_s };
 }
 
-String ColorInputType::sanitizeValue(const String& proposedValue) const
+ValueOrReference<String> ColorInputType::sanitizeValue(const String& proposedValue LIFETIME_BOUND) const
 {
     if (!isValidSimpleColor(proposedValue))
         return fallbackValue();
@@ -132,7 +132,7 @@ String ColorInputType::sanitizeValue(const String& proposedValue) const
 Color ColorInputType::valueAsColor() const
 {
     ASSERT(element());
-    return parseSimpleColorValue(element()->value()).value();
+    return parseSimpleColorValue(element()->value().get()).value();
 }
 
 void ColorInputType::createShadowSubtree()
