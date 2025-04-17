@@ -45,9 +45,9 @@ public:
     WEBCORE_EXPORT void setCols(unsigned);
     WEBCORE_EXPORT String defaultValue() const;
     WEBCORE_EXPORT void setDefaultValue(String&&);
-    WEBCORE_EXPORT String value() const final;
+    WEBCORE_EXPORT ValueOrReference<String> value() const final;
     WEBCORE_EXPORT ExceptionOr<void> setValue(const String&, TextFieldEventBehavior = DispatchNoEvent, TextControlSetValueSelection = TextControlSetValueSelection::SetSelectionToEnd) final;
-    unsigned textLength() const { return value().length(); }
+    unsigned textLength() const { return value()->length(); }
     String validationMessage() const final;
 
     void setSelectionRangeForBindings(unsigned start, unsigned end, const String& direction);
@@ -75,7 +75,7 @@ private:
     HTMLElement* placeholderElement() const final { return m_placeholder.get(); }
     RefPtr<HTMLElement> protectedPlaceholderElement() const;
     void updatePlaceholderText() final;
-    bool isEmptyValue() const final { return value().isEmpty(); }
+    bool isEmptyValue() const final { return value()->isEmpty(); }
 
     bool isOptionalFormControl() const final { return !isRequiredFormControl(); }
     bool isRequiredFormControl() const final { return isRequired(); }

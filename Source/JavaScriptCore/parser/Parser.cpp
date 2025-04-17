@@ -315,7 +315,7 @@ Expected<typename Parser<LexerType>::ParseInnerResult, String> Parser<LexerType>
 
     VariableEnvironment& varDeclarations = scope->declaredVariables();
     for (auto& entry : capturedVariables)
-        varDeclarations.markVariableAsCaptured(entry);
+        varDeclarations.markVariableAsCaptured(entry.get());
     scope->finalizeLexicalEnvironment();
 
     if (isGeneratorWrapperParseMode(parseMode) || isAsyncFunctionOrAsyncGeneratorWrapperParseMode(parseMode)) {
@@ -503,13 +503,13 @@ end:
 
     for (const auto& pair : m_moduleScopeData->exportedBindings()) {
         const auto& uid = pair.key;
-        if (currentScope()->hasDeclaredVariable(uid)) {
-            currentScope()->declaredVariables().markVariableAsExported(uid);
+        if (currentScope()->hasDeclaredVariable(uid.get())) {
+            currentScope()->declaredVariables().markVariableAsExported(uid.get());
             continue;
         }
 
-        if (currentScope()->hasLexicallyDeclaredVariable(uid)) {
-            currentScope()->lexicalVariables().markVariableAsExported(uid);
+        if (currentScope()->hasLexicallyDeclaredVariable(uid.get())) {
+            currentScope()->lexicalVariables().markVariableAsExported(uid.get());
             continue;
         }
 

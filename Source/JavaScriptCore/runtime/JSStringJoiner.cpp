@@ -165,6 +165,55 @@ static inline String joinStrings(const JSStringJoiner::Entries& strings, std::sp
     return result;
 }
 
+template<typename OutputCharacterType, typename SeparatorCharacterType>
+static inline String joinStrings(JSGlobalObject* globalObject, const WriteBarrier<Unknown>* strings, unsigned size, std::span<const SeparatorCharacterType> separator, unsigned joinedLength)
+{
+    VM& vm = globalObject->vm();
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    ASSERT(joinedLength);
+
+    std::span<OutputCharacterType> data;
+    String result = StringImpl::tryCreateUninitialized(joinedLength, data);
+    if (UNLIKELY(result.isNull())) {
+        throwOutOfMemoryError(globalObject, scope);
+        return { };
+    }
+
+    switch (separator.size()) {
+    case 0: {
+        for (unsigned i = 0; i < size; ++i) {
+            JSValue value = strings[i].get();
+            auto view = asString(value)->view(globalObject);
+            RETURN_IF_EXCEPTION(scope, String());
+
+            appendStringToData(data, view);
+        }
+        break;
+    }
+    default: {
+        JSValue value = strings[0].get();
+        auto view = asString(value)->view(globalObject);
+        RETURN_IF_EXCEPTION(scope, String());
+
+        appendStringToData(data, view);
+
+        for (unsigned i = 1; i < size; ++i) {
+            JSValue value = strings[i].get();
+            auto view = asString(value)->view(globalObject);
+            RETURN_IF_EXCEPTION(scope, String());
+
+            appendStringToData(data, separator);
+            appendStringToData(data, view);
+        }
+        break;
+    }
+    }
+    ASSERT(data.data() == result.span<OutputCharacterType>().data() + joinedLength);
+
+    return result;
+}
+
 inline unsigned JSStringJoiner::joinedLength(JSGlobalObject* globalObject) const
 {
     VM& vm = globalObject->vm();
@@ -183,7 +232,7 @@ inline unsigned JSStringJoiner::joinedLength(JSGlobalObject* globalObject) const
     return totalLength;
 }
 
-JSValue JSStringJoiner::joinSlow(JSGlobalObject* globalObject)
+JSValue JSStringJoiner::joinImpl(JSGlobalObject* globalObject)
 {
     VM& vm = globalObject->vm();
     auto scope = DECLARE_THROW_SCOPE(vm);
@@ -214,6 +263,37 @@ JSValue JSStringJoiner::joinSlow(JSGlobalObject* globalObject)
         throwOutOfMemoryError(globalObject, scope);
         return { };
     }
+
+    return jsString(vm, WTFMove(result));
+}
+
+JSValue JSOnlyStringsJoiner::joinImpl(JSGlobalObject* globalObject, const WriteBarrier<Unknown>* data, unsigned length)
+{
+    VM& vm = globalObject->vm();
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    if (!length)
+        return jsEmptyString(vm);
+
+    CheckedInt32 separatorLength = m_separator.length();
+    CheckedInt32 totalSeparatorsLength = separatorLength * (CheckedInt32(length) - 1);
+    CheckedInt32 totalLength = totalSeparatorsLength + m_accumulatedStringsLength;
+    if (UNLIKELY(totalLength.hasOverflowed())) {
+        throwOutOfMemoryError(globalObject, scope);
+        return { };
+    }
+
+    String result;
+    if (m_isAll8Bit)
+        result = joinStrings<LChar>(globalObject, data, length, m_separator.span8(), totalLength);
+    else {
+        if (m_separator.is8Bit())
+            result = joinStrings<UChar>(globalObject, data, length, m_separator.span8(), totalLength);
+        else
+            result = joinStrings<UChar>(globalObject, data, length, m_separator.span16(), totalLength);
+    }
+
+    RETURN_IF_EXCEPTION(scope, { });
 
     return jsString(vm, WTFMove(result));
 }

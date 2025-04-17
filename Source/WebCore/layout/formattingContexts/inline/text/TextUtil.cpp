@@ -59,7 +59,7 @@ InlineLayoutUnit TextUtil::width(const InlineTextBox& inlineTextBox, const FontC
     if (inlineTextBox.isCombined())
         return fontCascade.size();
 
-    auto text = inlineTextBox.content();
+    auto& text = inlineTextBox.content();
     ASSERT(to <= text.length());
     auto hasKerningOrLigatures = fontCascade.enableKerning() || fontCascade.requiresShaping();
     // The "non-whitespace" + "whitespace" pattern is very common for inline content and since most of the "non-whitespace" runs end up with
@@ -121,9 +121,8 @@ InlineLayoutUnit TextUtil::width(const InlineTextItem& inlineTextItem, const Fon
 
 InlineLayoutUnit TextUtil::trailingWhitespaceWidth(const InlineTextBox& inlineTextBox, const FontCascade& fontCascade, size_t startPosition, size_t endPosition)
 {
-    auto text = inlineTextBox.content();
     ASSERT(endPosition > startPosition + 1);
-    ASSERT(text[endPosition - 1] == space);
+    ASSERT(inlineTextBox.content()[endPosition - 1] == space);
     return width(inlineTextBox, fontCascade, startPosition, endPosition, { }, UseTrailingWhitespaceMeasuringOptimization::Yes) - 
         width(inlineTextBox, fontCascade, startPosition, endPosition - 1, { }, UseTrailingWhitespaceMeasuringOptimization::No);
 }
@@ -166,7 +165,7 @@ TextUtil::FallbackFontList TextUtil::fallbackFontsForText(StringView textContent
 {
     TextUtil::FallbackFontList fallbackFonts;
 
-    auto collectFallbackFonts = [&](const auto& textRun) {
+    auto collectFallbackFonts = [&](auto&& textRun) {
         if (textRun.text().isEmpty())
             return;
 
@@ -237,7 +236,7 @@ TextUtil::WordBreakLeft TextUtil::breakWord(const InlineTextBox& inlineTextBox, 
 {
     ASSERT(availableWidth >= 0);
     ASSERT(length);
-    auto text = inlineTextBox.content();
+    auto& text = inlineTextBox.content();
 
     if (UNLIKELY(!textWidth)) {
         ASSERT_NOT_REACHED();
@@ -541,7 +540,7 @@ bool TextUtil::containsStrongDirectionalityText(StringView text)
 
 size_t TextUtil::firstUserPerceivedCharacterLength(const InlineTextBox& inlineTextBox, size_t startPosition, size_t length)
 {
-    auto textContent = inlineTextBox.content();
+    auto& textContent = inlineTextBox.content();
     RELEASE_ASSERT(!textContent.isEmpty());
 
     if (textContent.is8Bit())

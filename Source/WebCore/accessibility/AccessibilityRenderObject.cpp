@@ -1447,7 +1447,7 @@ AXTextRuns AccessibilityRenderObject::textRuns()
                 continue;
             auto* renderer = node.renderer();
             auto* containingBlock = renderer ? renderer->containingBlock() : nullptr;
-            return containingBlock ? AXTextRuns(containingBlock, { AXTextRun(0, inputElement->value().isolatedCopy()) }) : AXTextRuns();
+            return containingBlock ? AXTextRuns(containingBlock, { AXTextRun(0, inputElement->value()->isolatedCopy()) }) : AXTextRuns();
         }
         return { };
     }
@@ -1709,7 +1709,7 @@ VisiblePosition AccessibilityRenderObject::visiblePositionForIndex(int index) co
     if (m_renderer) {
         if (isNativeTextControl()) {
             auto& textControl = uncheckedDowncast<RenderTextControl>(*m_renderer).textFormControlElement();
-            return textControl.visiblePositionForIndex(std::clamp(index, 0, static_cast<int>(textControl.value().length())));
+            return textControl.visiblePositionForIndex(std::clamp(index, 0, static_cast<int>(textControl.value()->length())));
         }
 
         if (!allowsTextRanges() && !is<RenderText>(*m_renderer))
@@ -1804,13 +1804,13 @@ void AccessibilityRenderObject::setSelectedVisiblePositionRange(const VisiblePos
                 auto innerRange = makeVisiblePositionRange(AXObjectCache::rangeForNodeContents(*innerText));
 
                 if (range.start.equals(textControlRange.end))
-                    start = textControl->value().length();
+                    start = textControl->value()->length();
                 else if (range.start <= innerRange.start)
                     start = 0;
 
                 if (range.end >= innerRange.end
                     || range.end.equals(textControlRange.end))
-                    end = textControl->value().length();
+                    end = textControl->value()->length();
             }
         }
 

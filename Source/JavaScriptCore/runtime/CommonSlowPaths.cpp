@@ -1164,8 +1164,8 @@ JSC_DEFINE_COMMON_SLOW_PATH(slow_path_get_by_val_with_this)
         if (JSCell::canUseFastGetOwnProperty(structure)) {
             auto existingAtomString = asString(subscript)->toExistingAtomString(globalObject);
             CHECK_EXCEPTION();
-            if (!existingAtomString.isNull()) {
-                if (JSValue result = baseValue.asCell()->fastGetOwnProperty(vm, structure, existingAtomString.impl()))
+            if (existingAtomString) {
+                if (JSValue result = baseValue.asCell()->fastGetOwnProperty(vm, structure, existingAtomString.data))
                     RETURN_PROFILED(result);
             }
         }

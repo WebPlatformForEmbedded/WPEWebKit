@@ -2727,6 +2727,17 @@ const FontCascadeDescription& RenderStyle::fontDescription() const
     return m_inheritedData->fontCascade.fontDescription();
 }
 
+FontCascadeDescription& RenderStyle::mutableFontDescriptionWithoutUpdate()
+{
+    auto& cascade = m_inheritedData.access().fontCascade;
+    return cascade.mutableFontDescription();
+}
+
+FontCascade& RenderStyle::mutableFontCascadeWithoutUpdate()
+{
+    return m_inheritedData.access().fontCascade;
+}
+
 float RenderStyle::specifiedFontSize() const
 {
     return fontDescription().specifiedSize();

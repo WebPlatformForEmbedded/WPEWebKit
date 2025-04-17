@@ -103,7 +103,7 @@ unsigned AccessibilityObject::accessibilitySecureFieldLength()
         return 0;
 
     auto* inputElement = dynamicDowncast<HTMLInputElement>(renderer->node());
-    return inputElement ? inputElement->value().length() : 0;
+    return inputElement ? inputElement->value()->length() : 0;
 }
 
 bool AccessibilityObject::accessibilityIgnoreAttachment() const

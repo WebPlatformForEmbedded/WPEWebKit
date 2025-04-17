@@ -51,7 +51,7 @@ private:
     void adjustMinInlineSize(RenderStyle&) const final;
     void stepDown() final;
     void stepUp() final;
-    String value() const final;
+    ValueOrReference<String> value() const final;
     String placeholderValue() const final;
     void handleKeyboardEvent(KeyboardEvent&) final;
 

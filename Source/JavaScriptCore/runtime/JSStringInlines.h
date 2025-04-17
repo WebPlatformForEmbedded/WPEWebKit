@@ -207,6 +207,31 @@ inline void JSRopeString::convertToNonRope(String&& string) const
     ASSERT(!JSString::isRope());
 }
 
+inline StringImpl* JSRopeString::tryGetLHS(ASCIILiteral rhs) const
+{
+    if (isSubstring())
+        return nullptr;
+
+    JSString* fiber2 = this->fiber2();
+    if (fiber2)
+        return nullptr;
+
+    JSString* fiber1 = this->fiber1();
+    ASSERT(fiber1);
+    if (fiber1->isRope())
+        return nullptr;
+
+    JSString* fiber0 = this->fiber0();
+    ASSERT(fiber0);
+    if (fiber0->isRope())
+        return nullptr;
+
+    if (fiber1->valueInternal() != rhs)
+        return nullptr;
+
+    return fiber0->valueInternal().impl();
+}
+
 // Overview: These functions convert a JSString from holding a string in rope form
 // down to a simple String representation. It does so by building up the string
 // backwards, since we want to avoid recursion, we expect that the tree structure

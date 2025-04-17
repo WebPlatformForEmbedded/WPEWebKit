@@ -345,12 +345,15 @@ JSC_DEFINE_HOST_FUNCTION(objectConstructorAssign, (JSGlobalObject* globalObject,
             }
         }
         if (willBatch) {
-            Vector<RefPtr<UniquedStringImpl>, 32> properties;
+            Vector<UniquedStringImpl*, 32> properties; // structures ensures the lifetimes of these strings.
             MarkedArgumentBufferWithSize<32> values;
+            MarkedArgumentBuffer structures;
             for (unsigned i = 1; i < argsCount; ++i) {
                 JSValue sourceValue = callFrame->uncheckedArgument(i);
                 JSObject* source = asObject(sourceValue);
-                source->structure()->forEachProperty(vm, [&](const PropertyTableEntry& entry) -> bool {
+                auto sourceStructure = source->structure();
+                structures.append(sourceStructure);
+                sourceStructure->forEachProperty(vm, [&](const PropertyTableEntry& entry) -> bool {
                     if (entry.attributes() & PropertyAttribute::DontEnum)
                         return true;
 
@@ -368,11 +371,12 @@ JSC_DEFINE_HOST_FUNCTION(objectConstructorAssign, (JSGlobalObject* globalObject,
             // Actually, assigning with empty object (option for example) is common. (`Object.assign(defaultOptions, passedOptions)` where `passedOptions` is empty object.)
             if (!properties.isEmpty())
                 target->putOwnDataPropertyBatching(vm, properties.data(), values.data(), properties.size());
+
             return JSValue::encode(target);
         }
     }
 
-    Vector<RefPtr<UniquedStringImpl>, 8> properties;
+    Vector<UniquedStringImpl*, 8> properties;
     MarkedArgumentBuffer values;
     for (unsigned i = 1; i < argsCount; ++i) {
         JSValue sourceValue = callFrame->uncheckedArgument(i);

@@ -1880,14 +1880,14 @@ BOOL HTMLConverter::_processElement(Element& element, NSInteger depth)
     } else if (element.hasTagName(inputTag)) {
         if (RefPtr inputElement = dynamicDowncast<HTMLInputElement>(element)) {
             if (inputElement->type() == textAtom()) {
-                RetainPtr value = (NSString *)inputElement->value();
+                RetainPtr value = (NSString *)inputElement->value().get();
                 if (value && [value length] > 0)
                     _addValue(value.get(), element);
             }
         }
     } else if (element.hasTagName(textareaTag)) {
         if (RefPtr textAreaElement = dynamicDowncast<HTMLTextAreaElement>(element)) {
-            RetainPtr value = (NSString *)textAreaElement->value();
+            RetainPtr value = (NSString *)textAreaElement->value().get();
             if (value && [value length] > 0)
                 _addValue(value.get(), element);
         }

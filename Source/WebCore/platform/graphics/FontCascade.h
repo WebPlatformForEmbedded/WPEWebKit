@@ -124,6 +124,7 @@ public:
     WEBCORE_EXPORT bool operator==(const FontCascade& other) const;
 
     const FontCascadeDescription& fontDescription() const { return m_fontDescription; }
+    FontCascadeDescription& mutableFontDescription() const { return m_fontDescription; }
 
     float size() const { return fontDescription().computedSize(); }
 
@@ -326,7 +327,13 @@ public:
 
     static ResolvedEmojiPolicy resolveEmojiPolicy(FontVariantEmoji, char32_t);
 
+    void updateUseBackslashAsYenSymbol() { m_useBackslashAsYenSymbol = computeUseBackslashAsYenSymbol(); }
+    void updateEnableKerning() { m_enableKerning = computeEnableKerning(); }
+    void updateRequiresShaping() { m_requiresShaping = computeRequiresShaping(); }
+
 private:
+
+    bool computeUseBackslashAsYenSymbol() const;
 
     bool advancedTextRenderingMode() const
     {

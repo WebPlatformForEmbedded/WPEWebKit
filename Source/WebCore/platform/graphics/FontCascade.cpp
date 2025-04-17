@@ -61,7 +61,7 @@ FontCascade::FontCascade()
 FontCascade::FontCascade(FontCascadeDescription&& description)
     : m_fontDescription(WTFMove(description))
     , m_generation(++lastFontCascadeGeneration)
-    , m_useBackslashAsYenSymbol(FontCache::forCurrentThread().useBackslashAsYenSignForFamily(m_fontDescription.firstFamily()))
+    , m_useBackslashAsYenSymbol(computeUseBackslashAsYenSymbol())
     , m_enableKerning(computeEnableKerning())
     , m_requiresShaping(computeRequiresShaping())
 {
@@ -72,7 +72,7 @@ FontCascade::FontCascade(FontCascadeDescription&& description, const FontCascade
     : m_fontDescription(WTFMove(description))
     , m_spacing(other.m_spacing)
     , m_generation(++lastFontCascadeGeneration)
-    , m_useBackslashAsYenSymbol(FontCache::forCurrentThread().useBackslashAsYenSignForFamily(m_fontDescription.firstFamily()))
+    , m_useBackslashAsYenSymbol(computeUseBackslashAsYenSymbol())
     , m_enableKerning(computeEnableKerning())
     , m_requiresShaping(computeRequiresShaping())
 {
@@ -1265,6 +1265,11 @@ bool FontCascade::isLoadingCustomFonts() const
 {
     RefPtr fonts = m_fonts;
     return fonts && fonts->isLoadingCustomFonts();
+}
+
+bool FontCascade::computeUseBackslashAsYenSymbol() const
+{
+    return FontCache::forCurrentThread().useBackslashAsYenSignForFamily(m_fontDescription.firstFamily());
 }
 
 enum class GlyphUnderlineType : uint8_t {

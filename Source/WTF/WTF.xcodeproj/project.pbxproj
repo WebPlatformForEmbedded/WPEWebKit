@@ -41,6 +41,7 @@
 		0FFF19DC1BB334EB00886D91 /* ParallelHelperPool.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0FFF19DA1BB334EB00886D91 /* ParallelHelperPool.cpp */; };
 		143DDE9620C8BC37007F76FA /* Entitlements.mm in Sources */ = {isa = PBXBuildFile; fileRef = 143DDE9520C8BC37007F76FA /* Entitlements.mm */; };
 		143F611F1565F0F900DB514A /* RAMSize.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 143F611D1565F0F900DB514A /* RAMSize.cpp */; };
+		144177D62D89B7C100F5099E /* ValueOrReference.h in Headers */ = {isa = PBXBuildFile; fileRef = 144177D52D89B7C100F5099E /* ValueOrReference.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		1469419D16EAB10A0024E146 /* AutodrainedPool.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1469419B16EAB10A0024E146 /* AutodrainedPool.cpp */; };
 		1470EAF32BD6F6D900E26254 /* WeakPtrImpl.h in Headers */ = {isa = PBXBuildFile; fileRef = 1470EAF22BD6F6D900E26254 /* WeakPtrImpl.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		1470EAF52BD6F8AF00E26254 /* WeakPtrFactory.h in Headers */ = {isa = PBXBuildFile; fileRef = 1470EAF42BD6F8AF00E26254 /* WeakPtrFactory.h */; settings = {ATTRIBUTES = (Private, ); }; };
@@ -1097,6 +1098,7 @@
 		143DDE9720C8BE99007F76FA /* Entitlements.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Entitlements.h; sourceTree = "<group>"; };
 		143F611D1565F0F900DB514A /* RAMSize.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = RAMSize.cpp; sourceTree = "<group>"; };
 		143F611E1565F0F900DB514A /* RAMSize.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = RAMSize.h; sourceTree = "<group>"; };
+		144177D52D89B7C100F5099E /* ValueOrReference.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ValueOrReference.h; sourceTree = "<group>"; };
 		1447AEC518FCE57700B3D7FF /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = /System/Library/Frameworks/Foundation.framework; sourceTree = "<absolute>"; };
 		1447AECA18FCE5B900B3D7FF /* libicucore.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libicucore.dylib; path = /usr/lib/libicucore.dylib; sourceTree = "<absolute>"; };
 		1469419416EAAFF80024E146 /* SchedulePair.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = SchedulePair.h; sourceTree = "<group>"; };
@@ -2511,6 +2513,7 @@
 				7AFEC6B01EB22B5900DADE36 /* UUID.cpp */,
 				7AFEC6AE1EB22AC600DADE36 /* UUID.h */,
 				A8A4736F151A825B004123FF /* ValueCheck.h */,
+				144177D52D89B7C100F5099E /* ValueOrReference.h */,
 				0F95B63420CB53C100479635 /* Vector.cpp */,
 				A8A47370151A825B004123FF /* Vector.h */,
 				E419F2E623AB9E2300B26129 /* VectorHash.h */,
@@ -3610,6 +3613,7 @@
 				DDF306F527C086CC006A526F /* utils.h in Headers */,
 				DD3DC8C227A4BF8E007E5B61 /* UUID.h in Headers */,
 				DD3DC86D27A4BF8E007E5B61 /* ValueCheck.h in Headers */,
+				144177D62D89B7C100F5099E /* ValueOrReference.h in Headers */,
 				DD3DC90B27A4BF8E007E5B61 /* Vector.h in Headers */,
 				4448265228D18CA600D916E8 /* VectorCF.h in Headers */,
 				DDF3079727C086CD006A526F /* VectorCocoa.h in Headers */,

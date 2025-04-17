@@ -219,8 +219,8 @@ protected:
 
 public:
     Identifier toIdentifier(JSGlobalObject*) const;
-    AtomString toAtomString(JSGlobalObject*) const;
-    AtomString toExistingAtomString(JSGlobalObject*) const;
+    GCOwnedDataScope<AtomStringImpl*> toAtomString(JSGlobalObject*) const;
+    GCOwnedDataScope<AtomStringImpl*> toExistingAtomString(JSGlobalObject*) const;
 
     GCOwnedDataScope<StringView> view(JSGlobalObject*) const;
 
@@ -229,8 +229,8 @@ public:
     GCOwnedDataScope<const String&> value(JSGlobalObject*) const;
     inline GCOwnedDataScope<const String&> tryGetValue(bool allocationAllowed = true) const;
     GCOwnedDataScope<const String&> tryGetValueWithoutGC() const;
-    const StringImpl* getValueImpl() const;
-    const StringImpl* tryGetValueImpl() const;
+    StringImpl* getValueImpl() const;
+    StringImpl* tryGetValueImpl() const;
     ALWAYS_INLINE unsigned length() const;
 
     JSValue toPrimitive(JSGlobalObject*, PreferredPrimitiveType) const;
@@ -514,6 +514,8 @@ public:
         return m_compactFibers.length();
     }
 
+    inline StringImpl* tryGetLHS(ASCIILiteral rhs) const;
+
 private:
     friend class LLIntOffsetsExtractor;
 
@@ -651,8 +653,8 @@ private:
     friend JSValue jsStringFromRegisterArray(JSGlobalObject*, Register*, unsigned);
 
     template<bool reportAllocation, typename Function> const String& resolveRopeWithFunction(JSGlobalObject* nullOrGlobalObjectForOOM, Function&&) const;
-    JS_EXPORT_PRIVATE AtomString resolveRopeToAtomString(JSGlobalObject*) const;
-    JS_EXPORT_PRIVATE RefPtr<AtomStringImpl> resolveRopeToExistingAtomString(JSGlobalObject*) const;
+    JS_EXPORT_PRIVATE GCOwnedDataScope<AtomStringImpl*> resolveRopeToAtomString(JSGlobalObject*) const;
+    JS_EXPORT_PRIVATE GCOwnedDataScope<AtomStringImpl*> resolveRopeToExistingAtomString(JSGlobalObject*) const;
     template<typename CharacterType> void resolveRopeInternalNoSubstring(std::span<CharacterType>, uint8_t* stackLimit) const;
     Identifier toIdentifier(JSGlobalObject*) const;
     void outOfMemory(JSGlobalObject* nullOrGlobalObjectForOOM) const;
@@ -765,13 +767,13 @@ ALWAYS_INLINE unsigned JSString::length() const
     return std::bit_cast<StringImpl*>(pointer)->length();
 }
 
-inline const StringImpl* JSString::getValueImpl() const
+inline StringImpl* JSString::getValueImpl() const
 {
     ASSERT(!isRope());
     return std::bit_cast<StringImpl*>(m_fiber);
 }
 
-inline const StringImpl* JSString::tryGetValueImpl() const
+inline StringImpl* JSString::tryGetValueImpl() const
 {
     uintptr_t pointer = fiberConcurrently();
     if (pointer & isRopeInPointer)
@@ -826,7 +828,7 @@ ALWAYS_INLINE Identifier JSRopeString::toIdentifier(JSGlobalObject* globalObject
     auto scope = DECLARE_THROW_SCOPE(vm);
     auto atomString = static_cast<const JSRopeString*>(this)->resolveRopeToAtomString(globalObject);
     RETURN_IF_EXCEPTION(scope, { });
-    return Identifier::fromString(vm, atomString);
+    return Identifier::fromString(vm, Ref { *atomString });
 }
 
 ALWAYS_INLINE void JSString::swapToAtomString(VM& vm, RefPtr<AtomStringImpl>&& atom) const
@@ -862,29 +864,32 @@ ALWAYS_INLINE Identifier JSString::toIdentifier(JSGlobalObject* globalObject) co
     return Identifier::fromString(vm, Ref { vm.lastAtomizedIdentifierAtomStringImpl });
 }
 
-ALWAYS_INLINE AtomString JSString::toAtomString(JSGlobalObject* globalObject) const
+ALWAYS_INLINE GCOwnedDataScope<AtomStringImpl*> JSString::toAtomString(JSGlobalObject* globalObject) const
 {
     if constexpr (validateDFGDoesGC)
         vm().verifyCanGC();
     if (isRope())
-        return static_cast<const JSRopeString*>(this)->resolveRopeToAtomString(globalObject);
+        return { this, static_cast<const JSRopeString*>(this)->resolveRopeToAtomString(globalObject) };
+    if (valueInternal().impl()->isAtom())
+        return { this, static_cast<AtomStringImpl*>(valueInternal().impl()) };
     AtomString atom(valueInternal());
-    // It is possible that AtomString constructor converts existing valueInternal()'s StringImpl to AtomicStringImpl,
-    // thus we need to recheck atomicity status here.
-    if (!valueInternal().impl()->isAtom())
-        swapToAtomString(getVM(globalObject), RefPtr { atom.impl() });
-    return atom;
+    swapToAtomString(getVM(globalObject), atom.releaseImpl());
+    return { this, static_cast<AtomStringImpl*>(valueInternal().impl()) };
 }
 
-ALWAYS_INLINE AtomString JSString::toExistingAtomString(JSGlobalObject* globalObject) const
+ALWAYS_INLINE GCOwnedDataScope<AtomStringImpl*> JSString::toExistingAtomString(JSGlobalObject* globalObject) const
 {
     if constexpr (validateDFGDoesGC)
         vm().verifyCanGC();
     if (isRope())
         return static_cast<const JSRopeString*>(this)->resolveRopeToExistingAtomString(globalObject);
     if (valueInternal().impl()->isAtom())
-        return static_cast<AtomStringImpl*>(valueInternal().impl());
-    return AtomStringImpl::lookUp(valueInternal().impl());
+        return { this, static_cast<AtomStringImpl*>(valueInternal().impl()) };
+    if (auto atom = AtomStringImpl::lookUp(valueInternal().impl())) {
+        swapToAtomString(getVM(globalObject), WTFMove(atom));
+        return { this, static_cast<AtomStringImpl*>(valueInternal().impl()) };
+    }
+    return { };
 }
 
 inline GCOwnedDataScope<const String&> JSString::value(JSGlobalObject* globalObject) const

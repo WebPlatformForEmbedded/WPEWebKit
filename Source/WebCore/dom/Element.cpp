@@ -2910,7 +2910,7 @@ auto Element::computeDirectionalityFromText() const -> TextDirectionWithStrongDi
 {
     if (RefPtr textControl = dynamicDowncast<HTMLTextFormControlElement>(const_cast<Element*>(this))) {
         if (textControl->dirAutoUsesValue()) {
-            auto direction = textControl->value().defaultWritingDirection();
+            auto direction = textControl->value()->defaultWritingDirection();
             if (!direction)
                 return { TextDirection::LTR, nullptr };
             return { *direction == U_LEFT_TO_RIGHT ? TextDirection::LTR : TextDirection::RTL, WTFMove(textControl) };

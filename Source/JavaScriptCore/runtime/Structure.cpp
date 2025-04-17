@@ -81,7 +81,7 @@ void StructureTransitionTable::add(VM& vm, JSCell* owner, Structure* structure)
     }
 
     // Add the structure to the map.
-    map()->set(StructureTransitionTable::Hash::createFromStructure(structure), structure);
+    map()->set(StructureTransitionTable::Hash::createKeyFromStructure(structure), structure);
 }
 
 void Structure::dumpStatistics()

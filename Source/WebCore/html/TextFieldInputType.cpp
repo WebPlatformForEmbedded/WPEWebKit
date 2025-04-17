@@ -175,7 +175,7 @@ void TextFieldInputType::setValue(const String& sanitizedValue, bool valueChange
     }
 
     if (!input->focused())
-        input->setTextAsOfLastFormControlChangeEvent(sanitizedValue);
+        input->setTextAsOfLastFormControlChangeEvent(String(sanitizedValue));
 
     if (UserTypingGestureIndicator::processingUserTypingGesture())
         didSetValueByUserEdit();
@@ -498,7 +498,7 @@ void TextFieldInputType::createDataListDropdownIndicator()
 
 #endif // ENABLE(DATALIST_ELEMENT)
 
-static String limitLength(const String& string, unsigned maxLength)
+static ValueOrReference<String> limitLength(const String& string LIFETIME_BOUND, unsigned maxLength)
 {
     if (LIKELY(string.length() <= maxLength))
         return string;
@@ -584,7 +584,7 @@ static bool isAutoFillButtonTypeChanged(const AtomString& attribute, AutoFillBut
     return false;
 }
 
-String TextFieldInputType::sanitizeValue(const String& proposedValue) const
+ValueOrReference<String> TextFieldInputType::sanitizeValue(const String& proposedValue LIFETIME_BOUND) const
 {
     if (LIKELY(!containsHTMLLineBreak(proposedValue)))
         return limitLength(proposedValue, HTMLInputElement::maxEffectiveLength);
@@ -593,7 +593,7 @@ String TextFieldInputType::sanitizeValue(const String& proposedValue) const
     auto proposedValueWithoutLineBreaks = proposedValue.removeCharacters([](auto character) {
         return isHTMLLineBreak(character);
     });
-    return limitLength(WTFMove(proposedValueWithoutLineBreaks), HTMLInputElement::maxEffectiveLength);
+    return String(limitLength(proposedValueWithoutLineBreaks, HTMLInputElement::maxEffectiveLength));
 }
 
 void TextFieldInputType::handleBeforeTextInsertedEvent(BeforeTextInsertedEvent& event)

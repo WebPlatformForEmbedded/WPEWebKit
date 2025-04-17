@@ -355,6 +355,7 @@ set(WTF_PUBLIC_HEADERS
     UniqueRefVector.h
     VMTags.h
     ValueCheck.h
+    ValueOrReference.h
     VariantExtras.h
     VariantList.h
     VariantListOperations.h

@@ -2093,6 +2093,15 @@ inline Vector<typename CopyOrMoveToVectorResult<Collection>::Type> moveToVector(
     return moveToVectorOf<typename CopyOrMoveToVectorResult<Collection>::Type>(collection);
 }
 
+template<typename T, size_t inlineCapacity = 0> static bool insertInUniquedSortedVector(Vector<T, inlineCapacity>& vector, const T& value)
+{
+    auto it = std::lower_bound(vector.begin(), vector.end(), value);
+    if (UNLIKELY(it != vector.end() && *it == value))
+        return false;
+    vector.insert(it - vector.begin(), value);
+    return true;
+}
+
 template<typename T> Vector(const T*, size_t) -> Vector<T>;
 template<typename T, size_t Extent> Vector(std::span<const T, Extent>) -> Vector<T>;
 
@@ -2105,4 +2114,5 @@ using WTF::copyToVectorOf;
 using WTF::copyToVectorSpecialization;
 using WTF::compactMap;
 using WTF::flatMap;
+using WTF::insertInUniquedSortedVector;
 using WTF::removeRepeatedElements;

@@ -125,15 +125,6 @@ template<typename CharacterType> static inline bool isCharAfterUnquotedAttribute
     return character == ' ' || character == '>' || isASCIIWhitespace(character);
 }
 
-template<typename T> static bool insertInUniquedSortedVector(Vector<T>& vector, const T& value)
-{
-    auto it = std::lower_bound(vector.begin(), vector.end(), value);
-    if (UNLIKELY(it != vector.end() && *it == value))
-        return false;
-    vector.insert(it - vector.begin(), value);
-    return true;
-}
-
 #define FOR_EACH_SUPPORTED_TAG(APPLY) \
     APPLY(a, A)                       \
     APPLY(b, B)                       \
@@ -808,11 +799,12 @@ private:
                 return didFail(HTMLFastPathResult::FailedParsingAttributes);
             }
             skipWhile<isASCIIWhitespace>(m_parsingBuffer);
-            AtomString attributeValue { emptyAtom() };
+            AtomString attributeValue;
             if (skipExactly(m_parsingBuffer, '=')) {
                 attributeValue = scanAttributeValue();
                 skipWhile<isASCIIWhitespace>(m_parsingBuffer);
-            }
+            } else
+                attributeValue = emptyAtom();
             if (UNLIKELY(!insertInUniquedSortedVector(m_attributeNames, attributeName.localName().impl()))) {
                 hasDuplicateAttributes = true;
                 continue;

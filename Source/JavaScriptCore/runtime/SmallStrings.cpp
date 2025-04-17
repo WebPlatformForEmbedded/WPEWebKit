@@ -122,6 +122,13 @@ Ref<AtomStringImpl> SmallStrings::singleCharacterStringRep(unsigned char charact
     return AtomStringImpl::add(string).releaseNonNull();
 }
 
+AtomStringImpl* SmallStrings::existingSingleCharacterStringRep(unsigned char character)
+{
+    if (UNLIKELY(!m_isInitialized))
+        return nullptr;
+    return static_cast<AtomStringImpl*>(const_cast<StringImpl*>(m_singleCharacterStrings[character]->tryGetValueImpl()));
+}
+
 void SmallStrings::initialize(VM* vm, JSString*& string, ASCIILiteral value)
 {
     string = JSString::create(*vm, AtomStringImpl::add(value));

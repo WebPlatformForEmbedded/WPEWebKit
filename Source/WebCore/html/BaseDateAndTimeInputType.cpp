@@ -194,7 +194,7 @@ bool BaseDateAndTimeInputType::typeMismatch() const
 bool BaseDateAndTimeInputType::hasBadInput() const
 {
     ASSERT(element());
-    return element()->value().isEmpty() && m_dateTimeEditElement && m_dateTimeEditElement->editableFieldsHaveValues();
+    return protectedElement()->value()->isEmpty() && m_dateTimeEditElement && m_dateTimeEditElement->editableFieldsHaveValues();
 }
 
 Decimal BaseDateAndTimeInputType::defaultValueForStepUp() const
@@ -257,9 +257,11 @@ String BaseDateAndTimeInputType::visibleValue() const
     return localizeValue(element()->value());
 }
 
-String BaseDateAndTimeInputType::sanitizeValue(const String& proposedValue) const
+ValueOrReference<String> BaseDateAndTimeInputType::sanitizeValue(const String& proposedValue LIFETIME_BOUND) const
 {
-    return typeMismatchFor(proposedValue) ? emptyString() : proposedValue;
+    if (typeMismatchFor(proposedValue))
+        return emptyString();
+    return proposedValue;
 }
 
 bool BaseDateAndTimeInputType::supportsReadOnly() const
@@ -398,7 +400,7 @@ void BaseDateAndTimeInputType::updateInnerTextValue()
 
     DateTimeEditElement::LayoutParameters layoutParameters(element()->locale());
 
-    auto date = parseToDateComponents(element()->value());
+    auto date = parseToDateComponents(element()->value().get());
     if (date)
         setupLayoutParameters(layoutParameters, *date);
     else {
@@ -619,7 +621,7 @@ bool BaseDateAndTimeInputType::setupDateTimeChooserParameters(DateTimeChooserPar
     auto* computedStyle = element.computedStyle();
     parameters.isAnchorElementRTL = computedStyle->direction() == TextDirection::RTL;
     parameters.useDarkAppearance = document.useDarkAppearance(computedStyle);
-    auto date = valueOrDefault(parseToDateComponents(element.value()));
+    auto date = valueOrDefault(parseToDateComponents(element.value().get()));
     parameters.hasSecondField = shouldHaveSecondField(date);
     parameters.hasMillisecondField = shouldHaveMillisecondField(date);
 
