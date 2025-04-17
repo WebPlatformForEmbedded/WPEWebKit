@@ -82,7 +82,7 @@ protected:
     void handleBlurEvent() final;
     void setValue(const String&, bool valueChanged, TextFieldEventBehavior, TextControlSetValueSelection) override;
     void updateInnerTextValue() final;
-    String sanitizeValue(const String&) const override;
+    ValueOrReference<String> sanitizeValue(const String& value LIFETIME_BOUND) const override;
 
     virtual String convertFromVisibleValue(const String&) const;
     virtual void didSetValueByUserEdit();

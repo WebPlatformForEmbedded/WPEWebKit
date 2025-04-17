@@ -1867,7 +1867,7 @@ BOOL HTMLConverter::_processElement(Element& element, NSInteger depth)
         if (is<HTMLInputElement>(element)) {
             HTMLInputElement& inputElement = downcast<HTMLInputElement>(element);
             if (inputElement.type() == textAtom()) {
-                NSString *value = inputElement.value();
+                NSString *value = inputElement.value().get();
                 if (value && [value length] > 0)
                     _addValue(value, element);
             }
@@ -1875,7 +1875,7 @@ BOOL HTMLConverter::_processElement(Element& element, NSInteger depth)
     } else if (element.hasTagName(textareaTag)) {
         if (is<HTMLTextAreaElement>(element)) {
             HTMLTextAreaElement& textAreaElement = downcast<HTMLTextAreaElement>(element);
-            NSString *value = textAreaElement.value();
+            NSString *value = textAreaElement.value().get();
             if (value && [value length] > 0)
                 _addValue(value, element);
         }

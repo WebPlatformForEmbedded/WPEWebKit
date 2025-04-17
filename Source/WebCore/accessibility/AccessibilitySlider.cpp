@@ -122,7 +122,7 @@ AXCoreObject* AccessibilitySlider::elementAccessibilityHitTest(const IntPoint& p
 float AccessibilitySlider::valueForRange() const
 {
     if (auto* input = inputElement())
-        return input->value().toFloat();
+        return input->value()->toFloat();
     return 0;
 }
 

@@ -88,7 +88,7 @@ bool EmailInputType::supportsSelectionAPI() const
     return false;
 }
 
-String EmailInputType::sanitizeValue(const String& proposedValue) const
+ValueOrReference<String> EmailInputType::sanitizeValue(const String& proposedValue LIFETIME_BOUND) const
 {
     String noLineBreakValue = proposedValue.removeCharacters(isHTMLLineBreak);
     ASSERT(element());

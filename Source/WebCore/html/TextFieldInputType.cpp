@@ -178,7 +178,7 @@ void TextFieldInputType::setValue(const String& sanitizedValue, bool valueChange
 
     // FIXME: Why do we do this when eventBehavior == DispatchNoEvent
     if (!input->focused() || eventBehavior == DispatchNoEvent)
-        input->setTextAsOfLastFormControlChangeEvent(sanitizedValue);
+        input->setTextAsOfLastFormControlChangeEvent(String { sanitizedValue });
 
     if (UserTypingGestureIndicator::processingUserTypingGesture())
         didSetValueByUserEdit();
@@ -507,7 +507,7 @@ bool TextFieldInputType::shouldOnlyShowDataListDropdownButtonWhenFocusedOrEdited
 
 #endif // ENABLE(DATALIST_ELEMENT)
 
-static String limitLength(const String& string, unsigned maxLength)
+static ValueOrReference<String> limitLength(const String& string LIFETIME_BOUND, unsigned maxLength)
 {
     unsigned newLength = std::min(maxLength, string.length());
     if (newLength == string.length())
@@ -592,9 +592,13 @@ static bool isAutoFillButtonTypeChanged(const AtomString& attribute, AutoFillBut
     return false;
 }
 
-String TextFieldInputType::sanitizeValue(const String& proposedValue) const
+ValueOrReference<String> TextFieldInputType::sanitizeValue(const String& proposedValue LIFETIME_BOUND) const
 {
-    return limitLength(proposedValue.removeCharacters(isHTMLLineBreak), HTMLInputElement::maxEffectiveLength);
+    if (LIKELY(proposedValue.find(isHTMLLineBreak) == notFound))
+        return limitLength(proposedValue, HTMLInputElement::maxEffectiveLength);
+
+    auto proposedValueWithoutLineBreaks = proposedValue.removeCharacters(isHTMLLineBreak);
+    return String { limitLength(proposedValueWithoutLineBreaks, HTMLInputElement::maxEffectiveLength) };
 }
 
 void TextFieldInputType::handleBeforeTextInsertedEvent(BeforeTextInsertedEvent& event)

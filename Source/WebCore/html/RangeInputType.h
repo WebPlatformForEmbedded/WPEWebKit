@@ -58,8 +58,8 @@ private:
     bool accessKeyAction(bool sendMouseEvents) final;
     void attributeChanged(const QualifiedName&) final;
     void setValue(const String&, bool valueChanged, TextFieldEventBehavior, TextControlSetValueSelection) final;
-    String fallbackValue() const final;
-    String sanitizeValue(const String& proposedValue) const final;
+    ValueOrReference<String> fallbackValue() const final;
+    ValueOrReference<String> sanitizeValue(const String& proposedValue LIFETIME_BOUND) const final;
     bool shouldRespectListAttribute() final;
     HTMLElement* sliderThumbElement() const final;
     HTMLElement* sliderTrackElement() const final;

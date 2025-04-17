@@ -98,9 +98,9 @@ bool BaseCheckableInputType::accessKeyAction(bool sendMouseEvents)
     return InputType::accessKeyAction(sendMouseEvents) || element()->dispatchSimulatedClick(0, sendMouseEvents ? SendMouseUpDownEvents : SendNoEvents);
 }
 
-String BaseCheckableInputType::fallbackValue() const
+ValueOrReference<String> BaseCheckableInputType::fallbackValue() const
 {
-    return onAtom();
+    return onAtom().string();
 }
 
 bool BaseCheckableInputType::storesValueSeparateFromAttribute()

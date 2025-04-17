@@ -4619,7 +4619,7 @@ void WebPage::requestDocumentEditingContext(DocumentEditingContextRequest reques
         } else if (is<HTMLTextFormControlElement>(element)) {
             auto& textFormControlElement = downcast<HTMLTextFormControlElement>(*element);
             rangeOfInterest.start = textFormControlElement.visiblePositionForIndex(0);
-            rangeOfInterest.end = textFormControlElement.visiblePositionForIndex(textFormControlElement.value().length());
+            rangeOfInterest.end = textFormControlElement.visiblePositionForIndex(textFormControlElement.value()->length());
         } else {
             rangeOfInterest.start = firstPositionInOrBeforeNode(element.get());
             rangeOfInterest.end = lastPositionInOrAfterNode(element.get());

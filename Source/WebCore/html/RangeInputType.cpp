@@ -96,7 +96,7 @@ const AtomString& RangeInputType::formControlType() const
 double RangeInputType::valueAsDouble() const
 {
     ASSERT(element());
-    return parseToDoubleForNumberType(element()->value());
+    return parseToDoubleForNumberType(element()->value().get());
 }
 
 ExceptionOr<void> RangeInputType::setValueAsDecimal(const Decimal& newValue, TextFieldEventBehavior eventBehavior) const
@@ -358,19 +358,19 @@ void RangeInputType::setValue(const String& value, bool valueChanged, TextFieldE
 
     if (eventBehavior == DispatchNoEvent) {
         ASSERT(element());
-        element()->setTextAsOfLastFormControlChangeEvent(value);
+        element()->setTextAsOfLastFormControlChangeEvent(String(value));
     }
 
     if (hasCreatedShadowSubtree())
         typedSliderThumbElement().setPositionFromValue();
 }
 
-String RangeInputType::fallbackValue() const
+ValueOrReference<String> RangeInputType::fallbackValue() const
 {
     return serializeForNumberType(createStepRange(AnyStepHandling::Reject).defaultValue());
 }
 
-String RangeInputType::sanitizeValue(const String& proposedValue) const
+ValueOrReference<String> RangeInputType::sanitizeValue(const String& proposedValue LIFETIME_BOUND) const
 {
     StepRange stepRange(createStepRange(AnyStepHandling::Reject));
     const Decimal proposedNumericValue = parseToNumber(proposedValue, stepRange.defaultValue());

@@ -62,7 +62,7 @@ static RefPtr<HTMLInputElement> nonEmptyRadioButton(Element& element)
         return nullptr;
 
     auto& inputElement = downcast<HTMLInputElement>(element);
-    if (!inputElement.isRadioButton() || inputElement.value().isEmpty())
+    if (!inputElement.isRadioButton() || inputElement.value()->isEmpty())
         return nullptr;
     return &inputElement;
 }

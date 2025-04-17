@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <initializer_list>
 #include <limits>
 #include <optional>
@@ -1909,6 +1910,15 @@ inline auto copyToVector(const Collection& collection) -> Vector<typename CopyTo
     return copyToVectorOf<typename CopyToVectorResult<Collection>::Type>(collection);
 }
 
+template<typename T, size_t inlineCapacity = 0> static bool insertInUniquedSortedVector(Vector<T, inlineCapacity>& vector, const T& value)
+{
+    auto it = std::lower_bound(vector.begin(), vector.end(), value);
+    if (UNLIKELY(it != vector.end() && *it == value))
+        return false;
+    vector.insert(it - vector.begin(), value);
+    return true;
+}
+
 } // namespace WTF
 
 using WTF::UnsafeVectorOverflow;
@@ -1917,4 +1927,5 @@ using WTF::copyToVector;
 using WTF::copyToVectorOf;
 using WTF::copyToVectorSpecialization;
 using WTF::compactMap;
+using WTF::insertInUniquedSortedVector;
 using WTF::removeRepeatedElements;
