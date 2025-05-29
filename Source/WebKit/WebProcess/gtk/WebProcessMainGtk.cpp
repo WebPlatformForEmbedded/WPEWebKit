@@ -31,6 +31,7 @@
 #include "WebProcess.h"
 #include <WebCore/GtkVersioning.h>
 #include <libintl.h>
+#include <wtf/StackBounds.h>
 
 #if USE(GSTREAMER)
 #include <WebCore/GStreamerCommon.h>
@@ -103,6 +104,7 @@ int WebProcessMain(int argc, char** argv)
     // This call needs to happen before any threads begin execution
     unsetenv("GTK_THEME");
 
+    WTF::StackBounds::setBottomOfMainThreadMain(__builtin_frame_address(0));
     return AuxiliaryProcessMain<WebProcessMainGtk>(argc, argv);
 }
 
