@@ -2108,7 +2108,6 @@ CodeBlock* CodeBlock::newReplacement()
     return ownerExecutable()->newReplacementCodeBlockFor(specializationKind());
 }
 
-#if ENABLE(JIT)
 CodeBlock* CodeBlock::replacement()
 {
     const ClassInfo* classInfo = this->classInfo();
@@ -2129,6 +2128,7 @@ CodeBlock* CodeBlock::replacement()
     return nullptr;
 }
 
+#if ENABLE(JIT)
 DFG::CapabilityLevel CodeBlock::computeCapabilityLevel()
 {
     const ClassInfo* classInfo = this->classInfo();
@@ -2245,10 +2245,9 @@ void CodeBlock::jettison(Profiler::JettisonReason reason, ReoptimizationMode mod
             }
         }
     }
-    
     if (DFG::shouldDumpDisassembly())
         dataLog("    Did invalidate ", *this, "\n");
-    
+
     // Count the reoptimization if that's what the user wanted.
     if (mode == CountReoptimization) {
         // FIXME: Maybe this should call alternative().
@@ -2257,32 +2256,33 @@ void CodeBlock::jettison(Profiler::JettisonReason reason, ReoptimizationMode mod
         if (DFG::shouldDumpDisassembly())
             dataLog("    Did count reoptimization for ", *this, "\n");
     }
-    
-    if (this != replacement()) {
-        // This means that we were never the entrypoint. This can happen for OSR entry code
-        // blocks.
-        return;
+#endif // ENABLE(DFG_JIT)
+
+    // If this is not true, then this means that we were never the entrypoint. This can happen for OSR entry code blocks.
+    if (this == replacement()) {
+#if ENABLE(DFG_JIT)
+        if (alternative())
+            alternative()->optimizeAfterWarmUp();
+
+        if (reason != Profiler::JettisonDueToOldAge && reason != Profiler::JettisonDueToVMTraps)
+            tallyFrequentExitSites();
+#endif // ENABLE(DFG_JIT)
+
+        // Jettison can happen during GC. We don't want to install code to a dead executable
+        // because that would add a dead object to the remembered set.
+        if (!vm.heap.currentThreadIsDoingGCWork() || vm.heap.isMarked(ownerExecutable())) {
+            // This accomplishes (2).
+            ownerExecutable()->installCode(vm, alternative(), codeType(), specializationKind(), reason);
+#if ENABLE(DFG_JIT)
+            if (DFG::shouldDumpDisassembly())
+                dataLog("    Did install baseline version of ", *this, "\n");
+#endif // ENABLE(DFG_JIT)
+        }
     }
 
-    if (alternative())
-        alternative()->optimizeAfterWarmUp();
-
-    if (reason != Profiler::JettisonDueToOldAge && reason != Profiler::JettisonDueToVMTraps)
-        tallyFrequentExitSites();
-#endif // ENABLE(DFG_JIT)
-
-    // Jettison can happen during GC. We don't want to install code to a dead executable
-    // because that would add a dead object to the remembered set.
-    if (vm.heap.currentThreadIsDoingGCWork() && !vm.heap.isMarked(ownerExecutable()))
-        return;
-
-    // This accomplishes (2).
-    ownerExecutable()->installCode(vm, alternative(), codeType(), specializationKind(), reason);
-
-#if ENABLE(DFG_JIT)
-    if (DFG::shouldDumpDisassembly())
-        dataLog("    Did install baseline version of ", *this, "\n");
-#endif // ENABLE(DFG_JIT)
+    // Regardless of whether it is used or replaced or upgraded already or not, since this is already jettisoned,
+    // there is no reason to keep it linked. Unlink incoming calls.
+    unlinkOrUpgradeIncomingCalls(vm, nullptr);
 }
 
 JSGlobalObject* CodeBlock::globalObjectFor(CodeOrigin codeOrigin)
