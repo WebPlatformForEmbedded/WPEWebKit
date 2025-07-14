@@ -3184,7 +3184,7 @@ private:
         ASSERT(!(reinterpret_cast<intptr_t>(instruction) & 1));
         ASSERT(!(reinterpret_cast<intptr_t>(target) & 1));
         
-        linkBX(writeTarget, instruction, target);
+        linkBX<copy>(writeTarget, instruction, target);
         uint16_t newInstruction = ifThenElse(cond, true, true) | OP_IT;
         machineCodeCopy<copy>(writeTarget - 6, &newInstruction, sizeof(uint16_t));
     }
