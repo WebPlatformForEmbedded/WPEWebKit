@@ -2981,11 +2981,16 @@ public:
         return Call(m_assembler.b(), Call::LinkableNearTail);
     }
 
+    ALWAYS_INLINE void padBeforePatch()
+    {
+        (void)label();
+        m_assembler.alignWithNop(sizeof(uint64_t));
+    }
+
     ALWAYS_INLINE Call threadSafePatchableNearCall()
     {
         invalidateAllTempRegisters();
         padBeforePatch();
-        m_assembler.alignWithNop(sizeof(int));
         m_assembler.bl();
         return Call(m_assembler.labelIgnoringWatchpoints(), Call::LinkableNear);
     }
@@ -2994,7 +2999,6 @@ public:
     {
         invalidateAllTempRegisters();
         padBeforePatch();
-        m_assembler.alignWithNop(sizeof(int));
         return Call(m_assembler.b(), Call::LinkableNearTail);
     }
 
