@@ -680,7 +680,7 @@ void CDMInstanceSessionThunder::loadSession(LicenseType licenseType, const Strin
             }
         } else {
             GST_ERROR("session %s not loaded", m_sessionID.utf8().data());
-            if (responseMessage->isEmpty())
+            if (!responseMessage || responseMessage->isEmpty())
                 callback(std::nullopt, std::nullopt, std::nullopt, SuccessValue::Failed, sessionLoadFailureFromThunder({ }));
             else {
                 auto responseData = responseMessage->extractData();
