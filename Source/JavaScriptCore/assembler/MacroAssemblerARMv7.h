@@ -1303,26 +1303,11 @@ public:
 
     void storePair32(TrustedImm32 imm1, TrustedImm32 imm2, Address address)
     {
-        // We cannot re-use the two register version of `storePair32` defined
-        // below here because we can only use the `addressTempRegister` as a
-        // scratch register if the `strd` case is taken.
         int32_t absOffset = address.offset;
         if (absOffset < 0)
             absOffset = -absOffset;
-        if (!(absOffset & ~0x3fc)) {
-            RegisterID src1 = getCachedAddressTempRegisterIDAndInvalidate();
-            move(imm1, src1);
-            RegisterID src2 = src1;
-            if (imm1.m_value != imm2.m_value) {
-                src2 = getCachedDataTempRegisterIDAndInvalidate();
-                move(imm2, src2);
-            }
-            ASSERT(src1 != address.base && src2 != address.base);
-            m_assembler.strd(src1, src2, address.base, address.offset, /* index: */ true, /* wback: */ false);
-        } else {
-            store32(imm1, address);
-            store32(imm2, address.withOffset(4));
-        }
+        store32(imm1, address);
+        store32(imm2, address.withOffset(4));
     }
 
     void storePair32(RegisterID src1, RegisterID src2, RegisterID dest)
@@ -1340,12 +1325,9 @@ public:
         int32_t absOffset = address.offset;
         if (absOffset < 0)
             absOffset = -absOffset;
-        if (!(absOffset & ~0x3fc))
-            m_assembler.strd(src1, src2, address.base, address.offset, /* index: */ true, /* wback: */ false);
-        else {
-            store32(src1, address);
-            store32(src2, address.withOffset(4));
-        }
+        // strd does not support unaligned accesses on some chips, so we avoid it.
+        store32(src1, address);
+        store32(src2, address.withOffset(4));
     }
 
     void storePair32(RegisterID src1, RegisterID src2, BaseIndex address)
