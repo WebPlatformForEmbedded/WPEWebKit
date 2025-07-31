@@ -1129,7 +1129,7 @@ end
     loadp (constexpr (JSWebAssemblyInstance::offsetOfVM()))[wasmInstance], a0
     copyCalleeSavesToVMEntryFrameCalleeSavesBuffer(a0, a1)
 
-if ASSERT_ENABLED
+if ASSERT_ENABLED or ARMv7
     storep cfr, (constexpr (JSWebAssemblyInstance::offsetOfTemporaryCallFrame()))[wasmInstance]
 end
 
