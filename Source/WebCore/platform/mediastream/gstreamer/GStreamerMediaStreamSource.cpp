@@ -165,6 +165,9 @@ public:
 
         g_object_set(m_src.get(), "is-live", TRUE, "format", GST_FORMAT_TIME, "emit-signals", TRUE, "min-percent", 100,
             "do-timestamp", isCaptureTrack, nullptr);
+        if (track.isVideo())
+            g_object_set(m_src.get(), "max-bytes", static_cast<guint64>(2 * WTF::MB), nullptr);
+
         g_signal_connect(m_src.get(), "enough-data", G_CALLBACK(+[](GstElement*, InternalSource* data) {
             data->m_enoughData = true;
         }), this);
