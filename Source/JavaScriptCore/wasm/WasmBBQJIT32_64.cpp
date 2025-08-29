@@ -2302,12 +2302,13 @@ PartialResult WARN_UNUSED_RETURN BBQJIT::addI64ShrU(Value lhs, Value rhs, Value&
 
 void BBQJIT::shiftI64Helper(ShiftI64HelperOp op, Location lhsLocation, Location rhsLocation, Location resultLocation)
 {
+    ScratchScope<1, 0> scratches(*this, lhsLocation, rhsLocation, resultLocation);
+
     auto shift = rhsLocation.asGPRlo();
     m_jit.and32(TrustedImm32(63), rhsLocation.asGPRlo(), shift);
     auto zero = m_jit.branch32(RelationalCondition::Equal, shift, TrustedImm32(0));
     auto aboveOrEqual32 = m_jit.branch32(RelationalCondition::AboveOrEqual, shift, TrustedImm32(32));
     // shift < 32
-    ScratchScope<1, 0> scratches(*this, lhsLocation, rhsLocation, resultLocation);
     auto carry = scratches.gpr(0);
     m_jit.move(TrustedImm32(32), carry);
     m_jit.sub32(carry, shift, carry);
@@ -2325,7 +2326,7 @@ void BBQJIT::shiftI64Helper(ShiftI64HelperOp op, Location lhsLocation, Location 
         m_jit.urshift32(lhsLocation.asGPRhi(), shift, resultLocation.asGPRhi());
         m_jit.urshift32(lhsLocation.asGPRlo(), shift, resultLocation.asGPRlo());
         m_jit.or32(carry, resultLocation.asGPRlo());
-    } else if (op ==ShiftI64HelperOp::Rshift) {
+    } else if (op == ShiftI64HelperOp::Rshift) {
         m_jit.lshift32(lhsLocation.asGPRhi(), carry, carry);
         ASSERT(resultLocation.asGPRhi() != shift);
         ASSERT(resultLocation.asGPRhi() != lhsLocation.asGPRlo());
@@ -2343,7 +2344,7 @@ void BBQJIT::shiftI64Helper(ShiftI64HelperOp op, Location lhsLocation, Location 
     } else if (op == ShiftI64HelperOp::Urshift) {
         m_jit.urshift32(lhsLocation.asGPRhi(), shift, resultLocation.asGPRlo());
         m_jit.xor32(resultLocation.asGPRhi(), resultLocation.asGPRhi());
-    } else if (op ==ShiftI64HelperOp::Rshift) {
+    } else if (op == ShiftI64HelperOp::Rshift) {
         ASSERT(resultLocation.asGPRlo() != lhsLocation.asGPRhi());
         m_jit.rshift32(lhsLocation.asGPRhi(), shift, resultLocation.asGPRlo());
         m_jit.rshift32(lhsLocation.asGPRhi(), TrustedImm32(31), resultLocation.asGPRhi());
