@@ -41,8 +41,8 @@ public:
 
 template<typename T> inline DoublyLinkedListNode<T>::DoublyLinkedListNode()
 {
-    setPrev(0);
-    setNext(0);
+    setPrev(nullptr);
+    setNext(nullptr);
 }
 
 template<typename T> inline void DoublyLinkedListNode<T>::setPrev(T* prev)
@@ -90,8 +90,8 @@ private:
 };
 
 template<typename T> inline DoublyLinkedList<T>::DoublyLinkedList()
-    : m_head(0)
-    , m_tail(0)
+    : m_head(nullptr)
+    , m_tail(nullptr)
 {
 }
 
@@ -126,37 +126,33 @@ template<typename T> inline T* DoublyLinkedList<T>::tail() const
 
 template<typename T> inline void DoublyLinkedList<T>::push(T* node)
 {
+    ASSERT(!node->prev() && !node->next());
     if (!m_head) {
         ASSERT(!m_tail);
         m_head = node;
         m_tail = node;
-        node->setPrev(0);
-        node->setNext(0);
         return;
     }
 
     ASSERT(m_tail);
     m_head->setPrev(node);
     node->setNext(m_head);
-    node->setPrev(0);
     m_head = node;
 }
 
 template<typename T> inline void DoublyLinkedList<T>::append(T* node)
 {
+    ASSERT(!node->prev() && !node->next());
     if (!m_tail) {
         ASSERT(!m_head);
         m_head = node;
         m_tail = node;
-        node->setPrev(0);
-        node->setNext(0);
         return;
     }
 
     ASSERT(m_head);
     m_tail->setNext(node);
     node->setPrev(m_tail);
-    node->setNext(0);
     m_tail = node;
 }
 
@@ -177,6 +173,8 @@ template<typename T> inline void DoublyLinkedList<T>::remove(T* node)
         ASSERT(node == m_tail);
         m_tail = node->prev();
     }
+    node->setNext(nullptr);
+    node->setPrev(nullptr);
 }
 
 template<typename T> inline T* DoublyLinkedList<T>::removeHead()
