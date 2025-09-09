@@ -1575,6 +1575,10 @@ void OMGIRGenerator::reloadMemoryRegistersFromInstance(const MemoryInformation& 
 void OMGIRGenerator::emitExceptionCheck(CCallHelpers& jit, ExceptionType type)
 {
     jit.move(CCallHelpers::TrustedImm32(static_cast<uint32_t>(type)), GPRInfo::argumentGPR1);
+    if (auto* omgOrigin = origin.omgOrigin()) {
+        jit.move(CCallHelpers::TrustedImm32(omgOrigin->m_callSiteIndex.bits()), GPRInfo::argumentGPR2);
+        jit.store32(GPRInfo::argumentGPR2, CCallHelpers::tagFor(CallFrameSlot::argumentCountIncludingThis));
+    }
     jit.jumpThunk(CodeLocationLabel<JITThunkPtrTag>(Thunks::singleton().stub(throwExceptionFromWasmThunkGenerator).code()));
 }
 
@@ -4852,6 +4856,10 @@ auto OMGIRGenerator::addThrow(unsigned exceptionIndex, ArgumentList& args, Stack
     patch->setGenerator([this, exceptionIndex, handle] (CCallHelpers& jit, const B3::StackmapGenerationParams& params) {
         AllowMacroScratchRegisterUsage allowScratch(jit);
         handle.generate(jit, params, this);
+        if (auto* omgOrigin = origin.omgOrigin()) {
+            jit.move(CCallHelpers::TrustedImm32(omgOrigin->m_callSiteIndex.bits()), GPRInfo::nonPreservedNonArgumentGPR0);
+            jit.store32(GPRInfo::nonPreservedNonArgumentGPR0, CCallHelpers::tagFor(CallFrameSlot::argumentCountIncludingThis));
+        }
         emitThrowImpl(jit, exceptionIndex);
     });
     m_currentBlock->append(patch);
@@ -4883,6 +4891,10 @@ auto WARN_UNUSED_RETURN OMGIRGenerator::addThrowRef(ExpressionType exn, Stack&) 
     patch->setGenerator([this, handle] (CCallHelpers& jit, const B3::StackmapGenerationParams& params) {
         AllowMacroScratchRegisterUsage allowScratch(jit);
         handle.generate(jit, params, this);
+        if (auto* omgOrigin = origin.omgOrigin()) {
+            jit.move(CCallHelpers::TrustedImm32(omgOrigin->m_callSiteIndex.bits()), GPRInfo::nonPreservedNonArgumentGPR0);
+            jit.store32(GPRInfo::nonPreservedNonArgumentGPR0, CCallHelpers::tagFor(CallFrameSlot::argumentCountIncludingThis));
+        }
         emitThrowRefImpl(jit);
     });
     m_currentBlock->append(patch);
@@ -4904,6 +4916,10 @@ auto OMGIRGenerator::addRethrow(unsigned, ControlType& data) -> PartialResult
     patch->setGenerator([this, handle] (CCallHelpers& jit, const B3::StackmapGenerationParams& params) {
         AllowMacroScratchRegisterUsage allowScratch(jit);
         handle.generate(jit, params, this);
+        if (auto* omgOrigin = origin.omgOrigin()) {
+            jit.move(CCallHelpers::TrustedImm32(omgOrigin->m_callSiteIndex.bits()), GPRInfo::nonPreservedNonArgumentGPR0);
+            jit.store32(GPRInfo::nonPreservedNonArgumentGPR0, CCallHelpers::tagFor(CallFrameSlot::argumentCountIncludingThis));
+        }
         emitThrowRefImpl(jit);
     });
     m_currentBlock->append(patch);
