@@ -2006,7 +2006,7 @@ public:
     {
         m_assembler.vcvtds(dst, ARMRegisters::asSingle(src));
     }
-    
+
     void convertDoubleToFloat(FPRegisterID src, FPRegisterID dst)
     {
         m_assembler.vcvtsd(ARMRegisters::asSingle(dst), src);
@@ -2085,10 +2085,8 @@ public:
 
     Jump branchFloatWithZero(DoubleCondition cond, FPRegisterID left)
     {
-        UNUSED_PARAM(cond);
-        UNUSED_PARAM(left);
-        UNREACHABLE_FOR_PLATFORM();
-        return { };
+        m_assembler.vcmpz(asSingle(left));
+        return makeFPBranch(cond);
     }
 
     Jump branchDouble(DoubleCondition cond, FPRegisterID left, FPRegisterID right)
@@ -2099,10 +2097,8 @@ public:
 
     Jump branchDoubleWithZero(DoubleCondition cond, FPRegisterID left)
     {
-        UNUSED_PARAM(cond);
-        UNUSED_PARAM(left);
-        UNREACHABLE_FOR_PLATFORM();
-        return { };
+        m_assembler.vcmpz(left);
+        return makeFPBranch(cond);
     }
 
     enum BranchTruncateType { BranchIfTruncateFailed, BranchIfTruncateSuccessful };
@@ -2155,7 +2151,7 @@ public:
         m_assembler.vcvt_floatingPointToUnsigned(fpTempRegisterAsSingle(), asSingle(src));
         m_assembler.vmov(dest, fpTempRegisterAsSingle());
     }
-    
+
     // Convert 'src' to an integer, and places the resulting 'dest'.
     // If the result is not representable as a 32 bit value, branch.
     // May also branch for some values that are representable in 32 bits
@@ -2201,6 +2197,84 @@ public:
         notEqual.link(this);
         return result;
     }
+private:
+    void convertDoubleToUint64(FPRegisterID src, RegisterID destLo, RegisterID destHi, FPRegisterID scratch1, FPRegisterID scratch2)
+    {
+        // We override src on the vmla, so we require a temp fp register here
+        ASSERT(src == fpTempRegister);
+
+        // Constant materialization
+        move(TrustedImm32(0x00000000), destLo);
+        move(TrustedImm32(0x3DF00000), destHi);
+        move64ToDouble(destHi, destLo, scratch1);
+        move(TrustedImm32(0x00000000), destLo);
+        move(TrustedImm32(0xC1F00000), destHi);
+        move64ToDouble(destHi, destLo, scratch2);
+
+        m_assembler.vmul(scratch1, src, scratch1);
+
+        m_assembler.vcvt_floatingPointToUnsigned(ARMRegisters::asSingle(scratch1), scratch1);
+        m_assembler.vmov(destHi, ARMRegisters::asSingle(scratch1));
+
+        m_assembler.vcvt_unsignedToFloatingPoint(scratch1, ARMRegisters::asSingle(scratch1));
+
+        m_assembler.vmla(src, scratch1, scratch2);
+
+        m_assembler.vcvt_floatingPointToUnsigned(ARMRegisters::asSingle(src), src);
+        m_assembler.vmov(destLo, ARMRegisters::asSingle(src));
+    }
+
+public:
+    void truncateDoubleToUint64(FPRegisterID src, RegisterID destLo, RegisterID destHi, FPRegisterID scratch1, FPRegisterID scratch2)
+    {
+        Jump notPositive = branchDoubleWithZero(DoubleLessThanOrEqualOrUnordered, src);
+
+        moveDouble(src, fpTempRegister);
+        convertDoubleToUint64(fpTempRegister, destLo, destHi, scratch1, scratch2);
+
+        Jump done = jump();
+
+        notPositive.link(this);
+        move(TrustedImm32(0), destLo);
+        move(TrustedImm32(0), destHi);
+
+        done.link(this);
+    }
+
+    void truncateDoubleToInt64(FPRegisterID src, RegisterID destLo, RegisterID destHi, FPRegisterID scratch1, FPRegisterID scratch2)
+    {
+        RegisterID signFlag = getCachedAddressTempRegisterIDAndInvalidate();
+        moveDouble(src, fpTempRegister);
+
+        Jump isNegative = branchDoubleWithZero(DoubleLessThanAndOrdered, fpTempRegister);
+        move(TrustedImm32(0), signFlag);
+        Jump join = jump();
+
+        isNegative.link(this);
+        m_assembler.vneg(fpTempRegister, fpTempRegister);
+        move(TrustedImm32(1), signFlag);
+
+        join.link(this);
+        convertDoubleToUint64(fpTempRegister, destLo, destHi, scratch1, scratch2);
+
+        Jump wasNonNegative = branch32(Equal, signFlag, TrustedImm32(0));
+        m_assembler.sub_S(destLo, ARMThumbImmediate::makeUInt12OrEncodedImm(0), destLo);
+        m_assembler.mvn(destHi, destHi);
+        m_assembler.adc(destHi, destHi, ARMThumbImmediate::makeEncodedImm(0));
+        wasNonNegative.link(this);
+    }
+
+    void truncateFloatToUint64(FPRegisterID src, RegisterID destLo, RegisterID destHi, FPRegisterID scratch1, FPRegisterID scratch2)
+    {
+        convertFloatToDouble(src, fpTempRegister);
+        truncateDoubleToUint64(fpTempRegister, destLo, destHi, scratch1, scratch2);
+    }
+
+    void truncateFloatToInt64(FPRegisterID src, RegisterID destLo, RegisterID destHi, FPRegisterID scratch1, FPRegisterID scratch2)
+    {
+        convertFloatToDouble(src, fpTempRegister);
+        truncateDoubleToInt64(fpTempRegister, destLo, destHi, scratch1, scratch2);
+    }
 
     // Stack manipulation operations:
     //
@@ -2209,7 +2283,7 @@ public:
     // operations add and remove a single register sized unit of data
     // to or from the stack.  Peek and poke operations read or write
     // values on the stack, without moving the current stack position.
-    
+
     void pop(RegisterID dest)
     {
         m_assembler.pop(dest);

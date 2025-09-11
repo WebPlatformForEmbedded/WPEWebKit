@@ -1163,7 +1163,6 @@ public:
     FloatingPointRange lookupTruncationRange(TruncationKind truncationKind);
 
     void truncInBounds(TruncationKind truncationKind, Location operandLocation, Location resultLocation, FPRReg scratch1FPR, FPRReg scratch2FPR);
-    void truncInBounds(TruncationKind truncationKind, Location operandLocation, Value& result, Location resultLocation);
 
     PartialResult WARN_UNUSED_RETURN truncTrapping(OpType truncationOp, Value operand, Value& result, Type returnType, Type operandType);
     PartialResult WARN_UNUSED_RETURN truncSaturated(Ext1OpType truncationOp, Value operand, Value& result, Type returnType, Type operandType);

@@ -1161,7 +1161,7 @@ Value WARN_UNUSED_RETURN BBQJIT::emitAtomicCompareExchange(ExtAtomicOpType op, T
     return result;
 }
 
-void BBQJIT::truncInBounds(TruncationKind truncationKind, Location operandLocation, Value& result, Location resultLocation)
+void BBQJIT::truncInBounds(TruncationKind truncationKind, Location operandLocation, Location resultLocation, FPRReg scratch1FPR, FPRReg scratch2FPR)
 {
     switch (truncationKind) {
     case TruncationKind::I32TruncF32S:
@@ -1177,27 +1177,19 @@ void BBQJIT::truncInBounds(TruncationKind truncationKind, Location operandLocati
         m_jit.truncateDoubleToUint32(operandLocation.asFPR(), resultLocation.asGPR());
         break;
     case TruncationKind::I64TruncF32S: {
-        auto operand = Value::pinned(TypeKind::F32, operandLocation);
-        consume(result);
-        emitCCall(Math::i64_trunc_s_f32, ArgumentList { operand }, result);
+        m_jit.truncateFloatToInt64(operandLocation.asFPR(), resultLocation.asGPRlo(), resultLocation.asGPRhi(), scratch1FPR, scratch2FPR);
         break;
     }
     case TruncationKind::I64TruncF64S: {
-        auto operand = Value::pinned(TypeKind::F64, operandLocation);
-        consume(result);
-        emitCCall(Math::i64_trunc_s_f64, ArgumentList { operand }, result);
+        m_jit.truncateDoubleToInt64(operandLocation.asFPR(), resultLocation.asGPRlo(), resultLocation.asGPRhi(), scratch1FPR, scratch2FPR);
         break;
     }
     case TruncationKind::I64TruncF32U: {
-        auto operand = Value::pinned(TypeKind::F32, operandLocation);
-        consume(result);
-        emitCCall(Math::i64_trunc_u_f32, ArgumentList { operand }, result);
+        m_jit.truncateFloatToUint64(operandLocation.asFPR(), resultLocation.asGPRlo(), resultLocation.asGPRhi(), scratch1FPR, scratch2FPR);
         break;
     }
     case TruncationKind::I64TruncF64U: {
-        auto operand = Value::pinned(TypeKind::F64, operandLocation);
-        consume(result);
-        emitCCall(Math::i64_trunc_u_f64, ArgumentList { operand }, result);
+        m_jit.truncateDoubleToUint64(operandLocation.asFPR(), resultLocation.asGPRlo(), resultLocation.asGPRhi(), scratch1FPR, scratch2FPR);
         break;
     }
     }
@@ -1231,7 +1223,7 @@ PartialResult WARN_UNUSED_RETURN BBQJIT::truncTrapping(OpType truncationOp, Valu
     emitMoveConst(minFloatConst, minFloat);
     emitMoveConst(maxFloatConst, maxFloat);
 
-    LOG_INSTRUCTION("TruncSaturated", operand, operandLocation, RESULT(result));
+    LOG_INSTRUCTION("TruncTrapping", operand, operandLocation, RESULT(result));
 
     DoubleCondition minCondition = range.closedLowerEndpoint ? DoubleCondition::DoubleLessThanOrUnordered : DoubleCondition::DoubleLessThanOrEqualOrUnordered;
     Jump belowMin = operandType == Types::F32
@@ -1244,7 +1236,7 @@ PartialResult WARN_UNUSED_RETURN BBQJIT::truncTrapping(OpType truncationOp, Valu
         : m_jit.branchDouble(DoubleCondition::DoubleGreaterThanOrEqualOrUnordered, operandLocation.asFPR(), maxFloat.asFPR());
     throwExceptionIf(ExceptionType::OutOfBoundsTrunc, aboveMax);
 
-    truncInBounds(kind, operandLocation, result, resultLocation);
+    truncInBounds(kind, operandLocation, resultLocation, scratches.fpr(0), scratches.fpr(1));
 
     return { };
 }
@@ -1314,7 +1306,7 @@ PartialResult WARN_UNUSED_RETURN BBQJIT::truncSaturated(Ext1OpType truncationOp,
         : m_jit.branchDouble(DoubleCondition::DoubleGreaterThanOrEqualOrUnordered, operandLocation.asFPR(), maxFloat.asFPR());
 
     // In-bounds case. Emit normal truncation instructions.
-    truncInBounds(kind, operandLocation, result, resultLocation);
+    truncInBounds(kind, operandLocation, resultLocation, scratches.fpr(0), scratches.fpr(1));
     resultLocation = locationOf(result);
 
     Jump afterInBounds = m_jit.jump();
