@@ -554,10 +554,19 @@ public:
         emitFunctionEpilogueWithEmptyFrame();
     }
 
+#if CPU(ARM_THUMB2)
+    ALWAYS_INLINE void preserveReturnAddressAfterCall(RegisterID reg)
+    {
+        // Clear LSB in LR; it's not part of the return address, it only
+        // signifies that we return to Thumb code.
+        and32(TrustedImm32(0xfffffffe), linkRegister, reg);
+    }
+#else
     ALWAYS_INLINE void preserveReturnAddressAfterCall(RegisterID reg)
     {
         move(linkRegister, reg);
     }
+#endif
 
     ALWAYS_INLINE void restoreReturnAddressBeforeReturn(RegisterID reg)
     {
