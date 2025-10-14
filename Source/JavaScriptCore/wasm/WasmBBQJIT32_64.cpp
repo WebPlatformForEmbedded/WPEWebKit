@@ -2308,6 +2308,7 @@ void BBQJIT::shiftI64Helper(ShiftI64HelperOp op, Location lhsLocation, Location 
     m_jit.and32(TrustedImm32(63), rhsLocation.asGPRlo(), shift);
     auto zero = m_jit.branch32(RelationalCondition::Equal, shift, TrustedImm32(0));
     auto aboveOrEqual32 = m_jit.branch32(RelationalCondition::AboveOrEqual, shift, TrustedImm32(32));
+
     // shift < 32
     auto carry = scratches.gpr(0);
     m_jit.move(TrustedImm32(32), carry);
@@ -2334,7 +2335,10 @@ void BBQJIT::shiftI64Helper(ShiftI64HelperOp op, Location lhsLocation, Location 
         m_jit.urshift32(lhsLocation.asGPRlo(), shift, resultLocation.asGPRlo());
         m_jit.or32(carry, resultLocation.asGPRlo());
     }
-    auto done = m_jit.jump();
+
+    JumpList done;
+    done.append(m_jit.jump());
+
     // shift >= 32
     aboveOrEqual32.link(&m_jit);
     m_jit.sub32(shift, TrustedImm32(32), shift);
@@ -2349,8 +2353,15 @@ void BBQJIT::shiftI64Helper(ShiftI64HelperOp op, Location lhsLocation, Location 
         m_jit.rshift32(lhsLocation.asGPRhi(), shift, resultLocation.asGPRlo());
         m_jit.rshift32(lhsLocation.asGPRhi(), TrustedImm32(31), resultLocation.asGPRhi());
     }
+    // The following move is only emitted if the lhs != res, so when they are the same, we
+    // can just fallthrough
+    if (lhsLocation != resultLocation)
+        done.append(m_jit.jump());
+
     // shift == 0
     zero.link(&m_jit);
+    emitMove(TypeKind::I64, lhsLocation, resultLocation);
+
     done.link(&m_jit);
 }
 
