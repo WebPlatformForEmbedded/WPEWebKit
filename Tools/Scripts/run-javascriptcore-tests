@@ -583,7 +583,7 @@ if (defined $archs) {
 
 # For running tests, arm64e should map to arm64
 $archs = "arm64" if $archs eq "arm64e";
-if ($archs ne nativeArchitecture($remotes) && (nativeArchitecture($remotes) ne "arm64" || !isAppleMacWebKit())) {
+if ($archs ne nativeArchitecture($remotes) && (nativeArchitecture($remotes) ne "arm64")) {
     die "Cannot run tests with $archs on this machine";
 }
 
@@ -665,7 +665,7 @@ sub runTest {
         unshift @command, $artifact_exec_wrapper;
     }
     unshift @command, ("xcrun", "-sdk", xcodeSDK(), "sim") if willUseIOSSimulatorSDK();
-    unshift @command, ("/usr/bin/arch", "-$archs") if $archs ne nativeArchitecture($remotes);
+    unshift @command, ("/usr/bin/arch", "-$archs") if isAppleMacWebKit() && $archs ne nativeArchitecture($remotes);
     unshift @command, wrapperPrefixIfNeeded() if isGtk() or isWPE();
 
     if ($envVars ne "") {
@@ -833,7 +833,8 @@ sub runJSCStressTests
         "/usr/bin/env", "ruby", "Tools/Scripts/run-jsc-stress-tests",
         "-j", jscPath($productDir), "-o", $jscStressResultsDir, "--arch", $archs);
 
-    if (nativeArchitecture($remotes) ne $archs) {
+    if (isAppleMacWebKit() && nativeArchitecture($remotes) ne $archs) {
+        # Forces use of the Mac-specific /usr/bin/arch in run-jsc-stress-tests.
         push(@jscStressDriverCmd, "--force-architecture");
         push(@jscStressDriverCmd, $archs);
     }
