@@ -540,6 +540,19 @@ public:
         }
     }
 
+    void or64(RegisterID op1Hi, RegisterID op1Lo, RegisterID op2Hi, RegisterID op2Lo, RegisterID destHi, RegisterID destLo)
+    {
+        if (destLo != op1Hi && destLo != op2Hi) {
+            m_assembler.orr(destLo, op1Lo, op2Lo);
+            m_assembler.orr(destHi, op1Hi, op2Hi);
+        } else {
+            RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
+            m_assembler.orr(scratch, op1Lo, op2Lo);
+            m_assembler.orr(destHi, op1Hi, op2Hi);
+            move(scratch, destLo);
+        }
+    }
+
     void rotateRight32(RegisterID op1, RegisterID op2, RegisterID dest)
     {
         m_assembler.ror(dest, op1, op2);
