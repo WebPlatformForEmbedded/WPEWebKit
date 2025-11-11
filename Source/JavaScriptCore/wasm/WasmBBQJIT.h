@@ -2247,9 +2247,6 @@ private:
 
     constexpr static int tempSlotSize = 16; // Size of the stack slot for a stack temporary. Currently the size of the largest possible temporary (a v128).
 
-    enum class ShiftI64HelperOp { Lshift, Urshift, Rshift };
-    void shiftI64Helper(ShiftI64HelperOp op, Location lhsLocation, Location rhsLocation, Location resultLocation);
-
     enum class RotI64HelperOp { Left, Right };
     void rotI64Helper(RotI64HelperOp op, Location lhsLocation, Location rhsLocation, Location resultLocation);
 

@@ -372,6 +372,11 @@ public:
         m_assembler.clz(dest, dest);
     }
 
+    void lshiftUnchecked(RegisterID src, RegisterID shiftAmount, RegisterID dest)
+    {
+        m_assembler.lsl(dest, src, shiftAmount);
+    }
+
     void lshift32(RegisterID src, RegisterID shiftAmount, RegisterID dest)
     {
         RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
@@ -385,7 +390,10 @@ public:
 
     void lshift32(RegisterID src, TrustedImm32 imm, RegisterID dest)
     {
-        m_assembler.lsl(dest, src, imm.m_value & 0x1f);
+        if (!(imm.m_value & 0x1f))
+            move(src, dest);
+        else
+            m_assembler.lsl(dest, src, imm.m_value & 0x1f);
     }
 
     void lshift32(TrustedImm32 imm, RegisterID shiftAmount, RegisterID dest)
@@ -587,6 +595,12 @@ public:
         m_assembler.sub(scratch, ARMThumbImmediate::makeUInt12(32), scratch);
         m_assembler.ror(dest, src, scratch);
     }
+
+    void rshiftUnchecked(RegisterID src, RegisterID shiftAmount, RegisterID dest)
+    {
+        m_assembler.asr(dest, src, shiftAmount);
+    }
+
     void rshift32(RegisterID src, RegisterID shiftAmount, RegisterID dest)
     {
         RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
@@ -610,10 +624,23 @@ public:
     {
         rshift32(dest, shiftAmount, dest);
     }
-    
+
     void rshift32(TrustedImm32 imm, RegisterID dest)
     {
         rshift32(dest, imm, dest);
+    }
+
+    void rshift32(TrustedImm32 imm, RegisterID shiftAmount, RegisterID dest)
+    {
+        // Clamp the shift to the range 0..31
+        m_assembler.ARM_and(dest, shiftAmount, ARMThumbImmediate::makeEncodedImm(0x1f));
+        move(imm, getCachedDataTempRegisterIDAndInvalidate());
+        m_assembler.asr(dest, dataTempRegister, dest);
+    }
+
+    void urshiftUnchecked(RegisterID src, RegisterID shiftAmount, RegisterID dest)
+    {
+        m_assembler.lsr(dest, src, shiftAmount);
     }
 
     void urshift32(RegisterID src, RegisterID shiftAmount, RegisterID dest)
@@ -623,10 +650,10 @@ public:
         ARMThumbImmediate armImm = ARMThumbImmediate::makeEncodedImm(0x1f);
         ASSERT(armImm.isValid());
         m_assembler.ARM_and(scratch, shiftAmount, armImm);
-        
+
         m_assembler.lsr(dest, src, scratch);
     }
-    
+
     void urshift32(RegisterID src, TrustedImm32 imm, RegisterID dest)
     {
         if (!(imm.m_value & 0x1f))
@@ -639,7 +666,7 @@ public:
     {
         urshift32(dest, shiftAmount, dest);
     }
-    
+
     void urshift32(TrustedImm32 imm, RegisterID dest)
     {
         urshift32(dest, imm, dest);
@@ -681,6 +708,17 @@ public:
         else {
             move(imm, dataTempRegister);
             m_assembler.sub(dest, dest, dataTempRegister);
+        }
+    }
+
+    void sub32(TrustedImm32 imm, RegisterID src, RegisterID dest)
+    {
+        ARMThumbImmediate armImm = ARMThumbImmediate::makeUInt12OrEncodedImm(imm.m_value);
+        if (armImm.isValid())
+            m_assembler.sub(dest, armImm, src);
+        else {
+            move(imm, dataTempRegister);
+            m_assembler.sub(dest, dataTempRegister, src);
         }
     }
 
