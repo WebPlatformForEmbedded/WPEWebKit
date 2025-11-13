@@ -70,21 +70,68 @@ auto BBQJIT::emitCheckAndPrepareAndMaterializePointerApply(Value pointer, uint32
             }
             return functor(CCallHelpers::Address(wasmBaseMemoryPointer, static_cast<int32_t>(finalOffset)));
         }
-        pointerLocation = Location::fromGPR(scratches.gpr(0));
-        emitMoveConst(pointer, pointerLocation);
+        // Constant pointer, but finalOffset doesn't fit in addressing mode
+        // Fold constantPointer + boundary into a single immediate for bounds checking
+        GPRReg boundsCheckReg = wasmScratchGPR;
+        if (boundary) {
+            uint64_t foldedValue = constantPointer + boundary;
+            // Check for 32-bit overflow at compile time
+            if (foldedValue > std::numeric_limits<uint32_t>::max()) {
+                // Overflow occurred - unconditional throw
+                throwExceptionIf(ExceptionType::OutOfBoundsMemoryAccess, m_jit.jump());
+            } else {
+                m_jit.move(TrustedImm32(foldedValue), boundsCheckReg);
+                switch (m_mode) {
+                case MemoryMode::BoundsChecking: {
+                    throwExceptionIf(ExceptionType::OutOfBoundsMemoryAccess, m_jit.branchPtr(RelationalCondition::AboveOrEqual, boundsCheckReg, wasmBoundsCheckingSizeRegister));
+                    break;
+                }
+                case MemoryMode::Signaling: {
+                    if (uoffset >= Memory::fastMappedRedzoneBytes()) {
+                        uint64_t maximum = m_info.memory.maximum() ? m_info.memory.maximum().bytes() : std::numeric_limits<uint32_t>::max();
+                        throwExceptionIf(ExceptionType::OutOfBoundsMemoryAccess, m_jit.branchPtr(RelationalCondition::AboveOrEqual, boundsCheckReg, TrustedImmPtr(static_cast<int64_t>(maximum))));
+                    }
+                    break;
+                }
+                }
+            }
+        } else {
+            switch (m_mode) {
+            case MemoryMode::BoundsChecking:
+                m_jit.move(TrustedImm32(constantPointer), boundsCheckReg);
+                throwExceptionIf(ExceptionType::OutOfBoundsMemoryAccess, m_jit.branchPtr(RelationalCondition::AboveOrEqual, boundsCheckReg, wasmBoundsCheckingSizeRegister));
+                break;
+            case MemoryMode::Signaling:
+                if (uoffset >= Memory::fastMappedRedzoneBytes()) {
+                    uint64_t maximum = m_info.memory.maximum() ? m_info.memory.maximum().bytes() : std::numeric_limits<uint32_t>::max();
+                    m_jit.move(TrustedImm32(constantPointer), boundsCheckReg);
+                    throwExceptionIf(ExceptionType::OutOfBoundsMemoryAccess, m_jit.branchPtr(RelationalCondition::AboveOrEqual, boundsCheckReg, TrustedImmPtr(static_cast<int64_t>(maximum))));
+                }
+                break;
+            }
+        }
+        // Use original constantPointer (not folded) for address calculation
+        m_jit.add32(TrustedImm32(constantPointer), wasmBaseMemoryPointer, wasmScratchGPR);
+        if (static_cast<uint64_t>(uoffset) > static_cast<uint64_t>(std::numeric_limits<int32_t>::max()) || !B3::Air::Arg::isValidAddrForm(B3::Air::Move, static_cast<int32_t>(uoffset), Width::Width128)) {
+            m_jit.addPtr(TrustedImmPtr(static_cast<int64_t>(uoffset)), wasmScratchGPR);
+            return functor(Address(wasmScratchGPR));
+        }
+        return functor(Address(wasmScratchGPR, static_cast<int32_t>(uoffset)));
     } else
         pointerLocation = loadIfNecessary(pointer);
     ASSERT(pointerLocation.isGPR());
 
+    GPRReg pointerReg = pointerLocation.asGPR();
     switch (m_mode) {
     case MemoryMode::BoundsChecking: {
         // We're not using signal handling only when the memory is not shared.
         // Regardless of signaling, we must check that no memory access exceeds the current memory size.
-        m_jit.zeroExtend32ToWord(pointerLocation.asGPR(), wasmScratchGPR);
-        if (boundary)
-            // NB: On 32-bit we have to check the addition for overflow
-            throwExceptionIf(ExceptionType::OutOfBoundsMemoryAccess, m_jit.branchAdd32(ResultCondition::Carry, wasmScratchGPR, TrustedImm32(boundary), wasmScratchGPR));
-        throwExceptionIf(ExceptionType::OutOfBoundsMemoryAccess, m_jit.branchPtr(RelationalCondition::AboveOrEqual, wasmScratchGPR, wasmBoundsCheckingSizeRegister));
+        if (boundary) {
+            m_jit.add32(TrustedImm32(boundary), pointerReg, wasmScratchGPR);
+            throwExceptionIf(ExceptionType::OutOfBoundsMemoryAccess, m_jit.branch32(RelationalCondition::Below, wasmScratchGPR, pointerReg));
+            throwExceptionIf(ExceptionType::OutOfBoundsMemoryAccess, m_jit.branchPtr(RelationalCondition::AboveOrEqual, wasmScratchGPR, wasmBoundsCheckingSizeRegister));
+        } else
+            throwExceptionIf(ExceptionType::OutOfBoundsMemoryAccess, m_jit.branchPtr(RelationalCondition::AboveOrEqual, pointerReg, wasmBoundsCheckingSizeRegister));
         break;
     }
 
@@ -101,17 +148,16 @@ auto BBQJIT::emitCheckAndPrepareAndMaterializePointerApply(Value pointer, uint32
         // any access equal to or greater than 4GiB will trap, no need to add the redzone.
         if (uoffset >= Memory::fastMappedRedzoneBytes()) {
             uint64_t maximum = m_info.memory.maximum() ? m_info.memory.maximum().bytes() : std::numeric_limits<uint32_t>::max();
-            m_jit.zeroExtend32ToWord(pointerLocation.asGPR(), wasmScratchGPR);
-            if (boundary)
-                m_jit.addPtr(TrustedImmPtr(boundary), wasmScratchGPR);
-            throwExceptionIf(ExceptionType::OutOfBoundsMemoryAccess, m_jit.branchPtr(RelationalCondition::AboveOrEqual, wasmScratchGPR, TrustedImmPtr(static_cast<int64_t>(maximum))));
+            if (boundary) {
+                m_jit.add32(TrustedImm32(boundary), pointerReg, wasmScratchGPR);
+                throwExceptionIf(ExceptionType::OutOfBoundsMemoryAccess, m_jit.branchPtr(RelationalCondition::AboveOrEqual, wasmScratchGPR, TrustedImmPtr(static_cast<int64_t>(maximum))));
+            } else
+                throwExceptionIf(ExceptionType::OutOfBoundsMemoryAccess, m_jit.branchPtr(RelationalCondition::AboveOrEqual, pointerReg, TrustedImmPtr(static_cast<int64_t>(maximum))));
         }
         break;
     }
     }
-
-    m_jit.zeroExtend32ToWord(pointerLocation.asGPR(), wasmScratchGPR);
-    m_jit.addPtr(wasmBaseMemoryPointer, wasmScratchGPR);
+    m_jit.add32(pointerReg, wasmBaseMemoryPointer, wasmScratchGPR);
 
     if (static_cast<uint64_t>(uoffset) > static_cast<uint64_t>(std::numeric_limits<int32_t>::max()) || !B3::Air::Arg::isValidAddrForm(B3::Air::Move, uoffset, Width::Width128)) {
         m_jit.addPtr(TrustedImmPtr(static_cast<int64_t>(uoffset)), wasmScratchGPR);
