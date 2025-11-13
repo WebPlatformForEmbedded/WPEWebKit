@@ -513,42 +513,57 @@ PartialResult WARN_UNUSED_RETURN BBQJIT::store(StoreOpType storeOp, Value pointe
                 ScratchScope<0, 1> scratches(*this);
                 valueLocation = Location::fromFPR(scratches.fpr(0));
                 emitMoveConst(value, valueLocation);
-            } else if (value.isConst() && typeNeedsGPR2(value.type())) {
-                ScratchScope<2, 0> scratches(*this);
-                valueLocation = Location::fromGPR2(scratches.gpr(1), scratches.gpr(0));
-                emitMoveConst(value, valueLocation);
-            } else if (value.isConst()) {
-                ScratchScope<1, 0> scratches(*this);
-                valueLocation = Location::fromGPR(scratches.gpr(0));
-                emitMoveConst(value, valueLocation);
-            } else
+            } else if (!value.isConst()) {
                 valueLocation = loadIfNecessary(value);
-            ASSERT(valueLocation.isRegister());
+                ASSERT(valueLocation.isRegister());
+            }
 
             consume(value);
             consume(pointer);
 
             switch (storeOp) {
             case StoreOpType::I64Store8:
-                m_jit.store8(valueLocation.asGPRlo(), location);
+                if (value.isConst())
+                    m_jit.store8(TrustedImm32(static_cast<int32_t>(value.asI64())), location);
+                else
+                    m_jit.store8(valueLocation.asGPRlo(), location);
                 return;
             case StoreOpType::I32Store8:
-                m_jit.store8(valueLocation.asGPR(), location);
+                if (value.isConst())
+                    m_jit.store8(TrustedImm32(value.asI32()), location);
+                else
+                    m_jit.store8(valueLocation.asGPR(), location);
                 return;
             case StoreOpType::I64Store16:
-                m_jit.store16(valueLocation.asGPRlo(), location);
+                if (value.isConst())
+                    m_jit.store16(TrustedImm32(static_cast<int32_t>(value.asI64())), location);
+                else
+                    m_jit.store16(valueLocation.asGPRlo(), location);
                 return;
             case StoreOpType::I32Store16:
-                m_jit.store16(valueLocation.asGPR(), location);
+                if (value.isConst())
+                    m_jit.store16(TrustedImm32(value.asI32()), location);
+                else
+                    m_jit.store16(valueLocation.asGPR(), location);
                 return;
             case StoreOpType::I64Store32:
-                m_jit.store32(valueLocation.asGPRlo(), location);
+                if (value.isConst())
+                    m_jit.store32(TrustedImm32(static_cast<int32_t>(value.asI64())), location);
+                else
+                    m_jit.store32(valueLocation.asGPRlo(), location);
                 return;
             case StoreOpType::I32Store:
-                m_jit.store32(valueLocation.asGPR(), location);
+                if (value.isConst())
+                    m_jit.store32(TrustedImm32(value.asI32()), location);
+                else
+                    m_jit.store32(valueLocation.asGPR(), location);
                 return;
             case StoreOpType::I64Store:
-                m_jit.storePair32(valueLocation.asGPRlo(), valueLocation.asGPRhi(), location);
+                if (value.isConst()) {
+                    int64_t val = value.asI64();
+                    m_jit.storePair32(TrustedImm32(static_cast<int32_t>(val)), TrustedImm32(static_cast<int32_t>(val >> 32)), location);
+                } else
+                    m_jit.storePair32(valueLocation.asGPRlo(), valueLocation.asGPRhi(), location);
                 return;
             case StoreOpType::F32Store: {
                 ScratchScope<1, 0> scratches(*this);
