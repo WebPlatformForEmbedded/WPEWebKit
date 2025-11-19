@@ -164,6 +164,57 @@ public:
         LessThanOrEqual = ARMv7Assembler::ConditionLE
     };
 
+    static constexpr ARMv7Assembler::Condition armV7ConditionForHigh32(RelationalCondition cond)
+    {
+        switch (cond) {
+        case GreaterThan:
+        case GreaterThanOrEqual:
+            return ARMv7Assembler::ConditionGT;
+        case LessThan:
+        case LessThanOrEqual:
+            return ARMv7Assembler::ConditionLT;
+        case Above:
+        case AboveOrEqual:
+            return ARMv7Assembler::ConditionHI;
+        case Below:
+        case BelowOrEqual:
+            return ARMv7Assembler::ConditionLO;
+        case NotEqual:
+            return ARMv7Assembler::ConditionNE;
+        case Equal:
+            // Equal can never be determined from high alone (needs both parts to match)
+            return ARMv7Assembler::ConditionInvalid;
+        default:
+            RELEASE_ASSERT_NOT_REACHED();
+            return ARMv7Assembler::ConditionInvalid;
+        }
+    }
+
+    static constexpr ARMv7Assembler::Condition armV7ConditionForLow32(RelationalCondition cond)
+    {
+        switch (cond) {
+        case GreaterThan:
+        case Above:
+            return ARMv7Assembler::ConditionHI;
+        case GreaterThanOrEqual:
+        case AboveOrEqual:
+            return ARMv7Assembler::ConditionHS;
+        case LessThan:
+        case Below:
+            return ARMv7Assembler::ConditionLO;
+        case LessThanOrEqual:
+        case BelowOrEqual:
+            return ARMv7Assembler::ConditionLS;
+        case NotEqual:
+            return ARMv7Assembler::ConditionNE;
+        case Equal:
+            return ARMv7Assembler::ConditionEQ;
+        default:
+            RELEASE_ASSERT_NOT_REACHED();
+            return ARMv7Assembler::ConditionInvalid;
+        }
+    }
+
     enum ResultCondition {
         Carry = ARMv7Assembler::ConditionCS,
         Overflow = ARMv7Assembler::ConditionVS,
@@ -370,6 +421,120 @@ public:
     {
         m_assembler.rbit(dest, src);
         m_assembler.clz(dest, dest);
+    }
+
+    void countLeadingZeros64(RegisterID srcHi, RegisterID srcLo, RegisterID destHi, RegisterID destLo)
+    {
+        if (destLo != srcLo) {
+            m_assembler.clz(destLo, srcHi);
+            m_assembler.cmp(destLo, ARMThumbImmediate::makeEncodedImm(32));
+            Jump done = makeBranch(ARMv7Assembler::ConditionNE);
+            m_assembler.clz(destLo, srcLo);
+            m_assembler.add(destLo, destLo, ARMThumbImmediate::makeEncodedImm(32));
+            done.link(this);
+            xor32(destHi, destHi);
+        } else {
+            RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
+            move(srcLo, scratch);
+            m_assembler.clz(destLo, srcHi);
+            m_assembler.cmp(destLo, ARMThumbImmediate::makeEncodedImm(32));
+            Jump done = makeBranch(ARMv7Assembler::ConditionNE);
+            m_assembler.clz(destLo, scratch);
+            m_assembler.add(destLo, destLo, ARMThumbImmediate::makeEncodedImm(32));
+            done.link(this);
+            xor32(destHi, destHi);
+        }
+    }
+
+    void countTrailingZeros64(RegisterID srcHi, RegisterID srcLo, RegisterID destHi, RegisterID destLo)
+    {
+        if (destLo != srcHi) {
+            countTrailingZeros32(srcLo, destLo);
+            m_assembler.cmp(destLo, ARMThumbImmediate::makeEncodedImm(32));
+            Jump done = makeBranch(ARMv7Assembler::ConditionNE);
+            countTrailingZeros32(srcHi, destLo);
+            m_assembler.add(destLo, destLo, ARMThumbImmediate::makeEncodedImm(32));
+            done.link(this);
+            xor32(destHi, destHi);
+        } else {
+            RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
+            move(srcHi, scratch);
+            countTrailingZeros32(srcLo, destLo);
+            m_assembler.cmp(destLo, ARMThumbImmediate::makeEncodedImm(32));
+            Jump done = makeBranch(ARMv7Assembler::ConditionNE);
+            countTrailingZeros32(scratch, destLo);
+            m_assembler.add(destLo, destLo, ARMThumbImmediate::makeEncodedImm(32));
+            done.link(this);
+            xor32(destHi, destHi);
+        }
+    }
+
+    void compare64(RelationalCondition cond, RegisterID lhsHi, RegisterID lhsLo, RegisterID rhsHi, RegisterID rhsLo, RegisterID dest)
+    {
+        if (cond == RelationalCondition::Equal || cond == RelationalCondition::NotEqual) {
+            // For Equal/NotEqual, we can optimize to only set one value conditionally
+            // NotEqual: default to 1, change to 0 only if both parts equal
+            // Equal: default to 0, change to 1 only if both parts equal
+            if (dest != lhsHi && dest != rhsHi && dest != lhsLo && dest != rhsLo) {
+                m_assembler.mov(dest, ARMThumbImmediate::makeEncodedImm(cond == RelationalCondition::NotEqual ? 1 : 0));
+                m_assembler.cmp(lhsHi, rhsHi);
+                Jump done = makeBranch(ARMv7Assembler::ConditionNE);
+                m_assembler.cmp(lhsLo, rhsLo);
+                // Only need to set the "opposite" value when both parts match
+                m_assembler.it(ARMv7Assembler::ConditionEQ);
+                m_assembler.mov(dest, ARMThumbImmediate::makeEncodedImm(cond == RelationalCondition::NotEqual ? 0 : 1));
+                done.link(this);
+            } else {
+                RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
+                m_assembler.mov(scratch, ARMThumbImmediate::makeEncodedImm(cond == RelationalCondition::NotEqual ? 1 : 0));
+                m_assembler.cmp(lhsHi, rhsHi);
+                Jump done = makeBranch(ARMv7Assembler::ConditionNE);
+                m_assembler.cmp(lhsLo, rhsLo);
+                m_assembler.it(ARMv7Assembler::ConditionEQ);
+                m_assembler.mov(scratch, ARMThumbImmediate::makeEncodedImm(cond == RelationalCondition::NotEqual ? 0 : 1));
+                done.link(this);
+                move(scratch, dest);
+            }
+            return;
+        }
+
+        ARMv7Assembler::Condition hiCondition = armV7ConditionForHigh32(cond);
+        ARMv7Assembler::Condition loCondition = armV7ConditionForLow32(cond);
+
+        if (dest != lhsLo && dest != rhsLo && dest != lhsHi && dest != rhsHi) {
+            // No aliasing - use ITE blocks with 1 branch
+            m_assembler.cmp(lhsHi, rhsHi);
+            m_assembler.it(hiCondition, false);
+            m_assembler.mov(dest, ARMThumbImmediate::makeEncodedImm(1));
+            m_assembler.mov(dest, ARMThumbImmediate::makeEncodedImm(0));
+
+            Jump done = makeBranch(ARMv7Assembler::ConditionNE);
+
+            m_assembler.cmp(lhsLo, rhsLo);
+            m_assembler.it(loCondition, false);
+            m_assembler.mov(dest, ARMThumbImmediate::makeEncodedImm(1));
+            m_assembler.mov(dest, ARMThumbImmediate::makeEncodedImm(0));
+
+            done.link(this);
+        } else {
+            // dest aliases with source - use scratch
+            RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
+
+            m_assembler.cmp(lhsHi, rhsHi);
+            m_assembler.it(hiCondition, false);
+            m_assembler.mov(scratch, ARMThumbImmediate::makeEncodedImm(1));
+            m_assembler.mov(scratch, ARMThumbImmediate::makeEncodedImm(0));
+
+            Jump done = makeBranch(ARMv7Assembler::ConditionNE);
+
+            m_assembler.cmp(lhsLo, rhsLo);
+            m_assembler.it(loCondition, false);
+            m_assembler.mov(scratch, ARMThumbImmediate::makeEncodedImm(1));
+            m_assembler.mov(scratch, ARMThumbImmediate::makeEncodedImm(0));
+
+            done.link(this);
+            move(scratch, dest);
+        }
     }
 
     void lshiftUnchecked(RegisterID src, RegisterID shiftAmount, RegisterID dest)
@@ -2617,6 +2782,11 @@ private:
         m_assembler.cmp(left, scratch);
     }
 
+    void compare32AndSetFlags(RegisterID left, RegisterID right)
+    {
+        m_assembler.cmp(left, right);
+    }
+
     void add32Impl(TrustedImm32 imm, Address address, bool updateFlags = false)
     {
         load32(address, dataTempRegister);
@@ -2851,6 +3021,91 @@ public:
         ArmAddress armAddress = setupArmAddress(address);
         MacroAssemblerHelpers::load16OnCondition(*this, cond, armAddress, addressTempRegister);
         return branch32(cond, addressTempRegister, right16);
+    }
+
+private:
+    template<typename T>
+    Jump branch64Impl(RelationalCondition cond, RegisterID leftHi, RegisterID leftLo, T rightHi, T rightLo)
+    {
+        if (cond == Equal) {
+            // Equal: bne done; cmp lo; beq target; done:
+            compare32AndSetFlags(leftHi, rightHi);
+            Jump done = makeBranch(ARMv7Assembler::ConditionNE);
+            compare32AndSetFlags(leftLo, rightLo);
+            Jump result = makeBranch(ARMv7Assembler::ConditionEQ);
+            done.link(this);
+            return result;
+        }
+
+        if (cond == NotEqual) {
+            // NotEqual: branch taken if ANY part differs
+            compare32AndSetFlags(leftHi, rightHi);
+            Jump fromHi = makeBranch(ARMv7Assembler::ConditionNE);
+            compare32AndSetFlags(leftLo, rightLo);
+            Jump fromLo = makeBranch(ARMv7Assembler::ConditionNE);
+            Jump notTaken = jump();
+            fromHi.link(this);
+            fromLo.link(this);
+            Jump result = jump();
+            notTaken.link(this);
+            return result;
+        }
+
+        ARMv7Assembler::Condition hiCond = armV7ConditionForHigh32(cond);
+        ARMv7Assembler::Condition loCond = armV7ConditionForLow32(cond);
+        ARMv7Assembler::Condition inverseLoCond = ARMv7Assembler::invert(loCond);
+        compare32AndSetFlags(leftHi, rightHi);
+        Jump fromHi = makeBranch(hiCond);
+        Jump notTakenHi = makeBranch(ARMv7Assembler::ConditionNE);
+        compare32AndSetFlags(leftLo, rightLo);
+        Jump notTakenLo = makeBranch(inverseLoCond);
+        fromHi.link(this);
+        Jump result = jump();
+        notTakenHi.link(this);
+        notTakenLo.link(this);
+        return result;
+    }
+
+public:
+    Jump branch64(RelationalCondition cond, RegisterID leftHi, RegisterID leftLo, RegisterID rightHi, RegisterID rightLo)
+    {
+        return branch64Impl(cond, leftHi, leftLo, rightHi, rightLo);
+    }
+
+    Jump branch64(RelationalCondition cond, RegisterID leftHi, RegisterID leftLo, TrustedImm64 right)
+    {
+        TrustedImm32 rightHi(static_cast<int32_t>(right.m_value >> 32));
+        TrustedImm32 rightLo(static_cast<int32_t>(right.m_value));
+
+        // Optimize for comparing with zero (unsigned comparisons only)
+        if (!rightHi.m_value && !rightLo.m_value) {
+            if (cond == Below)
+                return Jump(); // no unsigned value is < 0
+            if (cond == AboveOrEqual)
+                return jump(); // all unsigned values are >= 0
+
+            if (cond == Equal || cond == BelowOrEqual || cond == NotEqual || cond == Above) {
+                RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
+                m_assembler.orr_S(scratch, leftHi, leftLo);
+                return Jump(makeBranch((cond == Equal || cond == BelowOrEqual) ? ARMv7Assembler::ConditionEQ : ARMv7Assembler::ConditionNE));
+            }
+        }
+
+        return branch64Impl(cond, leftHi, leftLo, rightHi, rightLo);
+    }
+
+    Jump branchTest64(ResultCondition cond, RegisterID regHi, RegisterID regLo)
+    {
+        if (cond == Signed || cond == PositiveOrZero) {
+            // For sign tests, only check the sign bit of the high 32 bits
+            m_assembler.tst(regHi, regHi);
+            return Jump(makeBranch((cond == Signed) ? ARMv7Assembler::ConditionMI : ARMv7Assembler::ConditionPL));
+        }
+
+        ASSERT(cond == Zero || cond == NonZero);
+        RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
+        m_assembler.orr_S(scratch, regHi, regLo);
+        return Jump(makeBranch(cond == Zero ? ARMv7Assembler::ConditionEQ : ARMv7Assembler::ConditionNE));
     }
 
     Jump branchTest32(ResultCondition cond, RegisterID reg, RegisterID mask)

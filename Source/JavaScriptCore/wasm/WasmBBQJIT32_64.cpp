@@ -3142,46 +3142,6 @@ PartialResult WARN_UNUSED_RETURN BBQJIT::addRethrow(unsigned, ControlType& data)
     return { };
 }
 
-BBQJIT::BranchFoldResult BBQJIT::tryFoldFusedBranchCompare(OpType, ExpressionType)
-{
-    RELEASE_ASSERT_NOT_REACHED();
-}
-
-BBQJIT::Jump BBQJIT::emitFusedBranchCompareBranch(OpType, ExpressionType, Location)
-{
-    RELEASE_ASSERT_NOT_REACHED();
-}
-
-BBQJIT::BranchFoldResult BBQJIT::tryFoldFusedBranchCompare(OpType, ExpressionType, ExpressionType)
-{
-    RELEASE_ASSERT_NOT_REACHED();
-}
-
-BBQJIT::Jump BBQJIT::emitFusedBranchCompareBranch(OpType, ExpressionType, Location, ExpressionType, Location)
-{
-    RELEASE_ASSERT_NOT_REACHED();
-}
-
-PartialResult BBQJIT::addFusedBranchCompare(OpType, ControlType&, ExpressionType, Stack&)
-{
-    RELEASE_ASSERT_NOT_REACHED();
-}
-
-PartialResult BBQJIT::addFusedBranchCompare(OpType, ControlType&, ExpressionType, ExpressionType, Stack&)
-{
-    RELEASE_ASSERT_NOT_REACHED();
-}
-
-PartialResult BBQJIT::addFusedIfCompare(OpType, ExpressionType, BlockSignature, Stack&, ControlType&, Stack&)
-{
-    RELEASE_ASSERT_NOT_REACHED();
-}
-
-PartialResult BBQJIT::addFusedIfCompare(OpType, ExpressionType, ExpressionType, BlockSignature, Stack&, ControlType&, Stack&)
-{
-    RELEASE_ASSERT_NOT_REACHED();
-}
-
 PartialResult WARN_UNUSED_RETURN BBQJIT::addBranchNull(ControlData& data, ExpressionType reference, Stack& returnValues, bool shouldNegate, ExpressionType& result)
 {
     if (reference.isConst() && (reference.asRef() == JSValue::encode(jsNull())) == shouldNegate) {

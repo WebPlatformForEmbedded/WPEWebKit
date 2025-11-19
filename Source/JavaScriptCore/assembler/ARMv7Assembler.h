@@ -417,6 +417,11 @@ public:
         ConditionInvalid
     } Condition;
 
+    static Condition invert(Condition cond)
+    {
+        return static_cast<Condition>(cond ^ 1);
+    }
+
 #define JUMP_ENUM_WITH_SIZE(index, value) (((value) << 3) | (index))
 #define JUMP_ENUM_SIZE(jump) ((jump) >> 3) 
     enum JumpType { JumpFixed = JUMP_ENUM_WITH_SIZE(0, 0), 
