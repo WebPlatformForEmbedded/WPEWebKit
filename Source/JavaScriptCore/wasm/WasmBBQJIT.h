@@ -861,8 +861,8 @@ private:
 #define LOG_DEDENT() do { if (UNLIKELY(Options::verboseBBQJITInstructions())) { m_loggingIndent -= 2; } } while (false);
 
 public:
-    // FIXME: Support fused branch compare on 32-bit platforms.
-    static constexpr bool shouldFuseBranchCompare = is64Bit();
+    // Enable fused branch compare for all platforms
+    static constexpr bool shouldFuseBranchCompare = true;
 
     static constexpr bool tierSupportsSIMD = true;
     static constexpr bool validateFunctionBodySize = true;
