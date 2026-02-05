@@ -430,8 +430,10 @@ public:
 
     void videoFrameAvailable(VideoFrame& videoFrame, VideoFrameTimeMetadata) final
     {
-        if (!m_parent || !m_isObserving)
+        if (!m_parent || !m_isObserving) {
+            GST_WARNING("returning without videoFrameAvailable as m_isObserving=%c m_parent=%c",m_isObserving?'y':'n', m_parent?'y':'n');
             return;
+        }
 
         updateFirstVideoSampleSeenFlag();
 
@@ -656,8 +658,10 @@ enum {
 void InternalSource::updateFirstVideoSampleSeenFlag()
 {
     WebKitMediaStreamSrc *src = WEBKIT_MEDIA_STREAM_SRC_CAST(m_parent);
-    if (src->priv->firstVideoSampleSeen == FALSE)
+    if (src->priv->firstVideoSampleSeen == FALSE) {
         src->priv->firstVideoSampleSeen = TRUE;
+        GST_DEBUG_OBJECT(src, "firstVideoSampleSeen set to TRUE");
+    }
 }
 
 bool InternalSource::receivedAudioSampleBeforeVideo()

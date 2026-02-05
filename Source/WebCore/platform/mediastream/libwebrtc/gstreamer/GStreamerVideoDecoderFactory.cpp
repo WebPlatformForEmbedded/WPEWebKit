@@ -34,6 +34,9 @@
 #include <gst/app/gstappsink.h>
 #include <gst/app/gstappsrc.h>
 #include <gst/video/video.h>
+#include <algorithm>
+#include <atomic>
+#include <cstdlib>
 #include <mutex>
 #include <wtf/Lock.h>
 #include <wtf/StdMap.h>
@@ -45,14 +48,16 @@ GST_DEBUG_CATEGORY(webkit_webrtcdec_debug);
 
 namespace WebCore {
 
-static Seconds keyFrameRequestInterval() {
-    static Seconds interval { 10.0 };
+static double keyFrameRequestIntervalSeconds()
+{
+    static double interval { 10.0 };
     static std::once_flag once;
     std::call_once(once, []() {
-        StringView env = StringView::fromLatin1(std::getenv("WEBKIT_WEBRTC_KEY_REQUEST_INTERVAL"));
-        if (!env.isEmpty()) {
-            size_t parsedLength;
-            interval = Seconds { std::max(1.0, parseDouble(env, parsedLength)) };
+        if (const char* env = std::getenv("WEBKIT_WEBRTC_KEY_REQUEST_INTERVAL")) {
+            char* end { nullptr };
+            double value = std::strtod(env, &end);
+            if (end != env && value > 0.0)
+                interval = std::max(1.0, value);
         }
     });
     return interval;
@@ -180,6 +185,8 @@ public:
             return WEBRTC_VIDEO_CODEC_ERROR;
         }
 
+        captureStreamOnErrorProbe();
+
         return true;
     }
 
@@ -198,6 +205,7 @@ public:
     int32_t Release() final
     {
         if (m_pipeline) {
+            removeCaptureStreamOnErrorProbe();
             disconnectSimpleBusMessageCallback(m_pipeline.get());
             auto bus = adoptGRef(gst_pipeline_get_bus(GST_PIPELINE(m_pipeline.get())));
             gst_bus_set_sync_handler(bus.get(), nullptr, nullptr, nullptr);
@@ -217,6 +225,7 @@ public:
                 GST_ERROR("Waiting for keyframe but got a delta unit... asking for keyframe");
                 return WEBRTC_VIDEO_CODEC_ERROR;
             }
+            GST_WARNING("SERXIONE-8283 in Decode :: frameType is keyframe? %c",inputImage._frameType == webrtc::VideoFrameType::kVideoFrameKey?'y':'n' );
             m_needsKeyframe = false;
         }
 
@@ -233,11 +242,11 @@ public:
             ASSERT_NOT_REACHED();
             return WEBRTC_VIDEO_CODEC_UNINITIALIZED;
         }
-
         if (inputImage._frameType == webrtc::VideoFrameType::kVideoFrameKey) {
-            GST_DEBUG_OBJECT(pipeline(), "Got a video key frame after %.2f seconds", g_timer_elapsed(m_keyFrameRequestTimer.get(), nullptr));
+            GST_DEBUG_OBJECT(pipeline(), "SERXIONE-8283 Got a video key frame after %.2f seconds", g_timer_elapsed(m_keyFrameRequestTimer.get(), nullptr));
             g_timer_reset(m_keyFrameRequestTimer.get());
         }
+
         // FIXME: Use a GstBufferPool.
         GST_TRACE_OBJECT(pipeline(), "Pushing encoded image with RTP timestamp %u", inputImage.RtpTimestamp());
         auto buffer = adoptGRef(gstBufferNewWrappedFast(fastMemDup(inputImage.data(), inputImage.size()), inputImage.size()));
@@ -270,12 +279,50 @@ public:
         auto frame = convertGStreamerSampleToLibWebRTCVideoFrame(WTFMove(sample), meta->timestamp);
         GST_TRACE_OBJECT(pipeline(), "Pulled video frame with RTP timestamp %u from %" GST_PTR_FORMAT, static_cast<uint32_t>(meta->timestamp), buffer);
         m_imageReadyCb->Decoded(frame);
-        if (g_timer_elapsed(m_keyFrameRequestTimer.get(), nullptr) > keyFrameRequestInterval().value()) {
-            GST_DEBUG_OBJECT(pipeline(), "requesting one keyframe after %.2f seconds, .", g_timer_elapsed(m_keyFrameRequestTimer.get(), nullptr));
+
+        if (g_timer_elapsed(m_keyFrameRequestTimer.get(), nullptr) > keyFrameRequestIntervalSeconds()) {
+            bool hadDecodeErrors = m_hadCaptureStreamOnError.exchange(false, std::memory_order_relaxed);
+            WTFLogAlways("SERXIONE-8283 10s decode-error check: hadDecodeErrors=%d after %.2f seconds",
+                hadDecodeErrors, g_timer_elapsed(m_keyFrameRequestTimer.get(), nullptr));
             g_timer_reset(m_keyFrameRequestTimer.get());
-            return WEBRTC_VIDEO_CODEC_OK_REQUEST_KEYFRAME;
+            if (hadDecodeErrors) {
+                WTFLogAlways("SERXIONE-8283 Requesting one keyframe due to capture_stream_on_error");
+                return WEBRTC_VIDEO_CODEC_OK_REQUEST_KEYFRAME;
+            }
         }
         return WEBRTC_VIDEO_CODEC_OK;
+    }
+
+    void captureStreamOnErrorProbe()
+    {
+        // Prefer receiving decode errors directly from the video sink (when it exposes a decode-error signal),
+        // similar to: g_signal_connect(video_sink, "decode-error", ...)
+        if (!m_decodeErrorHandlerId && m_sink) {
+            const char* signalName = nullptr;
+            if (g_signal_lookup("decode-error-callback", G_OBJECT_TYPE(m_sink)))
+                signalName = "decode-error-callback";
+            else if (g_signal_lookup("decode-error", G_OBJECT_TYPE(m_sink)))
+                signalName = "decode-error";
+            else if (g_signal_lookup("decode_error", G_OBJECT_TYPE(m_sink)))
+                signalName = "decode_error";
+
+            if (signalName) {
+                m_decodeErrorHandlerId = g_signal_connect(m_sink, signalName,
+                    G_CALLBACK(decode_error_callback_cb),
+                    this);
+                return;
+            }
+        }
+
+    }
+
+    void removeCaptureStreamOnErrorProbe()
+    {
+        if (m_sink && m_decodeErrorHandlerId) {
+            g_signal_handler_disconnect(m_sink, m_decodeErrorHandlerId);
+            m_decodeErrorHandlerId = 0;
+        }
+
     }
 
     virtual void updateCapsFromImageSize(int width, int height)
@@ -331,7 +378,18 @@ private:
     webrtc::DecodedImageCallback* m_imageReadyCb;
 
     GRefPtr<GstCaps> m_rtpTimestampCaps;
+
     GUniquePtr<GTimer> m_keyFrameRequestTimer;
+    std::atomic<bool> m_hadCaptureStreamOnError { false };
+    gulong m_decodeErrorHandlerId { 0 };
+
+    static void decode_error_callback_cb(GstElement* object, guint arg0, gpointer arg1, gpointer userData)
+    {
+        auto* decoder = static_cast<GStreamerWebRTCVideoDecoder*>(userData);
+        const char* sinkName = object ? GST_ELEMENT_NAME(object) : "(null)";
+        GST_WARNING_OBJECT(decoder->pipeline(), "SERXIONE-8283 decode_error_callback_cb fired (sink=%s arg0=%u arg1=%p)", sinkName, arg0, arg1);
+        decoder->m_hadCaptureStreamOnError.store(true, std::memory_order_relaxed);
+    }
 };
 
 class H264Decoder : public GStreamerWebRTCVideoDecoder {
