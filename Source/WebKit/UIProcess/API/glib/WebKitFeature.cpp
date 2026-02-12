@@ -431,3 +431,27 @@ WebKitFeature* webkit_feature_list_get(WebKitFeatureList* featureList, gsize ind
     g_return_val_if_fail(index < featureList->items.size(), nullptr);
     return featureList->items[index];
 }
+
+/**
+ * webkit_feature_list_find:
+ * @feature_list: a #WebKitFeatureList
+ * @identifier: a #WebKitFeature identifier
+ *
+ * Finds a feature given its identifier.
+ *
+ * Returns: (transfer none) (nullable): The feature with the given
+ *     @identifier, or @NULL if it cannot be found.
+ *
+ * Since: 2.54
+ */
+WebKitFeature* webkit_feature_list_find(WebKitFeatureList* featureList, const char* identifier)
+{
+    g_return_val_if_fail(featureList, nullptr);
+    g_return_val_if_fail(identifier, nullptr);
+
+    auto it = std::ranges::find_if(featureList->items, [identifier](WebKitFeature* feature) -> bool {
+        return !g_ascii_strcasecmp(identifier, webkit_feature_get_identifier(feature));
+    });
+
+    return (it != featureList->items.end()) ? *it : nullptr;
+}

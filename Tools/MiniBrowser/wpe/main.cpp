@@ -373,16 +373,6 @@ static void automationStartedCallback(WebKitWebContext*, WebKitAutomationSession
     g_signal_connect(session, "create-web-view", G_CALLBACK(createWebViewForAutomationCallback), view);
 }
 
-static WebKitFeature* findFeature(WebKitFeatureList* featureList, const char* identifier)
-{
-    for (gsize i = 0; i < webkit_feature_list_get_length(featureList); i++) {
-        WebKitFeature* feature = webkit_feature_list_get(featureList, i);
-        if (!g_ascii_strcasecmp(identifier, webkit_feature_get_identifier(feature)))
-            return feature;
-    }
-    return nullptr;
-}
-
 static void activate(GApplication* application, WPEToolingBackends::ViewBackend* backend)
 {
     g_application_hold(application);
@@ -507,7 +497,7 @@ static void activate(GApplication* application, WPEToolingBackends::ViewBackend*
                 continue;
             }
 
-            if (auto* feature = findFeature(features, item))
+            if (auto* feature = webkit_feature_list_find(features, item))
                 webkit_settings_set_feature_enabled(settings, feature, enabled);
             else
                 g_printerr("Feature '%s' is not available.", item);

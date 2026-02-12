@@ -257,16 +257,6 @@ static gboolean isValidParameterType(GType gParamType)
             || gParamType == G_TYPE_FLOAT);
 }
 
-static WebKitFeature* findFeature(WebKitFeatureList *featureList, const char *identifier)
-{
-    for (gsize i = 0; i < webkit_feature_list_get_length(featureList); i++) {
-        WebKitFeature *feature = webkit_feature_list_get(featureList, i);
-        if (!g_ascii_strcasecmp(identifier, webkit_feature_get_identifier(feature)))
-            return feature;
-    }
-    return NULL;
-}
-
 static gboolean parseFeaturesOptionCallback(const gchar *option, const gchar *value, WebKitSettings *webSettings, GError **error)
 {
     g_autoptr(WebKitFeatureList) featureList = webkit_settings_get_all_features();
@@ -311,7 +301,7 @@ static gboolean parseFeaturesOptionCallback(const gchar *option, const gchar *va
             return FALSE;
         }
 
-        WebKitFeature *feature = findFeature(featureList, item);
+        WebKitFeature *feature = webkit_feature_list_find(featureList, item);
         if (!feature) {
             g_set_error(error, G_OPTION_ERROR, G_OPTION_ERROR_FAILED, "Feature '%s' is not available", item);
             return FALSE;
