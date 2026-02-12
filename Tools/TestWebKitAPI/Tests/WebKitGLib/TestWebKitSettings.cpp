@@ -493,6 +493,22 @@ void testWebKitFeatures(Test* test, gconstpointer)
 
         g_assert(webkit_settings_get_feature_enabled(settings.get(), feature) == webkit_feature_get_default_value(feature));
     }
+
+    // Check finding features given their identifier.
+    if (webkit_feature_list_get_length(allFeatures)) {
+        WebKitFeature* firstFeature = webkit_feature_list_get(allFeatures, 0);
+        WebKitFeature* foundFeature = webkit_feature_list_find(allFeatures, webkit_feature_get_identifier(firstFeature));
+        g_assert_nonnull(foundFeature);
+        g_assert(firstFeature == foundFeature);
+
+        g_autofree char* lowerCaseIdentifier = g_utf8_strdown(webkit_feature_get_identifier(firstFeature), -1);
+        foundFeature = webkit_feature_list_find(allFeatures, lowerCaseIdentifier);
+        g_assert_nonnull(foundFeature);
+        g_assert(firstFeature == foundFeature);
+    }
+
+    WebKitFeature* foundFeature = webkit_feature_list_find(allFeatures, "ThisFeatureIdentifierCannotPossiblyExist");
+    g_assert_null(foundFeature);
 }
 
 void testWebKitSettingsApplyFromConfigFile(Test* test, gconstpointer)
