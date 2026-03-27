@@ -78,7 +78,9 @@
 #endif
 
 #include <cstring>
+#include <fnmatch.h>
 #include <glib.h>
+#include <gst/app/gstappsrc.h>
 #include <gst/audio/streamvolume.h>
 #include <gst/gst.h>
 #include <gst/pbutils/missing-plugins.h>
@@ -3059,6 +3061,129 @@ void MediaPlayerPrivateGStreamer::setPlaybackFlags(bool isMediaStream)
     }
 }
 
+static const char* gst_state_to_string(GstState s) {
+    switch (s) {
+    case GST_STATE_NULL: return "NULL";
+    case GST_STATE_READY: return "READY";
+    case GST_STATE_PAUSED: return "PAUSED";
+    case GST_STATE_PLAYING: return "PLAYING";
+    case GST_STATE_VOID_PENDING: return "VOID";
+    default: return "(UNKNONW)";
+    }
+}
+
+// debugProbeId refers to an index in the debugProbeIds array.
+// dumpPipeline, if not null, must contain an "appsrc name=dumpsrc" element.
+static void installOrUninstallProbeIfNeeded(MediaPlayerPrivateGStreamer* player, const char* elementNamePattern, const char* padName, GstState installState, uint debugProbeId, GstMessage* message, const char* dumpPipeline = nullptr)
+{
+    typedef MediaPlayerPrivateGStreamer::DebugProbeContext DebugProbeContext;
+
+    if (GST_MESSAGE_TYPE(message) == GST_MESSAGE_STATE_CHANGED
+        && !fnmatch(elementNamePattern, GST_MESSAGE_SRC_NAME(message), 0)) {
+        uint& id = player->debugProbeContexts[debugProbeId].id;
+        gulong& probeId = player->debugProbeContexts[debugProbeId].probeId;
+        GstElement* element = GST_ELEMENT(GST_MESSAGE_SRC(message));
+        const gchar* elementName = GST_ELEMENT_NAME(element);
+        GstState currentState, newState;
+
+        gst_message_parse_state_changed(message, &currentState, &newState, nullptr);
+
+        if (currentState == static_cast<GstState>(installState-1) && newState == installState) {
+            // Probe already installed, bailing out.
+            if (probeId)
+                return;
+
+            id = debugProbeId;
+
+            GRefPtr<GstPad> pad = adoptGRef(gst_element_get_static_pad(element, padName));
+            if (!pad) {
+                GST_WARNING("[DUMPERPROBE][%u] No pad! %s:%s", id, elementName, padName);
+                return;
+            }
+
+            GRefPtr<GstCaps> caps = adoptGRef(gst_pad_get_current_caps(pad.get()));
+            GUniquePtr<gchar> strcaps(gst_caps_to_string(caps.get()));
+            const gchar* padName = GST_PAD_NAME(pad.get());
+            GST_DEBUG("[DUMPERPROBE][%u] %s --> %s Adding probe to pad %s:%s: (caps) %s", id,
+                gst_state_to_string(currentState), gst_state_to_string(newState),
+                elementName, padName, strcaps.get());
+            if (dumpPipeline) {
+                GRefPtr<GstElement>& pipeline = player->debugProbeContexts[id].pipeline;
+                GRefPtr<GstElement>& src = player->debugProbeContexts[id].src;
+                
+                pipeline = adoptGRef(GST_ELEMENT(gst_object_ref_sink(gst_parse_launch(dumpPipeline, nullptr))));
+                if (!pipeline) {
+                    GST_ERROR("[DUMPERPROBE][%u] Error creating pipeline: %s", id, dumpPipeline);
+                    return;
+                }
+
+                src = adoptGRef(GST_ELEMENT(gst_bin_get_by_name(GST_BIN(pipeline.get()), "dumpsrc")));
+                if (!src || !GST_IS_APP_SRC(src.get())) {
+                    GST_ERROR("[DUMPERPROBE][%u] Error, there must be an appsrc name=\"dumpsrc\" element in pipeline: %s", id, dumpPipeline);
+                    return;
+                }
+
+                GST_DEBUG("[DUMPERPROBE][%u] Dumping data to pipeline: %s", id, dumpPipeline);
+
+                gst_element_set_state(pipeline.get(), GST_STATE_PLAYING);
+                g_timeout_add(2000, [] (gpointer userData) -> gboolean {
+                    DebugProbeContext& ctx = *static_cast<DebugProbeContext*>(userData);
+                    if (!ctx.pipeline)
+                        return G_SOURCE_REMOVE;
+
+                    auto dotFileName = makeString(GST_OBJECT_NAME(ctx.pipeline.get()), "_", ctx.id);
+                    GST_DEBUG("[DUMPERPROBE][%u] dumpPipeline graph saved to %s", ctx.id, dotFileName.utf8().data());
+                    GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS(GST_BIN_CAST(ctx.pipeline.get()), GST_DEBUG_GRAPH_SHOW_ALL, dotFileName.utf8().data());
+                    return G_SOURCE_REMOVE;
+                }, &player->debugProbeContexts[id]);
+            }
+            probeId = gst_pad_add_probe(pad.get(), GST_PAD_PROBE_TYPE_BUFFER,
+                [] (GstPad* pad, GstPadProbeInfo* info, gpointer userData) -> GstPadProbeReturn {
+                    GstBuffer *buffer = GST_BUFFER(info->data);
+                    const gchar* padName = GST_PAD_NAME(pad);
+                    const gchar* elementName = GST_ELEMENT_NAME(GST_PAD_PARENT(pad));
+                    DebugProbeContext& ctx = *static_cast<DebugProbeContext*>(userData);
+                    GST_DEBUG("[DUMPERPROBE][%u] %s:%s: PTS=%" GST_TIME_FORMAT ", DUR=%" GST_TIME_FORMAT,
+                        ctx.id, elementName, padName, GST_TIME_ARGS(GST_BUFFER_PTS(buffer)), GST_TIME_ARGS(GST_BUFFER_DURATION(buffer)));
+
+                    if (ctx.src) {
+                        GRefPtr<GstCaps> currentCaps = adoptGRef(gst_pad_get_current_caps(pad));
+                        GST_DEBUG("[DUMPERPROBE][%u] Pushing sample with caps: %" GST_PTR_FORMAT, ctx.id, currentCaps.get());
+                        gst_app_src_set_caps(GST_APP_SRC(ctx.src.get()), currentCaps.get());
+                        gst_app_src_push_buffer(GST_APP_SRC(ctx.src.get()), gst_buffer_copy(buffer));
+                    }
+
+                    return GST_PAD_PROBE_OK;
+                }, &player->debugProbeContexts[debugProbeId], nullptr);
+        } else if (currentState == static_cast<GstState>(installState) && newState == installState-1) {
+            GRefPtr<GstPad> pad = adoptGRef(gst_element_get_static_pad(element, padName));
+            if (pad && probeId) {
+                const gchar* padName = GST_PAD_NAME(pad.get());
+                auto &dumpsrc = player->debugProbeContexts[id].src;
+                if (dumpsrc) {
+                    GST_DEBUG("[DUMPERPROBE][%u] Signaling EOS to dumper pipeline", id);
+                    gst_app_src_end_of_stream(GST_APP_SRC(dumpsrc.get()));
+                }
+
+                // We leak the pipeline here, since it's still running and I'm too lazy to wait until EOS is processed ¯\_ (ツ)_/¯
+                auto& pipeline = player->debugProbeContexts[id].pipeline;
+                if (pipeline) {
+                    g_object_ref(pipeline.get());
+                    pipeline.clear();
+                }
+
+                GST_DEBUG("[DUMPERPROBE][%u] %s --> %s Removing probe from pad %s:%s", id,
+                    gst_state_to_string(currentState), gst_state_to_string(newState),
+                    elementName, padName);
+                gst_pad_remove_probe(pad.get(), probeId);
+                probeId = 0;
+
+                // Leave id as it is, since it may be needed by g_idle_add() code even after the probe is detached.
+            }
+        }
+    }
+}
+
 void MediaPlayerPrivateGStreamer::createGSTPlayBin(const URL& url)
 {
     GST_INFO("Creating pipeline for %s player", m_player->isVideoPlayer() ? "video" : "audio");
@@ -3113,6 +3238,38 @@ void MediaPlayerPrivateGStreamer::createGSTPlayBin(const URL& url)
     // later than "updateend".
     g_signal_connect_swapped(bus.get(), "sync-message::stream-collection", G_CALLBACK(+[](MediaPlayerPrivateGStreamer* player, GstMessage* message) {
         player->handleStreamCollectionMessage(message);
+    }), this);
+
+    g_signal_connect_swapped(bus.get(), "sync-message::state-changed", G_CALLBACK(+[](MediaPlayerPrivateGStreamer* player, GstMessage* message) {
+        // Enable this when needed.
+        bool printStateChanges = false;
+
+        if (printStateChanges && GST_MESSAGE_TYPE(message) == GST_MESSAGE_STATE_CHANGED) {
+            GstState currentState;
+            GstState newState;
+            GstState pendingState;
+            gst_message_parse_state_changed(message, &currentState, &newState, &pendingState);
+            printf("!!! %s: %s --> %s (%s pending)\n", GST_MESSAGE_SRC_NAME(message), gst_state_to_string(currentState), gst_state_to_string(newState), gst_state_to_string(pendingState)); fflush(stdout);
+        }
+
+        uint debugProbeId = 0;
+
+        // Place more installOrUninstallProbeIfNeeded() calls here. Wildcards can be used to match element names.
+/*
+        installOrUninstallProbeIfNeeded(player, "brcmvidfilter*", "brcm-vidfilter-sink",
+            GST_STATE_PAUSED, debugProbeId++, message,
+            "appsrc name=dumpsrc ! filesink name=dumpsink location=/tmp/webrtc.h264");
+*/
+
+/*
+        installOrUninstallProbeIfNeeded(player, "brcmvidfilter*", "brcm-vidfilter-sink",
+            GST_STATE_PAUSED, debugProbeId++, message,
+            "appsrc name=dumpsrc ! brcmvidfilter ! queue ! westerossink");
+
+        installOrUninstallProbeIfNeeded(player, "parsebin1", "sink", GST_STATE_PAUSED, debugProbeId++, message, nullptr);
+        installOrUninstallProbeIfNeeded(player, "WesterosVideoSink", "sink", GST_STATE_PAUSED, debugProbeId++, message, nullptr);
+        installOrUninstallProbeIfNeeded(player, "*brcmaudio", "sink", GST_STATE_PAUSED, debugProbeId++, message, nullptr);
+*/
     }), this);
 
     g_object_set(m_pipeline.get(), "mute", static_cast<gboolean>(m_player->muted()), nullptr);

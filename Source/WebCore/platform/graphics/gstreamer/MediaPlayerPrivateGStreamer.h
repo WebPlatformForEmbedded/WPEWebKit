@@ -718,6 +718,16 @@ private:
 
     RefPtr<GStreamerQuirksManager> m_quirksManagerForTesting;
     HashMap<const GStreamerQuirk*, std::unique_ptr<GStreamerQuirkBase::GStreamerQuirkState>> m_quirkStates;
+
+public:
+    struct DebugProbeContext {
+        uint id = { 0 };
+        gulong probeId = { 0 };
+        GRefPtr<GstElement> pipeline;
+        GRefPtr<GstElement> src;
+    };
+    DebugProbeContext debugProbeContexts[10] = { };
+
 };
 
 }
