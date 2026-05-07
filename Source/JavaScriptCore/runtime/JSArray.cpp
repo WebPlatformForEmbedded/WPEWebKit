@@ -64,6 +64,7 @@ JSArray* JSArray::tryCreateUninitializedRestricted(ObjectInitializationScope& sc
             deferralContext, AllocationFailureMode::ReturnNull);
         if (UNLIKELY(!temp))
             return nullptr;
+        vm.heap.incrementDeferralDepth();
         butterfly = Butterfly::fromBase(temp, 0, outOfLineStorage);
         butterfly->setVectorLength(vectorLength);
         butterfly->setPublicLength(initialLength);
@@ -86,6 +87,7 @@ JSArray* JSArray::tryCreateUninitializedRestricted(ObjectInitializationScope& sc
             deferralContext, AllocationFailureMode::ReturnNull);
         if (UNLIKELY(!temp))
             return nullptr;
+        vm.heap.incrementDeferralDepth();
         butterfly = Butterfly::fromBase(temp, indexBias, outOfLineStorage);
         *butterfly->indexingHeader() = indexingHeaderForArrayStorage(initialLength, vectorLength);
         ArrayStorage* storage = butterfly->arrayStorage();
@@ -99,6 +101,7 @@ JSArray* JSArray::tryCreateUninitializedRestricted(ObjectInitializationScope& sc
     JSArray* result = createWithButterfly(vm, deferralContext, structure, butterfly);
 
     scope.notifyAllocated(result);
+    vm.heap.decrementDeferralDepth();
     return result;
 }
 
