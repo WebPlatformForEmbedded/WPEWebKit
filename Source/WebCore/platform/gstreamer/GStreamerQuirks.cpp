@@ -201,6 +201,14 @@ bool GStreamerQuirksManager::sinksRequireClockSynchronization() const
     return m_holePunchQuirk->requiresClockSynchronization();
 }
 
+std::optional<VideoFrameMetadata> GStreamerQuirksManager::videoFrameMetadata(GRefPtr<GstElement> videoSink, uint64_t& lastVideoFrameMetadataSampleCount)
+{
+    if (!m_holePunchQuirk)
+        return { };
+
+    return m_holePunchQuirk->videoFrameMetadata(videoSink, lastVideoFrameMetadataSampleCount);
+}
+
 void GStreamerQuirksManager::configureElement(GstElement* element, OptionSet<ElementRuntimeCharacteristics>&& characteristics)
 {
     GST_DEBUG("Configuring element %" GST_PTR_FORMAT, element);

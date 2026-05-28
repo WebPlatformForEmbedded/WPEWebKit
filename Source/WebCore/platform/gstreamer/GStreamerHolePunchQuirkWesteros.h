@@ -33,6 +33,7 @@ public:
     GstElement* createHolePunchVideoSink(bool, const MediaPlayer*) final;
     bool setHolePunchVideoRectangle(GstElement*, const IntRect&) final;
     bool requiresClockSynchronization() const final { return false; }
+    std::optional<VideoFrameMetadata> videoFrameMetadata(GRefPtr<GstElement>, uint64_t&) final;
 };
 
 } // namespace WebCore

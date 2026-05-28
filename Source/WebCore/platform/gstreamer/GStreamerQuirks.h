@@ -24,6 +24,7 @@
 
 #include "GStreamerCommon.h"
 #include "MediaPlayer.h"
+#include "VideoFrameMetadata.h"
 #include <wtf/Forward.h>
 #include <wtf/Noncopyable.h>
 #include <wtf/Nonmovable.h>
@@ -116,6 +117,7 @@ public:
     virtual GstElement* createHolePunchVideoSink(bool, const MediaPlayer*) { return nullptr; }
     virtual bool setHolePunchVideoRectangle(GstElement*, const IntRect&) { return false; }
     virtual bool requiresClockSynchronization() const { return true; }
+    virtual std::optional<VideoFrameMetadata> videoFrameMetadata(GRefPtr<GstElement>, uint64_t&) { return { }; }
 };
 
 class GStreamerQuirksManager : public RefCounted<GStreamerQuirksManager> {
@@ -143,6 +145,7 @@ public:
     GstElement* createHolePunchVideoSink(bool isLegacyPlaybin, const MediaPlayer*);
     void setHolePunchVideoRectangle(GstElement*, const IntRect&);
     bool sinksRequireClockSynchronization() const;
+    std::optional<VideoFrameMetadata> videoFrameMetadata(GRefPtr<GstElement>, uint64_t&);
 
     void setHolePunchEnabledForTesting(bool);
 

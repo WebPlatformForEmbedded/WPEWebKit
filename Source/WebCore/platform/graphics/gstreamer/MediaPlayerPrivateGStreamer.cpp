@@ -4902,6 +4902,9 @@ WTFLogChannel& MediaPlayerPrivateGStreamer::logChannel() const
 std::optional<VideoFrameMetadata> MediaPlayerPrivateGStreamer::videoFrameMetadata()
 {
     Locker sampleLocker { m_sampleMutex };
+    if (isHolePunchRenderingEnabled() && m_videoSink)
+        return GStreamerQuirksManager::singleton().videoFrameMetadata(m_videoSink, m_lastVideoFrameMetadataSampleCount);
+
     if (!GST_IS_SAMPLE(m_sample.get()))
         return { };
 

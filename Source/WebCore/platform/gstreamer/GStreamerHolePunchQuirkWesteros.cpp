@@ -61,6 +61,49 @@ bool GStreamerHolePunchQuirkWesteros::setHolePunchVideoRectangle(GstElement* vid
     return true;
 }
 
+std::optional<VideoFrameMetadata> GStreamerHolePunchQuirkWesteros::videoFrameMetadata(GRefPtr<GstElement> videoSink, uint64_t& lastVideoFrameMetadataSampleCount)
+{
+    if (UNLIKELY(!gstObjectHasProperty(videoSink.get(), "video_pts")
+        || !gstObjectHasProperty(videoSink.get(), "stats")))
+        return { };
+
+    gint64 pts90kHz = 0;
+    GstStructure* stats = nullptr;
+    gint width = 0, height = 0;
+    g_object_get(videoSink.get(),
+        "video_pts", &pts90kHz,
+        "stats",     &stats,
+        "video_width",     &width,
+        "video_height",    &height,
+        nullptr);
+
+    if (!pts90kHz || !stats)
+        return { };
+
+    guint64 rendered = 0;
+    gst_structure_get_uint64(stats, "rendered", &rendered);
+    gst_structure_free(stats);
+
+    if (rendered == lastVideoFrameMetadataSampleCount)
+        return { };
+    lastVideoFrameMetadataSampleCount = rendered;
+
+    double now = MonotonicTime::now().secondsSinceEpoch().seconds();
+
+    VideoFrameMetadata metadata;
+    // Convert 90kHz ticks to seconds
+    metadata.mediaTime = MediaTime(pts90kHz, 90000.0).toDouble();
+    metadata.width = width;
+    metadata.height = height;
+    metadata.presentedFrames = rendered;
+
+    // FIXME: presentationTime and expectedDisplayTime might not always have the same value, we should try getting more precise values.
+    metadata.presentationTime = now;
+    metadata.expectedDisplayTime = metadata.presentationTime;
+
+    return metadata;
+}
+
 #undef GST_CAT_DEFAULT
 
 } // namespace WebCore
