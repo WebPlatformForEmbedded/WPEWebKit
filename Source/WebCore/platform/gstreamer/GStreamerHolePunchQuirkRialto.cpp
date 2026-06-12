@@ -58,6 +58,55 @@ bool GStreamerHolePunchQuirkRialto::setHolePunchVideoRectangle(GstElement* video
     return true;
 }
 
+std::optional<VideoFrameMetadata> GStreamerHolePunchQuirkRialto::videoFrameMetadata(GRefPtr<GstElement> videoSink, uint64_t& lastVideoFrameMetadataSampleCount)
+{
+    if (UNLIKELY(!gstObjectHasProperty(videoSink.get(), "video_pts")
+        || !gstObjectHasProperty(videoSink.get(), "stats")))
+        return { };
+
+    gint64 pts90kHz = 0;
+    GstStructure* stats = nullptr;
+    g_object_get(videoSink.get(), "video_pts", &pts90kHz, "stats", &stats, nullptr);
+
+    if (!pts90kHz || !stats)
+        return { };
+
+    guint64 rendered = 0;
+    gst_structure_get_uint64(stats, "rendered", &rendered);
+    gst_structure_free(stats);
+
+    if (rendered == lastVideoFrameMetadataSampleCount)
+        return { };
+    lastVideoFrameMetadataSampleCount = rendered;
+
+    gint width = 0;
+    gint height = 0;
+    if (GstPad *sinkPad = gst_element_get_static_pad(GST_ELEMENT(videoSink.get()), "sink")) {
+        if (GstCaps *caps = gst_pad_get_current_caps(sinkPad)){
+            GstStructure *s = gst_caps_get_structure(caps, 0);
+            gst_structure_get_int(s, "width", &width);
+            gst_structure_get_int(s, "height", &height);
+            gst_caps_unref(caps);
+        }
+        gst_object_unref(sinkPad);
+    }
+
+    const auto now = MonotonicTime::now().secondsSinceEpoch().seconds();
+
+    VideoFrameMetadata metadata;
+    // Convert 90kHz ticks to seconds
+    metadata.mediaTime = MediaTime(pts90kHz, 90000.0).toDouble();
+    metadata.width = width;
+    metadata.height = height;
+    metadata.presentedFrames = rendered;
+
+    // FIXME: presentationTime and expectedDisplayTime might not always have the same value, we should try getting more precise values.
+    metadata.presentationTime = now;
+    metadata.expectedDisplayTime = metadata.presentationTime;
+
+    return metadata;
+}
+
 #undef GST_CAT_DEFAULT
 
 } // namespace WebCore
