@@ -41,6 +41,11 @@
 
 #include <gst/app/gstappsrc.h>
 #include <gst/base/gstflowcombiner.h>
+
+#if USE(LIBWEBRTC) && USE(GSTREAMER)
+#include <platform/mediastream/libwebrtc/gstreamer/GStreamerVideoDecoderFactory.h>
+#endif
+
 #include <wtf/UUID.h>
 #include <wtf/glib/WTFGType.h>
 
@@ -430,6 +435,33 @@ public:
 
     void videoFrameAvailable(VideoFrame& videoFrame, VideoFrameTimeMetadata) final
     {
+        auto gstVideoFrame = static_cast<VideoFrameGStreamer*>(&videoFrame);
+        GRefPtr<GstSample> sample = gstVideoFrame->sample();
+#if USE(LIBWEBRTC) && USE(GSTREAMER)
+        auto* buffer = gst_sample_get_buffer(sample.get());
+        // We're getting a pointer to a RefPtr<GStreamerVideoDecoderFactory::RenderErrorObserverInterface>
+        // here. It's a simple way to get a reference to some code that can notify the WebRTC video decoding
+        // pipeline (in cases when it's just a passthrough that provides encoded video (H.264, webm, etc.)
+        // and the real decoding is happening in the playback pipeline. No matter what happens with the
+        // buffer, we have to get ownership of that reference and free it when done, in order to avoid a leak.
+        GQuark quark = g_quark_from_string("render-error-observer");
+        auto* renderErrorObserver = (RefPtr<GStreamerVideoDecoderFactory::RenderErrorObserverInterface>*)gst_mini_object_get_qdata((GstMiniObject*)buffer, quark);
+
+        // Avoid a second taking of the RefPtr*, just in case this same buffer arrives twice to this method
+        // (maybe to other observer instance).
+        if (renderErrorObserver) {
+            GST_DEBUG_OBJECT(m_src.get(), "!!! Received RenderErrorObserver from libWebRTC GStreamerWebRTCVideoDecoder: %p, current observer: %p, != %s", renderErrorObserver->get(), m_renderErrorObserver.get(), boolForPrinting(m_renderErrorObserver != *renderErrorObserver));
+            if (m_renderErrorObserver != *renderErrorObserver) {
+                std::swap(m_renderErrorObserver, *renderErrorObserver);
+                GST_DEBUG_OBJECT(m_src.get(), "!!! Set RenderErrorObserver as: %p", m_renderErrorObserver.get());
+            }
+            // This will delete the RefPtr* using the destructor set by GStreamerWebRTCVideoDecoder when
+            // gst_mini_object_set_qdata() was called from there, as the original qdata is being overwritten here.
+            gst_mini_object_set_qdata((GstMiniObject*)buffer, quark, nullptr, nullptr);
+        }
+
+#endif
+
         if (!m_parent || !m_isObserving) {
             GST_WARNING("returning without videoFrameAvailable as m_isObserving=%c m_parent=%c",m_isObserving?'y':'n', m_parent?'y':'n');
             return;
@@ -439,9 +471,6 @@ public:
 
         auto videoFrameSize = videoFrame.presentationSize();
         IntSize captureSize(videoFrameSize.width(), videoFrameSize.height());
-
-        auto gstVideoFrame = static_cast<VideoFrameGStreamer*>(&videoFrame);
-        GRefPtr<GstSample> sample = gstVideoFrame->sample();
 
 #if USE(GSTREAMER_WEBRTC)
         // Video encoders require a multiple of two frame size. At least x264enc does anyway.
@@ -634,6 +663,7 @@ private:
     bool m_consumerIsVideoPlayer { false };
     bool m_isIncomingVideoSource { false };
     GRefPtr<GstStream> m_stream;
+    RefPtr<GStreamerVideoDecoderFactory::RenderErrorObserverInterface> m_renderErrorObserver;
 };
 
 struct _WebKitMediaStreamSrcPrivate {

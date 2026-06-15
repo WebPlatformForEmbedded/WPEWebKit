@@ -65,14 +65,49 @@ static double keyFrameRequestIntervalSeconds()
 
 class GStreamerWebRTCVideoDecoder : public webrtc::VideoDecoder {
 public:
+    class RenderErrorObserver
+        : public GStreamerVideoDecoderFactory::RenderErrorObserverInterface
+    {
+
+    public:
+        RenderErrorObserver(GStreamerWebRTCVideoDecoder* decoder)
+            : m_decoder(decoder)
+        {
+        }
+
+        virtual ~RenderErrorObserver() = default;
+
+        void onWebRTCDecoderDestroyed()
+        {
+            m_decoder = nullptr;
+        }
+
+        virtual void onRenderingError(GError* error) final
+        {
+            if (!m_decoder)
+                return;
+            m_decoder->handleError(error);
+        }
+    private:
+        GStreamerWebRTCVideoDecoder* m_decoder;
+    };
+
     GStreamerWebRTCVideoDecoder()
         : m_width(0)
         , m_height(0)
         , m_requireParse(false)
         , m_needsKeyframe(true)
+        , m_renderErrorObserver(new RenderErrorObserver(this))
     {
         m_rtpTimestampCaps = adoptGRef(gst_caps_new_empty_simple("timestamp/x-rtp"));
         m_keyFrameRequestTimer.reset(g_timer_new());
+    }
+
+    virtual ~GStreamerWebRTCVideoDecoder()
+    {
+        if (m_renderErrorObserver)
+            m_renderErrorObserver->onWebRTCDecoderDestroyed();
+        m_renderErrorObserver = nullptr;
     }
 
     static void decodebinPadAddedCb(GstElement*, GstPad* srcpad, GstPad* sinkpad)
@@ -276,6 +311,25 @@ public:
         auto buffer = gst_sample_get_buffer(sample.get());
         auto meta = gst_buffer_get_reference_timestamp_meta(buffer, m_rtpTimestampCaps.get());
         RELEASE_ASSERT(meta);
+
+        // This is increasing the refcount of m_renderErrorObserver and passig the ownership of that ref
+        // to the receiving side of the buffer, in GStreamerMediaStreamSource's InternalSource::videoFrameAvailable(),
+        // who would be responsible of its adoption and destruction.
+        if (!m_isRenderErrorObserverSent) {
+            m_isRenderErrorObserverSent = true;
+            GQuark quark = g_quark_from_string("render-error-observer");
+            auto* p = new RefPtr<GStreamerVideoDecoderFactory::RenderErrorObserverInterface>(m_renderErrorObserver);
+            gst_mini_object_set_qdata((GstMiniObject*)buffer, quark,
+                p,
+                reinterpret_cast<GDestroyNotify>(+[](RefPtr<GStreamerVideoDecoderFactory::RenderErrorObserverInterface>* renderErrorObserver) {
+                    if (!renderErrorObserver)
+                        return;
+                    GST_DEBUG("!!! Deleting RenderErrorObserver assigned to a buffer: RefPtr*: %p, observer: %p", renderErrorObserver, renderErrorObserver->get());
+                    delete renderErrorObserver;
+                }));
+            GST_DEBUG_OBJECT(pipeline(), "!!! Sent RenderErrorObserver from libWebRTC GStreamerWebRTCVideoDecoder to GStreamerMediaStreamSource's InternalSource via GstBuffer %p, Quark %zu: %p", buffer, (size_t)quark, p->get());
+        }
+
         auto frame = convertGStreamerSampleToLibWebRTCVideoFrame(WTFMove(sample), meta->timestamp);
         GST_TRACE_OBJECT(pipeline(), "Pulled video frame with RTP timestamp %u from %" GST_PTR_FORMAT, static_cast<uint32_t>(meta->timestamp), buffer);
         m_imageReadyCb->Decoded(frame);
@@ -382,6 +436,8 @@ private:
     GUniquePtr<GTimer> m_keyFrameRequestTimer;
     std::atomic<bool> m_hadCaptureStreamOnError { false };
     gulong m_decodeErrorHandlerId { 0 };
+    RefPtr<RenderErrorObserver> m_renderErrorObserver;
+    bool m_isRenderErrorObserverSent { false };
 
     static void decode_error_callback_cb(GstElement* object, guint arg0, gpointer arg1, gpointer userData)
     {

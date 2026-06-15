@@ -25,6 +25,7 @@
 #include "LibWebRTCMacros.h"
 #include "api/video_codecs/video_decoder_factory.h"
 #include <wtf/Forward.h>
+#include <wtf/ThreadSafeRefCounted.h>
 
 namespace WebCore {
 
@@ -32,6 +33,21 @@ class GStreamerVideoDecoderFactory : public webrtc::VideoDecoderFactory {
     WTF_MAKE_FAST_ALLOCATED;
 public:
     GStreamerVideoDecoderFactory(bool isSupportingVP9Profile0, bool isSupportingVP9Profile2);
+
+    // Used to report rendering errors on the playback pipeline. Useful when the decoding pipeline
+    // managed by the VideoDecoder is just a passthrough that provides encoded frames with the
+    // expectation that actual decoding happens on a playback pipeline (beyond the reach of
+    // VideoDecoder). When the data is corrupt/missing and the decoding/rendering errors happen
+    // there, we need a way to request a sync frame to WebRTC. This observer exists to report that
+    // condition, but internals of the GStreamer-specific VideoDecoder can't be exposed in this
+    // header. An actual (private) RenderErrorObserver will implement this interface and do
+    // the job wihtout exposing internals in this header.
+    class RenderErrorObserverInterface : public ThreadSafeRefCounted<RenderErrorObserverInterface>
+    {
+    public:
+        virtual void onRenderingError(GError* error) = 0;
+        virtual ~RenderErrorObserverInterface() = default;
+    };
 
 private:
     std::unique_ptr<webrtc::VideoDecoder> CreateVideoDecoder(const webrtc::SdpVideoFormat&) final;
