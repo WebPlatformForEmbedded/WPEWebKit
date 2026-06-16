@@ -3806,6 +3806,19 @@ void MediaPlayerPrivateGStreamer::invalidateCachedPositionOnNextIteration() cons
     });
 }
 
+// Used to forward video decoding errors to libWebRTC's Decoder when decoding is actually happpening
+// in the playback pipeline instead of in the Decoder.
+void MediaPlayerPrivateGStreamer::notifyVideoDecodingError() {
+    GST_DEBUG_OBJECT(pipeline(), "isMediaStreamPlayer: %s, m_source: %p", boolForPrinting(isMediaStreamPlayer()), m_source.get());
+    if (!isMediaStreamPlayer() || !m_source)
+        return;
+#if ENABLE(MEDIA_STREAM)
+    WebKitMediaStreamSrc* src = WEBKIT_MEDIA_STREAM_SRC(m_source.get());
+    GST_DEBUG_OBJECT(pipeline(), "!!! Decoding error detected, notifying WebKitMediaStreamSrc");
+    webkitMediaStreamSrcNotifyVideoDecodingError(src);
+#endif
+}
+
 void MediaPlayerPrivateGStreamer::triggerRepaint(GRefPtr<GstSample>&& sample)
 {
     ASSERT(!isMainThread());
@@ -4266,7 +4279,15 @@ GstElement* MediaPlayerPrivateGStreamer::createVideoSink()
 
     // Ensure the sink has the max-lateness property set.
     auto exit = makeScopeExit([this] {
-        if (!m_videoSink || isMediaStreamPlayer())
+        if (!m_videoSink)
+            return;
+
+        auto& quirksManager = GStreamerQuirksManager::singleton();
+
+        if (quirksManager.isEnabled())
+            quirksManager.setupDecoderVideoSinkDecodingErrorNotification(this, m_videoSink.get());
+
+        if (isMediaStreamPlayer())
             return;
 
         GstElement* sink = m_videoSink.get();

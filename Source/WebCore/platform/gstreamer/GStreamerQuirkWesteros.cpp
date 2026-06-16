@@ -24,6 +24,7 @@
 #if USE(GSTREAMER)
 
 #include "GStreamerCommon.h"
+#include "MediaPlayerPrivateGStreamer.h"
 #include <wtf/OptionSet.h>
 
 namespace WebCore {
@@ -73,6 +74,32 @@ std::optional<bool> GStreamerQuirkWesteros::isHardwareAccelerated(GstElementFact
         return true;
 
     return std::nullopt;
+}
+
+bool GStreamerQuirkWesteros::setupDecoderVideoSinkDecodingErrorNotification(MediaPlayerPrivateGStreamer* playerPrivate, GstElement* videoSink) const
+{
+    if (g_strcmp0(G_OBJECT_TYPE_NAME(G_OBJECT(videoSink)), "GstWesterosSink")) {
+        GST_WARNING("The supplied video sink isn't a GstWesterosSink");
+        return false;
+    }
+
+    if (!gstObjectHasProperty(videoSink, "report-decode-errors")) {
+        GST_WARNING("WesterosSink doesn't have a report-decode-errors property");
+        return false;
+    }
+
+    if (!g_signal_lookup("decode-error-callback", G_OBJECT_TYPE(G_OBJECT(videoSink)))) {
+        GST_WARNING("WesterosSink doesn't have a decode-error-callback signal");
+        return false;
+    }
+
+    GST_INFO("Enable 'report-decode-errors' in WesterosSink and listen to the decode-error-callback signal");
+    g_object_set(videoSink, "report-decode-errors", TRUE, nullptr);
+    g_signal_connect_swapped(videoSink, "decode-error-callback", G_CALLBACK(+[](MediaPlayerPrivateGStreamer* player) {
+        GST_INFO("!!! Decoding error detected, notifying player");
+        player->notifyVideoDecodingError();
+    }), playerPrivate);
+    return true;
 }
 
 #undef GST_CAT_DEFAULT

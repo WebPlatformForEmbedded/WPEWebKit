@@ -559,6 +559,15 @@ public:
 
     bool isEnded() const { return m_isEnded; }
 
+    void notifyVideoDecodingError()
+    {
+        if (!m_renderErrorObserver)
+            return;
+
+        GUniquePtr<GError> error(g_error_new(GST_STREAM_ERROR, GST_STREAM_ERROR_DECODE, "Playback pipeline video decoding error"));
+        m_renderErrorObserver->onRenderingError(error.get());
+    }
+
     void updateFirstVideoSampleSeenFlag();
     bool receivedAudioSampleBeforeVideo();
     GstStream* stream() const { return m_stream.get(); }
@@ -1160,6 +1169,15 @@ void webkitMediaStreamSrcSignalEndOfStream(WebKitMediaStreamSrc* self)
     for (auto& source : self->priv->sources)
         source->signalEndOfStream();
     self->priv->sources.clear();
+}
+
+void webkitMediaStreamSrcNotifyVideoDecodingError(WebKitMediaStreamSrc* self)
+{
+    for (auto& source : self->priv->sources) {
+        auto& trackSource = source->track().source();
+        if (trackSource.isIncomingVideoSource())
+            source->notifyVideoDecodingError();
+    }
 }
 
 void webkitMediaStreamSrcCharacteristicsChanged(WebKitMediaStreamSrc* self)

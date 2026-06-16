@@ -86,6 +86,7 @@ public:
     virtual int correctBufferingPercentage(MediaPlayerPrivateGStreamer*, int originalBufferingPercentage, GstBufferingMode) const { return originalBufferingPercentage; }
     virtual void resetBufferingPercentage(MediaPlayerPrivateGStreamer*, int) const { };
     virtual void setupBufferingPercentageCorrection(MediaPlayerPrivateGStreamer*, GstState, GstState, GRefPtr<GstElement>&&) const { }
+    virtual bool setupDecoderVideoSinkDecodingErrorNotification(MediaPlayerPrivateGStreamer*, GstElement*) const { return false; }
 
     // Subclass must return true if it wants to override the default behaviour of sibling platforms.
     virtual bool processWebAudioSilentBuffer(GstBuffer* buffer) const
@@ -145,6 +146,7 @@ public:
     int correctBufferingPercentage(MediaPlayerPrivateGStreamer*, int originalBufferingPercentage, GstBufferingMode) const;
     void resetBufferingPercentage(MediaPlayerPrivateGStreamer*, int bufferingPercentage) const;
     void setupBufferingPercentageCorrection(MediaPlayerPrivateGStreamer*, GstState currentState, GstState newState, GRefPtr<GstElement>&&) const;
+    void setupDecoderVideoSinkDecodingErrorNotification(MediaPlayerPrivateGStreamer*, GstElement*);
 
     void processWebAudioSilentBuffer(GstBuffer*) const;
 private:

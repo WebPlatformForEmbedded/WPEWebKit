@@ -284,6 +284,7 @@ public:
     };
     void setVideoRectangle(const IntRect& rect);
     bool shouldDownload() { return m_fillTimer.isActive(); }
+    void notifyVideoDecodingError();
 
     void setQuirkState(const GStreamerQuirk* owner, std::unique_ptr<GStreamerQuirkBase::GStreamerQuirkState>&& state)
     {

@@ -45,6 +45,7 @@ public:
     class RenderErrorObserverInterface : public ThreadSafeRefCounted<RenderErrorObserverInterface>
     {
     public:
+        // Error is transfer-none (owned by the caller).
         virtual void onRenderingError(GError* error) = 0;
         virtual ~RenderErrorObserverInterface() = default;
     };

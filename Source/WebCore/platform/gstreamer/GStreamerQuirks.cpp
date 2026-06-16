@@ -381,6 +381,15 @@ void GStreamerQuirksManager::setupBufferingPercentageCorrection(MediaPlayerPriva
     }
 }
 
+void GStreamerQuirksManager::setupDecoderVideoSinkDecodingErrorNotification(MediaPlayerPrivateGStreamer* playerPrivate, GstElement* videoSink)
+{
+    // Only the first quirk that successfully performs the setup must operate. We're assuming that the m_quirks Vector
+    // preserves its order among calls to the percentage correction family of methods.
+    for (auto& quirk : m_quirks)
+        if (quirk->setupDecoderVideoSinkDecodingErrorNotification(playerPrivate, videoSink))
+            return;
+}
+
 void GStreamerQuirksManager::processWebAudioSilentBuffer(GstBuffer* buffer) const
 {
     for (const auto& quirk : m_quirks)

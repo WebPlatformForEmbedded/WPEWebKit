@@ -34,7 +34,7 @@ public:
 
     void configureElement(GstElement*, const OptionSet<ElementRuntimeCharacteristics>&) final;
     std::optional<bool> isHardwareAccelerated(GstElementFactory*) final;
-
+    bool setupDecoderVideoSinkDecodingErrorNotification(MediaPlayerPrivateGStreamer*, GstElement*) const final;
 private:
     GRefPtr<GstCaps> m_sinkCaps;
 };
