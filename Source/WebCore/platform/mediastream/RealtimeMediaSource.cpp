@@ -241,6 +241,14 @@ void RealtimeMediaSource::videoFrameAvailable(VideoFrame& videoFrame, VideoFrame
         return;
     }
 
+    // !!! DEBUG !!! DISCARD ONE EVERY N FRAMES TO CREATE DECODING ERRORS ON PURPOSE !!!
+    static size_t count = 0;
+    count++;
+    if (count % 3 == 0) {
+        printf("!!!! %s: Dropping video frame %d to create decoding errors !!!!", __PRETTY_FUNCTION__, count); fflush(stdout);
+        return;
+    }
+
     if (!m_pendingVideoFrames.isEmpty()) {
         ALWAYS_LOG_IF(m_logger, LOGIDENTIFIER, "RealtimeMediaSource: Delivering ", m_pendingVideoFrames.size(), " queued frame(s) (observer ready)");
         for (auto& pending : m_pendingVideoFrames)
