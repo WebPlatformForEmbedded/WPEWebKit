@@ -27,6 +27,7 @@
 #include "LoadableClassicScript.h"
 
 #include "DefaultResourceLoadPriority.h"
+#include "Document.h"
 #include "Element.h"
 #include "FetchIdioms.h"
 #include "LoadableScriptError.h"
