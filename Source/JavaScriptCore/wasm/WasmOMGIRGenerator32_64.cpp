@@ -3993,7 +3993,7 @@ void OMGIRGenerator::emitRefTestOrCast(CastKind castKind, ExpressionType referen
             Value* jsType = append<MemoryValue>(heapTop(), m_proc, Load8Z, Int32, origin(), truncate(get(reference)), safeCast<int32_t>(JSCell::typeInfoTypeOffset()));
             emitCheckOrBranchForCast(castKind, append<Value>(m_proc, NotEqual, origin(), jsType, constant(Int32, JSType::WebAssemblyGCObjectType)), castFailure, falseBlock);
             Value* rtt = emitLoadRTTFromObject(truncate(get(reference)));
-            emitCheckOrBranchForCast(castKind, emitNotRTTKind(truncate(rtt), static_cast<TypeKind>(heapType) == Wasm::TypeKind::Arrayref ? RTTKind::Array : RTTKind::Struct), castFailure, falseBlock);
+            emitCheckOrBranchForCast(castKind, emitNotRTTKind(rtt, static_cast<TypeKind>(heapType) == Wasm::TypeKind::Arrayref ? RTTKind::Array : RTTKind::Struct), castFailure, falseBlock);
             break;
         }
         default:
@@ -4013,12 +4013,12 @@ void OMGIRGenerator::emitRefTestOrCast(CastKind castKind, ExpressionType referen
             Value* jsType = append<MemoryValue>(heapTop(), m_proc, Load8Z, Int32, origin(), truncate(get(reference)), safeCast<int32_t>(JSCell::typeInfoTypeOffset()));
             emitCheckOrBranchForCast(castKind, append<Value>(m_proc, NotEqual, origin(), jsType, constant(Int32, JSType::WebAssemblyGCObjectType)), castFailure, falseBlock);
             rtt = emitLoadRTTFromObject(truncate(get(reference)));
-            emitCheckOrBranchForCast(castKind, emitNotRTTKind(truncate(rtt), signature.expand().is<Wasm::ArrayType>() ? RTTKind::Array : RTTKind::Struct), castFailure, falseBlock);
+            emitCheckOrBranchForCast(castKind, emitNotRTTKind(rtt, signature.expand().is<Wasm::ArrayType>() ? RTTKind::Array : RTTKind::Struct), castFailure, falseBlock);
         }
 
         Value* targetRTT = append<ConstPtrValue>(m_proc, origin(), m_info.rtts[heapType].get());
         Value* rttsAreEqual = append<Value>(m_proc, Equal, origin(),
-            truncate(rtt), targetRTT);
+            rtt, targetRTT);
         BasicBlock* equalBlock;
         if (castKind == CastKind::Cast)
             equalBlock = continuation;
@@ -4033,7 +4033,7 @@ void OMGIRGenerator::emitRefTestOrCast(CastKind castKind, ExpressionType referen
         // FIXME: It may be worthwhile to JIT inline this in the future.
         Value* isSubRTT = append<CCallValue>(m_proc, B3::Int32, origin(),
             append<ConstPtrValue>(m_proc, origin(), tagCFunction<OperationPtrTag>(operationWasmIsSubRTT)),
-            truncate(rtt), targetRTT);
+            rtt, targetRTT);
         emitCheckOrBranchForCast(castKind, append<Value>(m_proc, Equal, origin(), isSubRTT, constant(Int32, 0)), castFailure, falseBlock);
     }
 
@@ -4086,7 +4086,7 @@ Value* OMGIRGenerator::emitLoadRTTFromFuncref(Value* funcref)
 
 Value* OMGIRGenerator::emitLoadRTTFromObject(Value* reference)
 {
-    return append<MemoryValue>(heapTop(), m_proc, B3::Load, toB3Type(Types::Ref), origin(), reference, safeCast<int32_t>(WebAssemblyGCObjectBase::offsetOfRTT()));
+    return append<MemoryValue>(heapTop(), m_proc, B3::Load, pointerType(), origin(), reference, safeCast<int32_t>(WebAssemblyGCObjectBase::offsetOfRTT()));
 }
 
 Value* OMGIRGenerator::emitNotRTTKind(Value* rtt, RTTKind targetKind)
