@@ -1291,7 +1291,7 @@ void OMGIRGenerator::restoreWasmContextInstance(BasicBlock* block, Value* arg)
     patchpoint->effects = effects;
     patchpoint->clobberLate(RegisterSetBuilder(GPRInfo::wasmContextInstancePointer));
     patchpoint->append(arg, ValueRep::SomeRegister);
-    patchpoint->setGenerator([, origin = this->origin()](CCallHelpers& jit, const StackmapGenerationParams& param) {
+    patchpoint->setGenerator([](CCallHelpers& jit, const StackmapGenerationParams& param) {
         jit.move(param[0].gpr(), GPRInfo::wasmContextInstancePointer);
     });
 }
@@ -1400,7 +1400,7 @@ OMGIRGenerator::OMGIRGenerator(CompilationContext& context, CalleeGroup& calleeG
         m_proc.pinRegister(GPRInfo::wasmBoundsCheckingSizeRegister);
 #endif
     if (info.memory) {
-        m_proc.setWasmBoundsCheckGenerator([=, this](CCallHelpers& jit, WasmBoundsCheckValue*, GPRReg pinnedGPR) {
+        m_proc.setWasmBoundsCheckGenerator([=, this](CCallHelpers& jit, WasmBoundsCheckValue* originValue, GPRReg pinnedGPR) {
             AllowMacroScratchRegisterUsage allowScratch(jit);
             switch (m_mode) {
             case MemoryMode::BoundsChecking:
@@ -1410,7 +1410,7 @@ OMGIRGenerator::OMGIRGenerator(CompilationContext& context, CalleeGroup& calleeG
                 ASSERT_UNUSED(pinnedGPR, InvalidGPRReg == pinnedGPR);
                 break;
             }
-            this->emitExceptionCheck(jit, origin, ExceptionType::OutOfBoundsMemoryAccess);
+            this->emitExceptionCheck(jit, originValue->origin(), ExceptionType::OutOfBoundsMemoryAccess);
         });
     }
 
@@ -1559,7 +1559,7 @@ void OMGIRGenerator::reloadMemoryRegistersFromInstance(const MemoryInformation& 
         patchpoint->numGPScratchRegisters = 1;
 
         patchpoint->append(instance, ValueRep::SomeRegister);
-        patchpoint->setGenerator([, origin = this->origin()](CCallHelpers& jit, const B3::StackmapGenerationParams& params) {
+        patchpoint->setGenerator([](CCallHelpers& jit, const B3::StackmapGenerationParams& params) {
             AllowMacroScratchRegisterUsage allowScratch(jit);
             GPRReg scratch = params.gpScratch(0);
             jit.loadPairPtr(params[0].gpr(), CCallHelpers::TrustedImm32(JSWebAssemblyInstance::offsetOfCachedMemory()), GPRInfo::wasmBaseMemoryPointer, GPRInfo::wasmBoundsCheckingSizeRegister);
@@ -3900,7 +3900,7 @@ void OMGIRGenerator::emitRefTestOrCast(CastKind castKind, ExpressionType referen
         falseBlock = m_proc.addBlock();
     }
 
-    auto castFailure = [this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+    auto castFailure = [this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
         this->emitExceptionCheck(jit, origin, ExceptionType::CastFailure);
     };
 
