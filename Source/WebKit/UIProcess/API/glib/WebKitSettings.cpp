@@ -191,6 +191,7 @@ enum {
     PROP_SCREEN_SUPPORTS_HDR,
     PROP_ENABLE_PAGE_LIFECYCLE,
     PROP_DESTROY_WINDOW_ON_FREEZE,
+    PROP_BACK_FORWARD_CACHE_WITH_MEDIA_ENABLED,
     N_PROPERTIES,
 };
 
@@ -460,6 +461,9 @@ ALLOW_DEPRECATED_DECLARATIONS_END
     case PROP_DESTROY_WINDOW_ON_FREEZE:
         webkit_settings_set_destroy_window_on_freeze(settings, g_value_get_boolean(value));
         break;
+    case PROP_BACK_FORWARD_CACHE_WITH_MEDIA_ENABLED:
+        webkit_settings_set_back_forward_cache_with_media_enabled(settings, g_value_get_boolean(value));
+        break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, propId, paramSpec);
         break;
@@ -699,6 +703,9 @@ ALLOW_DEPRECATED_DECLARATIONS_END
         break;
     case PROP_DESTROY_WINDOW_ON_FREEZE:
         g_value_set_boolean(value, webkit_settings_get_destroy_window_on_freeze(settings));
+        break;
+    case PROP_BACK_FORWARD_CACHE_WITH_MEDIA_ENABLED:
+        g_value_set_boolean(value, webkit_settings_get_back_forward_cache_with_media_enabled(settings));
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, propId, paramSpec);
@@ -1865,6 +1872,19 @@ static void webkit_settings_class_init(WebKitSettingsClass* klass)
         _("Destroy window on freeze"),
         _("Whether to destroy the native window on freeze."),
         FALSE,
+        readWriteConstructParamFlags);
+
+    /**
+     * WebKitSettings:back-forward-cache-with-media-enabled:
+     *
+     * Enable or disable the back/forward cache for pages containing audio or video elements.
+     *
+     */
+    sObjProperties[PROP_BACK_FORWARD_CACHE_WITH_MEDIA_ENABLED] = g_param_spec_boolean(
+        "back-forward-cache-with-media-enabled",
+        _("Back/Forward Cache with Media"),
+        _("Enable back/forward cache for pages with media"),
+        TRUE,
         readWriteConstructParamFlags);
 
     g_object_class_install_properties(gObjectClass, N_PROPERTIES, sObjProperties);
@@ -4713,4 +4733,42 @@ void webkit_settings_set_destroy_window_on_freeze(WebKitSettings* settings, gboo
 
     priv->preferences->setPageLifecycleAPIDestroyWindowOnFreeze(destroy);
     g_object_notify(G_OBJECT(settings), "destroy-window-on-freeze");
+}
+
+/**
+ * webkit_settings_get_back_forward_cache_with_media_enabled:
+ * @settings: a #WebKitSettings
+ *
+ * Get the #WebKitSettings:back-forward-cache-with-media-enabled property.
+ *
+ * Returns: %TRUE if the back/forward cache is enabled for pages with media or %FALSE otherwise.
+ *
+ * Since: 2.54
+ */
+gboolean webkit_settings_get_back_forward_cache_with_media_enabled(WebKitSettings* settings)
+{
+    g_return_val_if_fail(WEBKIT_IS_SETTINGS(settings), FALSE);
+
+    return settings->priv->preferences->backForwardCacheWithMediaEnabled();
+}
+
+/**
+ * webkit_settings_set_back_forward_cache_with_media_enabled:
+ * @settings: a #WebKitSettings
+ * @enabled: Value to be set
+ *
+ * Set the #WebKitSettings:back-forward-cache-with-media-enabled property.
+ *
+ * Since: 2.54
+ */
+void webkit_settings_set_back_forward_cache_with_media_enabled(WebKitSettings* settings, gboolean enabled)
+{
+    g_return_if_fail(WEBKIT_IS_SETTINGS(settings));
+
+    WebKitSettingsPrivate* priv = settings->priv;
+    if (priv->preferences->backForwardCacheWithMediaEnabled() == static_cast<bool>(enabled))
+        return;
+
+    priv->preferences->setBackForwardCacheWithMediaEnabled(enabled);
+    g_object_notify_by_pspec(G_OBJECT(settings), sObjProperties[PROP_BACK_FORWARD_CACHE_WITH_MEDIA_ENABLED]);
 }
