@@ -40,6 +40,7 @@
 #include "FocusController.h"
 #include "FrameDestructionObserverInlines.h"
 #include "FrameLoader.h"
+#include "HTMLMediaElement.h"
 #include "HTTPParsers.h"
 #include "HistoryController.h"
 #include "LocalDOMWindow.h"
@@ -217,6 +218,17 @@ static bool canCachePage(Page& page)
         logBackForwardCacheFailureDiagnosticMessage(diagnosticLoggingClient, DiagnosticLoggingKeys::isDisabledKey());
         isCacheable = false;
     }
+#if PLATFORM(WPE)
+    if (!page.settings().backForwardCacheWithMediaEnabled()) {
+        bool hasMedia = false;
+        page.forEachMediaElement([&](HTMLMediaElement&) { hasMedia = true; });
+        if (hasMedia) {
+            PCLOG("   -Page contains media elements and back/forward cache with media is disabled"_s);
+            logBackForwardCacheFailureDiagnosticMessage(diagnosticLoggingClient, DiagnosticLoggingKeys::pageContainsMediaEngineKey());
+            isCacheable = false;
+        }
+    }
+#endif
 #if ENABLE(DEVICE_ORIENTATION) && !PLATFORM(IOS_FAMILY)
     if (DeviceMotionController::isActiveAt(&page)) {
         PCLOG("   -Page is using DeviceMotion"_s);
