@@ -3148,7 +3148,7 @@ public:
                 m_assembler.clz(dest, op1);
                 m_assembler.lsr(dest, dest, 5);
             } else {
-                m_assembler.eor(dest, op1, op2);
+                m_assembler.ARM_and(dest, op1, op2);
                 m_assembler.clz(dest, dest);
                 m_assembler.lsr(dest, dest, 5);
             }
@@ -3160,7 +3160,7 @@ public:
                 m_assembler.lsr(dest, dest, 5);
                 m_assembler.eor(dest, dest, ARMThumbImmediate::makeEncodedImm(1));
             } else {
-                m_assembler.eor(dest, op1, op2);
+                m_assembler.ARM_and(dest, op1, op2);
                 m_assembler.clz(dest, dest);
                 m_assembler.lsr(dest, dest, 5);
                 m_assembler.eor(dest, dest, ARMThumbImmediate::makeEncodedImm(1));
