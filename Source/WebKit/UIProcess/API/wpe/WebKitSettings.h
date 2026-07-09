@@ -568,6 +568,13 @@ WEBKIT_API void
 webkit_settings_set_destroy_window_on_freeze                   (WebKitSettings* settings,
                                                                 gboolean destroy_window);
 
+WEBKIT_API gboolean
+webkit_settings_get_back_forward_cache_with_media_enabled      (WebKitSettings *settings);
+
+WEBKIT_API void
+webkit_settings_set_back_forward_cache_with_media_enabled      (WebKitSettings *settings,
+                                                                gboolean        enabled);
+
 G_END_DECLS
 
 #endif /* WebKitSettings_h */

@@ -362,6 +362,19 @@ AuthorAndUserStylesEnabled:
     WebCore:
       default: true
 
+BackForwardCacheWithMediaEnabled:
+  type: bool
+  humanReadableName: "Back/Forward Cache with Media"
+  humanReadableDescription: "Enable back/forward cache for pages with media"
+  condition: PLATFORM(WPE)
+  defaultValue:
+    WebKitLegacy:
+      default: true
+    WebKit:
+      default: true
+    WebCore:
+      default: true
+
 BackspaceKeyNavigationEnabled:
   type: bool
   defaultValue:
