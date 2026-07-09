@@ -30,6 +30,7 @@
 
 #include "AirCode.h"
 #include "AllowMacroScratchRegisterUsageIf.h"
+#include "DisallowMacroScratchRegisterUsage.h"
 #include "B3BasicBlockInlines.h"
 #include "B3CCallValue.h"
 #include "B3Const128Value.h"
@@ -976,7 +977,7 @@ private:
         return append<CCallValue>(block, m_proc, resultType, origin(), operationValue, std::forward<Args>(args)...);
     }
 
-    void emitExceptionCheck(CCallHelpers&, ExceptionType);
+    void emitExceptionCheck(CCallHelpers&, Origin, ExceptionType);
 
     void emitWriteBarrierForJSWrapper();
     void emitWriteBarrier(Value* cell, Value* instanceCell);
@@ -1290,7 +1291,7 @@ void OMGIRGenerator::restoreWasmContextInstance(BasicBlock* block, Value* arg)
     patchpoint->effects = effects;
     patchpoint->clobberLate(RegisterSetBuilder(GPRInfo::wasmContextInstancePointer));
     patchpoint->append(arg, ValueRep::SomeRegister);
-    patchpoint->setGenerator([](CCallHelpers& jit, const StackmapGenerationParams& param) {
+    patchpoint->setGenerator([, origin = this->origin()](CCallHelpers& jit, const StackmapGenerationParams& param) {
         jit.move(param[0].gpr(), GPRInfo::wasmContextInstancePointer);
     });
 }
@@ -1409,7 +1410,7 @@ OMGIRGenerator::OMGIRGenerator(CompilationContext& context, CalleeGroup& calleeG
                 ASSERT_UNUSED(pinnedGPR, InvalidGPRReg == pinnedGPR);
                 break;
             }
-            this->emitExceptionCheck(jit, ExceptionType::OutOfBoundsMemoryAccess);
+            this->emitExceptionCheck(jit, origin, ExceptionType::OutOfBoundsMemoryAccess);
         });
     }
 
@@ -1558,7 +1559,7 @@ void OMGIRGenerator::reloadMemoryRegistersFromInstance(const MemoryInformation& 
         patchpoint->numGPScratchRegisters = 1;
 
         patchpoint->append(instance, ValueRep::SomeRegister);
-        patchpoint->setGenerator([](CCallHelpers& jit, const B3::StackmapGenerationParams& params) {
+        patchpoint->setGenerator([, origin = this->origin()](CCallHelpers& jit, const B3::StackmapGenerationParams& params) {
             AllowMacroScratchRegisterUsage allowScratch(jit);
             GPRReg scratch = params.gpScratch(0);
             jit.loadPairPtr(params[0].gpr(), CCallHelpers::TrustedImm32(JSWebAssemblyInstance::offsetOfCachedMemory()), GPRInfo::wasmBaseMemoryPointer, GPRInfo::wasmBoundsCheckingSizeRegister);
@@ -1572,10 +1573,10 @@ void OMGIRGenerator::reloadMemoryRegistersFromInstance(const MemoryInformation& 
 #endif // OMG_JSVALUE_32_64_PINNED_MEMORY_REGISTERS
 }
 
-void OMGIRGenerator::emitExceptionCheck(CCallHelpers& jit, ExceptionType type)
+void OMGIRGenerator::emitExceptionCheck(CCallHelpers& jit, Origin origin, ExceptionType type)
 {
     jit.move(CCallHelpers::TrustedImm32(static_cast<uint32_t>(type)), GPRInfo::argumentGPR1);
-    if (auto* omgOrigin = origin.omgOrigin()) {
+    if (auto* omgOrigin = std::bit_cast<const OMGOrigin*>(origin.data())) {
         jit.move(CCallHelpers::TrustedImm32(omgOrigin->m_callSiteIndex.bits()), GPRInfo::argumentGPR2);
         jit.store32(GPRInfo::argumentGPR2, CCallHelpers::tagFor(CallFrameSlot::argumentCountIncludingThis));
     }
@@ -1840,8 +1841,8 @@ auto OMGIRGenerator::addTableGet(unsigned tableIndex, ExpressionType index, Expr
         CheckValue* check = append<CheckValue>(m_proc, Check, origin(),
             append<Value>(m_proc, Equal, origin(), resultValue, append<WasmConstRefValue>(m_proc, origin(), 0)));
 
-        check->setGenerator([=, this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-            this->emitExceptionCheck(jit, ExceptionType::OutOfBoundsTableAccess);
+        check->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+            this->emitExceptionCheck(jit, origin, ExceptionType::OutOfBoundsTableAccess);
         });
     }
 
@@ -1857,8 +1858,8 @@ auto OMGIRGenerator::addTableSet(unsigned tableIndex, ExpressionType index, Expr
         CheckValue* check = append<CheckValue>(m_proc, Check, origin(),
             append<Value>(m_proc, Equal, origin(), shouldThrow, append<Const32Value>(m_proc, origin(), 0)));
 
-        check->setGenerator([=, this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-            this->emitExceptionCheck(jit, ExceptionType::OutOfBoundsTableAccess);
+        check->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+            this->emitExceptionCheck(jit, origin, ExceptionType::OutOfBoundsTableAccess);
         });
     }
 
@@ -1880,8 +1881,8 @@ auto OMGIRGenerator::addRefAsNonNull(ExpressionType reference, ExpressionType& r
     {
         CheckValue* check = append<CheckValue>(m_proc, Check, origin(),
             append<Value>(m_proc, Equal, origin(), get(reference), append<WasmConstRefValue>(m_proc, origin(), JSValue::encode(jsNull()))));
-        check->setGenerator([=, this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-            this->emitExceptionCheck(jit, ExceptionType::NullRefAsNonNull);
+        check->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+            this->emitExceptionCheck(jit, origin, ExceptionType::NullRefAsNonNull);
         });
     }
     return { };
@@ -1904,8 +1905,8 @@ auto OMGIRGenerator::addTableInit(unsigned elementIndex, unsigned tableIndex, Ex
         CheckValue* check = append<CheckValue>(m_proc, Check, origin(),
             append<Value>(m_proc, Equal, origin(), resultValue, append<Const32Value>(m_proc, origin(), 0)));
 
-        check->setGenerator([=, this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-            this->emitExceptionCheck(jit, ExceptionType::OutOfBoundsTableAccess);
+        check->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+            this->emitExceptionCheck(jit, origin, ExceptionType::OutOfBoundsTableAccess);
         });
     }
 
@@ -1947,8 +1948,8 @@ auto OMGIRGenerator::addTableFill(unsigned tableIndex, ExpressionType offset, Ex
         CheckValue* check = append<CheckValue>(m_proc, Check, origin(),
             append<Value>(m_proc, Equal, origin(), resultValue, append<Const32Value>(m_proc, origin(), 0)));
 
-        check->setGenerator([=, this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-            this->emitExceptionCheck(jit, ExceptionType::OutOfBoundsTableAccess);
+        check->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+            this->emitExceptionCheck(jit, origin, ExceptionType::OutOfBoundsTableAccess);
         });
     }
 
@@ -1968,8 +1969,8 @@ auto OMGIRGenerator::addTableCopy(unsigned dstTableIndex, unsigned srcTableIndex
         CheckValue* check = append<CheckValue>(m_proc, Check, origin(),
             append<Value>(m_proc, Equal, origin(), resultValue, append<Const32Value>(m_proc, origin(), 0)));
 
-        check->setGenerator([=, this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-            this->emitExceptionCheck(jit, ExceptionType::OutOfBoundsTableAccess);
+        check->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+            this->emitExceptionCheck(jit, origin, ExceptionType::OutOfBoundsTableAccess);
         });
     }
 
@@ -1987,8 +1988,8 @@ auto OMGIRGenerator::getLocal(uint32_t index, ExpressionType& result) -> Partial
 auto OMGIRGenerator::addUnreachable() -> PartialResult
 {
     B3::PatchpointValue* unreachable = append<B3::PatchpointValue>(m_proc, B3::Void, origin());
-    unreachable->setGenerator([this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-        this->emitExceptionCheck(jit, ExceptionType::Unreachable);
+    unreachable->setGenerator([this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+        this->emitExceptionCheck(jit, origin, ExceptionType::Unreachable);
     });
     unreachable->effects.terminal = true;
     return { };
@@ -2220,8 +2221,8 @@ auto OMGIRGenerator::addMemoryFill(ExpressionType dstAddress, ExpressionType tar
         CheckValue* check = append<CheckValue>(m_proc, Check, origin(),
             append<Value>(m_proc, Equal, origin(), resultValue, append<Const32Value>(m_proc, origin(), 0)));
 
-        check->setGenerator([=, this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-            this->emitExceptionCheck(jit, ExceptionType::OutOfBoundsMemoryAccess);
+        check->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+            this->emitExceptionCheck(jit, origin, ExceptionType::OutOfBoundsMemoryAccess);
         });
     }
 
@@ -2239,8 +2240,8 @@ auto OMGIRGenerator::addMemoryInit(unsigned dataSegmentIndex, ExpressionType dst
         CheckValue* check = append<CheckValue>(m_proc, Check, origin(),
             append<Value>(m_proc, Equal, origin(), resultValue, append<Const32Value>(m_proc, origin(), 0)));
 
-        check->setGenerator([=, this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-            this->emitExceptionCheck(jit, ExceptionType::OutOfBoundsMemoryAccess);
+        check->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+            this->emitExceptionCheck(jit, origin, ExceptionType::OutOfBoundsMemoryAccess);
         });
     }
 
@@ -2257,8 +2258,8 @@ auto OMGIRGenerator::addMemoryCopy(ExpressionType dstAddress, ExpressionType src
         CheckValue* check = append<CheckValue>(m_proc, Check, origin(),
             append<Value>(m_proc, Equal, origin(), resultValue, append<Const32Value>(m_proc, origin(), 0)));
 
-        check->setGenerator([=, this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-            this->emitExceptionCheck(jit, ExceptionType::OutOfBoundsMemoryAccess);
+        check->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+            this->emitExceptionCheck(jit, origin, ExceptionType::OutOfBoundsMemoryAccess);
         });
     }
 
@@ -2557,15 +2558,15 @@ inline Value* OMGIRGenerator::emitCheckAndPreparePointer(Value* pointer, uint32_
         Value* highestAccess = append<Value>(m_proc, Add, origin(), pointerPlusOffset, sizeValue);
         // Test that we didn't overflow.
         CheckValue* checkOverflow = append<CheckValue>(m_proc, Check, origin(), append<Value>(m_proc, AboveEqual, origin(), pointer, highestAccess));
-        checkOverflow->setGenerator([=, this] (CCallHelpers& jit, const StackmapGenerationParams&) {
-            this->emitExceptionCheck(jit, ExceptionType::OutOfBoundsMemoryAccess);
+        checkOverflow->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const StackmapGenerationParams&) {
+            this->emitExceptionCheck(jit, origin, ExceptionType::OutOfBoundsMemoryAccess);
         });
         // Test that we're within bounds.
         Value* boundsCheckingSize = append<MemoryValue>(heapTop(), m_proc, Load, Int32, origin(), instanceValue(), safeCast<int32_t>(JSWebAssemblyInstance::offsetOfCachedBoundsCheckingSize()));
         Value* isWithinBounds = append<Value>(m_proc, Above, origin(), highestAccess, boundsCheckingSize);
         CheckValue* checkBounds = append<CheckValue>(m_proc, Check, origin(), isWithinBounds);
-        checkBounds->setGenerator([=, this] (CCallHelpers& jit, const StackmapGenerationParams&) {
-            this->emitExceptionCheck(jit, ExceptionType::OutOfBoundsMemoryAccess);
+        checkBounds->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const StackmapGenerationParams&) {
+            this->emitExceptionCheck(jit, origin, ExceptionType::OutOfBoundsMemoryAccess);
         });
         break;
     }
@@ -2694,8 +2695,8 @@ auto OMGIRGenerator::load(LoadOpType op, ExpressionType pointerVar, ExpressionTy
         // FIXME: Even though this is provably out of bounds, it's not a validation error, so we have to handle it
         // as a runtime exception. However, this may change: https://bugs.webkit.org/show_bug.cgi?id=166435
         B3::PatchpointValue* throwException = append<B3::PatchpointValue>(m_proc, B3::Void, origin());
-        throwException->setGenerator([this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-            this->emitExceptionCheck(jit, ExceptionType::OutOfBoundsMemoryAccess);
+        throwException->setGenerator([this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+            this->emitExceptionCheck(jit, origin, ExceptionType::OutOfBoundsMemoryAccess);
         });
 
         switch (op) {
@@ -2794,8 +2795,8 @@ auto OMGIRGenerator::store(StoreOpType op, ExpressionType pointerVar, Expression
         // FIXME: Even though this is provably out of bounds, it's not a validation error, so we have to handle it
         // as a runtime exception. However, this may change: https://bugs.webkit.org/show_bug.cgi?id=166435
         B3::PatchpointValue* throwException = append<B3::PatchpointValue>(m_proc, B3::Void, origin());
-        throwException->setGenerator([this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-            this->emitExceptionCheck(jit, ExceptionType::OutOfBoundsMemoryAccess);
+        throwException->setGenerator([this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+            this->emitExceptionCheck(jit, origin, ExceptionType::OutOfBoundsMemoryAccess);
         });
     } else
         emitStoreOp(op, emitCheckAndPreparePointer(pointer, offset, sizeOfStoreOp(op)), value, offset);
@@ -2847,8 +2848,8 @@ Value* OMGIRGenerator::fixupPointerPlusOffsetForAtomicOps(ExtAtomicOpType op, Va
     if (accessWidth(op) != Width8) {
         CheckValue* check = append<CheckValue>(m_proc, Check, origin(),
             append<Value>(m_proc, BitAnd, origin(), pointer, constant(pointerType(), sizeOfAtomicOpMemoryAccess(op) - 1)));
-        check->setGenerator([=, this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-            this->emitExceptionCheck(jit, ExceptionType::UnalignedMemoryAccess);
+        check->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+            this->emitExceptionCheck(jit, origin, ExceptionType::UnalignedMemoryAccess);
         });
     }
     return pointer;
@@ -2884,8 +2885,8 @@ auto OMGIRGenerator::atomicLoad(ExtAtomicOpType op, Type valueType, ExpressionTy
         // FIXME: Even though this is provably out of bounds, it's not a validation error, so we have to handle it
         // as a runtime exception. However, this may change: https://bugs.webkit.org/show_bug.cgi?id=166435
         B3::PatchpointValue* throwException = append<B3::PatchpointValue>(m_proc, B3::Void, origin());
-        throwException->setGenerator([this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-            this->emitExceptionCheck(jit, ExceptionType::OutOfBoundsMemoryAccess);
+        throwException->setGenerator([this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+            this->emitExceptionCheck(jit, origin, ExceptionType::OutOfBoundsMemoryAccess);
         });
 
         switch (valueType.kind) {
@@ -2922,8 +2923,8 @@ auto OMGIRGenerator::atomicStore(ExtAtomicOpType op, Type valueType, ExpressionT
         // FIXME: Even though this is provably out of bounds, it's not a validation error, so we have to handle it
         // as a runtime exception. However, this may change: https://bugs.webkit.org/show_bug.cgi?id=166435
         B3::PatchpointValue* throwException = append<B3::PatchpointValue>(m_proc, B3::Void, origin());
-        throwException->setGenerator([this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-            this->emitExceptionCheck(jit, ExceptionType::OutOfBoundsMemoryAccess);
+        throwException->setGenerator([this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+            this->emitExceptionCheck(jit, origin, ExceptionType::OutOfBoundsMemoryAccess);
         });
     } else
         emitAtomicStoreOp(op, valueType, emitCheckAndPreparePointer(get(pointer), offset, sizeOfAtomicOpMemoryAccess(op)), get(value), offset);
@@ -3010,8 +3011,8 @@ auto OMGIRGenerator::atomicBinaryRMW(ExtAtomicOpType op, Type valueType, Express
         // FIXME: Even though this is provably out of bounds, it's not a validation error, so we have to handle it
         // as a runtime exception. However, this may change: https://bugs.webkit.org/show_bug.cgi?id=166435
         B3::PatchpointValue* throwException = append<B3::PatchpointValue>(m_proc, B3::Void, origin());
-        throwException->setGenerator([this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-            this->emitExceptionCheck(jit, ExceptionType::OutOfBoundsMemoryAccess);
+        throwException->setGenerator([this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+            this->emitExceptionCheck(jit, origin, ExceptionType::OutOfBoundsMemoryAccess);
         });
 
         switch (valueType.kind) {
@@ -3123,8 +3124,8 @@ auto OMGIRGenerator::atomicCompareExchange(ExtAtomicOpType op, Type valueType, E
         // FIXME: Even though this is provably out of bounds, it's not a validation error, so we have to handle it
         // as a runtime exception. However, this may change: https://bugs.webkit.org/show_bug.cgi?id=166435
         B3::PatchpointValue* throwException = append<B3::PatchpointValue>(m_proc, B3::Void, origin());
-        throwException->setGenerator([this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-            this->emitExceptionCheck(jit, ExceptionType::OutOfBoundsMemoryAccess);
+        throwException->setGenerator([this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+            this->emitExceptionCheck(jit, origin, ExceptionType::OutOfBoundsMemoryAccess);
         });
 
         switch (valueType.kind) {
@@ -3163,8 +3164,8 @@ auto OMGIRGenerator::atomicWait(ExtAtomicOpType op, ExpressionType pointerVar, E
         CheckValue* check = append<CheckValue>(m_proc, Check, origin(),
             append<Value>(m_proc, LessThan, origin(), resultValue, append<Const32Value>(m_proc, origin(), 0)));
 
-        check->setGenerator([=, this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-            this->emitExceptionCheck(jit, ExceptionType::OutOfBoundsMemoryAccess);
+        check->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+            this->emitExceptionCheck(jit, origin, ExceptionType::OutOfBoundsMemoryAccess);
         });
     }
 
@@ -3180,8 +3181,8 @@ auto OMGIRGenerator::atomicNotify(ExtAtomicOpType, ExpressionType pointer, Expre
         CheckValue* check = append<CheckValue>(m_proc, Check, origin(),
             append<Value>(m_proc, LessThan, origin(), resultValue, append<Const32Value>(m_proc, origin(), 0)));
 
-        check->setGenerator([=, this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-            this->emitExceptionCheck(jit, ExceptionType::OutOfBoundsMemoryAccess);
+        check->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+            this->emitExceptionCheck(jit, origin, ExceptionType::OutOfBoundsMemoryAccess);
         });
     }
 
@@ -3337,8 +3338,8 @@ auto OMGIRGenerator::addI31GetS(ExpressionType ref, ExpressionType& result) -> P
     {
         CheckValue* check = append<CheckValue>(m_proc, Check, origin(),
             append<Value>(m_proc, Equal, origin(), get(ref), append<WasmConstRefValue>(m_proc, origin(), JSValue::encode(jsNull()))));
-        check->setGenerator([=, this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-            this->emitExceptionCheck(jit, ExceptionType::NullI31Get);
+        check->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+            this->emitExceptionCheck(jit, origin, ExceptionType::NullI31Get);
         });
     }
 
@@ -3353,8 +3354,8 @@ auto OMGIRGenerator::addI31GetU(ExpressionType ref, ExpressionType& result) -> P
     {
         CheckValue* check = append<CheckValue>(m_proc, Check, origin(),
             append<Value>(m_proc, Equal, origin(), get(ref), append<WasmConstRefValue>(m_proc, origin(), JSValue::encode(jsNull()))));
-        check->setGenerator([=, this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-            this->emitExceptionCheck(jit, ExceptionType::NullI31Get);
+        check->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+            this->emitExceptionCheck(jit, origin, ExceptionType::NullI31Get);
         });
     }
 
@@ -3380,8 +3381,8 @@ Variable* OMGIRGenerator::pushArrayNew(uint32_t typeIndex, Value* initValue, Exp
         CheckValue* check = append<CheckValue>(m_proc, Check, origin(),
             append<Value>(m_proc, Equal, origin(), resultValue, append<WasmConstRefValue>(m_proc, origin(), JSValue::encode(jsNull()))));
 
-        check->setGenerator([=, this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-            this->emitExceptionCheck(jit, ExceptionType::BadArrayNew);
+        check->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+            this->emitExceptionCheck(jit, origin, ExceptionType::BadArrayNew);
         });
     }
 
@@ -3509,8 +3510,8 @@ auto OMGIRGenerator::addArrayGet(ExtGCOpType arrayGetKind, uint32_t typeIndex, E
     {
         CheckValue* check = append<CheckValue>(m_proc, Check, origin(),
             append<Value>(m_proc, Equal, origin(), get(arrayref), append<WasmConstRefValue>(m_proc, origin(), JSValue::encode(jsNull()))));
-        check->setGenerator([=, this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-            this->emitExceptionCheck(jit, ExceptionType::NullArrayGet);
+        check->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+            this->emitExceptionCheck(jit, origin, ExceptionType::NullArrayGet);
         });
     }
 
@@ -3520,8 +3521,8 @@ auto OMGIRGenerator::addArrayGet(ExtGCOpType arrayGetKind, uint32_t typeIndex, E
     {
         CheckValue* check = append<CheckValue>(m_proc, Check, origin(),
             append<Value>(m_proc, AboveEqual, origin(), get(index), arraySize));
-        check->setGenerator([=, this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-            this->emitExceptionCheck(jit, ExceptionType::OutOfBoundsArrayGet);
+        check->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+            this->emitExceptionCheck(jit, origin, ExceptionType::OutOfBoundsArrayGet);
         });
     }
 
@@ -3571,8 +3572,8 @@ void OMGIRGenerator::emitArrayNullCheck(Value* arrayref, ExceptionType exception
 {
     CheckValue* check = append<CheckValue>(m_proc, Check, origin(),
         append<Value>(m_proc, Equal, origin(), arrayref, append<WasmConstRefValue>(m_proc, origin(), JSValue::encode(jsNull()))));
-    check->setGenerator([=, this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-        this->emitExceptionCheck(jit, exceptionType);
+    check->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+        this->emitExceptionCheck(jit, origin, exceptionType);
     });
 }
 
@@ -3626,8 +3627,8 @@ auto OMGIRGenerator::addArraySet(uint32_t typeIndex, ExpressionType arrayref, Ex
     {
         CheckValue* check = append<CheckValue>(m_proc, Check, origin(),
             append<Value>(m_proc, AboveEqual, origin(), get(index), arraySize));
-        check->setGenerator([=, this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-            this->emitExceptionCheck(jit, ExceptionType::OutOfBoundsArraySet);
+        check->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+            this->emitExceptionCheck(jit, origin, ExceptionType::OutOfBoundsArraySet);
         });
     }
 
@@ -3642,8 +3643,8 @@ auto OMGIRGenerator::addArrayLen(ExpressionType arrayref, ExpressionType& result
     {
         CheckValue* check = append<CheckValue>(m_proc, Check, origin(),
             append<Value>(m_proc, Equal, origin(), get(arrayref), append<WasmConstRefValue>(m_proc, origin(), JSValue::encode(jsNull()))));
-        check->setGenerator([=, this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-            this->emitExceptionCheck(jit, ExceptionType::NullArrayLen);
+        check->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+            this->emitExceptionCheck(jit, origin, ExceptionType::NullArrayLen);
         });
     }
 
@@ -3673,8 +3674,8 @@ auto OMGIRGenerator::addArrayFill(uint32_t typeIndex, ExpressionType arrayref, E
         CheckValue* check = append<CheckValue>(m_proc, Check, origin(),
             append<Value>(m_proc, Equal, origin(), resultValue, append<Const32Value>(m_proc, origin(), 0)));
 
-        check->setGenerator([=, this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-            this->emitExceptionCheck(jit, ExceptionType::OutOfBoundsArrayFill);
+        check->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+            this->emitExceptionCheck(jit, origin, ExceptionType::OutOfBoundsArrayFill);
         });
     }
 
@@ -3696,8 +3697,8 @@ auto OMGIRGenerator::addArrayCopy(uint32_t, ExpressionType dst, ExpressionType d
         CheckValue* check = append<CheckValue>(m_proc, Check, origin(),
             append<Value>(m_proc, Equal, origin(), resultValue, append<Const32Value>(m_proc, origin(), 0)));
 
-        check->setGenerator([=, this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-            this->emitExceptionCheck(jit, ExceptionType::OutOfBoundsArrayCopy);
+        check->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+            this->emitExceptionCheck(jit, origin, ExceptionType::OutOfBoundsArrayCopy);
         });
     }
 
@@ -3718,8 +3719,8 @@ auto OMGIRGenerator::addArrayInitElem(uint32_t, ExpressionType dst, ExpressionTy
         CheckValue* check = append<CheckValue>(m_proc, Check, origin(),
             append<Value>(m_proc, Equal, origin(), resultValue, append<Const32Value>(m_proc, origin(), 0)));
 
-        check->setGenerator([=, this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-            this->emitExceptionCheck(jit, ExceptionType::OutOfBoundsArrayInitElem);
+        check->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+            this->emitExceptionCheck(jit, origin, ExceptionType::OutOfBoundsArrayInitElem);
         });
     }
 
@@ -3740,8 +3741,8 @@ auto OMGIRGenerator::addArrayInitData(uint32_t, ExpressionType dst, ExpressionTy
         CheckValue* check = append<CheckValue>(m_proc, Check, origin(),
             append<Value>(m_proc, Equal, origin(), resultValue, append<Const32Value>(m_proc, origin(), 0)));
 
-        check->setGenerator([=, this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-            this->emitExceptionCheck(jit, ExceptionType::OutOfBoundsArrayInitData);
+        check->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+            this->emitExceptionCheck(jit, origin, ExceptionType::OutOfBoundsArrayInitData);
         });
     }
 
@@ -3761,8 +3762,8 @@ auto OMGIRGenerator::addStructNew(uint32_t typeIndex, ArgumentList& args, Expres
     {
         CheckValue* check = append<CheckValue>(m_proc, Check, origin(),
             append<Value>(m_proc, Equal, origin(), structValue, append<WasmConstRefValue>(m_proc, origin(), JSValue::encode(jsNull()))));
-        check->setGenerator([=, this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-            this->emitExceptionCheck(jit, ExceptionType::BadStructNew);
+        check->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+            this->emitExceptionCheck(jit, origin, ExceptionType::BadStructNew);
         });
     }
 
@@ -3788,8 +3789,8 @@ auto OMGIRGenerator::addStructNewDefault(uint32_t typeIndex, ExpressionType& res
     {
         CheckValue* check = append<CheckValue>(m_proc, Check, origin(),
             append<Value>(m_proc, Equal, origin(), structValue, append<WasmConstRefValue>(m_proc, origin(), JSValue::encode(jsNull()))));
-        check->setGenerator([=, this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-            this->emitExceptionCheck(jit, ExceptionType::BadStructNew);
+        check->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+            this->emitExceptionCheck(jit, origin, ExceptionType::BadStructNew);
         });
     }
 
@@ -3818,8 +3819,8 @@ auto OMGIRGenerator::addStructGet(ExtGCOpType structGetKind, ExpressionType stru
     {
         CheckValue* check = append<CheckValue>(m_proc, Check, origin(),
             append<Value>(m_proc, Equal, origin(), get(structReference), append<WasmConstRefValue>(m_proc, origin(), JSValue::encode(jsNull()))));
-        check->setGenerator([=, this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-            this->emitExceptionCheck(jit, ExceptionType::NullStructGet);
+        check->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+            this->emitExceptionCheck(jit, origin, ExceptionType::NullStructGet);
         });
     }
 
@@ -3865,8 +3866,8 @@ auto OMGIRGenerator::addStructSet(ExpressionType structReference, const StructTy
     {
         CheckValue* check = append<CheckValue>(m_proc, Check, origin(),
             append<Value>(m_proc, Equal, origin(), get(structReference), append<WasmConstRefValue>(m_proc, origin(), JSValue::encode(jsNull()))));
-        check->setGenerator([=, this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-            this->emitExceptionCheck(jit, ExceptionType::NullStructSet);
+        check->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+            this->emitExceptionCheck(jit, origin, ExceptionType::NullStructSet);
         });
     }
 
@@ -3900,7 +3901,7 @@ void OMGIRGenerator::emitRefTestOrCast(CastKind castKind, ExpressionType referen
     }
 
     auto castFailure = [this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-        this->emitExceptionCheck(jit, ExceptionType::CastFailure);
+        this->emitExceptionCheck(jit, origin, ExceptionType::CastFailure);
     };
 
     // Ensure reference nullness agrees with heap type.
@@ -4853,10 +4854,10 @@ auto OMGIRGenerator::addThrow(unsigned exceptionIndex, ArgumentList& args, Stack
     m_maxNumJSCallArguments = std::max(m_maxNumJSCallArguments, offset);
     patch->clobber(RegisterSetBuilder::registersToSaveForJSCall(m_proc.usesSIMD() ? RegisterSetBuilder::allRegisters() : RegisterSetBuilder::allScalarRegisters()));
     PatchpointExceptionHandle handle = preparePatchpointForExceptions(m_currentBlock, patch);
-    patch->setGenerator([this, exceptionIndex, handle] (CCallHelpers& jit, const B3::StackmapGenerationParams& params) {
+    patch->setGenerator([this, exceptionIndex, handle, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams& params) {
         AllowMacroScratchRegisterUsage allowScratch(jit);
         handle.generate(jit, params, this);
-        if (auto* omgOrigin = origin.omgOrigin()) {
+        if (auto* omgOrigin = std::bit_cast<const OMGOrigin*>(origin.data())) {
             jit.move(CCallHelpers::TrustedImm32(omgOrigin->m_callSiteIndex.bits()), GPRInfo::nonPreservedNonArgumentGPR0);
             jit.store32(GPRInfo::nonPreservedNonArgumentGPR0, CCallHelpers::tagFor(CallFrameSlot::argumentCountIncludingThis));
         }
@@ -4884,14 +4885,14 @@ auto WARN_UNUSED_RETURN OMGIRGenerator::addThrowRef(ExpressionType exn, Stack&) 
     CheckValue* check = m_currentBlock->appendNew<CheckValue>(m_proc, Check, origin(),
         m_currentBlock->appendNew<Value>(m_proc, Equal, origin(), exception, constant(Wasm::toB3Type(exnrefType()), JSValue::encode(jsNull()))));
 
-    check->setGenerator([=, this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-        this->emitExceptionCheck(jit, ExceptionType::NullExnReference);
+    check->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+        this->emitExceptionCheck(jit, origin, ExceptionType::NullExnReference);
     });
     PatchpointExceptionHandle handle = preparePatchpointForExceptions(m_currentBlock, patch);
-    patch->setGenerator([this, handle] (CCallHelpers& jit, const B3::StackmapGenerationParams& params) {
+    patch->setGenerator([this, handle, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams& params) {
         AllowMacroScratchRegisterUsage allowScratch(jit);
         handle.generate(jit, params, this);
-        if (auto* omgOrigin = origin.omgOrigin()) {
+        if (auto* omgOrigin = std::bit_cast<const OMGOrigin*>(origin.data())) {
             jit.move(CCallHelpers::TrustedImm32(omgOrigin->m_callSiteIndex.bits()), GPRInfo::nonPreservedNonArgumentGPR0);
             jit.store32(GPRInfo::nonPreservedNonArgumentGPR0, CCallHelpers::tagFor(CallFrameSlot::argumentCountIncludingThis));
         }
@@ -4913,10 +4914,10 @@ auto OMGIRGenerator::addRethrow(unsigned, ControlType& data) -> PartialResult
     patch->append(exception, ValueRep::reg(GPRInfo::argumentGPR2));
     patch->append(constant(Int32, JSValue::CellTag), ValueRep::reg(GPRInfo::argumentGPR3));
     PatchpointExceptionHandle handle = preparePatchpointForExceptions(m_currentBlock, patch);
-    patch->setGenerator([this, handle] (CCallHelpers& jit, const B3::StackmapGenerationParams& params) {
+    patch->setGenerator([this, handle, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams& params) {
         AllowMacroScratchRegisterUsage allowScratch(jit);
         handle.generate(jit, params, this);
-        if (auto* omgOrigin = origin.omgOrigin()) {
+        if (auto* omgOrigin = std::bit_cast<const OMGOrigin*>(origin.data())) {
             jit.move(CCallHelpers::TrustedImm32(omgOrigin->m_callSiteIndex.bits()), GPRInfo::nonPreservedNonArgumentGPR0);
             jit.store32(GPRInfo::nonPreservedNonArgumentGPR0, CCallHelpers::tagFor(CallFrameSlot::argumentCountIncludingThis));
         }
@@ -5356,7 +5357,7 @@ static inline void prepareForTailCallImpl(unsigned functionIndex, CCallHelpers& 
             dataLogLn("callee original: ", RawPointer(fpp->callee().rawPtr()));
             auto& wasmCallee = context.gpr<uintptr_t*>(GPRInfo::callFrameRegister)[CallFrameSlot::callee * 1];
             dataLogLn("callee original: ", RawHex(wasmCallee), " at ", RawPointer(&wasmCallee));
-            dataLogLn("retPC original: ", RawPointer(fpp->rawReturnPCForInspection()));
+            dataLogLn("retPC original: ", RawPointer(fpp->returnPCForInspection()));
             auto& retPC = context.gpr<uintptr_t*>(GPRInfo::callFrameRegister)[CallFrame::returnPCOffset() / sizeof(uint64_t)];
             dataLogLn("retPC original: ", RawHex(retPC), " at ", RawPointer(&retPC));
             dataLogLn("callerFrame original: ", RawPointer(fpp->callerFrame()));
@@ -6118,8 +6119,8 @@ auto OMGIRGenerator::addCallIndirect(unsigned tableIndex, const TypeDefinition& 
         CheckValue* check = append<CheckValue>(m_proc, Check, origin(),
             append<Value>(m_proc, AboveEqual, origin(), calleeIndex, callableFunctionBufferLength));
 
-        check->setGenerator([=, this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-            this->emitExceptionCheck(jit, ExceptionType::OutOfBoundsCallIndirect);
+        check->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+            this->emitExceptionCheck(jit, origin, ExceptionType::OutOfBoundsCallIndirect);
         });
     }
 
@@ -6148,8 +6149,8 @@ auto OMGIRGenerator::addCallIndirect(unsigned tableIndex, const TypeDefinition& 
         CheckValue* check = append<CheckValue>(m_proc, Check, origin(),
             append<Value>(m_proc, Equal, origin(), calleeSignatureIndex, constant(pointerType(), 0)));
 
-        check->setGenerator([=, this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-            this->emitExceptionCheck(jit, ExceptionType::NullTableEntry);
+        check->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+            this->emitExceptionCheck(jit, origin, ExceptionType::NullTableEntry);
         });
     }
 
@@ -6193,8 +6194,8 @@ auto OMGIRGenerator::addCallIndirect(unsigned tableIndex, const TypeDefinition& 
 
     m_currentBlock = throwBlock;
     B3::PatchpointValue* throwException = append<B3::PatchpointValue>(m_proc, B3::Void, origin());
-    throwException->setGenerator([=, this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-        this->emitExceptionCheck(jit, ExceptionType::BadSignature);
+    throwException->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+        this->emitExceptionCheck(jit, origin, ExceptionType::BadSignature);
     });
     throwException->effects.terminal = true;
 
@@ -6220,8 +6221,8 @@ auto OMGIRGenerator::addCallRef(const TypeDefinition& originalSignature, Argumen
     {
         CheckValue* check = append<CheckValue>(m_proc, Check, origin(),
             append<Value>(m_proc, Equal, origin(), callee, append<WasmConstRefValue>(m_proc, origin(), JSValue::encode(jsNull()))));
-        check->setGenerator([=, this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-            this->emitExceptionCheck(jit, ExceptionType::NullReference);
+        check->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+            this->emitExceptionCheck(jit, origin, ExceptionType::NullReference);
         });
     }
 
@@ -6404,8 +6405,8 @@ void OMGIRGenerator::emitChecksForModOrDiv(B3::Opcode operation, Value* left, Va
         CheckValue* check = append<CheckValue>(m_proc, Check, origin(),
             append<Value>(m_proc, Equal, origin(), right, constant(type, 0)));
 
-        check->setGenerator([=, this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-            this->emitExceptionCheck(jit, ExceptionType::DivisionByZero);
+        check->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+            this->emitExceptionCheck(jit, origin, ExceptionType::DivisionByZero);
         });
     }
 
@@ -6417,8 +6418,8 @@ void OMGIRGenerator::emitChecksForModOrDiv(B3::Opcode operation, Value* left, Va
                 append<Value>(m_proc, Equal, origin(), left, constant(type, min)),
                 append<Value>(m_proc, Equal, origin(), right, constant(type, -1))));
 
-        check->setGenerator([=, this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
-            this->emitExceptionCheck(jit, ExceptionType::IntegerOverflow);
+        check->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+            this->emitExceptionCheck(jit, origin, ExceptionType::IntegerOverflow);
         });
     }
 }
@@ -6661,8 +6662,8 @@ auto OMGIRGenerator::addI32TruncSF64(ExpressionType argVar, ExpressionType& resu
         append<Value>(m_proc, GreaterThan, origin(), arg, min));
     outOfBounds = append<Value>(m_proc, Equal, origin(), outOfBounds, constant(Int32, 0));
     CheckValue* trap = append<CheckValue>(m_proc, Check, origin(), outOfBounds);
-    trap->setGenerator([=, this] (CCallHelpers& jit, const StackmapGenerationParams&) {
-        this->emitExceptionCheck(jit, ExceptionType::OutOfBoundsTrunc);
+    trap->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const StackmapGenerationParams&) {
+        this->emitExceptionCheck(jit, origin, ExceptionType::OutOfBoundsTrunc);
     });
     PatchpointValue* patchpoint = append<PatchpointValue>(m_proc, Int32, origin());
     patchpoint->append(arg, ValueRep::SomeRegister);
@@ -6684,8 +6685,8 @@ auto OMGIRGenerator::addI32TruncSF32(ExpressionType argVar, ExpressionType& resu
         append<Value>(m_proc, GreaterEqual, origin(), arg, min));
     outOfBounds = append<Value>(m_proc, Equal, origin(), outOfBounds, constant(Int32, 0));
     CheckValue* trap = append<CheckValue>(m_proc, Check, origin(), outOfBounds);
-    trap->setGenerator([=, this] (CCallHelpers& jit, const StackmapGenerationParams&) {
-        this->emitExceptionCheck(jit, ExceptionType::OutOfBoundsTrunc);
+    trap->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const StackmapGenerationParams&) {
+        this->emitExceptionCheck(jit, origin, ExceptionType::OutOfBoundsTrunc);
     });
     PatchpointValue* patchpoint = append<PatchpointValue>(m_proc, Int32, origin());
     patchpoint->append(arg, ValueRep::SomeRegister);
@@ -6708,8 +6709,8 @@ auto OMGIRGenerator::addI32TruncUF64(ExpressionType argVar, ExpressionType& resu
         append<Value>(m_proc, GreaterThan, origin(), arg, min));
     outOfBounds = append<Value>(m_proc, Equal, origin(), outOfBounds, constant(Int32, 0));
     CheckValue* trap = append<CheckValue>(m_proc, Check, origin(), outOfBounds);
-    trap->setGenerator([=, this] (CCallHelpers& jit, const StackmapGenerationParams&) {
-        this->emitExceptionCheck(jit, ExceptionType::OutOfBoundsTrunc);
+    trap->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const StackmapGenerationParams&) {
+        this->emitExceptionCheck(jit, origin, ExceptionType::OutOfBoundsTrunc);
     });
     PatchpointValue* patchpoint = append<PatchpointValue>(m_proc, Int32, origin());
     patchpoint->append(arg, ValueRep::SomeRegister);
@@ -6731,8 +6732,8 @@ auto OMGIRGenerator::addI32TruncUF32(ExpressionType argVar, ExpressionType& resu
         append<Value>(m_proc, GreaterThan, origin(), arg, min));
     outOfBounds = append<Value>(m_proc, Equal, origin(), outOfBounds, constant(Int32, 0));
     CheckValue* trap = append<CheckValue>(m_proc, Check, origin(), outOfBounds);
-    trap->setGenerator([=, this] (CCallHelpers& jit, const StackmapGenerationParams&) {
-        this->emitExceptionCheck(jit, ExceptionType::OutOfBoundsTrunc);
+    trap->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const StackmapGenerationParams&) {
+        this->emitExceptionCheck(jit, origin, ExceptionType::OutOfBoundsTrunc);
     });
     PatchpointValue* patchpoint = append<PatchpointValue>(m_proc, Int32, origin());
     patchpoint->append(arg, ValueRep::SomeRegister);
@@ -6754,8 +6755,8 @@ auto OMGIRGenerator::addI64TruncSF64(ExpressionType argVar, ExpressionType& resu
         append<Value>(m_proc, GreaterEqual, origin(), arg, min));
     outOfBounds = append<Value>(m_proc, Equal, origin(), outOfBounds, constant(Int32, 0));
     CheckValue* trap = append<CheckValue>(m_proc, Check, origin(), outOfBounds);
-    trap->setGenerator([=, this] (CCallHelpers& jit, const StackmapGenerationParams&) {
-        this->emitExceptionCheck(jit, ExceptionType::OutOfBoundsTrunc);
+    trap->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const StackmapGenerationParams&) {
+        this->emitExceptionCheck(jit, origin, ExceptionType::OutOfBoundsTrunc);
     });
     Value* call = append<CCallValue>(m_proc, B3::Int64, origin(),
         append<ConstPtrValue>(m_proc, origin(), tagCFunction<OperationPtrTag>(Math::i64_trunc_s_f64)),
@@ -6774,8 +6775,8 @@ auto OMGIRGenerator::addI64TruncUF64(ExpressionType argVar, ExpressionType& resu
         append<Value>(m_proc, GreaterThan, origin(), arg, min));
     outOfBounds = append<Value>(m_proc, Equal, origin(), outOfBounds, constant(Int32, 0));
     CheckValue* trap = append<CheckValue>(m_proc, Check, origin(), outOfBounds);
-    trap->setGenerator([=, this] (CCallHelpers& jit, const StackmapGenerationParams&) {
-        this->emitExceptionCheck(jit, ExceptionType::OutOfBoundsTrunc);
+    trap->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const StackmapGenerationParams&) {
+        this->emitExceptionCheck(jit, origin, ExceptionType::OutOfBoundsTrunc);
     });
 
     Value* call = append<CCallValue>(m_proc, B3::Int64, origin(),
@@ -6795,8 +6796,8 @@ auto OMGIRGenerator::addI64TruncSF32(ExpressionType argVar, ExpressionType& resu
         append<Value>(m_proc, GreaterEqual, origin(), arg, min));
     outOfBounds = append<Value>(m_proc, Equal, origin(), outOfBounds, constant(Int32, 0));
     CheckValue* trap = append<CheckValue>(m_proc, Check, origin(), outOfBounds);
-    trap->setGenerator([=, this] (CCallHelpers& jit, const StackmapGenerationParams&) {
-        this->emitExceptionCheck(jit, ExceptionType::OutOfBoundsTrunc);
+    trap->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const StackmapGenerationParams&) {
+        this->emitExceptionCheck(jit, origin, ExceptionType::OutOfBoundsTrunc);
     });
     Value* call = append<CCallValue>(m_proc, B3::Int64, origin(),
         append<ConstPtrValue>(m_proc, origin(), tagCFunction<OperationPtrTag>(Math::i64_trunc_s_f32)),
@@ -6815,8 +6816,8 @@ auto OMGIRGenerator::addI64TruncUF32(ExpressionType argVar, ExpressionType& resu
         append<Value>(m_proc, GreaterThan, origin(), arg, min));
     outOfBounds = append<Value>(m_proc, Equal, origin(), outOfBounds, constant(Int32, 0));
     CheckValue* trap = append<CheckValue>(m_proc, Check, origin(), outOfBounds);
-    trap->setGenerator([=, this] (CCallHelpers& jit, const StackmapGenerationParams&) {
-        this->emitExceptionCheck(jit, ExceptionType::OutOfBoundsTrunc);
+    trap->setGenerator([=, this, origin = this->origin()] (CCallHelpers& jit, const StackmapGenerationParams&) {
+        this->emitExceptionCheck(jit, origin, ExceptionType::OutOfBoundsTrunc);
     });
 
     Value* call = append<CCallValue>(m_proc, B3::Int64, origin(),
