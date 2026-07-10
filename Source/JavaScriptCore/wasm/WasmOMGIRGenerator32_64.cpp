@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2016-2024 Apple Inc. All rights reserved.
+ * Copyright (C) 2026 Igalia S.L. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -3422,11 +3423,10 @@ auto OMGIRGenerator::addArrayNew(uint32_t typeIndex, ExpressionType size, Expres
 #endif
 
     Value* initValue = get(value);
-    if (value->type() == B3::Float || value->type() == B3::Double) {
+    if (value->type() == B3::Float || value->type() == B3::Double)
         initValue = append<Value>(m_proc, BitwiseCast, origin(), initValue);
-        if (initValue->type() == B3::Int32)
-            initValue = append<Value>(m_proc, ZExt32, origin(), initValue);
-    }
+    if (initValue->type() == B3::Int32)
+        initValue = append<Value>(m_proc, ZExt32, origin(), initValue);
 
     result = pushArrayNew(typeIndex, initValue, size);
 
