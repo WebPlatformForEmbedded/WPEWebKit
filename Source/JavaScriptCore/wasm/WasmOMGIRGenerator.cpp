@@ -4887,7 +4887,7 @@ static inline void prepareForTailCallImpl(unsigned functionIndex, CCallHelpers& 
             dataLogLn("callee original: ", RawPointer(fpp->callee().rawPtr()));
             auto& wasmCallee = context.gpr<uintptr_t*>(GPRInfo::callFrameRegister)[CallFrameSlot::callee * 1];
             dataLogLn("callee original: ", RawHex(wasmCallee), " at ", RawPointer(&wasmCallee));
-            dataLogLn("retPC original: ", RawPointer(fpp->rawReturnPCForInspection()));
+            dataLogLn("retPC original: ", RawPointer(fpp->returnPCForInspection()));
             auto& retPC = context.gpr<uintptr_t*>(GPRInfo::callFrameRegister)[CallFrame::returnPCOffset() / sizeof(uint64_t)];
             dataLogLn("retPC original: ", RawHex(retPC), " at ", RawPointer(&retPC));
             dataLogLn("callerFrame original: ", RawPointer(fpp->callerFrame()));
