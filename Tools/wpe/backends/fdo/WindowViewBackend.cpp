@@ -32,12 +32,17 @@
 #include <mutex>
 #include <sys/mman.h>
 #include <unistd.h>
+#include <vector>
 
 // This include order is necessary to enforce the Wayland EGL platform.
 #include <wayland-egl.h>
 #include <epoxy/egl.h>
 #include <wpe/fdo-egl.h>
 #include <xkbcommon/xkbcommon.h>
+
+#if WPE_FDO_CHECK_VERSION(1, 5, 0)
+#include <wayland-server.h>
+#endif
 
 #ifndef EGL_WL_bind_wayland_display
 #define EGL_WL_bind_wayland_display 1
@@ -1051,9 +1056,85 @@ void WindowViewBackend::displayBuffer(struct wpe_fdo_egl_exported_image* image)
 }
 
 #if WPE_FDO_CHECK_VERSION(1, 5, 0)
-void WindowViewBackend::displayBuffer(struct wpe_fdo_shm_exported_buffer*)
+void WindowViewBackend::displayBuffer(struct wpe_fdo_shm_exported_buffer* buffer)
 {
-    g_warning("WindowViewBackend: cannot yet handle wpe_fdo_shm_exported_buffer.");
+    struct wl_shm_buffer* shmBuffer = wpe_fdo_shm_exported_buffer_get_shm_buffer(buffer);
+    uint32_t format = wl_shm_buffer_get_format(shmBuffer);
+    if (format != WL_SHM_FORMAT_ARGB8888 && format != WL_SHM_FORMAT_XRGB8888) {
+        g_warning("WindowViewBackend: unsupported shm buffer format %u.", format);
+        wpe_view_backend_exportable_fdo_egl_dispatch_release_shm_exported_buffer(m_exportable, buffer);
+        wpe_view_backend_exportable_fdo_dispatch_frame_complete(m_exportable);
+        return;
+    }
+
+    int32_t width = wl_shm_buffer_get_width(shmBuffer);
+    int32_t height = wl_shm_buffer_get_height(shmBuffer);
+    int32_t stride = wl_shm_buffer_get_stride(shmBuffer);
+
+    // wl_shm ARGB8888/XRGB8888 buffers are stored in memory as B, G, R, A (little-endian);
+    // swap to R, G, B, A here since the GL texture below is uploaded as plain GL_RGBA.
+    std::vector<uint8_t> pixels(static_cast<size_t>(width) * height * 4);
+    wl_shm_buffer_begin_access(shmBuffer);
+    auto* src = static_cast<uint8_t*>(wl_shm_buffer_get_data(shmBuffer));
+    for (int32_t y = 0; y < height; ++y) {
+        auto* srcRow = src + stride * y;
+        auto* dstRow = pixels.data() + width * 4 * y;
+        for (int32_t x = 0; x < width; ++x) {
+            dstRow[4 * x + 0] = srcRow[4 * x + 2];
+            dstRow[4 * x + 1] = srcRow[4 * x + 1];
+            dstRow[4 * x + 2] = srcRow[4 * x + 0];
+            dstRow[4 * x + 3] = srcRow[4 * x + 3];
+        }
+    }
+    wl_shm_buffer_end_access(shmBuffer);
+    wpe_view_backend_exportable_fdo_egl_dispatch_release_shm_exported_buffer(m_exportable, buffer);
+
+    if (!m_eglContext)
+        return;
+
+    auto& connection = WaylandEGLConnection::singleton();
+    eglMakeCurrent(connection.eglDisplay, m_eglSurface, m_eglSurface, m_eglContext);
+
+    glViewport(0, 0, m_width, m_height);
+    glClearColor(1, 0, 0, 1);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    glUseProgram(m_program);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, m_viewTexture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+    glUniform1i(m_textureUniform, 0);
+
+    static const GLfloat vertices[4][2] = {
+        { -1.0, 1.0 },
+        { 1.0, 1.0 },
+        { -1.0, -1.0 },
+        { 1.0, -1.0 },
+    };
+
+    static const GLfloat texturePos[4][2] = {
+        { 0, 0 },
+        { 1, 0 },
+        { 0, 1 },
+        { 1, 1 },
+    };
+
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, vertices);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, texturePos);
+
+    glEnableVertexAttribArray(0);
+    glEnableVertexAttribArray(1);
+
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+    glDisableVertexAttribArray(0);
+    glDisableVertexAttribArray(1);
+
+    struct wl_callback* callback = wl_surface_frame(m_surface);
+    wl_callback_add_listener(callback, &s_frameListener, this);
+
+    eglSwapBuffers(connection.eglDisplay, m_eglSurface);
 }
 #endif
 
