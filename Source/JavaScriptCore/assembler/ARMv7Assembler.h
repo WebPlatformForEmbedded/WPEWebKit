@@ -1169,13 +1169,16 @@ public:
             add = false;
             offset = -offset;
         }
-        ASSERT((offset & ~0xff) == 0);
-        
+        // The T4 encoding only has an 8-bit offset field; a larger magnitude would
+        // silently corrupt the wback/add/index bits below. Guard in release too, since
+        // release-only mis-encodes here are painful to track down.
+        RELEASE_ASSERT((offset & ~0xff) == 0);
+
         offset |= (wback << 8);
         offset |= (add   << 9);
         offset |= (index << 10);
         offset |= (1 << 11);
-        
+
         m_formatter.twoWordOp12Reg4Reg4Imm12(OP_LDR_imm_T4, rn, rt, offset);
     }
 
@@ -1775,13 +1778,15 @@ public:
             add = false;
             offset = -offset;
         }
-        ASSERT((offset & ~0xff) == 0);
-        
+        // See the matching note in ldr(): the T4 offset field is 8 bits, so guard against
+        // a wider magnitude corrupting the wback/add/index bits in release builds too.
+        RELEASE_ASSERT((offset & ~0xff) == 0);
+
         offset |= (wback << 8);
         offset |= (add   << 9);
         offset |= (index << 10);
         offset |= (1 << 11);
-        
+
         m_formatter.twoWordOp12Reg4Reg4Imm12(OP_STR_imm_T4, rn, rt, offset);
     }
 

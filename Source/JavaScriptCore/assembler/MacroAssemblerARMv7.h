@@ -1095,15 +1095,32 @@ public:
             loadPair32(Address(scratch), dest1, dest2);
         } else {
             ASSERT(dest1 != dest2); // If it is the same, ldp becomes illegal instruction.
-            // ldrd does not support unaligned accesses on some chips, so we avoid it. Order the
-            // two load32s so the base register is not overwritten before both words are read.
-            ArmAddress highAddress(address.base, address.u.offset + 4);
+            // Check if dest1 or dest2 aliases the base register to avoid UNPREDICTABLE ldrd behavior
             if (address.base == dest1) {
+                // Load high word first to avoid clobbering base register
+                ArmAddress highAddress(address.base, address.u.offset + 4);
                 load32(highAddress, dest2);
                 load32(address, dest1);
+            } else if (address.base == dest2) {
+                // Load low word first to avoid clobbering base register
+                load32(address, dest1);
+                ArmAddress highAddress(address.base, address.u.offset + 4);
+                load32(highAddress, dest2);
             } else {
-                load32(address, dest1);
-                load32(highAddress, dest2);
+                int32_t absOffset = address.u.offset;
+                if (absOffset < 0)
+                    absOffset = -absOffset;
+                if (!(absOffset & ~0x3fc)) {
+                    if ((dest1 == addressTempRegister) || (dest2 == addressTempRegister))
+                        invalidateCachedAddressTempRegister();
+                    if ((dest1 == dataTempRegister) || (dest2 == dataTempRegister))
+                        cachedDataTempRegister().invalidate();
+                    m_assembler.ldrd(dest1, dest2, address.base, address.u.offset, /* index: */ true, /* wback: */ false);
+                } else {
+                    load32(address, dest1);
+                    ArmAddress highAddress(address.base, address.u.offset + 4);
+                    load32(highAddress, dest2);
+                }
             }
         }
     }
@@ -1111,6 +1128,24 @@ public:
     void loadPair32(Address address, RegisterID dest1, RegisterID dest2)
     {
         loadPair32(setupArmAddress(address), dest1, dest2);
+    }
+
+    // Doubleword load whose address may be unaligned. loadPair32 uses ldrd, which faults on
+    // unaligned addresses on this target (aarch32 with no kernel alignment fixup), so split it
+    // into two single-word loads that the hardware handles unaligned. Used for Wasm linear
+    // memory, whose alignment is caller-controlled. store32/load32 go through setupArmAddress,
+    // so wide offsets are materialized rather than mis-encoded.
+    void loadPair32Unaligned(Address address, RegisterID dest1, RegisterID dest2)
+    {
+        ASSERT(dest1 != dest2);
+        // Order the loads so the base register is not overwritten before both words are read.
+        if (address.base == dest1) {
+            load32(address.withOffset(4), dest2);
+            load32(address, dest1);
+        } else {
+            load32(address, dest1);
+            load32(address.withOffset(4), dest2);
+        }
     }
 
     void loadPair32(BaseIndex address, RegisterID dest1, RegisterID dest2)

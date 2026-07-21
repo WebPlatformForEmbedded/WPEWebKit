@@ -477,14 +477,14 @@ PartialResult WARN_UNUSED_RETURN BBQJIT::load(LoadOpType loadOp, Value pointer, 
                 m_jit.rshift32(resultLocation.asGPRlo(), TrustedImm32(31), resultLocation.asGPRhi());
                 break;
             case LoadOpType::I64Load:
-                m_jit.loadPair32(location, resultLocation.asGPRlo(), resultLocation.asGPRhi());
+                m_jit.loadPair32Unaligned(location, resultLocation.asGPRlo(), resultLocation.asGPRhi());
                 break;
             case LoadOpType::F32Load:
                 m_jit.load32(location, wasmScratchGPR);
                 m_jit.move32ToFloat(wasmScratchGPR, resultLocation.asFPR());
                 break;
             case LoadOpType::F64Load:
-                m_jit.loadPair32(location, wasmScratchGPR, wasmScratchGPR2);
+                m_jit.loadPair32Unaligned(location, wasmScratchGPR, wasmScratchGPR2);
                 m_jit.move64ToDouble(wasmScratchGPR2, wasmScratchGPR, resultLocation.asFPR());
                 break;
             }
