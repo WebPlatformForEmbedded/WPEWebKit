@@ -699,6 +699,15 @@ uint64_t toGstUnsigned64Time(const MediaTime& mediaTime)
     return time.timeValue();
 }
 
+GstClockTime toGstClockTime(const WTF::MediaTime& mediaTime)
+{
+    if (mediaTime.isInvalid())
+        return GST_CLOCK_TIME_NONE;
+    if (mediaTime < MediaTime::zeroTime())
+        return 0;
+    return static_cast<GstClockTime>(toGstUnsigned64Time(mediaTime));
+}
+
 RefPtr<GstMappedOwnedBuffer> GstMappedOwnedBuffer::create(GRefPtr<GstBuffer>&& buffer)
 {
     auto* mappedBuffer = new GstMappedOwnedBuffer(WTFMove(buffer));

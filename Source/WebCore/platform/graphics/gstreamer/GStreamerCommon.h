@@ -89,14 +89,7 @@ void deinitializeGStreamer();
 unsigned getGstPlayFlag(const char* nick);
 uint64_t toGstUnsigned64Time(const MediaTime&);
 
-inline GstClockTime toGstClockTime(const MediaTime& mediaTime)
-{
-    if (mediaTime.isInvalid())
-        return GST_CLOCK_TIME_NONE;
-    if (mediaTime < MediaTime::zeroTime())
-        return 0;
-    return static_cast<GstClockTime>(toGstUnsigned64Time(mediaTime));
-}
+GstClockTime toGstClockTime(const WTF::MediaTime&);
 
 inline GstClockTime toGstClockTime(const Seconds& seconds)
 {
