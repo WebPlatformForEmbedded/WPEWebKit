@@ -1664,34 +1664,55 @@ PartialResult WARN_UNUSED_RETURN BBQJIT::addSelect(Value condition, Value lhs, V
         LOG_INSTRUCTION("Select", condition, lhs, lhsLocation, rhs, rhsLocation, RESULT(result));
         LOG_INDENT();
 
-        bool inverted = false;
-
-        // If the operands or the result alias, we want the matching one to be on top.
-        if (rhsLocation == resultLocation) {
-            std::swap(lhs, rhs);
-            std::swap(lhsLocation, rhsLocation);
-            inverted = true;
+        if constexpr (is32Bit()) {
+            // On 32-bit an i64 occupies a register pair, and the result pair can
+            // partially overlap rhs (e.g. result's high half is rhs's low half).
+            // Moving lhs into result first, as the 64-bit path does, would then
+            // clobber rhs before the conditional move reads it, so branch and move
+            // only the selected operand -- a single move handles its own overlap.
+            Jump selectFalse = m_jit.branchTest32(ResultCondition::Zero, conditionLocation.asGPR(), conditionLocation.asGPR());
+            consume(condition);
+            if (lhs.isConst())
+                emitMoveConst(lhs, resultLocation);
+            else
+                emitMove(lhs.type(), lhsLocation, resultLocation);
+            Jump done = m_jit.jump();
+            selectFalse.link(&m_jit);
+            if (rhs.isConst())
+                emitMoveConst(rhs, resultLocation);
+            else
+                emitMove(rhs.type(), rhsLocation, resultLocation);
+            done.link(&m_jit);
+        } else {
+            bool inverted = false;
+    
+            // If the operands or the result alias, we want the matching one to be on top.
+            if (rhsLocation == resultLocation) {
+                std::swap(lhs, rhs);
+                std::swap(lhsLocation, rhsLocation);
+                inverted = true;
+            }
+    
+            // If the condition location and the result alias, we want to make sure the condition is
+            // preserved no matter what.
+            if (conditionLocation == resultLocation) {
+                m_jit.move(conditionLocation.asGPR(), wasmScratchGPR);
+                conditionLocation = Location::fromGPR(wasmScratchGPR);
+            }
+    
+            // Kind of gross isel, but it should handle all use/def aliasing cases correctly.
+            if (lhs.isConst())
+                emitMoveConst(lhs, resultLocation);
+            else
+                emitMove(lhs.type(), lhsLocation, resultLocation);
+            Jump ifZero = m_jit.branchTest32(inverted ? ResultCondition::Zero : ResultCondition::NonZero, conditionLocation.asGPR(), conditionLocation.asGPR());
+            consume(condition);
+            if (rhs.isConst())
+                emitMoveConst(rhs, resultLocation);
+            else
+                emitMove(rhs.type(), rhsLocation, resultLocation);
+            ifZero.link(&m_jit);
         }
-
-        // If the condition location and the result alias, we want to make sure the condition is
-        // preserved no matter what.
-        if (conditionLocation == resultLocation) {
-            m_jit.move(conditionLocation.asGPR(), wasmScratchGPR);
-            conditionLocation = Location::fromGPR(wasmScratchGPR);
-        }
-
-        // Kind of gross isel, but it should handle all use/def aliasing cases correctly.
-        if (lhs.isConst())
-            emitMoveConst(lhs, resultLocation);
-        else
-            emitMove(lhs.type(), lhsLocation, resultLocation);
-        Jump ifZero = m_jit.branchTest32(inverted ? ResultCondition::Zero : ResultCondition::NonZero, conditionLocation.asGPR(), conditionLocation.asGPR());
-        consume(condition);
-        if (rhs.isConst())
-            emitMoveConst(rhs, resultLocation);
-        else
-            emitMove(rhs.type(), rhsLocation, resultLocation);
-        ifZero.link(&m_jit);
 
         LOG_DEDENT();
     }
