@@ -227,8 +227,8 @@ void BBQJIT::emitModOrDiv(Value& lhs, Location lhsLocation, Value& rhs, Location
         }
     }
 
-    auto lhsArg = Value::pinned(argType, lhsLocation);
-    auto rhsArg = Value::pinned(argType, rhsLocation);
+    auto lhsArg = lhs.isConst() ? lhs : Value::pinned(argType, lhsLocation);
+    auto rhsArg = rhs.isConst() ? rhs : Value::pinned(argType, rhsLocation);
     consume(result);
     emitCCall(modOrDiv, ArgumentList { lhsArg, rhsArg }, result);
 }
