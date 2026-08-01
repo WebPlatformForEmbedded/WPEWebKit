@@ -137,11 +137,12 @@ if (DEVELOPER_MODE AND DEVELOPER_MODE_FATAL_WARNINGS)
 endif ()
 
 if (COMPILER_IS_GCC_OR_CLANG)
-    if (COMPILER_IS_CLANG OR DEVELOPER_MODE)
+    if (COMPILER_IS_CLANG OR (DEVELOPER_MODE AND NOT WTF_CPU_ARM))
         # Split debug information in ".debug_types" / ".debug_info" sections - this leads
         # to a smaller overall size of the debug information, and avoids linker relocation
         # errors on e.g. aarch64 (relocation R_AARCH64_ABS32 out of range: 4312197985 is not in [-2147483648, 4294967295])
         # But when using GCC this breaks Linux distro debuginfo generation, so limit to DEVELOPER_MODE.
+        # On ARM32 the extra sections exhaust the linker's 32-bit address space, so skip it there.
         WEBKIT_PREPEND_GLOBAL_COMPILER_FLAGS(-fdebug-types-section)
     endif ()
 
