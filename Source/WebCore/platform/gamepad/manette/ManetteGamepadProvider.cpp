@@ -29,7 +29,13 @@
 
 #if ENABLE(GAMEPAD) && OS(LINUX)
 
+#ifndef MANETTE_CHECK_VERSION
+#define MANETTE_CHECK_VERSION(major,minor,micro) 0
+#endif
+
+#if !MANETTE_CHECK_VERSION(1, 0, 0)
 #include "GUniquePtrManette.h"
+#endif
 #include "GamepadProviderClient.h"
 #include "Logging.h"
 #include "ManetteGamepad.h"
@@ -90,10 +96,18 @@ void ManetteGamepadProvider::startMonitoringGamepads(GamepadProviderClient& clie
     m_initialGamepadsConnectedTimer.startOneShot(connectionDelayInterval);
 
     RunLoop::current().dispatch([this] {
+#if MANETTE_CHECK_VERSION(1, 0, 0)
+        gsize numDevices = 0;
+        ManetteDevice** devices = manette_monitor_list_devices(m_monitor.get(), &numDevices);
+        for (gsize i = 0; i < numDevices; i++)
+            deviceConnected(devices[i]);
+        g_free(devices);
+#else
         ManetteDevice* device;
         GUniquePtr<ManetteMonitorIter> iter(manette_monitor_iterate(m_monitor.get()));
         while (manette_monitor_iter_next(iter.get(), &device))
             deviceConnected(device);
+#endif
     });
 }
 
