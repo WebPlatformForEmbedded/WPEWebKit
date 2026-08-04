@@ -74,6 +74,7 @@ public:
 
     void absoluteAxisChanged(ManetteDevice*, StandardGamepadAxis, double value);
     void buttonPressedOrReleased(ManetteDevice*, StandardGamepadButton, bool pressed);
+    void analogButtonChanged(ManetteDevice*, StandardGamepadButton, double value);
     void playEffect(GamepadHapticEffectType, const GamepadEffectParameters&, CompletionHandler<void(bool)>&&) final;
     void stopEffects(CompletionHandler<void()>&&) final;
 
