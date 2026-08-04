@@ -53,7 +53,13 @@ This will define the following variables in your project:
 #]=======================================================================]
 
 find_package(PkgConfig QUIET)
-pkg_check_modules(PC_MANETTE QUIET manette-0.2)
+
+# Try manette-1 first (libmanette 1.0), fall back to manette-0.2
+pkg_check_modules(PC_MANETTE QUIET manette-1)
+if (NOT PC_MANETTE_FOUND)
+    pkg_check_modules(PC_MANETTE QUIET manette-0.2)
+endif ()
+
 set(Manette_COMPILE_OPTIONS ${PC_MANETTE_CFLAGS_OTHER})
 set(Manette_VERSION ${PC_MANETTE_VERSION})
 
@@ -64,7 +70,7 @@ find_path(Manette_INCLUDE_DIR
 )
 
 find_library(Manette_LIBRARY
-    NAMES ${Manette_NAMES} manette-0.2
+    NAMES ${Manette_NAMES} manette-1 manette-0.2
     HINTS ${PC_MANETTE_LIBDIR}
           ${PC_MANETTE_LIBRARY_DIRS}
 )
