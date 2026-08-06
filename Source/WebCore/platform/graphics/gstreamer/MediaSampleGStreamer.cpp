@@ -97,6 +97,15 @@ Ref<MediaSampleGStreamer> MediaSampleGStreamer::createFakeSample(GstCaps*, const
     return adoptRef(*gstreamerMediaSample);
 }
 
+void MediaSampleGStreamer::extendToTheBeginning()
+{
+    // Only to be used with the first sample, as a hack for lack of support for edit lists.
+    // See AppendPipeline::appsinkNewSample()
+    ASSERT(m_dts == MediaTime::zeroTime());
+    m_duration += m_pts;
+    m_pts = MediaTime::zeroTime();
+}
+
 void MediaSampleGStreamer::setTimestamps(const MediaTime& presentationTime, const MediaTime& decodeTime)
 {
     m_pts = presentationTime;
