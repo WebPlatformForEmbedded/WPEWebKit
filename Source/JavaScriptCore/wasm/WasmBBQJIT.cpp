@@ -4985,7 +4985,8 @@ PartialResult BBQJIT::addFusedBranchCompare(OpType opType, ControlType& target, 
         Jump ifNotTaken = emitFusedBranchCompareBranch(opType, left, leftLocation, right, rightLocation);
         currentControlData().addExit(*this, target.targetLocations(), results);
         target.addBranch(m_jit.jump());
-        ifNotTaken.link(&m_jit);
+        if (ifNotTaken.isSet())
+            ifNotTaken.link(&m_jit);
         currentControlData().finalizeBlock(*this, target.targetLocations().size(), results, true);
     }
 
