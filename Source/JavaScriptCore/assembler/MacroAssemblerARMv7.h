@@ -1331,6 +1331,18 @@ public:
         loadPair32(setupArmAddress(address), dest1, dest2);
     }
 
+    void loadPair32Unaligned(Address address, RegisterID dest1, RegisterID dest2)
+    {
+        ASSERT(dest1 != dest2);
+        if (address.base == dest1) {
+            load32(address.withOffset(4), dest2);
+            load32(address, dest1);
+        } else {
+            load32(address, dest1);
+            load32(address.withOffset(4), dest2);
+        }
+    }
+
     void loadPair32(BaseIndex address, RegisterID dest1, RegisterID dest2)
     {
         // Using r0-r7 can often be encoded with a shorter (16-bit vs 32-bit) instruction, so use
