@@ -1201,6 +1201,7 @@ void MediaSource::detachFromElement()
         m_seekTargetPromise->reject(PlatformMediaError::Cancelled);
         m_seekTargetPromise.reset();
     }
+    m_pendingSeekTarget.reset();
 }
 
 void MediaSource::sourceBufferDidChangeActiveState(SourceBuffer&, bool)
