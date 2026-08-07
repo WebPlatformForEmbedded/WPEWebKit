@@ -3069,7 +3069,7 @@ public:
         // Optimize for comparing with zero (unsigned comparisons only)
         if (!rightHi.m_value && !rightLo.m_value) {
             if (cond == Below)
-                return Jump(); // no unsigned value is < 0
+                return branch32(Below, leftHi, TrustedImm32(0));
             if (cond == AboveOrEqual)
                 return jump(); // all unsigned values are >= 0
 
