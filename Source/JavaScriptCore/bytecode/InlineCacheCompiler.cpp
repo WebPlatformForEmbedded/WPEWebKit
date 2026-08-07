@@ -4048,7 +4048,13 @@ void InlineCacheCompiler::emitProxyObjectAccess(unsigned index, AccessCase& acce
     jit.load8(CCallHelpers::Address(baseGPR, JSCell::typeInfoTypeOffset()), scratchGPR);
     fallThrough.append(jit.branch32(CCallHelpers::NotEqual, scratchGPR, CCallHelpers::TrustedImm32(ProxyObjectType)));
 
-    InlineCacheCompiler::SpillState spillState = preserveLiveRegistersToStackForCall();
+    RegisterSet extraSpill;
+#if CPU(ARM_THUMB2)
+    // Calls below can clobber this, which is a problem for DFG.
+    extraSpill.add(GPRInfo::metadataTableRegister, IgnoreVectors);
+    extraSpill.add(GPRInfo::jitDataRegister, IgnoreVectors);
+#endif
+    InlineCacheCompiler::SpillState spillState = preserveLiveRegistersToStackForCall(extraSpill);
 
     if (m_stubInfo.useDataIC) {
         callSiteIndexForExceptionHandlingOrOriginal();
@@ -4192,10 +4198,6 @@ void InlineCacheCompiler::emitProxyObjectAccess(unsigned index, AccessCase& acce
 #if USE(JSVALUE32_64)
         // We *always* know that the proxy function, if non-null, is a cell.
         jit.move(CCallHelpers::TrustedImm32(JSValue::CellTag), BaselineJITRegisters::Call::calleeJSR.tagGPR());
-#endif
-#if CPU(ARM_THUMB2)
-        // ARMv7 clobbers metadataTable register. Thus we need to restore them back here.
-        JIT::emitMaterializeMetadataAndConstantPoolRegisters(jit);
 #endif
         m_callLinkInfos[index] = makeUnique<OptimizingCallLinkInfo>(m_stubInfo.codeOrigin, nullptr);
         auto* callLinkInfo = m_callLinkInfos[index].get();
