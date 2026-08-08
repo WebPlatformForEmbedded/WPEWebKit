@@ -4255,6 +4255,7 @@ void testALUSub32Immediate()
             jit.ret();
         });
 
+#if CPU(ARM_THUMB2)
         auto reversed = compile([=] (CCallHelpers& jit) {
             emitFunctionPrologue(jit);
             jit.move(GPRInfo::argumentGPR0, GPRInfo::argumentGPR1);
@@ -4270,14 +4271,17 @@ void testALUSub32Immediate()
             emitFunctionEpilogue(jit);
             jit.ret();
         });
+#endif
 
         for (auto value : aluValues()) {
             uint32_t expected = value - static_cast<uint32_t>(immediate);
-            uint32_t expectedReversed = static_cast<uint32_t>(immediate) - value;
             CHECK_EQ(invoke<uint32_t>(aliased, value), expected);
             CHECK_EQ(invoke<uint32_t>(distinct, value), expected);
+#if CPU(ARM_THUMB2)
+            uint32_t expectedReversed = static_cast<uint32_t>(immediate) - value;
             CHECK_EQ(invoke<uint32_t>(reversed, value), expectedReversed);
             CHECK_EQ(invoke<uint32_t>(reversedAliased, value), expectedReversed);
+#endif
         }
     }
 }
@@ -4465,6 +4469,7 @@ void testALUNeg32AndNot32()
         jit.ret();
     });
 
+#if CPU(ARM_THUMB2) || CPU(ARM64) || CPU(RISCV64)
     auto notDistinct = compile([] (CCallHelpers& jit) {
         emitFunctionPrologue(jit);
         jit.move(GPRInfo::argumentGPR0, GPRInfo::argumentGPR1);
@@ -4472,6 +4477,7 @@ void testALUNeg32AndNot32()
         emitFunctionEpilogue(jit);
         jit.ret();
     });
+#endif
 
     auto xorMinusOne = compile([] (CCallHelpers& jit) {
         emitFunctionPrologue(jit);
@@ -4484,7 +4490,9 @@ void testALUNeg32AndNot32()
     for (auto value : aluValues()) {
         CHECK_EQ(invoke<uint32_t>(negAliased, value), static_cast<uint32_t>(0u - value));
         CHECK_EQ(invoke<uint32_t>(notAliased, value), ~value);
+#if CPU(ARM_THUMB2) || CPU(ARM64) || CPU(RISCV64)
         CHECK_EQ(invoke<uint32_t>(notDistinct, value), ~value);
+#endif
         CHECK_EQ(invoke<uint32_t>(xorMinusOne, value), ~value);
     }
 }
