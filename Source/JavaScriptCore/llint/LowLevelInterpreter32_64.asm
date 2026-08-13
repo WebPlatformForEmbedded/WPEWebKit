@@ -3427,7 +3427,9 @@ llintOpWithReturn(op_instanceof, OpInstanceof, macro (size, get, dispatch, retur
     callSlowPath(_llint_slow_path_instanceof)
     dispatch()
 .osrReturnPoint:
+    # We do not checkpoint properly on 32-bit.
     getterSetterOSRExitReturnPoint(op_instanceof, size)
+    callSlowPath(_llint_slow_path_instanceof)
     dispatch()
 end)
 
