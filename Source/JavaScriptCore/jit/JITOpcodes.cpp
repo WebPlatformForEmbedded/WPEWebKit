@@ -1210,10 +1210,14 @@ void JIT::emit_op_catch(const JSInstruction* currentInstruction)
     // we updated the exception handlers to point here). Because the LLInt uses a different value
     // inside GPRInfo::jitDataRegister, the callee saves we restore above may not contain the correct register.
     // So we replenish it here.
+#if CPU(ARM_THUMB2)
+    emitMaterializeMetadataAndConstantPoolRegisters();
+#else
     {
         loadPtr(addressFor(CallFrameSlot::codeBlock), regT0);
         loadPtr(Address(regT0, CodeBlock::offsetOfJITData()), GPRInfo::jitDataRegister);
     }
+#endif
 
     callOperationNoExceptionCheck(operationRetrieveAndClearExceptionIfCatchable, TrustedImmPtr(&vm()));
     Jump isCatchableException = branchTest32(NonZero, returnValueGPR);
