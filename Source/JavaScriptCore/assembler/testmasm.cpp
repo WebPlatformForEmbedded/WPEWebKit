@@ -8340,6 +8340,7 @@ void testBranchNegAndOr32Masmbr()
         }
     }
 
+#if CPU(X86) || CPU(X86_64) || CPU(ARM_THUMB2)
     for (auto cond : { MacroAssembler::Zero, MacroAssembler::NonZero, MacroAssembler::Signed, MacroAssembler::PositiveOrZero }) {
         auto testOr = compile([=] (CCallHelpers& jit) {
             emitFunctionPrologue(jit);
@@ -8371,6 +8372,7 @@ void testBranchNegAndOr32Masmbr()
                 CHECK_EQ(invoke<int>(testOr, a, b), evaluateResult32(cond, a | b, false, false) ? 1 : 0);
         }
     }
+#endif
 }
 
 void testMoveConditionally32Masmbr()
