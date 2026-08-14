@@ -589,6 +589,8 @@ void NavigationScheduler::timerFired()
         InspectorInstrumentation::frameClearedScheduledNavigation(m_frame);
         return;
     }
+    if (m_frame.loader().provisionalDocumentLoader())
+        return;
 
     Ref<Frame> protect(m_frame);
 
