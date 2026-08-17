@@ -172,34 +172,30 @@ bool CDMPrivateThunder::supportsConfiguration(const CDMKeySystemConfiguration& c
 Vector<AtomString> CDMPrivateThunder::supportedRobustnesses() const
 {
 #if THUNDER_HAS_OCDM_SUPPORTED_ROBUSTNESS
-    Vector<AtomString> robustnesses = { emptyAtom() };
-    
-    if (!m_thunderSystem) {
-        GST_ERROR("CDMPrivateThunder: No active OpenCDM system for %s. Returning default robustness only.", m_keySystem.utf8().data());
-        return robustnesses;
-    }
+    if (m_thunderSystem) {
+        Vector<AtomString> robustnesses = { emptyAtom() };
+        char** buffer = nullptr;
+        uint16_t count = 0;
 
-    char** buffer = nullptr;
-    uint16_t count = 0;
-
-    OpenCDMError error = opencdm_system_supported_robustness(m_thunderSystem.get(), &buffer, &count);
-    if (error == ERROR_NONE && buffer != nullptr && count > 0) {
-        robustnesses.reserveCapacity(robustnesses.size() + count);
-        for (uint16_t i = 0; i < count; ++i) {
-            if (buffer[i] != nullptr) {
-                robustnesses.append(AtomString::fromLatin1(buffer[i]));;
-                free(buffer[i]);
+        OpenCDMError error = opencdm_system_supported_robustness(m_thunderSystem.get(), &buffer, &count);
+        if (error == ERROR_NONE && buffer != nullptr && count > 0) {
+            robustnesses.reserveCapacity(robustnesses.size() + count);
+            for (uint16_t i = 0; i < count; ++i) {
+                if (buffer[i] != nullptr) {
+                    robustnesses.append(AtomString::fromLatin1(buffer[i]));
+                    free(buffer[i]);
+                }
             }
         }
-    }
-    if (buffer != nullptr) {
-        free(buffer);
-    }
+        if (buffer != nullptr) {
+            free(buffer);
+        } 
  
-    if (error == ERROR_NONE && count > 0) {
-        return robustnesses;
+        if (error == ERROR_NONE && robustnesses.size() > 1) {
+            return robustnesses;
+        }
+        GST_WARNING("Failed to get robustness levels from OCDM.Falling back to default WebKit robustness levels.");
     }
-    GST_WARNING("Failed to get robustness levels from OCDM.Falling back to default WebKit robustness levels.");
 #endif
 
     return { emptyAtom(), "SW_SECURE_DECODE"_s, "SW_SECURE_CRYPTO"_s };
