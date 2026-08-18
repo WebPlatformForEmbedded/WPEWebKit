@@ -634,12 +634,19 @@ static void webKitMediaSrcLoop(void* userData)
     } else if (GST_IS_EVENT(object.get())) {
         // EOS events and other enqueued events are also sent unlocked so they can react to flushes if necessary.
         GRefPtr<GstEvent> event = GRefPtr<GstEvent>(GST_EVENT(object.leakRef()));
+        bool isEOS = GST_EVENT_TYPE(event.get()) == GST_EVENT_EOS;
 
         streamingMembers.unlockEarly();
         GST_DEBUG_OBJECT(pad, "Pushing event downstream: %" GST_PTR_FORMAT, event.get());
         bool eventHandled = gst_pad_push_event(pad, GRefPtr<GstEvent>(event).leakRef());
         if (!eventHandled)
             GST_DEBUG_OBJECT(pad, "Pushed event was not handled: %" GST_PTR_FORMAT, event.get());
+
+        if (isEOS) {
+            DataMutexLocker streamingMembersAfterEOS { stream->streamingMembersDataMutex };
+            GST_INFO_OBJECT(pad, "EOS pushed, resetting wasStreamStartSent to allow re-sending STREAM_START.");
+            streamingMembersAfterEOS->wasStreamStartSent = false;
+        }
     } else
         ASSERT_NOT_REACHED();
 }
