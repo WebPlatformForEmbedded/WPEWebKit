@@ -31,6 +31,14 @@
 namespace WebCore {
 
 TextureMapperPlatformLayerProxy::TextureMapperPlatformLayerProxy() = default;
+
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+TextureMapperPlatformLayerProxy::TextureMapperPlatformLayerProxy(Function<void()>&& layerAttachedCallback)
+    : m_layerAttachedCallback(WTFMove(layerAttachedCallback))
+{
+}
+#endif
+
 TextureMapperPlatformLayerProxy::~TextureMapperPlatformLayerProxy() = default;
 
 bool TextureMapperPlatformLayerProxy::isActive()
