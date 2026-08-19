@@ -356,7 +356,8 @@ protected:
 #endif
 
 #if USE(TEXTURE_MAPPER)
-    void pushTextureToCompositor(bool isDuplicateSample);
+    enum class IsDuplicateSample : bool { No, Yes };
+    void pushTextureToCompositor(IsDuplicateSample);
 #if USE(NICOSIA)
     void swapBuffersIfNeeded() final;
 #else

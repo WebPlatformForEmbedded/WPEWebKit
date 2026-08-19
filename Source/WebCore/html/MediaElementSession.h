@@ -150,6 +150,7 @@ public:
     bool hasBehaviorRestriction(BehaviorRestrictions restriction) const { return restriction & m_restrictions; }
 
     HTMLMediaElement& element() const { return m_element; }
+    void mediaUsageManagerSessionWillBeSuspended();
 
     bool wantsToObserveViewportVisibilityForMediaControls() const;
     bool wantsToObserveViewportVisibilityForAutoplay() const;

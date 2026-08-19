@@ -47,6 +47,14 @@ class TextureMapperPlatformLayerProxyDMABuf final : public TextureMapperPlatform
     WTF_MAKE_FAST_ALLOCATED;
 public:
     explicit TextureMapperPlatformLayerProxyDMABuf(ContentType);
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+    // Invoked on the compositing thread whenever a new (non-null) target layer is attached,
+    // e.g. because the previous layer was destroyed and recreated, which happens whenever the
+    // render tree is rebuilt, such as when a page is restored from the back/forward cache.
+    // This lets the owning media player re-deliver its current frame so the new layer isn't
+    // left blank until the next decoded sample arrives (which, for a paused player, may never happen).
+    TextureMapperPlatformLayerProxyDMABuf(ContentType, Function<void()>&& layerAttachedCallback);
+#endif
     virtual ~TextureMapperPlatformLayerProxyDMABuf();
 
     bool isDMABufBased() const override { return true; }

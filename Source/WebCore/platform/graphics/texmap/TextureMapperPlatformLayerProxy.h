@@ -53,6 +53,15 @@ public:
     };
 
     explicit TextureMapperPlatformLayerProxy(ContentType);
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+    // layerAttachedCallback is invoked on the compositing thread whenever a new (non-null)
+    // target layer is attached, e.g. because the previous layer was destroyed and recreated,
+    // which happens whenever the render tree is rebuilt, such as when a page is restored from
+    // the back/forward cache. This lets the owning media player re-deliver its current frame so
+    // the new layer isn't left blank until the next decoded sample arrives (which, for a paused
+    // player, may never happen).
+    TextureMapperPlatformLayerProxy(ContentType, Function<void()>&& layerAttachedCallback);
+#endif
     virtual ~TextureMapperPlatformLayerProxy();
 
     virtual bool isGLBased() const { return false; }
@@ -72,6 +81,9 @@ protected:
     Compositor* m_compositor { nullptr };
     TextureMapperLayer* m_targetLayer { nullptr };
     ContentType m_contentType;
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+    Function<void()> m_layerAttachedCallback;
+#endif
 };
 
 } // namespace WebCore
