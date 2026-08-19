@@ -27,6 +27,7 @@
 
 #if USE(COORDINATED_GRAPHICS)
 
+#include <wtf/Function.h>
 #include <wtf/Lock.h>
 #include <wtf/ThreadSafeRefCounted.h>
 
@@ -60,9 +61,22 @@ public:
     virtual void swapBuffer() = 0;
 
 protected:
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+    // layerAttachedCallback is invoked on the compositing thread whenever a new (non-null)
+    // target layer is attached, e.g. because the previous layer was destroyed and recreated,
+    // which happens whenever the render tree is rebuilt, such as when a page is restored from
+    // the back/forward cache. This lets the owning media player re-deliver its current frame so
+    // the new layer isn't left blank until the next decoded sample arrives (which, for a paused
+    // player, may never happen).
+    TextureMapperPlatformLayerProxy(Function<void()>&& layerAttachedCallback);
+#endif
+
     Lock m_lock;
     Compositor* m_compositor { nullptr };
     TextureMapperLayer* m_targetLayer { nullptr };
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+    Function<void()> m_layerAttachedCallback;
+#endif
 };
 
 } // namespace WebCore

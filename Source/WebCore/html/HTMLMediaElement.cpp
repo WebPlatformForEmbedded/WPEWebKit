@@ -5919,16 +5919,17 @@ void HTMLMediaElement::cancelPendingTasks()
 #endif
 }
 
-void HTMLMediaElement::userCancelledLoad()
+void HTMLMediaElement::userCancelledLoad(ShouldDestroyMediaPlayer shouldDestroyMediaPlayer)
 {
     INFO_LOG(LOGIDENTIFIER);
 
     // FIXME: We should look to reconcile the iOS and non-iOS code (below).
 #if PLATFORM(IOS_FAMILY)
+    UNUSED_PARAM(shouldDestroyMediaPlayer);
     if (m_networkState == NETWORK_EMPTY || m_readyState >= HAVE_METADATA)
         return;
 #else
-    if (m_networkState == NETWORK_EMPTY || m_completelyLoaded)
+    if (m_networkState == NETWORK_EMPTY || m_completelyLoaded || shouldDestroyMediaPlayer == ShouldDestroyMediaPlayer::No)
         return;
 #endif
 
@@ -6060,7 +6061,7 @@ void HTMLMediaElement::stopWithoutDestroyingMediaPlayer()
 
     setAutoplayEventPlaybackState(AutoplayEventPlaybackState::None);
 
-    userCancelledLoad();
+    userCancelledLoad(ShouldDestroyMediaPlayer::No);
 
     updateRenderer();
 
@@ -6113,8 +6114,10 @@ void HTMLMediaElement::suspend(ReasonForSuspension reason)
     case ReasonForSuspension::BackForwardCache:
         stopWithoutDestroyingMediaPlayer();
         setBufferingPolicy(BufferingPolicy::MakeResourcesPurgeable);
-        if (m_mediaSession)
+        if (m_mediaSession) {
             m_mediaSession->addBehaviorRestriction(MediaElementSession::RequirePageConsentToResumeMedia);
+            m_mediaSession->mediaUsageManagerSessionWillBeSuspended();
+        }
         break;
     case ReasonForSuspension::PageWillBeSuspended:
         stopWithoutDestroyingMediaPlayer();
@@ -8116,8 +8119,16 @@ void HTMLMediaElement::resumeAutoplaying()
 void HTMLMediaElement::mayResumePlayback(bool shouldResume)
 {
     ALWAYS_LOG(LOGIDENTIFIER, "paused = ", paused());
-    if (paused() && shouldResume)
-        play();
+    if (ended())
+        return;
+
+    if (paused()) {
+        if (shouldResume)
+            play();
+        return;
+    }
+
+    updatePlayState();
 }
 
 String HTMLMediaElement::mediaSessionTitle() const

@@ -94,6 +94,13 @@ struct TextureMapperPlatformLayerProxyDMABuf::DMABufLayer::EGLImageData {
 };
 
 TextureMapperPlatformLayerProxyDMABuf::TextureMapperPlatformLayerProxyDMABuf() = default;
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+TextureMapperPlatformLayerProxyDMABuf::TextureMapperPlatformLayerProxyDMABuf(Function<void()>&& layerAttachedCallback)
+    : TextureMapperPlatformLayerProxy(WTFMove(layerAttachedCallback))
+{
+}
+#endif
+
 TextureMapperPlatformLayerProxyDMABuf::~TextureMapperPlatformLayerProxyDMABuf() = default;
 
 void TextureMapperPlatformLayerProxyDMABuf::activateOnCompositingThread(Compositor* compositor, TextureMapperLayer* targetLayer)
@@ -106,11 +113,21 @@ void TextureMapperPlatformLayerProxyDMABuf::activateOnCompositingThread(Composit
     ASSERT(compositor);
     ASSERT(targetLayer);
 
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+    bool didAttachNewLayer;
+#endif
     {
         Locker locker { m_lock };
         m_compositor = compositor;
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+        didAttachNewLayer = targetLayer && m_targetLayer != targetLayer;
+#endif
         m_targetLayer = targetLayer;
     }
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+    if (didAttachNewLayer && m_layerAttachedCallback)
+        m_layerAttachedCallback();
+#endif
 }
 
 void TextureMapperPlatformLayerProxyDMABuf::invalidate()
