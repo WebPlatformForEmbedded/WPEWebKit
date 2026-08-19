@@ -47,6 +47,13 @@ TextureMapperPlatformLayerProxyGL::TextureMapperPlatformLayerProxyGL(ContentType
 {
 }
 
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+TextureMapperPlatformLayerProxyGL::TextureMapperPlatformLayerProxyGL(ContentType contentType, Function<void()>&& layerAttachedCallback)
+    : TextureMapperPlatformLayerProxy(contentType, WTFMove(layerAttachedCallback))
+{
+}
+#endif
+
 TextureMapperPlatformLayerProxyGL::~TextureMapperPlatformLayerProxyGL()
 {
     Locker locker { m_lock };
@@ -64,12 +71,18 @@ void TextureMapperPlatformLayerProxyGL::activateOnCompositingThread(Compositor* 
     ASSERT(compositor);
     ASSERT(targetLayer);
     Function<void()> updateFunction;
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+    bool didAttachNewLayer = false;
+#endif
     {
         Locker locker { m_lock };
         m_compositor = compositor;
         // If the proxy is already active on another layer, remove the layer's reference to the current buffer.
         if (m_targetLayer)
             m_targetLayer->setContentsLayer(nullptr);
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+        didAttachNewLayer = targetLayer && m_targetLayer != targetLayer;
+#endif
         m_targetLayer = targetLayer;
         if (m_targetLayer && m_currentBuffer)
             m_targetLayer->setContentsLayer(m_currentBuffer.get());
@@ -82,11 +95,15 @@ void TextureMapperPlatformLayerProxyGL::activateOnCompositingThread(Compositor* 
         m_releaseUnusedBuffersTimer->setPriority(RunLoopSourcePriority::ReleaseUnusedResourcesTimer);
 #endif
 
-        if (!m_compositorThreadUpdateFunction)
-            return;
-        updateFunction = WTFMove(m_compositorThreadUpdateFunction);
+        if (m_compositorThreadUpdateFunction)
+            updateFunction = WTFMove(m_compositorThreadUpdateFunction);
     }
-    updateFunction();
+    if (updateFunction)
+        updateFunction();
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+    if (didAttachNewLayer && m_layerAttachedCallback)
+        m_layerAttachedCallback();
+#endif
 }
 
 void TextureMapperPlatformLayerProxyGL::invalidate()

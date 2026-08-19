@@ -35,6 +35,13 @@ TextureMapperPlatformLayerProxy::TextureMapperPlatformLayerProxy(ContentType con
 {
 }
 
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+TextureMapperPlatformLayerProxy::TextureMapperPlatformLayerProxy(ContentType contentType, Function<void()>&& layerAttachedCallback)
+    : m_contentType(contentType), m_layerAttachedCallback(WTFMove(layerAttachedCallback))
+{
+}
+#endif
+
 TextureMapperPlatformLayerProxy::~TextureMapperPlatformLayerProxy() = default;
 
 bool TextureMapperPlatformLayerProxy::isActive()

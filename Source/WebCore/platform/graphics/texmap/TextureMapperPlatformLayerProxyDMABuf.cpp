@@ -76,6 +76,13 @@ TextureMapperPlatformLayerProxyDMABuf::TextureMapperPlatformLayerProxyDMABuf(Con
 {
 }
 
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+TextureMapperPlatformLayerProxyDMABuf::TextureMapperPlatformLayerProxyDMABuf(ContentType contentType, Function<void()>&& layerAttachedCallback)
+    : TextureMapperPlatformLayerProxy(contentType, WTFMove(layerAttachedCallback))
+{
+}
+#endif
+
 TextureMapperPlatformLayerProxyDMABuf::~TextureMapperPlatformLayerProxyDMABuf() = default;
 
 void TextureMapperPlatformLayerProxyDMABuf::activateOnCompositingThread(Compositor* compositor, TextureMapperLayer* targetLayer)
@@ -87,14 +94,23 @@ void TextureMapperPlatformLayerProxyDMABuf::activateOnCompositingThread(Composit
     ASSERT(m_compositorThread == &Thread::current());
     ASSERT(compositor);
     ASSERT(targetLayer);
-
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+    bool didAttachNewLayer;
+#endif
     {
         Locker locker { m_lock };
         m_compositor = compositor;
         if (m_targetLayer)
             m_targetLayer->setContentsLayer(nullptr);
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+        didAttachNewLayer = targetLayer && m_targetLayer != targetLayer;
+#endif
         m_targetLayer = targetLayer;
     }
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+    if (didAttachNewLayer && m_layerAttachedCallback)
+        m_layerAttachedCallback();
+#endif
 }
 
 void TextureMapperPlatformLayerProxyDMABuf::invalidate()
