@@ -44,15 +44,14 @@
 
 using namespace WebCore;
 
-// Never pause download of media resources smaller than 2MiB.
-#define SMALL_MEDIA_RESOURCE_MAX_SIZE 2 * 1024 * 1024
-
-// Keep at most 2% of the full, non-small, media resource buffered. When this
-// threshold is reached, the download task is paused.
+// Keep at most 2% of the full media resource buffered or 2MB for small files (<100MB).
+// When this threshold is reached, the download task is paused.
+// For files smaller than MIN_QUEUE_HIGH_WATERMARK, downloading won't be paused.
 #define HIGH_QUEUE_FACTOR_THRESHOLD 0.02
+#define MIN_QUEUE_HIGH_WATERMARK (2 * 1024 * 1024)
 
-// Keep at least 20% of maximum queue size buffered. When this threshold is
-// reached, the download task resumes.
+// Keep at least 20% of maximum queue size buffered (size * HIGH_QUEUE_FACTOR_THRESHOLD * LOW_QUEUE_FACTOR_THRESHOLD).
+// When this threshold is reached, the download task resumes.
 #define LOW_QUEUE_FACTOR_THRESHOLD 0.2
 
 class CachedResourceStreamingClient final : public PlatformMediaResourceClient {
@@ -115,6 +114,7 @@ struct WebKitWebSrcPrivate {
         bool didPassAccessControlCheck { false };
         bool haveSize { false };
         uint64_t size { 0 };
+        size_t queueHighWatermark { 0 };
         bool isSeekable { false };
         GRefPtr<GstCaps> pendingCaps;
         GRefPtr<GstMessage> pendingHttpHeadersMessage; // Set from MT, sent from create().
@@ -285,6 +285,7 @@ static void webkitWebSrcReset([[maybe_unused]] WebKitWebSrc* src, DataMutexLocke
         members->isSeekable = false;
         members->haveSize = false;
         members->size = 0;
+        members->queueHighWatermark = 0;
         members->requestedPosition = 0;
         members->stopPosition = UINT64_MAX;
         members->readPosition = members->requestedPosition;
@@ -388,10 +389,10 @@ static void restartLoaderIfNeeded(WebKitWebSrc* src, DataMutexLocker<WebKitWebSr
         return;
     }
 
-    GST_TRACE_OBJECT(src, "is download suspended %s, does have EOS %s, does have size %s, is seekable %s, size %" G_GUINT64_FORMAT
-        " (min %u)", boolForPrinting(members->isDownloadSuspended), boolForPrinting(members->doesHaveEOS), boolForPrinting(members->haveSize)
-        , boolForPrinting(members->isSeekable), members->size, SMALL_MEDIA_RESOURCE_MAX_SIZE);
-    if (members->doesHaveEOS || !members->haveSize || !members->isSeekable || members->size <= SMALL_MEDIA_RESOURCE_MAX_SIZE) {
+    GST_TRACE_OBJECT(src, "is download suspended %s, does have EOS %s, does have size %s, is seekable %s, size %" G_GUINT64_FORMAT,
+        boolForPrinting(members->isDownloadSuspended), boolForPrinting(members->doesHaveEOS), boolForPrinting(members->haveSize)
+        , boolForPrinting(members->isSeekable), members->size);
+    if (members->doesHaveEOS || !members->haveSize || !members->isSeekable) {
         GST_TRACE_OBJECT(src, "download cannot be stopped/restarted");
         return;
     }
@@ -402,10 +403,10 @@ static void restartLoaderIfNeeded(WebKitWebSrc* src, DataMutexLocker<WebKitWebSr
     }
 
     size_t queueSize = gst_adapter_available(members->adapter.get());
-    GST_TRACE_OBJECT(src, "queue size %zu (min %1.0f)", queueSize
-        , members->size * HIGH_QUEUE_FACTOR_THRESHOLD * LOW_QUEUE_FACTOR_THRESHOLD);
+    size_t lowWatermark = members->queueHighWatermark * LOW_QUEUE_FACTOR_THRESHOLD;
+    GST_TRACE_OBJECT(src, "queue size %zu (min %zu)", queueSize, lowWatermark);
 
-    if (queueSize >= members->size * HIGH_QUEUE_FACTOR_THRESHOLD * LOW_QUEUE_FACTOR_THRESHOLD) {
+    if (queueSize >= lowWatermark) {
         GST_TRACE_OBJECT(src, "queue size above low watermark, not restarting download");
         return;
     }
@@ -427,17 +428,16 @@ static void stopLoaderIfNeeded([[maybe_unused]] WebKitWebSrc* src, DataMutexLock
         return;
     }
 
-    GST_TRACE_OBJECT(src, "is download suspended %s, does have size %s, is seekable %s, size %" G_GUINT64_FORMAT " (min %u)"
-        , boolForPrinting(members->isDownloadSuspended), boolForPrinting(members->haveSize), boolForPrinting(members->isSeekable), members->size
-        , SMALL_MEDIA_RESOURCE_MAX_SIZE);
-    if (!members->isSeekable || members->size <= SMALL_MEDIA_RESOURCE_MAX_SIZE) {
+    GST_TRACE_OBJECT(src, "is download suspended %s, does have size %s, is seekable %s, size %" G_GUINT64_FORMAT,
+        boolForPrinting(members->isDownloadSuspended), boolForPrinting(members->haveSize), boolForPrinting(members->isSeekable), members->size);
+    if (!members->isSeekable) {
         GST_TRACE_OBJECT(src, "download cannot be stopped/restarted");
         return;
     }
 
     size_t queueSize = gst_adapter_available(members->adapter.get());
-    GST_TRACE_OBJECT(src, "queue size %zu (max %1.0f)", queueSize, members->size * HIGH_QUEUE_FACTOR_THRESHOLD);
-    if (queueSize <= members->size * HIGH_QUEUE_FACTOR_THRESHOLD) {
+    GST_TRACE_OBJECT(src, "queue size %zu (max %zu)", queueSize, members->queueHighWatermark);
+    if (queueSize <= members->queueHighWatermark) {
         GST_TRACE_OBJECT(src, "queue size under high watermark, not stopping download");
         return;
     }
@@ -1101,9 +1101,12 @@ void CachedResourceStreamingClient::responseReceived(PlatformMediaResource&, con
         if (!members->haveSize || members->size != length) {
             members->haveSize = true;
             members->size = length;
+            members->queueHighWatermark = std::max<size_t>(length * HIGH_QUEUE_FACTOR_THRESHOLD, MIN_QUEUE_HIGH_WATERMARK);
         }
-    } else
+    } else {
         members->haveSize = false;
+        members->queueHighWatermark = 0;
+    }
 
     // Signal to downstream if this is an Icecast stream.
     GRefPtr<GstCaps> caps;
