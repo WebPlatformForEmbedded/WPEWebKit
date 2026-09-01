@@ -1405,7 +1405,24 @@ void FrameLoader::loadURL(FrameLoadRequest&& frameLoadRequest, const String& ref
 
     bool sameURL = shouldTreatURLAsSameAsCurrent(&frameLoadRequest.requesterSecurityOrigin(), newURL);
     const String& httpMethod = request.httpMethod();
-    
+
+    static bool keepNavigationOnLocationReload = false;
+    static bool keepNavigationOnLocationReloadInitialized = false;
+    if (!keepNavigationOnLocationReloadInitialized) {
+        keepNavigationOnLocationReload = !!getenv("WPE_KEEP_NAVIGATION_ON_LOCATION_RELOAD");
+        keepNavigationOnLocationReloadInitialized = true;
+    }
+    // A page-script-initiated reload (e.g. window.location.reload() via a timer) racing
+    // an already-in-flight client/user navigation to a different URL (e.g. a native
+    // webkit_web_view_load_uri() call). Stop a page-script-initiated reload here.
+    if (keepNavigationOnLocationReload && isReload(newLoadType) && !frameLoadRequest.isRequestFromClientOrUserInput()) {
+        DocumentLoader* ongoingLoader = m_policyDocumentLoader ? m_policyDocumentLoader.get() : m_provisionalDocumentLoader.get();
+        if (ongoingLoader && ongoingLoader->isRequestFromClientOrUserInput() && ongoingLoader->request().url() != newURL) {
+            FRAMELOADER_RELEASE_LOG(ResourceLoading, "loadURL: navigation to: %s will be continued after location reload to url: %s", ongoingLoader->request().url().string().utf8().data(), newURL.string().utf8().data());
+            return;
+        }
+    }
+
     // Make sure to do scroll to fragment processing even if the URL is
     // exactly the same so pages with '#' links and DHTML side effects
     // work properly.
