@@ -32,19 +32,13 @@
 find_package(PkgConfig QUIET)
 pkg_check_modules(LIBSECRET libsecret-1)
 
-set(VERSION_OK TRUE)
 if (LIBSECRET_VERSION)
-    if (LIBSECRET_FIND_VERSION_EXACT)
-        if (NOT("${LIBSECRET_FIND_VERSION}" VERSION_EQUAL "${LIBSECRET_VERSION}"))
-            set(VERSION_OK FALSE)
-        endif ()
-    else ()
-        if ("${LIBSECRET_VERSION}" VERSION_LESS "${LIBSECRET_FIND_VERSION}")
-            set(VERSION_OK FALSE)
-        endif ()
-    endif ()
+    set(LIBSECRET_VERSION_ARG "VERSION_VAR LIBSECRET_VERSION")
 endif ()
 
 include(FindPackageHandleStandardArgs)
-find_package_handle_standard_args(Libsecret REQUIRED_VARS LIBSECRET_INCLUDE_DIRS LIBSECRET_LIBRARIES VERSION_OK
-                                  FOUND_VAR LIBSECRET_FOUND)
+find_package_handle_standard_args(Libsecret REQUIRED_VARS LIBSECRET_INCLUDE_DIRS LIBSECRET_LIBRARIES
+                                  FOUND_VAR LIBSECRET_FOUND
+                                  ${LIBSECRET_VERSION_ARG})
+
+unset(LIBSECRET_VERSION_ARG)

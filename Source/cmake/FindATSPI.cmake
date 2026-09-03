@@ -34,18 +34,13 @@ find_package(PkgConfig QUIET)
 
 pkg_check_modules(ATSPI atspi-2)
 
-set(VERSION_OK TRUE)
 if (ATSPI_VERSION)
-    if (ATSPI_FIND_VERSION_EXACT)
-        if (NOT("${ATSPI_FIND_VERSION}" VERSION_EQUAL "${ATSPI_VERSION}"))
-            set(VERSION_OK FALSE)
-        endif ()
-    else ()
-        if ("${ATSPI_VERSION}" VERSION_LESS "${ATSPI_FIND_VERSION}")
-            set(VERSION_OK FALSE)
-        endif ()
-    endif ()
+    set(ATSPI_VERSION_ARGUMENT "VERSION_VAR ATSPI_VERSION")
 endif ()
 
 include(FindPackageHandleStandardArgs)
-FIND_PACKAGE_HANDLE_STANDARD_ARGS(ATSPI DEFAULT_MSG ATSPI_INCLUDE_DIRS ATSPI_LIBRARIES VERSION_OK)
+FIND_PACKAGE_HANDLE_STANDARD_ARGS(ATSPI
+                                  REQUIRED_VARS ATSPI_INCLUDE_DIRS ATSPI_LIBRARIES
+                                  ${ATSPI_VERSION_ARGUMENT})
+
+unset(ATSPI_VERSION_ARGUMENT)
