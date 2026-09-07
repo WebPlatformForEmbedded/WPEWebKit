@@ -40,7 +40,7 @@ enum class DecodingMode : uint8_t {
 
 class DecodingOptions {
 public:
-    explicit DecodingOptions(DecodingMode decodingMode = DecodingMode::Auto)
+    DecodingOptions(DecodingMode decodingMode = DecodingMode::Auto)
         : m_decodingModeOrSize(decodingMode)
     {
     }

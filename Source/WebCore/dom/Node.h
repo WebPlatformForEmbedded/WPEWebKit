@@ -247,6 +247,9 @@ public:
     HTMLSlotElement* assignedSlot() const;
     HTMLSlotElement* assignedSlotForBindings() const;
 
+    bool hasEverPaintedImages() const;
+    void setHasEverPaintedImages(bool);
+
     bool isUndefinedCustomElement() const { return customElementState() == CustomElementState::Undefined || customElementState() == CustomElementState::Failed; }
     bool isCustomElementUpgradeCandidate() const { return customElementState() == CustomElementState::Undefined; }
     bool isDefinedCustomElement() const { return customElementState() == CustomElementState::Custom; }
