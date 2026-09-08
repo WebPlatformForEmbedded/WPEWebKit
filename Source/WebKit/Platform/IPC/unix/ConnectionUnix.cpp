@@ -647,6 +647,11 @@ pid_t readPIDFromPeer(int socket)
     if (ret == -1)
         g_error("readPIDFromPeer: Failed to read pid from PID socket: %s", g_strerror(errno));
 
+    if (ret == 0) {
+        // Peer died before sending PID (e.g. SIGTERM during container teardown).
+        return 0;
+    }
+
     if (message.msg_controllen <= 0)
         g_error("readPIDFromPeer: Unexpected short read from PID socket");
 
