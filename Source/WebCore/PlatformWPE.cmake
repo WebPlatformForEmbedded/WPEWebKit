@@ -131,13 +131,32 @@ elseif (USE_LIBDRM)
 endif ()
 
 if (ENABLE_GAMEPAD)
-    list(APPEND WebCore_PRIVATE_INCLUDE_DIRECTORIES
-        "${WEBCORE_DIR}/platform/gamepad/libwpe"
-    )
-
-    list(APPEND WebCore_PRIVATE_FRAMEWORK_HEADERS
-        platform/gamepad/libwpe/GamepadProviderLibWPE.h
-    )
+    if (USE_MANETTE_GAMEPAD_PROVIDER)
+        list(APPEND WebCore_PRIVATE_INCLUDE_DIRECTORIES
+            "${WEBCORE_DIR}/platform/gamepad/manette"
+        )
+        list(APPEND WebCore_PRIVATE_FRAMEWORK_HEADERS
+            platform/gamepad/manette/ManetteGamepadProvider.h
+        )
+        list(APPEND WebCore_LIBRARIES
+            Manette::Manette
+        )
+        list(APPEND WebCore_SOURCES
+            platform/gamepad/manette/ManetteGamepad.cpp
+            platform/gamepad/manette/ManetteGamepadProvider.cpp
+        )
+    else ()
+        list(APPEND WebCore_PRIVATE_INCLUDE_DIRECTORIES
+            "${WEBCORE_DIR}/platform/gamepad/libwpe"
+        )
+        list(APPEND WebCore_PRIVATE_FRAMEWORK_HEADERS
+            platform/gamepad/libwpe/GamepadProviderLibWPE.h
+        )
+        list(APPEND WebCore_SOURCES
+            platform/gamepad/libwpe/GamepadLibWPE.cpp
+            platform/gamepad/libwpe/GamepadProviderLibWPE.cpp
+        )
+    endif ()
 endif ()
 
 if (ENABLE_SPEECH_SYNTHESIS)

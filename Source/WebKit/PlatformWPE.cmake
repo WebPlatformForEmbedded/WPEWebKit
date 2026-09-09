@@ -468,6 +468,18 @@ if (ENABLE_BUBBLEWRAP_SANDBOX)
     list(APPEND WebKit_LIBRARIES Libseccomp::Libseccomp)
 endif ()
 
+if (ENABLE_GAMEPAD)
+    if (USE_MANETTE_GAMEPAD_PROVIDER)
+        list(APPEND WebKit_SOURCES
+            UIProcess/Gamepad/manette/UIGamepadProviderManette.cpp
+        )
+    else ()
+        list(APPEND WebKit_SOURCES
+            UIProcess/Gamepad/libwpe/UIGamepadProviderLibWPE.cpp
+        )
+    endif ()
+endif ()
+
 if (USE_GSTREAMER_FULL)
     list(APPEND WebKit_SYSTEM_INCLUDE_DIRECTORIES
         ${GSTREAMER_FULL_INCLUDE_DIRS}

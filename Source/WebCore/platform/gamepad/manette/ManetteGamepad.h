@@ -27,10 +27,11 @@
 
 #if ENABLE(GAMEPAD) && OS(LINUX)
 
+#include "GamepadEffectParameters.h"
 #include "PlatformGamepad.h"
 
 #include <libmanette.h>
-#include <wtf/HashMap.h>
+#include <wtf/RunLoop.h>
 #include <wtf/glib/GRefPtr.h>
 
 namespace WebCore {
@@ -71,17 +72,27 @@ public:
     ManetteGamepad(ManetteDevice*, unsigned index);
     virtual ~ManetteGamepad();
 
-    const Vector<SharedGamepadValue>& axisValues() const final { return m_axisValues; }
-    const Vector<SharedGamepadValue>& buttonValues() const final { return m_buttonValues; }
-
     void absoluteAxisChanged(ManetteDevice*, StandardGamepadAxis, double value);
     void buttonPressedOrReleased(ManetteDevice*, StandardGamepadButton, bool pressed);
+    void analogButtonChanged(ManetteDevice*, StandardGamepadButton, double value);
+    void playEffect(GamepadHapticEffectType, const GamepadEffectParameters&, CompletionHandler<void(bool)>&&) final;
+    void stopEffects(CompletionHandler<void()>&&) final;
 
 private:
+    const Vector<SharedGamepadValue>& axisValues() const final { return m_axisValues; }
+    const Vector<SharedGamepadValue>& buttonValues() const final { return m_buttonValues; }
+    void effectDelayTimerFired();
+    void effectDurationTimerFired();
+    void startRumble(const GamepadEffectParameters&);
+
     GRefPtr<ManetteDevice> m_device;
 
     Vector<SharedGamepadValue> m_buttonValues;
     Vector<SharedGamepadValue> m_axisValues;
+    RunLoop::Timer m_effectDelayTimer;
+    RunLoop::Timer m_effectDurationTimer;
+    CompletionHandler<void(bool)> m_effectCompletionHandler;
+    GamepadEffectParameters m_pendingEffectParameters;
 };
 
 } // namespace WebCore
