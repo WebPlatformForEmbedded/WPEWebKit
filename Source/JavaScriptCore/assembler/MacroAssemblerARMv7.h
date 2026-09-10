@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2009-2022 Apple Inc. All rights reserved.
  * Copyright (C) 2010 University of Szeged
+ * Copyright (C) 2026 Igalia S.L.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -34,6 +35,21 @@
 #include "AbstractMacroAssembler.h"
 
 namespace JSC {
+
+#if !defined(VALIDATE_ARMV7_MACRO_ASSEMBLER)
+#define VALIDATE_ARMV7_MACRO_ASSEMBLER ASSERT_ENABLED
+#endif
+
+static constexpr bool validateARMv7MacroAssembler = VALIDATE_ARMV7_MACRO_ASSEMBLER;
+
+#define ARMV7_MASM_ASSERT(assertion) do { \
+        if constexpr (validateARMv7MacroAssembler) { \
+            if (UNLIKELY(!(assertion))) { \
+                WTFReportAssertionFailure(__FILE__, __LINE__, WTF_PRETTY_FUNCTION, #assertion); \
+                CRASH(); \
+            } \
+        } \
+    } while (0)
 
 using Assembler = TARGET_ASSEMBLER;
 
@@ -164,6 +180,57 @@ public:
         LessThanOrEqual = ARMv7Assembler::ConditionLE
     };
 
+    static constexpr ARMv7Assembler::Condition armV7ConditionForHigh32(RelationalCondition cond)
+    {
+        switch (cond) {
+        case GreaterThan:
+        case GreaterThanOrEqual:
+            return ARMv7Assembler::ConditionGT;
+        case LessThan:
+        case LessThanOrEqual:
+            return ARMv7Assembler::ConditionLT;
+        case Above:
+        case AboveOrEqual:
+            return ARMv7Assembler::ConditionHI;
+        case Below:
+        case BelowOrEqual:
+            return ARMv7Assembler::ConditionLO;
+        case NotEqual:
+            return ARMv7Assembler::ConditionNE;
+        case Equal:
+            // Equal can never be determined from high alone (needs both parts to match)
+            return ARMv7Assembler::ConditionInvalid;
+        default:
+            RELEASE_ASSERT_NOT_REACHED();
+            return ARMv7Assembler::ConditionInvalid;
+        }
+    }
+
+    static constexpr ARMv7Assembler::Condition armV7ConditionForLow32(RelationalCondition cond)
+    {
+        switch (cond) {
+        case GreaterThan:
+        case Above:
+            return ARMv7Assembler::ConditionHI;
+        case GreaterThanOrEqual:
+        case AboveOrEqual:
+            return ARMv7Assembler::ConditionHS;
+        case LessThan:
+        case Below:
+            return ARMv7Assembler::ConditionLO;
+        case LessThanOrEqual:
+        case BelowOrEqual:
+            return ARMv7Assembler::ConditionLS;
+        case NotEqual:
+            return ARMv7Assembler::ConditionNE;
+        case Equal:
+            return ARMv7Assembler::ConditionEQ;
+        default:
+            RELEASE_ASSERT_NOT_REACHED();
+            return ARMv7Assembler::ConditionInvalid;
+        }
+    }
+
     enum ResultCondition {
         Carry = ARMv7Assembler::ConditionCS,
         Overflow = ARMv7Assembler::ConditionVS,
@@ -218,6 +285,8 @@ public:
     
     void add32(AbsoluteAddress src, RegisterID dest)
     {
+        ARMV7_MASM_ASSERT(dest != dataTempRegister);
+        ARMV7_MASM_ASSERT(dest != addressTempRegister);
         load32(setupArmAddress(src), dataTempRegister);
         add32(dataTempRegister, dest);
     }
@@ -244,6 +313,8 @@ public:
             return;
         }
 
+        ARMV7_MASM_ASSERT(src != dataTempRegister);
+        ARMV7_MASM_ASSERT(src != dataTempRegister);
         move(imm, dataTempRegister);
         m_assembler.add(dest, src, dataTempRegister);
     }
@@ -256,6 +327,8 @@ public:
 
     void add32(Address src, RegisterID dest)
     {
+        ARMV7_MASM_ASSERT(dest != dataTempRegister);
+        ARMV7_MASM_ASSERT(dest != addressTempRegister);
         // load32 will invalidate the cachedDataTempRegister() for us
         load32(src, dataTempRegister);
         add32(dataTempRegister, dest);
@@ -276,9 +349,14 @@ public:
 
     void getEffectiveAddress(BaseIndex address, RegisterID dest)
     {
+        ARMV7_MASM_ASSERT(address.index != addressTempRegister);
         RegisterID scratch = getCachedAddressTempRegisterIDAndInvalidate();
         m_assembler.lsl(scratch, address.index, static_cast<int>(address.scale));
         m_assembler.add(dest, address.base, scratch);
+        if (dest == addressTempRegister)
+            invalidateCachedAddressTempRegister();
+        else if (dest == dataTempRegister)
+            cachedDataTempRegister().invalidate();
         if (address.offset)
             add32(TrustedImm32(address.offset), dest);
     }
@@ -292,14 +370,15 @@ public:
     {
         RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
 
-        load32(setupArmAddress(address), scratch);
+        move(TrustedImmPtr(address.m_ptr), addressTempRegister);
+        m_assembler.ldr(scratch, addressTempRegister, ARMThumbImmediate::makeUInt12(0));
         ARMThumbImmediate armImm = ARMThumbImmediate::makeEncodedImm(imm.m_value);
         if (armImm.isValid())
             m_assembler.add_S(scratch, scratch, armImm);
         else {
             move(imm, addressTempRegister);
             m_assembler.add_S(scratch, scratch, addressTempRegister);
-            move(TrustedImmPtr(address.m_ptr), addressTempRegister);
+            moveFixedWidthEncoding(TrustedImm32(TrustedImmPtr(address.m_ptr)), addressTempRegister);
         }
         m_assembler.str(scratch, addressTempRegister, ARMThumbImmediate::makeUInt12(0));
 
@@ -310,6 +389,8 @@ public:
 
     void add64(RegisterID op1Hi, RegisterID op1Lo, RegisterID op2Hi, RegisterID op2Lo, RegisterID destHi, RegisterID destLo)
     {
+        ARMV7_MASM_ASSERT(op1Hi != dataTempRegister);
+        ARMV7_MASM_ASSERT(op2Hi != dataTempRegister);
         RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
         m_assembler.add_S(scratch, op1Lo, op2Lo);
         m_assembler.adc(destHi, op1Hi, op2Hi);
@@ -318,6 +399,8 @@ public:
 
     void and16(Address src, RegisterID dest)
     {
+        ARMV7_MASM_ASSERT(dest != dataTempRegister);
+        ARMV7_MASM_ASSERT(dest != addressTempRegister);
         load16(src, dataTempRegister);
         and32(dataTempRegister, dest);
     }
@@ -341,6 +424,8 @@ public:
             return;
         }
 
+        ARMV7_MASM_ASSERT(src != dataTempRegister);
+        ARMV7_MASM_ASSERT(src != dataTempRegister);
         move(imm, dataTempRegister);
         m_assembler.ARM_and(dest, src, dataTempRegister);
     }
@@ -357,6 +442,8 @@ public:
 
     void and32(Address src, RegisterID dest)
     {
+        ARMV7_MASM_ASSERT(dest != dataTempRegister);
+        ARMV7_MASM_ASSERT(dest != addressTempRegister);
         load32(src, dataTempRegister);
         and32(dataTempRegister, dest);
     }
@@ -372,12 +459,148 @@ public:
         m_assembler.clz(dest, dest);
     }
 
+    void countLeadingZeros64(RegisterID srcHi, RegisterID srcLo, RegisterID destHi, RegisterID destLo)
+    {
+        ARMV7_MASM_ASSERT(destHi != destLo);
+        ARMV7_MASM_ASSERT(destLo != srcLo || srcHi != dataTempRegister);
+        if (destLo != srcLo) {
+            m_assembler.clz(destLo, srcHi);
+            m_assembler.cmp(destLo, ARMThumbImmediate::makeEncodedImm(32));
+            Jump done = makeBranch(ARMv7Assembler::ConditionNE);
+            m_assembler.clz(destLo, srcLo);
+            m_assembler.add(destLo, destLo, ARMThumbImmediate::makeEncodedImm(32));
+            done.link(this);
+            xor32(destHi, destHi);
+        } else {
+            RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
+            move(srcLo, scratch);
+            m_assembler.clz(destLo, srcHi);
+            m_assembler.cmp(destLo, ARMThumbImmediate::makeEncodedImm(32));
+            Jump done = makeBranch(ARMv7Assembler::ConditionNE);
+            m_assembler.clz(destLo, scratch);
+            m_assembler.add(destLo, destLo, ARMThumbImmediate::makeEncodedImm(32));
+            done.link(this);
+            xor32(destHi, destHi);
+        }
+    }
+
+    void countTrailingZeros64(RegisterID srcHi, RegisterID srcLo, RegisterID destHi, RegisterID destLo)
+    {
+        ARMV7_MASM_ASSERT(destHi != destLo);
+        ARMV7_MASM_ASSERT(destLo != srcHi || srcLo != dataTempRegister);
+        if (destLo != srcHi) {
+            countTrailingZeros32(srcLo, destLo);
+            m_assembler.cmp(destLo, ARMThumbImmediate::makeEncodedImm(32));
+            Jump done = makeBranch(ARMv7Assembler::ConditionNE);
+            countTrailingZeros32(srcHi, destLo);
+            m_assembler.add(destLo, destLo, ARMThumbImmediate::makeEncodedImm(32));
+            done.link(this);
+            xor32(destHi, destHi);
+        } else {
+            RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
+            move(srcHi, scratch);
+            countTrailingZeros32(srcLo, destLo);
+            m_assembler.cmp(destLo, ARMThumbImmediate::makeEncodedImm(32));
+            Jump done = makeBranch(ARMv7Assembler::ConditionNE);
+            countTrailingZeros32(scratch, destLo);
+            m_assembler.add(destLo, destLo, ARMThumbImmediate::makeEncodedImm(32));
+            done.link(this);
+            xor32(destHi, destHi);
+        }
+    }
+
+    void compare64(RelationalCondition cond, RegisterID lhsHi, RegisterID lhsLo, RegisterID rhsHi, RegisterID rhsLo, RegisterID dest)
+    {
+        ARMV7_MASM_ASSERT(lhsHi != dataTempRegister);
+        ARMV7_MASM_ASSERT(lhsLo != dataTempRegister);
+        ARMV7_MASM_ASSERT(rhsHi != dataTempRegister);
+        ARMV7_MASM_ASSERT(rhsLo != dataTempRegister);
+        ARMV7_MASM_ASSERT(lhsHi != ARMRegisters::sp && lhsLo != ARMRegisters::sp);
+        ARMV7_MASM_ASSERT(rhsHi != ARMRegisters::sp && rhsLo != ARMRegisters::sp);
+        ARMV7_MASM_ASSERT(dest != ARMRegisters::sp && dest != ARMRegisters::pc);
+
+        if (cond == RelationalCondition::Equal || cond == RelationalCondition::NotEqual) {
+            // For Equal/NotEqual, we can optimize to only set one value conditionally
+            // NotEqual: default to 1, change to 0 only if both parts equal
+            // Equal: default to 0, change to 1 only if both parts equal
+            if (dest != lhsHi && dest != rhsHi && dest != lhsLo && dest != rhsLo) {
+                m_assembler.mov(dest, ARMThumbImmediate::makeEncodedImm(cond == RelationalCondition::NotEqual ? 1 : 0));
+                m_assembler.cmp(lhsHi, rhsHi);
+                Jump done = makeBranch(ARMv7Assembler::ConditionNE);
+                m_assembler.cmp(lhsLo, rhsLo);
+                // Only need to set the "opposite" value when both parts match
+                m_assembler.it(ARMv7Assembler::ConditionEQ);
+                m_assembler.mov(dest, ARMThumbImmediate::makeEncodedImm(cond == RelationalCondition::NotEqual ? 0 : 1));
+                done.link(this);
+            } else {
+                RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
+                m_assembler.mov(scratch, ARMThumbImmediate::makeEncodedImm(cond == RelationalCondition::NotEqual ? 1 : 0));
+                m_assembler.cmp(lhsHi, rhsHi);
+                Jump done = makeBranch(ARMv7Assembler::ConditionNE);
+                m_assembler.cmp(lhsLo, rhsLo);
+                m_assembler.it(ARMv7Assembler::ConditionEQ);
+                m_assembler.mov(scratch, ARMThumbImmediate::makeEncodedImm(cond == RelationalCondition::NotEqual ? 0 : 1));
+                done.link(this);
+                move(scratch, dest);
+            }
+            return;
+        }
+
+        ARMv7Assembler::Condition hiCondition = armV7ConditionForHigh32(cond);
+        ARMv7Assembler::Condition loCondition = armV7ConditionForLow32(cond);
+        ARMV7_MASM_ASSERT(hiCondition != ARMv7Assembler::ConditionInvalid);
+        ARMV7_MASM_ASSERT(loCondition != ARMv7Assembler::ConditionInvalid);
+        ARMV7_MASM_ASSERT(hiCondition != ARMv7Assembler::ConditionInvalid);
+        ARMV7_MASM_ASSERT(loCondition != ARMv7Assembler::ConditionInvalid);
+
+        if (dest != lhsLo && dest != rhsLo && dest != lhsHi && dest != rhsHi) {
+            // No aliasing - use ITE blocks with 1 branch
+            m_assembler.cmp(lhsHi, rhsHi);
+            m_assembler.it(hiCondition, false);
+            m_assembler.mov(dest, ARMThumbImmediate::makeEncodedImm(1));
+            m_assembler.mov(dest, ARMThumbImmediate::makeEncodedImm(0));
+
+            Jump done = makeBranch(ARMv7Assembler::ConditionNE);
+
+            m_assembler.cmp(lhsLo, rhsLo);
+            m_assembler.it(loCondition, false);
+            m_assembler.mov(dest, ARMThumbImmediate::makeEncodedImm(1));
+            m_assembler.mov(dest, ARMThumbImmediate::makeEncodedImm(0));
+
+            done.link(this);
+        } else {
+            // dest aliases with source - use scratch
+            RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
+
+            m_assembler.cmp(lhsHi, rhsHi);
+            m_assembler.it(hiCondition, false);
+            m_assembler.mov(scratch, ARMThumbImmediate::makeEncodedImm(1));
+            m_assembler.mov(scratch, ARMThumbImmediate::makeEncodedImm(0));
+
+            Jump done = makeBranch(ARMv7Assembler::ConditionNE);
+
+            m_assembler.cmp(lhsLo, rhsLo);
+            m_assembler.it(loCondition, false);
+            m_assembler.mov(scratch, ARMThumbImmediate::makeEncodedImm(1));
+            m_assembler.mov(scratch, ARMThumbImmediate::makeEncodedImm(0));
+
+            done.link(this);
+            move(scratch, dest);
+        }
+    }
+
+    void lshiftUnchecked(RegisterID src, RegisterID shiftAmount, RegisterID dest)
+    {
+        m_assembler.lsl(dest, src, shiftAmount);
+    }
+
     void lshift32(RegisterID src, RegisterID shiftAmount, RegisterID dest)
     {
+        ARMV7_MASM_ASSERT(src != dataTempRegister);
         RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
         // Clamp the shift to the range 0..31
         ARMThumbImmediate armImm = ARMThumbImmediate::makeEncodedImm(0x1f);
-        ASSERT(armImm.isValid());
+        ARMV7_MASM_ASSERT(armImm.isValid());
         m_assembler.ARM_and(scratch, shiftAmount, armImm);
 
         m_assembler.lsl(dest, src, scratch);
@@ -385,11 +608,15 @@ public:
 
     void lshift32(RegisterID src, TrustedImm32 imm, RegisterID dest)
     {
-        m_assembler.lsl(dest, src, imm.m_value & 0x1f);
+        if (!(imm.m_value & 0x1f))
+            move(src, dest);
+        else
+            m_assembler.lsl(dest, src, imm.m_value & 0x1f);
     }
 
     void lshift32(TrustedImm32 imm, RegisterID shiftAmount, RegisterID dest)
     {
+        ARMV7_MASM_ASSERT(dest != dataTempRegister);
         // Clamp the shift to the range 0..31
         m_assembler.ARM_and(dest, shiftAmount, ARMThumbImmediate::makeEncodedImm(0x1f));
         move(imm, getCachedDataTempRegisterIDAndInvalidate());
@@ -408,18 +635,22 @@ public:
 
     void mul32(RegisterID src, RegisterID dest)
     {
+        ARMV7_MASM_ASSERT(dest != dataTempRegister);
         RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
         m_assembler.smull(dest, scratch, dest, src);
     }
 
     void mul32(RegisterID left, RegisterID right, RegisterID dest)
     {
+        ARMV7_MASM_ASSERT(dest != dataTempRegister);
         RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
         m_assembler.smull(dest, scratch, left, right);
     }
 
     void mul32(TrustedImm32 imm, RegisterID src, RegisterID dest)
     {
+        ARMV7_MASM_ASSERT(src != dataTempRegister);
+        ARMV7_MASM_ASSERT(dest != dataTempRegister);
         move(imm, dataTempRegister);
         cachedDataTempRegister().invalidate();
         m_assembler.smull(dest, dataTempRegister, src, dataTempRegister);
@@ -446,7 +677,7 @@ public:
         load8(setupArmAddress(address), dataTempRegister);
         if (armImm.isValid()) {
             m_assembler.orr(dataTempRegister, dataTempRegister, armImm);
-            store8(dataTempRegister, Address(addressTempRegister));
+            store8(dataTempRegister, address.m_ptr);
         } else {
             move(imm, addressTempRegister);
             m_assembler.orr(dataTempRegister, dataTempRegister, addressTempRegister);
@@ -461,7 +692,7 @@ public:
         load16(setupArmAddress(dest), dataTempRegister);
         if (armImm.isValid()) {
             m_assembler.orr(dataTempRegister, dataTempRegister, armImm);
-            store16(dataTempRegister, Address(addressTempRegister));
+            store16(dataTempRegister, dest.m_ptr);
         } else {
             move(imm, addressTempRegister);
             m_assembler.orr(dataTempRegister, dataTempRegister, addressTempRegister);
@@ -472,9 +703,11 @@ public:
 
     void or16(RegisterID mask, AbsoluteAddress dest)
     {
+        ARMV7_MASM_ASSERT(mask != dataTempRegister);
+        ARMV7_MASM_ASSERT(mask != addressTempRegister);
         load16(setupArmAddress(dest), dataTempRegister);
         m_assembler.orr(dataTempRegister, dataTempRegister, mask);
-        store16(dataTempRegister, Address(addressTempRegister));
+        store16(dataTempRegister, dest.m_ptr);
     }
 
     void or32(RegisterID src, RegisterID dest)
@@ -484,13 +717,17 @@ public:
 
     void or32(RegisterID src, AbsoluteAddress dest)
     {
+        ARMV7_MASM_ASSERT(src != dataTempRegister);
+        ARMV7_MASM_ASSERT(src != addressTempRegister);
         load32(setupArmAddress(dest), dataTempRegister);
         or32(src, dataTempRegister);
-        store32(dataTempRegister, Address(addressTempRegister));
+        store32(dataTempRegister, dest.m_ptr);
     }
 
     void or32(RegisterID src, Address dest)
     {
+        ARMV7_MASM_ASSERT(src != dataTempRegister);
+        ARMV7_MASM_ASSERT(src != addressTempRegister);
         load32(dest, dataTempRegister);
         or32(src, dataTempRegister);
         store32(dataTempRegister, dest);
@@ -502,7 +739,7 @@ public:
         load32(setupArmAddress(address), dataTempRegister);
         if (armImm.isValid()) {
             m_assembler.orr(dataTempRegister, dataTempRegister, armImm);
-            store32(dataTempRegister, Address(addressTempRegister));
+            store32(dataTempRegister, address.m_ptr);
         } else {
             move(imm, addressTempRegister);
             m_assembler.orr(dataTempRegister, dataTempRegister, addressTempRegister);
@@ -534,7 +771,7 @@ public:
         if (armImm.isValid())
             m_assembler.orr(dest, src, armImm);
         else {
-            ASSERT(src != dataTempRegister);
+            ARMV7_MASM_ASSERT(src != dataTempRegister);
             move(imm, dataTempRegister);
             m_assembler.orr(dest, src, dataTempRegister);
         }
@@ -560,7 +797,7 @@ public:
 
     void rotateRight32(RegisterID src, TrustedImm32 imm, RegisterID dest)
     {
-        if (!imm.m_value)
+        if (!(imm.m_value & 0x1f))
             move(src, dest);
         else
             m_assembler.ror(dest, src, imm.m_value & 0x1f);
@@ -573,26 +810,35 @@ public:
 
     void rotateLeft32(RegisterID src, RegisterID shift, RegisterID dest)
     {
+        ARMV7_MASM_ASSERT(src != dataTempRegister);
         RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
         m_assembler.ARM_and(scratch, shift, ARMThumbImmediate::makeEncodedImm(0x1f));
-        m_assembler.sub(scratch, ARMThumbImmediate::makeUInt12(32), scratch);
+        m_assembler.sub(scratch, ARMThumbImmediate::makeEncodedImm(32), scratch);
         m_assembler.ror(dest, src, scratch);
     }
 
     void rotateLeft32(RegisterID src, TrustedImm32 shift, RegisterID dest)
     {
+        ARMV7_MASM_ASSERT(src != dataTempRegister);
         RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
         move(shift, scratch);
         m_assembler.ARM_and(scratch, scratch, ARMThumbImmediate::makeEncodedImm(0x1f));
-        m_assembler.sub(scratch, ARMThumbImmediate::makeUInt12(32), scratch);
+        m_assembler.sub(scratch, ARMThumbImmediate::makeEncodedImm(32), scratch);
         m_assembler.ror(dest, src, scratch);
     }
+
+    void rshiftUnchecked(RegisterID src, RegisterID shiftAmount, RegisterID dest)
+    {
+        m_assembler.asr(dest, src, shiftAmount);
+    }
+
     void rshift32(RegisterID src, RegisterID shiftAmount, RegisterID dest)
     {
+        ARMV7_MASM_ASSERT(src != dataTempRegister);
         RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
         // Clamp the shift to the range 0..31
         ARMThumbImmediate armImm = ARMThumbImmediate::makeEncodedImm(0x1f);
-        ASSERT(armImm.isValid());
+        ARMV7_MASM_ASSERT(armImm.isValid());
         m_assembler.ARM_and(scratch, shiftAmount, armImm);
 
         m_assembler.asr(dest, src, scratch);
@@ -610,23 +856,38 @@ public:
     {
         rshift32(dest, shiftAmount, dest);
     }
-    
+
     void rshift32(TrustedImm32 imm, RegisterID dest)
     {
         rshift32(dest, imm, dest);
     }
 
+    void rshift32(TrustedImm32 imm, RegisterID shiftAmount, RegisterID dest)
+    {
+        ARMV7_MASM_ASSERT(dest != dataTempRegister);
+        // Clamp the shift to the range 0..31
+        m_assembler.ARM_and(dest, shiftAmount, ARMThumbImmediate::makeEncodedImm(0x1f));
+        move(imm, getCachedDataTempRegisterIDAndInvalidate());
+        m_assembler.asr(dest, dataTempRegister, dest);
+    }
+
+    void urshiftUnchecked(RegisterID src, RegisterID shiftAmount, RegisterID dest)
+    {
+        m_assembler.lsr(dest, src, shiftAmount);
+    }
+
     void urshift32(RegisterID src, RegisterID shiftAmount, RegisterID dest)
     {
+        ARMV7_MASM_ASSERT(src != dataTempRegister);
         RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
         // Clamp the shift to the range 0..31
         ARMThumbImmediate armImm = ARMThumbImmediate::makeEncodedImm(0x1f);
-        ASSERT(armImm.isValid());
+        ARMV7_MASM_ASSERT(armImm.isValid());
         m_assembler.ARM_and(scratch, shiftAmount, armImm);
-        
+
         m_assembler.lsr(dest, src, scratch);
     }
-    
+
     void urshift32(RegisterID src, TrustedImm32 imm, RegisterID dest)
     {
         if (!(imm.m_value & 0x1f))
@@ -639,7 +900,7 @@ public:
     {
         urshift32(dest, shiftAmount, dest);
     }
-    
+
     void urshift32(TrustedImm32 imm, RegisterID dest)
     {
         urshift32(dest, imm, dest);
@@ -648,6 +909,7 @@ public:
     void addUnsignedRightShift32(RegisterID src1, RegisterID src2, TrustedImm32 amount, RegisterID dest)
     {
         // dest = src1 + (src2 >> amount)
+        ARMV7_MASM_ASSERT(src1 != dataTempRegister);
         urshift32(src2, amount, dataTempRegister);
         add32(src1, dataTempRegister, dest);
     }
@@ -668,6 +930,8 @@ public:
         if (armImm.isValid())
             m_assembler.sub(dest, left, armImm);
         else {
+            ARMV7_MASM_ASSERT(left != dataTempRegister);
+            ARMV7_MASM_ASSERT(left != dataTempRegister);
             move(right, dataTempRegister);
             m_assembler.sub(dest, left, dataTempRegister);
         }
@@ -679,8 +943,23 @@ public:
         if (armImm.isValid())
             m_assembler.sub(dest, dest, armImm);
         else {
+            ARMV7_MASM_ASSERT(dest != dataTempRegister);
+            ARMV7_MASM_ASSERT(dest != dataTempRegister);
             move(imm, dataTempRegister);
             m_assembler.sub(dest, dest, dataTempRegister);
+        }
+    }
+
+    void sub32(TrustedImm32 imm, RegisterID src, RegisterID dest)
+    {
+        ARMThumbImmediate armImm = ARMThumbImmediate::makeEncodedImm(imm.m_value);
+        if (armImm.isValid())
+            m_assembler.sub(dest, armImm, src);
+        else {
+            ARMV7_MASM_ASSERT(src != dataTempRegister);
+            ARMV7_MASM_ASSERT(src != dataTempRegister);
+            move(imm, dataTempRegister);
+            m_assembler.sub(dest, dataTempRegister, src);
         }
     }
 
@@ -703,6 +982,8 @@ public:
 
     void sub32(Address src, RegisterID dest)
     {
+        ARMV7_MASM_ASSERT(dest != dataTempRegister);
+        ARMV7_MASM_ASSERT(dest != addressTempRegister);
         load32(src, dataTempRegister);
         sub32(dataTempRegister, dest);
     }
@@ -726,6 +1007,8 @@ public:
 
     void sub64(RegisterID leftHi, RegisterID leftLo, RegisterID rightHi, RegisterID rightLo, RegisterID destHi, RegisterID destLo)
     {
+        ARMV7_MASM_ASSERT(leftHi != dataTempRegister);
+        ARMV7_MASM_ASSERT(rightHi != dataTempRegister);
         RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
         m_assembler.sub_S(scratch, leftLo, rightLo);
         m_assembler.sbc(destHi, leftHi, rightHi);
@@ -748,6 +1031,8 @@ public:
         if (armImm.isValid())
             m_assembler.eor(dest, src, armImm);
         else {
+            ARMV7_MASM_ASSERT(src != dataTempRegister);
+            ARMV7_MASM_ASSERT(src != dataTempRegister);
             move(imm, dataTempRegister);
             m_assembler.eor(dest, src, dataTempRegister);
         }
@@ -760,6 +1045,8 @@ public:
 
     void xor32(Address src, RegisterID dest)
     {
+        ARMV7_MASM_ASSERT(dest != dataTempRegister);
+        ARMV7_MASM_ASSERT(dest != addressTempRegister);
         load32(src, dataTempRegister);
         xor32(dataTempRegister, dest);
     }
@@ -806,10 +1093,10 @@ private:
             m_assembler.ldr(dest, address.base, address.u.index, address.u.scale);
         else if (address.u.offset >= 0) {
             ARMThumbImmediate armImm = ARMThumbImmediate::makeUInt12(address.u.offset);
-            ASSERT(armImm.isValid());
+            ARMV7_MASM_ASSERT(armImm.isValid());
             m_assembler.ldr(dest, address.base, armImm);
         } else {
-            ASSERT(address.u.offset >= -255);
+            ARMV7_MASM_ASSERT(address.u.offset >= -255);
             m_assembler.ldr(dest, address.base, address.u.offset, true, false);
         }
     }
@@ -825,10 +1112,10 @@ private:
             m_assembler.ldrh(dest, address.base, address.u.index, address.u.scale);
         else if (address.u.offset >= 0) {
             ARMThumbImmediate armImm = ARMThumbImmediate::makeUInt12(address.u.offset);
-            ASSERT(armImm.isValid());
+            ARMV7_MASM_ASSERT(armImm.isValid());
             m_assembler.ldrh(dest, address.base, armImm);
         } else {
-            ASSERT(address.u.offset >= -255);
+            ARMV7_MASM_ASSERT(address.u.offset >= -255);
             m_assembler.ldrh(dest, address.base, address.u.offset, true, false);
         }
     }
@@ -844,10 +1131,10 @@ private:
             m_assembler.ldrsh(dest, address.base, address.u.index, address.u.scale);
         else if (address.u.offset >= 0) {
             ARMThumbImmediate armImm = ARMThumbImmediate::makeUInt12(address.u.offset);
-            ASSERT(armImm.isValid());
+            ARMV7_MASM_ASSERT(armImm.isValid());
             m_assembler.ldrsh(dest, address.base, armImm);
         } else {
-            ASSERT(address.u.offset >= -255);
+            ARMV7_MASM_ASSERT(address.u.offset >= -255);
             m_assembler.ldrsh(dest, address.base, address.u.offset, true, false);
         }
     }
@@ -863,10 +1150,10 @@ private:
             m_assembler.ldrb(dest, address.base, address.u.index, address.u.scale);
         else if (address.u.offset >= 0) {
             ARMThumbImmediate armImm = ARMThumbImmediate::makeUInt12(address.u.offset);
-            ASSERT(armImm.isValid());
+            ARMV7_MASM_ASSERT(armImm.isValid());
             m_assembler.ldrb(dest, address.base, armImm);
         } else {
-            ASSERT(address.u.offset >= -255);
+            ARMV7_MASM_ASSERT(address.u.offset >= -255);
             m_assembler.ldrb(dest, address.base, address.u.offset, true, false);
         }
     }
@@ -882,10 +1169,10 @@ private:
             m_assembler.ldrsb(dest, address.base, address.u.index, address.u.scale);
         else if (address.u.offset >= 0) {
             ARMThumbImmediate armImm = ARMThumbImmediate::makeUInt12(address.u.offset);
-            ASSERT(armImm.isValid());
+            ARMV7_MASM_ASSERT(armImm.isValid());
             m_assembler.ldrsb(dest, address.base, armImm);
         } else {
-            ASSERT(address.u.offset >= -255);
+            ARMV7_MASM_ASSERT(address.u.offset >= -255);
             m_assembler.ldrsb(dest, address.base, address.u.offset, true, false);
         }
     }
@@ -897,10 +1184,10 @@ protected:
             m_assembler.str(src, address.base, address.u.index, address.u.scale);
         else if (address.u.offset >= 0) {
             ARMThumbImmediate armImm = ARMThumbImmediate::makeUInt12(address.u.offset);
-            ASSERT(armImm.isValid());
+            ARMV7_MASM_ASSERT(armImm.isValid());
             m_assembler.str(src, address.base, armImm);
         } else {
-            ASSERT(address.u.offset >= -255);
+            ARMV7_MASM_ASSERT(address.u.offset >= -255);
             m_assembler.str(src, address.base, address.u.offset, true, false);
         }
     }
@@ -912,10 +1199,10 @@ private:
             m_assembler.strb(src, address.base, address.u.index, address.u.scale);
         else if (address.u.offset >= 0) {
             ARMThumbImmediate armImm = ARMThumbImmediate::makeUInt12(address.u.offset);
-            ASSERT(armImm.isValid());
+            ARMV7_MASM_ASSERT(armImm.isValid());
             m_assembler.strb(src, address.base, armImm);
         } else {
-            ASSERT(address.u.offset >= -255);
+            ARMV7_MASM_ASSERT(address.u.offset >= -255);
             m_assembler.strb(src, address.base, address.u.offset, true, false);
         }
     }
@@ -926,10 +1213,10 @@ private:
             m_assembler.strh(src, address.base, address.u.index, address.u.scale);
         else if (address.u.offset >= 0) {
             ARMThumbImmediate armImm = ARMThumbImmediate::makeUInt12(address.u.offset);
-            ASSERT(armImm.isValid());
+            ARMV7_MASM_ASSERT(armImm.isValid());
             m_assembler.strh(src, address.base, armImm);
         } else {
-            ASSERT(address.u.offset >= -255);
+            ARMV7_MASM_ASSERT(address.u.offset >= -255);
             m_assembler.strh(src, address.base, address.u.offset, true, false);
         }
     }
@@ -981,8 +1268,13 @@ public:
     ConvertibleLoadLabel convertibleLoadPtr(Address address, RegisterID dest)
     {
         ConvertibleLoadLabel result(this);
-        ASSERT(address.offset >= 0 && address.offset <= 255);
+        ARMV7_MASM_ASSERT(address.offset >= 0 && address.offset <= 255);
         m_assembler.ldrWide8BitImmediate(dest, address.base, address.offset);
+
+        if (dest == addressTempRegister)
+            invalidateCachedAddressTempRegister();
+        else if (dest == dataTempRegister)
+            cachedDataTempRegister().invalidate();
         return result;
     }
 
@@ -1030,7 +1322,14 @@ public:
 
     void load16(BaseIndex address, RegisterID dest)
     {
+        ARMV7_MASM_ASSERT(address.index != addressTempRegister);
+        ARMV7_MASM_ASSERT(address.scale <= TimesEight);
         m_assembler.ldrh(dest, makeBaseIndexBase(address), address.index, address.scale);
+
+        if (dest == addressTempRegister)
+            invalidateCachedAddressTempRegister();
+        else if (dest == dataTempRegister)
+            cachedDataTempRegister().invalidate();
     }
     
     void load16SignedExtendTo32(BaseIndex address, RegisterID dest)
@@ -1044,9 +1343,15 @@ public:
         if (armImm.isValid())
             m_assembler.ldrh(dest, address.base, armImm);
         else {
+            ARMV7_MASM_ASSERT(address.base != dataTempRegister);
             move(TrustedImm32(address.offset), dataTempRegister);
             m_assembler.ldrh(dest, address.base, dataTempRegister);
         }
+
+        if (dest == addressTempRegister)
+            invalidateCachedAddressTempRegister();
+        else if (dest == dataTempRegister)
+            cachedDataTempRegister().invalidate();
     }
 
     void loadAcq16(Address address, RegisterID dest)
@@ -1092,18 +1397,14 @@ public:
             }
             loadPair32(Address(scratch), dest1, dest2);
         } else {
-            ASSERT(dest1 != dest2); // If it is the same, ldp becomes illegal instruction.
+            ARMV7_MASM_ASSERT(dest1 != dest2); // If it is the same, ldp becomes illegal instruction.
             // Check if dest1 or dest2 aliases the base register to avoid UNPREDICTABLE ldrd behavior
             if (address.base == dest1) {
-                // Load high word first to avoid clobbering base register
-                ArmAddress highAddress(address.base, address.u.offset + 4);
-                load32(highAddress, dest2);
+                load32(Address(address.base, address.u.offset + 4), dest2);
                 load32(address, dest1);
             } else if (address.base == dest2) {
-                // Load low word first to avoid clobbering base register
                 load32(address, dest1);
-                ArmAddress highAddress(address.base, address.u.offset + 4);
-                load32(highAddress, dest2);
+                load32(Address(address.base, address.u.offset + 4), dest2);
             } else {
                 int32_t absOffset = address.u.offset;
                 if (absOffset < 0)
@@ -1116,8 +1417,7 @@ public:
                     m_assembler.ldrd(dest1, dest2, address.base, address.u.offset, /* index: */ true, /* wback: */ false);
                 } else {
                     load32(address, dest1);
-                    ArmAddress highAddress(address.base, address.u.offset + 4);
-                    load32(highAddress, dest2);
+                    load32(Address(address.base, address.u.offset + 4), dest2);
                 }
             }
         }
@@ -1125,16 +1425,32 @@ public:
 
     void loadPair32(Address address, RegisterID dest1, RegisterID dest2)
     {
+        ARMV7_MASM_ASSERT(dest1 != dest2);
         loadPair32(setupArmAddress(address), dest1, dest2);
+    }
+
+    void loadPair32Unaligned(Address address, RegisterID dest1, RegisterID dest2)
+    {
+        ARMV7_MASM_ASSERT(dest1 != dest2);
+        if (address.base == dest1) {
+            load32(address.withOffset(4), dest2);
+            load32(address, dest1);
+        } else {
+            load32(address, dest1);
+            load32(address.withOffset(4), dest2);
+        }
     }
 
     void loadPair32(BaseIndex address, RegisterID dest1, RegisterID dest2)
     {
+        ARMV7_MASM_ASSERT(dest1 != dest2);
+        ARMV7_MASM_ASSERT(address.scale <= TimesEight);
         // Using r0-r7 can often be encoded with a shorter (16-bit vs 32-bit) instruction, so use
         // whichever destination register is in that range (if any) as the address temp register
         RegisterID scratch = dest1;
         if (dest1 >= ARMRegisters::r8)
             scratch = dest2;
+        ARMV7_MASM_ASSERT(scratch != addressTempRegister);
         if (address.scale == TimesOne)
             m_assembler.add(scratch, address.base, address.index);
         else {
@@ -1146,7 +1462,7 @@ public:
 
     void loadPair64(RegisterID src, TrustedImm32 offset, FPRegisterID dest1, FPRegisterID dest2)
     {
-        ASSERT(dest1 != dest2);
+        ARMV7_MASM_ASSERT(dest1 != dest2);
         if ((dest2 == (dest1 + 1)) && !offset.m_value) {
             // Only emit a VLDMIA if the registers happen to be consecutive and
             // in the proper order and the offset happens to be zero. Otherwise,
@@ -1161,26 +1477,47 @@ public:
 
     void loadLink8(Address addr, RegisterID dest)
     {
-        ASSERT(!addr.offset);
+        ARMV7_MASM_ASSERT(!addr.offset);
         m_assembler.ldrexb(dest, addr.base);
+        if (dest == addressTempRegister)
+            invalidateCachedAddressTempRegister();
+        else if (dest == dataTempRegister)
+            cachedDataTempRegister().invalidate();
     }
 
     void loadLink16(Address addr, RegisterID dest)
     {
-        ASSERT(!addr.offset);
+        ARMV7_MASM_ASSERT(!addr.offset);
         m_assembler.ldrexh(dest, addr.base);
+        if (dest == addressTempRegister)
+            invalidateCachedAddressTempRegister();
+        else if (dest == dataTempRegister)
+            cachedDataTempRegister().invalidate();
     }
 
     void loadLink32(Address addr, RegisterID dest)
     {
-        ASSERT(!addr.offset);
+        ARMV7_MASM_ASSERT(!addr.offset);
         m_assembler.ldrex(dest, addr.base, 0);
+        if (dest == addressTempRegister)
+            invalidateCachedAddressTempRegister();
+        else if (dest == dataTempRegister)
+            cachedDataTempRegister().invalidate();
     }
 
     void loadLinkPair32(Address addr, RegisterID destLo, RegisterID destHi)
     {
-        ASSERT(!addr.offset);
+        ARMV7_MASM_ASSERT(!addr.offset);
+        ARMV7_MASM_ASSERT(destLo != destHi);
         m_assembler.ldrexd(destLo, destHi, addr.base);
+        if (destLo == addressTempRegister)
+            invalidateCachedAddressTempRegister();
+        else if (destLo == dataTempRegister)
+            cachedDataTempRegister().invalidate();
+        if (destHi == addressTempRegister)
+            invalidateCachedAddressTempRegister();
+        else if (destHi == dataTempRegister)
+            cachedDataTempRegister().invalidate();
     }
 
     void storePair64(FPRegisterID src1, FPRegisterID src2, RegisterID dest, TrustedImm32 offset)
@@ -1216,6 +1553,7 @@ public:
         RegisterID scratch = addressTempRegister;
         if (armAddress.type == ArmAddress::HasIndex)
             scratch = dataTempRegister;
+        RELEASE_ASSERT(armAddress.base != scratch);
         move(imm, scratch);
         store32(scratch, armAddress);
     }
@@ -1305,6 +1643,12 @@ public:
         store16(dataTempRegister, address);
     }
 
+    void store16(TrustedImm32 imm, Address address)
+    {
+        move(imm, dataTempRegister);
+        store16(dataTempRegister, address);
+    }
+
     void storeRel16(RegisterID src, Address address)
     {
         storeFence();
@@ -1325,26 +1669,11 @@ public:
 
     void storePair32(TrustedImm32 imm1, TrustedImm32 imm2, Address address)
     {
-        // We cannot re-use the two register version of `storePair32` defined
-        // below here because we can only use the `addressTempRegister` as a
-        // scratch register if the `strd` case is taken.
         int32_t absOffset = address.offset;
         if (absOffset < 0)
             absOffset = -absOffset;
-        if (!(absOffset & ~0x3fc)) {
-            RegisterID src1 = getCachedAddressTempRegisterIDAndInvalidate();
-            move(imm1, src1);
-            RegisterID src2 = src1;
-            if (imm1.m_value != imm2.m_value) {
-                src2 = getCachedDataTempRegisterIDAndInvalidate();
-                move(imm2, src2);
-            }
-            ASSERT(src1 != address.base && src2 != address.base);
-            m_assembler.strd(src1, src2, address.base, address.offset, /* index: */ true, /* wback: */ false);
-        } else {
-            store32(imm1, address);
-            store32(imm2, address.withOffset(4));
-        }
+        store32(imm1, address);
+        store32(imm2, address.withOffset(4));
     }
 
     void storePair32(RegisterID src1, RegisterID src2, RegisterID dest)
@@ -1362,17 +1691,16 @@ public:
         int32_t absOffset = address.offset;
         if (absOffset < 0)
             absOffset = -absOffset;
-        if (!(absOffset & ~0x3fc))
-            m_assembler.strd(src1, src2, address.base, address.offset, /* index: */ true, /* wback: */ false);
-        else {
-            store32(src1, address);
-            store32(src2, address.withOffset(4));
-        }
+        // strd does not support unaligned accesses on some chips, so we avoid it.
+        store32(src1, address);
+        store32(src2, address.withOffset(4));
     }
 
     void storePair32(RegisterID src1, RegisterID src2, BaseIndex address)
     {
-        ASSERT(src1 != dataTempRegister && src2 != dataTempRegister);
+        ARMV7_MASM_ASSERT(src1 != dataTempRegister && src2 != dataTempRegister);
+        ARMV7_MASM_ASSERT(src1 != addressTempRegister && src2 != addressTempRegister);
+        ARMV7_MASM_ASSERT(address.scale <= TimesEight);
         RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
         // The 'addressTempRegister' might be used when the offset is wide, so use 'dataTempRegister'
         if (address.scale == TimesOne)
@@ -1394,8 +1722,11 @@ public:
     void storePair32(RegisterID src1, TrustedImm32 imm, const void* address)
     {
         ArmAddress armAddress = setupArmAddress(AbsoluteAddress(address));
-        ASSERT(armAddress.type == ArmAddress::HasOffset);
-        RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
+        ARMV7_MASM_ASSERT(armAddress.type == ArmAddress::HasOffset);
+        RegisterID scratch = armAddress.base == dataTempRegister
+            ? getCachedAddressTempRegisterIDAndInvalidate()
+            : getCachedDataTempRegisterIDAndInvalidate();
+        ARMV7_MASM_ASSERT(armAddress.base != scratch && src1 != scratch);
         move(imm, scratch);
         storePair32(src1, scratch, Address(armAddress.base, armAddress.u.offset));
     }
@@ -1403,7 +1734,7 @@ public:
     void storePair32(RegisterID src1, RegisterID src2, const void* address)
     {
         ArmAddress armAddress = setupArmAddress(AbsoluteAddress(address));
-        ASSERT(armAddress.type == ArmAddress::HasOffset);
+        ARMV7_MASM_ASSERT(armAddress.type == ArmAddress::HasOffset);
         storePair32(src1, src2, Address(armAddress.base, armAddress.u.offset));
     }
 
@@ -1484,31 +1815,48 @@ public:
 
     void storeCond8(RegisterID src, Address addr, RegisterID result)
     {
-        ASSERT(!addr.offset);
+        ARMV7_MASM_ASSERT(!addr.offset);
         m_assembler.strexb(result, src, addr.base);
+        if (result == addressTempRegister)
+            invalidateCachedAddressTempRegister();
+        else if (result == dataTempRegister)
+            cachedDataTempRegister().invalidate();
     }
 
     void storeCond16(RegisterID src, Address addr, RegisterID result)
     {
-        ASSERT(!addr.offset);
+        ARMV7_MASM_ASSERT(!addr.offset);
         m_assembler.strexh(result, src, addr.base);
+        if (result == addressTempRegister)
+            invalidateCachedAddressTempRegister();
+        else if (result == dataTempRegister)
+            cachedDataTempRegister().invalidate();
     }
 
     void storeCond32(RegisterID src, Address addr, RegisterID result)
     {
-        ASSERT(!addr.offset);
+        ARMV7_MASM_ASSERT(!addr.offset);
         m_assembler.strex(result, src, addr.base, 0);
+        if (result == addressTempRegister)
+            invalidateCachedAddressTempRegister();
+        else if (result == dataTempRegister)
+            cachedDataTempRegister().invalidate();
     }
 
     void storeCondPair32(RegisterID srcLo, RegisterID srcHi, Address addr, RegisterID result)
     {
-        ASSERT(!addr.offset);
+        ARMV7_MASM_ASSERT(!addr.offset);
         m_assembler.strexd(result, srcLo, srcHi, addr.base);
+        if (result == addressTempRegister)
+            invalidateCachedAddressTempRegister();
+        else if (result == dataTempRegister)
+            cachedDataTempRegister().invalidate();
     }
 
     // Possibly clobbers src, but not on this architecture.
     void moveDoubleToInts(FPRegisterID src, RegisterID dest1, RegisterID dest2)
     {
+        ARMV7_MASM_ASSERT(dest1 != dest2);
         m_assembler.vmov(dest1, dest2, src);
     }
     
@@ -1534,6 +1882,7 @@ public:
 
     void moveDoubleTo64(FPRegisterID src, RegisterID destHi, RegisterID destLo)
     {
+        ARMV7_MASM_ASSERT(destHi != destLo);
         m_assembler.vmov(destLo, destHi, src);
     }
 
@@ -1571,25 +1920,25 @@ public:
 
     NO_RETURN_DUE_TO_CRASH void countPopulation32(RegisterID, RegisterID)
     {
-        ASSERT(!supportsCountPopulation());
+        ARMV7_MASM_ASSERT(!supportsCountPopulation());
         CRASH();
     }
 
     NO_RETURN_DUE_TO_CRASH void countPopulation32(RegisterID, RegisterID, FPRegisterID)
     {
-        ASSERT(!supportsCountPopulation());
+        ARMV7_MASM_ASSERT(!supportsCountPopulation());
         CRASH();
     }
 
     NO_RETURN_DUE_TO_CRASH void countPopulation64(RegisterID, RegisterID)
     {
-        ASSERT(!supportsCountPopulation());
+        ARMV7_MASM_ASSERT(!supportsCountPopulation());
         CRASH();
     }
 
     NO_RETURN_DUE_TO_CRASH void countPopulation64(RegisterID, RegisterID, FPRegisterID)
     {
-        ASSERT(!supportsCountPopulation());
+        ARMV7_MASM_ASSERT(!supportsCountPopulation());
         CRASH();
     }
 
@@ -1609,6 +1958,9 @@ public:
 
         // Arm vfp addresses can be offset by a 9-bit ones-comp immediate, left shifted by 2.
         if ((offset & 3) || (offset > (255 * 4)) || (offset < -(255 * 4))) {
+            ARMV7_MASM_ASSERT(base != dataTempRegister
+                || ARMThumbImmediate::makeUInt12OrEncodedImm(offset).isValid()
+                || ARMThumbImmediate::makeUInt12OrEncodedImm(-offset).isValid());
             RegisterID scratch = getCachedAddressTempRegisterIDAndInvalidate();
             add32(TrustedImm32(offset), base, scratch);
             base = scratch;
@@ -1625,6 +1977,9 @@ public:
 
         // Arm vfp addresses can be offset by a 9-bit ones-comp immediate, left shifted by 2.
         if ((offset & 3) || (offset > (255 * 4)) || (offset < -(255 * 4))) {
+            ARMV7_MASM_ASSERT(base != dataTempRegister
+                || ARMThumbImmediate::makeUInt12OrEncodedImm(offset).isValid()
+                || ARMThumbImmediate::makeUInt12OrEncodedImm(-offset).isValid());
             RegisterID scratch = getCachedAddressTempRegisterIDAndInvalidate();
             add32(TrustedImm32(offset), base, scratch);
             base = scratch;
@@ -1636,6 +1991,7 @@ public:
 
     void loadDouble(BaseIndex address, FPRegisterID dest)
     {
+        ARMV7_MASM_ASSERT(address.base != addressTempRegister);
         move(address.index, addressTempRegister);
         lshift32(TrustedImm32(address.scale), addressTempRegister);
         add32(address.base, addressTempRegister);
@@ -1645,6 +2001,7 @@ public:
     
     void loadFloat(BaseIndex address, FPRegisterID dest)
     {
+        ARMV7_MASM_ASSERT(address.base != addressTempRegister);
         move(address.index, addressTempRegister);
         lshift32(TrustedImm32(address.scale), addressTempRegister);
         add32(address.base, addressTempRegister);
@@ -1721,6 +2078,9 @@ public:
 
         // Arm vfp addresses can be offset by a 9-bit ones-comp immediate, left shifted by 2.
         if ((offset & 3) || (offset > (255 * 4)) || (offset < -(255 * 4))) {
+            ARMV7_MASM_ASSERT(base != dataTempRegister
+                || ARMThumbImmediate::makeUInt12OrEncodedImm(offset).isValid()
+                || ARMThumbImmediate::makeUInt12OrEncodedImm(-offset).isValid());
             RegisterID scratch = getCachedAddressTempRegisterIDAndInvalidate();
             add32(TrustedImm32(offset), base, scratch);
             base = scratch;
@@ -1737,6 +2097,9 @@ public:
 
         // Arm vfp addresses can be offset by a 9-bit ones-comp immediate, left shifted by 2.
         if ((offset & 3) || (offset > (255 * 4)) || (offset < -(255 * 4))) {
+            ARMV7_MASM_ASSERT(base != dataTempRegister
+                || ARMThumbImmediate::makeUInt12OrEncodedImm(offset).isValid()
+                || ARMThumbImmediate::makeUInt12OrEncodedImm(-offset).isValid());
             RegisterID scratch = getCachedAddressTempRegisterIDAndInvalidate();
             add32(TrustedImm32(offset), base, scratch);
             base = scratch;
@@ -1754,6 +2117,7 @@ public:
 
     void storeDouble(FPRegisterID src, BaseIndex address)
     {
+        ARMV7_MASM_ASSERT(address.base != addressTempRegister);
         move(address.index, addressTempRegister);
         lshift32(TrustedImm32(address.scale), addressTempRegister);
         add32(address.base, addressTempRegister);
@@ -1763,6 +2127,7 @@ public:
     
     void storeFloat(FPRegisterID src, BaseIndex address)
     {
+        ARMV7_MASM_ASSERT(address.base != addressTempRegister);
         move(address.index, addressTempRegister);
         lshift32(TrustedImm32(address.scale), addressTempRegister);
         add32(address.base, addressTempRegister);
@@ -1782,6 +2147,7 @@ public:
 
     void addDouble(Address src, FPRegisterID dest)
     {
+        ARMV7_MASM_ASSERT(dest != fpTempRegister);
         loadDouble(src, fpTempRegister);
         addDouble(fpTempRegister, dest);
     }
@@ -1793,6 +2159,7 @@ public:
 
     void addDouble(AbsoluteAddress address, FPRegisterID dest)
     {
+        ARMV7_MASM_ASSERT(dest != fpTempRegister);
         loadDouble(TrustedImmPtr(address.m_ptr), fpTempRegister);
         m_assembler.vadd(dest, dest, fpTempRegister);
     }
@@ -1824,6 +2191,7 @@ public:
 
     void subDouble(Address src, FPRegisterID dest)
     {
+        ARMV7_MASM_ASSERT(dest != fpTempRegister);
         loadDouble(src, fpTempRegister);
         subDouble(fpTempRegister, dest);
     }
@@ -1845,6 +2213,7 @@ public:
 
     void mulDouble(Address src, FPRegisterID dest)
     {
+        ARMV7_MASM_ASSERT(dest != fpTempRegister);
         loadDouble(src, fpTempRegister);
         mulDouble(fpTempRegister, dest);
     }
@@ -1906,43 +2275,43 @@ public:
 
     NO_RETURN_DUE_TO_CRASH void ceilFloat(FPRegisterID, FPRegisterID)
     {
-        ASSERT(!supportsFloatingPointRounding());
+        ARMV7_MASM_ASSERT(!supportsFloatingPointRounding());
         CRASH();
     }
 
     NO_RETURN_DUE_TO_CRASH void floorFloat(FPRegisterID, FPRegisterID)
     {
-        ASSERT(!supportsFloatingPointRounding());
+        ARMV7_MASM_ASSERT(!supportsFloatingPointRounding());
         CRASH();
     }
 
     NO_RETURN_DUE_TO_CRASH void roundTowardNearestIntFloat(FPRegisterID, FPRegisterID)
     {
-        ASSERT(!supportsFloatingPointRounding());
+        ARMV7_MASM_ASSERT(!supportsFloatingPointRounding());
         CRASH();
     }
 
     NO_RETURN_DUE_TO_CRASH void roundTowardZeroFloat(FPRegisterID, FPRegisterID)
     {
-        ASSERT(!supportsFloatingPointRounding());
+        ARMV7_MASM_ASSERT(!supportsFloatingPointRounding());
         CRASH();
     }
 
     NO_RETURN_DUE_TO_CRASH void ceilDouble(FPRegisterID, FPRegisterID)
     {
-        ASSERT(!supportsFloatingPointRounding());
+        ARMV7_MASM_ASSERT(!supportsFloatingPointRounding());
         CRASH();
     }
 
     NO_RETURN_DUE_TO_CRASH void floorDouble(FPRegisterID, FPRegisterID)
     {
-        ASSERT(!supportsFloatingPointRounding());
+        ARMV7_MASM_ASSERT(!supportsFloatingPointRounding());
         CRASH();
     }
 
     NO_RETURN_DUE_TO_CRASH void roundTowardZeroDouble(FPRegisterID, FPRegisterID)
     {
-        ASSERT(!supportsFloatingPointRounding());
+        ARMV7_MASM_ASSERT(!supportsFloatingPointRounding());
         CRASH();
     }
 
@@ -1958,6 +2327,7 @@ public:
 
     void convertInt32ToFloat(RegisterID src, FPRegisterID dest)
     {
+        ARMV7_MASM_ASSERT(dest <= ARMRegisters::d15);
         m_assembler.vmov(fpTempRegister, src, src);
         m_assembler.vcvt_signedToFloatingPoint(dest, fpTempRegisterAsSingle(), /* toDouble: */ false);
     }
@@ -1992,6 +2362,7 @@ public:
 
     void convertUInt32ToFloat(RegisterID src, FPRegisterID dest)
     {
+        ARMV7_MASM_ASSERT(dest <= ARMRegisters::d15);
         m_assembler.vmov(fpTempRegister, src, src);
         m_assembler.vcvt_unsignedToFloatingPoint(dest, fpTempRegisterAsSingle(), /* toDouble: */ false);
     }
@@ -2006,7 +2377,7 @@ public:
     {
         m_assembler.vcvtds(dst, ARMRegisters::asSingle(src));
     }
-    
+
     void convertDoubleToFloat(FPRegisterID src, FPRegisterID dst)
     {
         m_assembler.vcvtsd(ARMRegisters::asSingle(dst), src);
@@ -2085,10 +2456,8 @@ public:
 
     Jump branchFloatWithZero(DoubleCondition cond, FPRegisterID left)
     {
-        UNUSED_PARAM(cond);
-        UNUSED_PARAM(left);
-        UNREACHABLE_FOR_PLATFORM();
-        return { };
+        m_assembler.vcmpz(asSingle(left));
+        return makeFPBranch(cond);
     }
 
     Jump branchDouble(DoubleCondition cond, FPRegisterID left, FPRegisterID right)
@@ -2099,10 +2468,8 @@ public:
 
     Jump branchDoubleWithZero(DoubleCondition cond, FPRegisterID left)
     {
-        UNUSED_PARAM(cond);
-        UNUSED_PARAM(left);
-        UNREACHABLE_FOR_PLATFORM();
-        return { };
+        m_assembler.vcmpz(left);
+        return makeFPBranch(cond);
     }
 
     enum BranchTruncateType { BranchIfTruncateFailed, BranchIfTruncateSuccessful };
@@ -2155,13 +2522,15 @@ public:
         m_assembler.vcvt_floatingPointToUnsigned(fpTempRegisterAsSingle(), asSingle(src));
         m_assembler.vmov(dest, fpTempRegisterAsSingle());
     }
-    
+
     // Convert 'src' to an integer, and places the resulting 'dest'.
     // If the result is not representable as a 32 bit value, branch.
     // May also branch for some values that are representable in 32 bits
     // (specifically, in this case, 0).
     void branchConvertDoubleToInt32(FPRegisterID src, RegisterID dest, JumpList& failureCases, FPRegisterID, bool negZeroCheck = true)
     {
+        ARMV7_MASM_ASSERT(src != fpTempRegister);
+        ARMV7_MASM_ASSERT(dest != dataTempRegister);
         m_assembler.vcvt_floatingPointToSigned(fpTempRegisterAsSingle(), src);
         m_assembler.vmov(dest, fpTempRegisterAsSingle());
 
@@ -2201,6 +2570,102 @@ public:
         notEqual.link(this);
         return result;
     }
+private:
+    void convertDoubleToUint64(FPRegisterID src, RegisterID destLo, RegisterID destHi, FPRegisterID scratch1, FPRegisterID scratch2)
+    {
+        // We override src on the vmla, so we require a temp fp register here
+        ARMV7_MASM_ASSERT(src == fpTempRegister);
+        ARMV7_MASM_ASSERT(scratch1 != scratch2);
+        ARMV7_MASM_ASSERT(scratch1 != src);
+        ARMV7_MASM_ASSERT(scratch2 != src);
+        ARMV7_MASM_ASSERT(destLo != destHi);
+        ARMV7_MASM_ASSERT(scratch1 != scratch2);
+        ARMV7_MASM_ASSERT(scratch1 != src);
+        ARMV7_MASM_ASSERT(scratch2 != src);
+        ARMV7_MASM_ASSERT(destLo != destHi);
+
+        // Constant materialization
+        move(TrustedImm32(0x00000000), destLo);
+        move(TrustedImm32(0x3DF00000), destHi);
+        move64ToDouble(destHi, destLo, scratch1);
+        move(TrustedImm32(0x00000000), destLo);
+        move(TrustedImm32(0xC1F00000), destHi);
+        move64ToDouble(destHi, destLo, scratch2);
+
+        m_assembler.vmul(scratch1, src, scratch1);
+
+        m_assembler.vcvt_floatingPointToUnsigned(ARMRegisters::asSingle(scratch1), scratch1);
+        m_assembler.vmov(destHi, ARMRegisters::asSingle(scratch1));
+
+        m_assembler.vcvt_unsignedToFloatingPoint(scratch1, ARMRegisters::asSingle(scratch1));
+
+        m_assembler.vmla(src, scratch1, scratch2);
+
+        m_assembler.vcvt_floatingPointToUnsigned(ARMRegisters::asSingle(src), src);
+        m_assembler.vmov(destLo, ARMRegisters::asSingle(src));
+    }
+
+public:
+    void truncateDoubleToUint64(FPRegisterID src, RegisterID destLo, RegisterID destHi, FPRegisterID scratch1, FPRegisterID scratch2)
+    {
+        ARMV7_MASM_ASSERT(scratch1 != fpTempRegister);
+        ARMV7_MASM_ASSERT(scratch2 != fpTempRegister);
+        ARMV7_MASM_ASSERT(scratch1 != scratch2);
+        ARMV7_MASM_ASSERT(destLo != destHi);
+        Jump notPositive = branchDoubleWithZero(DoubleLessThanOrEqualOrUnordered, src);
+
+        moveDouble(src, fpTempRegister);
+        convertDoubleToUint64(fpTempRegister, destLo, destHi, scratch1, scratch2);
+
+        Jump done = jump();
+
+        notPositive.link(this);
+        move(TrustedImm32(0), destLo);
+        move(TrustedImm32(0), destHi);
+
+        done.link(this);
+    }
+
+    void truncateDoubleToInt64(FPRegisterID src, RegisterID destLo, RegisterID destHi, FPRegisterID scratch1, FPRegisterID scratch2)
+    {
+        ARMV7_MASM_ASSERT(scratch1 != fpTempRegister);
+        ARMV7_MASM_ASSERT(scratch2 != fpTempRegister);
+        ARMV7_MASM_ASSERT(scratch1 != scratch2);
+        ARMV7_MASM_ASSERT(destLo != destHi);
+        ARMV7_MASM_ASSERT(destLo != addressTempRegister);
+        ARMV7_MASM_ASSERT(destHi != addressTempRegister);
+        RegisterID signFlag = getCachedAddressTempRegisterIDAndInvalidate();
+        moveDouble(src, fpTempRegister);
+
+        Jump isNegative = branchDoubleWithZero(DoubleLessThanAndOrdered, fpTempRegister);
+        move(TrustedImm32(0), signFlag);
+        Jump join = jump();
+
+        isNegative.link(this);
+        m_assembler.vneg(fpTempRegister, fpTempRegister);
+        move(TrustedImm32(1), signFlag);
+
+        join.link(this);
+        convertDoubleToUint64(fpTempRegister, destLo, destHi, scratch1, scratch2);
+
+        Jump wasNonNegative = branch32(Equal, signFlag, TrustedImm32(0));
+        m_assembler.sub_S(destLo, ARMThumbImmediate::makeEncodedImm(0), destLo);
+        m_assembler.mvn(destHi, destHi);
+        m_assembler.adc(destHi, destHi, ARMThumbImmediate::makeEncodedImm(0));
+        wasNonNegative.link(this);
+    }
+
+    void truncateFloatToUint64(FPRegisterID src, RegisterID destLo, RegisterID destHi, FPRegisterID scratch1, FPRegisterID scratch2)
+    {
+        convertFloatToDouble(src, fpTempRegister);
+        truncateDoubleToUint64(fpTempRegister, destLo, destHi, scratch1, scratch2);
+    }
+
+    void truncateFloatToInt64(FPRegisterID src, RegisterID destLo, RegisterID destHi, FPRegisterID scratch1, FPRegisterID scratch2)
+    {
+        convertFloatToDouble(src, fpTempRegister);
+        truncateDoubleToInt64(fpTempRegister, destLo, destHi, scratch1, scratch2);
+    }
 
     // Stack manipulation operations:
     //
@@ -2209,7 +2674,7 @@ public:
     // operations add and remove a single register sized unit of data
     // to or from the stack.  Peek and poke operations read or write
     // values on the stack, without moving the current stack position.
-    
+
     void pop(RegisterID dest)
     {
         m_assembler.pop(dest);
@@ -2351,6 +2816,8 @@ public:
 
     void swap(RegisterID reg1, RegisterID reg2)
     {
+        ARMV7_MASM_ASSERT(reg1 != dataTempRegister);
+        ARMV7_MASM_ASSERT(reg2 != dataTempRegister);
         move(reg1, dataTempRegister);
         move(reg2, reg1);
         move(dataTempRegister, reg2);
@@ -2494,9 +2961,16 @@ private:
         m_assembler.cmp(left, scratch);
     }
 
+    void compare32AndSetFlags(RegisterID left, RegisterID right)
+    {
+        m_assembler.cmp(left, right);
+    }
+
     void add32Impl(TrustedImm32 imm, Address address, bool updateFlags = false)
     {
-        load32(address, dataTempRegister);
+        ArmAddress armAddress = setupArmAddress(address);
+        RELEASE_ASSERT(armAddress.base != dataTempRegister && armAddress.base != addressTempRegister);
+        load32(armAddress, dataTempRegister);
 
         ARMThumbImmediate armImm = ARMThumbImmediate::makeEncodedImm(imm.m_value);
         if (armImm.isValid()) {
@@ -2507,14 +2981,20 @@ private:
         } else {
             // Hrrrm, since dataTempRegister holds the data loaded,
             // use addressTempRegister to hold the immediate.
+            bool addressUsesTemp = armAddress.type == ArmAddress::HasIndex && armAddress.u.index == addressTempRegister;
             move(imm, addressTempRegister);
-            if (updateFlags)
+            if (updateFlags) {
                 m_assembler.add_S(dataTempRegister, dataTempRegister, addressTempRegister);
-            else
+                if (addressUsesTemp)
+                    moveFixedWidthEncoding(TrustedImm32(address.offset), addressTempRegister);
+            } else {
                 m_assembler.add(dataTempRegister, dataTempRegister, addressTempRegister);
+                if (addressUsesTemp)
+                    move(TrustedImm32(address.offset), addressTempRegister);
+            }
         }
 
-        store32(dataTempRegister, address);
+        store32(dataTempRegister, armAddress);
     }
 
     void add32Impl(TrustedImm32 imm, AbsoluteAddress address, bool updateFlags = false)
@@ -2545,9 +3025,13 @@ public:
     {
         int32_t imm = mask.m_value;
 
-        if (imm == -1)
-            m_assembler.tst(reg, reg);
-        else {
+        if (imm == -1) {
+            if (reg == ARMRegisters::sp) {
+                move(reg, addressTempRegister);
+                m_assembler.tst(addressTempRegister, addressTempRegister);
+            } else
+                m_assembler.tst(reg, reg);
+        } else {
             ARMThumbImmediate armImm = ARMThumbImmediate::makeEncodedImm(imm);
             if (armImm.isValid()) {
                 if (reg == ARMRegisters::sp) {
@@ -2730,16 +3214,106 @@ public:
         return branch32(cond, addressTempRegister, right16);
     }
 
+private:
+    template<typename T>
+    Jump branch64Impl(RelationalCondition cond, RegisterID leftHi, RegisterID leftLo, T rightHi, T rightLo)
+    {
+        if (cond == Equal) {
+            // Equal: bne done; cmp lo; beq target; done:
+            compare32AndSetFlags(leftHi, rightHi);
+            Jump done = makeBranch(ARMv7Assembler::ConditionNE);
+            compare32AndSetFlags(leftLo, rightLo);
+            Jump result = makeBranch(ARMv7Assembler::ConditionEQ);
+            done.link(this);
+            return result;
+        }
+
+        if (cond == NotEqual) {
+            // NotEqual: branch taken if ANY part differs
+            compare32AndSetFlags(leftHi, rightHi);
+            Jump fromHi = makeBranch(ARMv7Assembler::ConditionNE);
+            compare32AndSetFlags(leftLo, rightLo);
+            Jump fromLo = makeBranch(ARMv7Assembler::ConditionNE);
+            Jump notTaken = jump();
+            fromHi.link(this);
+            fromLo.link(this);
+            Jump result = jump();
+            notTaken.link(this);
+            return result;
+        }
+
+        ARMv7Assembler::Condition hiCond = armV7ConditionForHigh32(cond);
+        ARMv7Assembler::Condition loCond = armV7ConditionForLow32(cond);
+        ARMV7_MASM_ASSERT(hiCond != ARMv7Assembler::ConditionInvalid);
+        ARMV7_MASM_ASSERT(loCond != ARMv7Assembler::ConditionInvalid);
+        ARMv7Assembler::Condition inverseLoCond = ARMv7Assembler::invert(loCond);
+        compare32AndSetFlags(leftHi, rightHi);
+        Jump fromHi = makeBranch(hiCond);
+        Jump notTakenHi = makeBranch(ARMv7Assembler::ConditionNE);
+        compare32AndSetFlags(leftLo, rightLo);
+        Jump notTakenLo = makeBranch(inverseLoCond);
+        fromHi.link(this);
+        Jump result = jump();
+        notTakenHi.link(this);
+        notTakenLo.link(this);
+        return result;
+    }
+
+public:
+    Jump branch64(RelationalCondition cond, RegisterID leftHi, RegisterID leftLo, RegisterID rightHi, RegisterID rightLo)
+    {
+        return branch64Impl(cond, leftHi, leftLo, rightHi, rightLo);
+    }
+
+    Jump branch64(RelationalCondition cond, RegisterID leftHi, RegisterID leftLo, TrustedImm64 right)
+    {
+        TrustedImm32 rightHi(static_cast<int32_t>(right.m_value >> 32));
+        TrustedImm32 rightLo(static_cast<int32_t>(right.m_value));
+
+        // Optimize for comparing with zero (unsigned comparisons only)
+        if (!rightHi.m_value && !rightLo.m_value) {
+            if (cond == Below)
+                return branch32(Below, leftHi, TrustedImm32(0));
+            if (cond == AboveOrEqual)
+                return jump(); // all unsigned values are >= 0
+
+            if (cond == Equal || cond == BelowOrEqual || cond == NotEqual || cond == Above) {
+                RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
+                m_assembler.orr_S(scratch, leftHi, leftLo);
+                return Jump(makeBranch((cond == Equal || cond == BelowOrEqual) ? ARMv7Assembler::ConditionEQ : ARMv7Assembler::ConditionNE));
+            }
+        }
+
+        return branch64Impl(cond, leftHi, leftLo, rightHi, rightLo);
+    }
+
+    Jump branchTest64(ResultCondition cond, RegisterID regHi, RegisterID regLo)
+    {
+        ARMV7_MASM_ASSERT(regHi != ARMRegisters::sp && regHi != ARMRegisters::pc);
+        ARMV7_MASM_ASSERT(regLo != ARMRegisters::sp && regLo != ARMRegisters::pc);
+        ARMV7_MASM_ASSERT(cond == Signed || cond == PositiveOrZero || cond == Zero || cond == NonZero);
+        if (cond == Signed || cond == PositiveOrZero) {
+            // For sign tests, only check the sign bit of the high 32 bits
+            m_assembler.tst(regHi, regHi);
+            return Jump(makeBranch((cond == Signed) ? ARMv7Assembler::ConditionMI : ARMv7Assembler::ConditionPL));
+        }
+
+        ARMV7_MASM_ASSERT(cond == Zero || cond == NonZero);
+        RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
+        m_assembler.orr_S(scratch, regHi, regLo);
+        return Jump(makeBranch(cond == Zero ? ARMv7Assembler::ConditionEQ : ARMv7Assembler::ConditionNE));
+    }
+
     Jump branchTest32(ResultCondition cond, RegisterID reg, RegisterID mask)
     {
-        ASSERT(cond == Zero || cond == NonZero || cond == Signed || cond == PositiveOrZero);
+        ARMV7_MASM_ASSERT(cond == Zero || cond == NonZero || cond == Signed || cond == PositiveOrZero);
         m_assembler.tst(reg, mask);
         return Jump(makeBranch(cond));
     }
 
     Jump branchTest32(ResultCondition cond, RegisterID reg, TrustedImm32 mask = TrustedImm32(-1))
     {
-        ASSERT(cond == Zero || cond == NonZero || cond == Signed || cond == PositiveOrZero);
+        ARMV7_MASM_ASSERT(cond == Zero || cond == NonZero || cond == Signed || cond == PositiveOrZero);
         test32(reg, mask);
         return Jump(makeBranch(cond));
     }
@@ -2875,6 +3449,7 @@ public:
         if (armImm.isValid())
             m_assembler.add_S(dest, op1, armImm);
         else {
+            ARMV7_MASM_ASSERT(op1 != dataTempRegister);
             move(imm, dataTempRegister);
             m_assembler.add_S(dest, op1, dataTempRegister);
         }
@@ -2913,6 +3488,8 @@ public:
 
     Jump branchMul32(ResultCondition cond, RegisterID src1, RegisterID src2, RegisterID dest)
     {
+        ARMV7_MASM_ASSERT(dest != dataTempRegister);
+        ARMV7_MASM_ASSERT((cond != Overflow) || (dest != addressTempRegister));
         m_assembler.smull(dest, dataTempRegister, src1, src2);
         // The invalidation of cachedDataTempRegister is handled by the branch.
         if (cond == Overflow) {
@@ -2931,13 +3508,14 @@ public:
 
     Jump branchMul32(ResultCondition cond, RegisterID src, TrustedImm32 imm, RegisterID dest)
     {
+        ARMV7_MASM_ASSERT(src != dataTempRegister);
         move(imm, dataTempRegister);
         return branchMul32(cond, dataTempRegister, src, dest);
     }
 
     Jump branchNeg32(ResultCondition cond, RegisterID srcDest)
     {
-        ARMThumbImmediate zero = ARMThumbImmediate::makeUInt12(0);
+        ARMThumbImmediate zero = ARMThumbImmediate::makeEncodedImm(0);
         m_assembler.sub_S(srcDest, zero, srcDest);
         return Jump(makeBranch(cond));
     }
@@ -2960,6 +3538,7 @@ public:
         if (armImm.isValid())
             m_assembler.sub_S(dest, op1, armImm);
         else {
+            ARMV7_MASM_ASSERT(op1 != dataTempRegister);
             move(imm, dataTempRegister);
             m_assembler.sub_S(dest, op1, dataTempRegister);
         }
@@ -2978,7 +3557,7 @@ public:
     
     void relativeTableJump(RegisterID index, int scale)
     {
-        ASSERT(scale >= 0 && scale <= 31);
+        ARMV7_MASM_ASSERT(scale >= 0 && scale <= 31);
 
         // dataTempRegister will point after the jump if index register contains zero
         move(ARMRegisters::pc, dataTempRegister);
@@ -3084,6 +3663,7 @@ public:
 
     void compare32(RelationalCondition cond, Address left, RegisterID right, RegisterID dest)
     {
+        ARMV7_MASM_ASSERT(right != addressTempRegister);
         load32(left, addressTempRegister);
         compare32(cond, addressTempRegister, right, dest);
     }
@@ -3201,6 +3781,8 @@ public:
 
     void moveConditionally32(RelationalCondition cond, RegisterID left, TrustedImm32 right, RegisterID thenCase, RegisterID elseCase, RegisterID dest)
     {
+        ARMV7_MASM_ASSERT(thenCase != dataTempRegister && thenCase != addressTempRegister);
+        ARMV7_MASM_ASSERT(elseCase != dataTempRegister && elseCase != addressTempRegister);
         compare32AndSetFlags(left, right);
         m_assembler.it(armV7Condition(cond), false);
         moveOrNop(thenCase, dest);
@@ -3243,6 +3825,8 @@ public:
 
     void moveConditionallyTest32(ResultCondition cond, RegisterID left, TrustedImm32 right, RegisterID thenCase, RegisterID elseCase, RegisterID dest)
     {
+        ARMV7_MASM_ASSERT(thenCase != dataTempRegister && thenCase != addressTempRegister);
+        ARMV7_MASM_ASSERT(elseCase != dataTempRegister && elseCase != addressTempRegister);
         test32(left, right);
         m_assembler.it(armV7Condition(cond), false);
         moveOrNop(thenCase, dest);
@@ -3548,6 +4132,8 @@ protected:
 
     ALWAYS_INLINE Jump makeBranch(ARMv7Assembler::Condition cond)
     {
+        ARMV7_MASM_ASSERT(cond != ARMv7Assembler::ConditionInvalid);
+        ARMV7_MASM_ASSERT(cond != ARMv7Assembler::ConditionAL);
         m_assembler.label(); // Force nop-padding if we're in the middle of a watchpoint.
         m_assembler.it(cond, true, true);
         moveFixedWidthEncoding(TrustedImm32(0), dataTempRegister);
@@ -3560,13 +4146,16 @@ protected:
 
     ArmAddress setupArmAddress(BaseIndex address)
     {
+        ARMV7_MASM_ASSERT(address.scale <= TimesEight);
         if (address.offset) {
+            ARMV7_MASM_ASSERT(address.index != addressTempRegister);
             ARMThumbImmediate imm = ARMThumbImmediate::makeUInt12OrEncodedImm(address.offset);
             if (imm.isValid()) {
                 RegisterID scratch = getCachedAddressTempRegisterIDAndInvalidate();
                 m_assembler.add(scratch, address.base, imm);
             } else {
                 RELEASE_ASSERT(m_allowScratchRegister);
+                ARMV7_MASM_ASSERT(address.base != addressTempRegister);
                 move(TrustedImm32(address.offset), addressTempRegister);
                 m_assembler.add(addressTempRegister, addressTempRegister, address.base);
                 cachedAddressTempRegister().invalidate();
@@ -3583,6 +4172,7 @@ protected:
             return ArmAddress(address.base, address.offset);
 
         RELEASE_ASSERT(m_allowScratchRegister);
+        ARMV7_MASM_ASSERT(address.base != addressTempRegister);
         move(TrustedImm32(address.offset), addressTempRegister);
         return ArmAddress(address.base, addressTempRegister);
     }
@@ -3616,10 +4206,13 @@ protected:
         if (!address.offset)
             return address.base;
 
+        RELEASE_ASSERT(m_allowScratchRegister);
+        ARMV7_MASM_ASSERT(address.index != addressTempRegister);
         ARMThumbImmediate imm = ARMThumbImmediate::makeUInt12OrEncodedImm(address.offset);
         if (imm.isValid())
             m_assembler.add(addressTempRegister, address.base, imm);
         else {
+            ARMV7_MASM_ASSERT(address.base != addressTempRegister);
             move(TrustedImm32(address.offset), addressTempRegister);
             m_assembler.add(addressTempRegister, addressTempRegister, address.base);
         }

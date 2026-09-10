@@ -28,6 +28,7 @@
 
 #include "ErrorInstance.h"
 #include "Exception.h"
+#include "JSCJSValueInlines.h"
 #include <wtf/StackTrace.h>
 #include <wtf/StringPrintStream.h>
 #include <wtf/Threading.h>

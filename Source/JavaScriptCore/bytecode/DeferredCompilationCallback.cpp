@@ -26,6 +26,8 @@
 #include "config.h"
 #include "DeferredCompilationCallback.h"
 
+#include "StrongInlines.h"
+
 namespace JSC {
 
 DeferredCompilationCallback::DeferredCompilationCallback() = default;

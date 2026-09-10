@@ -3423,10 +3423,19 @@ llintOpWithReturn(op_enumerator_put_by_val, OpEnumeratorPutByVal, macro (size, g
     dispatch()
 end)
 
+llintOpWithReturn(op_instanceof, OpInstanceof, macro (size, get, dispatch, return)
+    callSlowPath(_llint_slow_path_instanceof)
+    dispatch()
+.osrReturnPoint:
+    # We do not checkpoint properly on 32-bit.
+    getterSetterOSRExitReturnPoint(op_instanceof, size)
+    callSlowPath(_llint_slow_path_instanceof)
+    dispatch()
+end)
+
 slowPathOp(get_property_enumerator)
 slowPathOp(enumerator_next)
 slowPathOp(enumerator_has_own_property)
 slowPathOp(mod)
 
 llintSlowPathOp(has_structure_with_flags)
-llintSlowPathOp(instanceof)

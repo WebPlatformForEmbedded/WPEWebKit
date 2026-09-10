@@ -1050,6 +1050,11 @@ const ScalarRegisterSet& InlineCacheCompiler::calculateLiveRegistersForCallAndEx
         if (m_stubInfo.useDataIC)
             liveRegistersForCall.add(m_stubInfo.m_stubInfoGPR, IgnoreVectors);
         liveRegistersForCall.exclude(calleeSaveRegisters().buildAndValidate().includeWholeRegisterWidth());
+#if CPU(ARM_THUMB2)
+        // These are callee save on armv7 only, so DFG treats them as caller-saved. 
+        liveRegistersForCall.add(GPRInfo::metadataTableRegister, IgnoreVectors);
+        liveRegistersForCall.add(GPRInfo::jitDataRegister, IgnoreVectors);
+#endif
         m_liveRegistersForCall = liveRegistersForCall.buildScalarRegisterSet();
     }
     return m_liveRegistersForCall;
@@ -4192,10 +4197,6 @@ void InlineCacheCompiler::emitProxyObjectAccess(unsigned index, AccessCase& acce
 #if USE(JSVALUE32_64)
         // We *always* know that the proxy function, if non-null, is a cell.
         jit.move(CCallHelpers::TrustedImm32(JSValue::CellTag), BaselineJITRegisters::Call::calleeJSR.tagGPR());
-#endif
-#if CPU(ARM_THUMB2)
-        // ARMv7 clobbers metadataTable register. Thus we need to restore them back here.
-        JIT::emitMaterializeMetadataAndConstantPoolRegisters(jit);
 #endif
         m_callLinkInfos[index] = makeUnique<OptimizingCallLinkInfo>(m_stubInfo.codeOrigin, nullptr);
         auto* callLinkInfo = m_callLinkInfos[index].get();
