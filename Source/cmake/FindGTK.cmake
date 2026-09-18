@@ -94,19 +94,6 @@ endif ()
 find_package(PkgConfig QUIET)
 pkg_check_modules(GTK IMPORTED_TARGET ${GTK_PC_MODULE})
 
-set(GTK_VERSION_OK TRUE)
-if (GTK_VERSION)
-    if (GTK_FIND_VERSION_EXACT)
-        if (NOT("${GTK_FIND_VERSION}" VERSION_EQUAL "${GTK_VERSION}"))
-            set(GTK_VERSION_OK FALSE)
-        endif ()
-    else ()
-        if ("${GTK_VERSION}" VERSION_LESS "${GTK_FIND_VERSION}")
-            set(GTK_VERSION_OK FALSE)
-        endif ()
-    endif ()
-endif ()
-
 # Set all the GTK_SUPPORTS_<target> variables to FALSE initially.
 foreach (gtk_target broadway quartz wayland win32 x11)
     string(TOUPPER "GTK_SUPPORTS_${gtk_target}" gtk_target)
@@ -147,4 +134,6 @@ foreach (gtk_component ${GTK_FIND_COMPONENTS})
 endforeach ()
 
 include(FindPackageHandleStandardArgs)
-FIND_PACKAGE_HANDLE_STANDARD_ARGS(GTK DEFAULT_MSG GTK_VERSION GTK_VERSION_OK)
+FIND_PACKAGE_HANDLE_STANDARD_ARGS(GTK
+                                  REQUIRED_VARS GTK_VERSION GTK_VERSION_OK
+                                  VERSION_VAR GTK_VERSION)

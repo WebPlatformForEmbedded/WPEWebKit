@@ -79,6 +79,8 @@ if (EXISTS "${GLIBCONFIG_INCLUDE_DIR}/glibconfig.h")
     string(REGEX MATCH "#define GLIB_MICRO_VERSION ([0-9]+)" _dummy "${GLIBCONFIG_H_CONTENTS}")
     set(GLIB_VERSION_MICRO "${CMAKE_MATCH_1}")
     set(GLIB_VERSION "${GLIB_VERSION_MAJOR}.${GLIB_VERSION_MINOR}.${GLIB_VERSION_MICRO}")
+else ()
+    set(GLIB_VERSION "${PC_GLIB_VERSION}")
 endif ()
 
 # Additional Glib components.  We only look for libraries, as not all of them
