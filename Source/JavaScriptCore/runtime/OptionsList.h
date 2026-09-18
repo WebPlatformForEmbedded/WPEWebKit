@@ -557,7 +557,7 @@ bool canUseWebAssemblyFastMemory();
     v(Bool, useWebAssemblyExceptions, true, Normal, "Allow the new section and instructions from the wasm exception handling spec.") \
     v(Bool, useWebAssemblyBranchHints, true, Normal, "Allow the new section from the wasm branch hinting spec.") \
     v(Bool, disableConsoleLog, false, Normal, "Disable printing of JS console logs.") \
-
+    v(Unsigned, markedBlockDumpInfoCount, 0, Normal, nullptr) /* FIXME: rdar://139998916 */ \
 
 enum OptionEquivalence {
     SameOption,

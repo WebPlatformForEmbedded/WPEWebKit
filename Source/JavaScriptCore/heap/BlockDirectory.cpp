@@ -306,6 +306,17 @@ void BlockDirectory::shrink()
         });
 }
 
+// FIXME: rdar://139998916
+MarkedBlock::Handle* BlockDirectory::findMarkedBlockHandleDebug(MarkedBlock* block)
+{
+    for (size_t index = 0; index < m_blocks.size(); ++index) {
+        MarkedBlock::Handle* handle = m_blocks[index];
+        if (&handle->block() == block)
+            return handle;
+    }
+    return nullptr;
+}
+
 void BlockDirectory::assertNoUnswept()
 {
     if (!ASSERT_ENABLED)

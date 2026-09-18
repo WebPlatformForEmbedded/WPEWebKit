@@ -130,8 +130,11 @@ public:
     void setNextDirectoryInAlignedMemoryAllocator(BlockDirectory* directory) { m_nextDirectoryInAlignedMemoryAllocator = directory; }
     
     MarkedBlock::Handle* findEmptyBlockToSteal();
-    
+
     MarkedBlock::Handle* findBlockToSweep();
+
+    // FIXME: rdar://139998916
+    MarkedBlock::Handle* findMarkedBlockHandleDebug(MarkedBlock*);
     
     Subspace* subspace() const { return m_subspace; }
     MarkedSpace& markedSpace() const;

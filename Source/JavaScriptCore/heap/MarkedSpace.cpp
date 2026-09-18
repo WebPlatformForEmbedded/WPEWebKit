@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2003-2018 Apple Inc. All rights reserved.
+ *  Copyright (C) 2003-2024 Apple Inc. All rights reserved.
  *  Copyright (C) 2007 Eric Seidel <eric@webkit.org>
  *
  *  This library is free software; you can redistribute it and/or
@@ -41,7 +41,7 @@ static Vector<size_t> sizeClasses()
 
     if (UNLIKELY(Options::dumpSizeClasses())) {
         dataLog("Block size: ", MarkedBlock::blockSize, "\n");
-        dataLog("Footer size: ", sizeof(MarkedBlock::Footer), "\n");
+        dataLog("Header size: ", sizeof(MarkedBlock::Header), "\n");
     }
     
     auto add = [&] (size_t sizeClass) {
@@ -372,6 +372,21 @@ bool MarkedSpace::isPagedOut()
     double maxHeapGrowthFactor = VM::isInMiniMode() ? Options::miniVMHeapGrowthFactor() : Options::largeHeapGrowthFactor();
     double bailoutPercentage = Options::customFullGCCallbackBailThreshold() == -1.0 ? maxHeapGrowthFactor - 1 : Options::customFullGCCallbackBailThreshold();
     return pagedOutPagesStats.mean() > pagedOutPagesStats.count() * bailoutPercentage;
+}
+
+// FIXME: rdar://139998916
+MarkedBlock::Handle* MarkedSpace::findMarkedBlockHandleDebug(MarkedBlock* block)
+{
+    MarkedBlock::Handle* result = nullptr;
+    forEachDirectory(
+        [&](BlockDirectory& directory) -> IterationStatus {
+            if (MarkedBlock::Handle* handle = directory.findMarkedBlockHandleDebug(block)) {
+                result = handle;
+                return IterationStatus::Done;
+            }
+            return IterationStatus::Continue;
+        });
+    return result;
 }
 
 void MarkedSpace::freeBlock(MarkedBlock::Handle* block)
