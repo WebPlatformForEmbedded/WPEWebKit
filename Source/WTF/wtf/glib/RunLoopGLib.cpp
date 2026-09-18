@@ -31,6 +31,8 @@
 #include <wtf/MainThread.h>
 #include <wtf/glib/RunLoopSourcePriority.h>
 
+#include "wtf/ConservativeScanStackGuards.h"
+
 namespace WTF {
 
 typedef struct {
@@ -103,6 +105,7 @@ void RunLoop::run()
     ASSERT(!runLoop.m_mainLoops.isEmpty());
 
     GMainLoop* innermostLoop = runLoop.m_mainLoops[0].get();
+    ConservativeScanStackGuards::ConservativeScanStackGuard guard;
     if (!g_main_loop_is_running(innermostLoop)) {
         g_main_context_push_thread_default(mainContext);
         g_main_loop_run(innermostLoop);
