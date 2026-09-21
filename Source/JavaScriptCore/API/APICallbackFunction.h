@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2013-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2026 Igalia S.L.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,7 +31,7 @@
 #include "Error.h"
 #include "JSCallbackConstructor.h"
 #include "JSLock.h"
-#include <wtf/Vector.h>
+#include "MarkedJSValueRefArray.h"
 
 namespace JSC {
 
