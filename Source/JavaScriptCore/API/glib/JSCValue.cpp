@@ -31,6 +31,7 @@
 #include "JSRetainPtr.h"
 #include "JSTypedArray.h"
 #include "LiteralParser.h"
+#include "MarkedJSValueRefArray.h"
 #include "OpaqueJSString.h"
 #include "TypedArrayType.h"
 #include <array>
@@ -874,7 +875,7 @@ char** jsc_value_object_enumerate_properties(JSCValue* value)
     return result;
 }
 
-static JSValueRef jsObjectCall(JSGlobalContextRef jsContext, JSObjectRef function, JSC::JSCCallbackFunction::Type functionType, JSObjectRef thisObject, const Vector<JSValueRef>& arguments, JSValueRef* exception)
+static JSValueRef jsObjectCall(JSGlobalContextRef jsContext, JSObjectRef function, JSC::JSCCallbackFunction::Type functionType, JSObjectRef thisObject, std::span<const JSValueRef> arguments, JSValueRef* exception)
 {
     switch (functionType) {
     case JSC::JSCCallbackFunction::Type::Constructor:
@@ -896,7 +897,8 @@ static GRefPtr<JSCValue> jscValueCallFunction(JSCValue* value, JSObjectRef funct
     JSC::JSLockHolder locker(globalObject);
 
     JSValueRef exception = nullptr;
-    Vector<JSValueRef> arguments;
+    // Converting a parameter allocates, so the values converted so far need a buffer the collector marks.
+    JSC::MarkedArgumentBuffer parameters;
     GType parameterType = firstParameterType;
     while (parameterType != G_TYPE_NONE) {
         GValue parameter;
@@ -915,11 +917,22 @@ static GRefPtr<JSCValue> jscValueCallFunction(JSCValue* value, JSObjectRef funct
         if (jscContextHandleExceptionIfNeeded(priv->context.get(), exception))
             return jscContextGetOrCreateValue(priv->context.get(), jsValue);
 
-        arguments.append(jsValue);
+        parameters.append(toJS(globalObject, jsValue));
         parameterType = va_arg(args, GType);
     }
+    if (parameters.hasOverflowed()) {
+        exception = toRef(JSC::createOutOfMemoryError(globalObject));
+        jscContextHandleExceptionIfNeeded(priv->context.get(), exception);
+        return adoptGRef(jsc_value_new_undefined(priv->context.get()));
+    }
 
-    auto result = jsObjectCall(jsContext, function, functionType, thisObject, arguments, &exception);
+    // Where a JSValue does not fit in a pointer toRef() allocates a wrapper cell, so the JSValueRefs
+    // need marking as well.
+    JSC::MarkedJSValueRefArray arguments(jsContext, static_cast<unsigned>(parameters.size()));
+    for (unsigned i = 0; i < arguments.size(); ++i)
+        arguments[i] = toRef(globalObject, parameters.at(i));
+
+    auto result = jsObjectCall(jsContext, function, functionType, thisObject, unsafeMakeSpan(arguments.data(), arguments.size()), &exception);
     if (jscContextHandleExceptionIfNeeded(priv->context.get(), exception))
         return adoptGRef(jsc_value_new_undefined(priv->context.get()));
 
@@ -1019,7 +1032,7 @@ JSCValue* jsc_value_object_invoke_methodv(JSCValue* value, const char* name, uns
         WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
     });
 
-    auto result = jsObjectCall(jsContext, function, JSC::JSCCallbackFunction::Type::Method, object, arguments, &exception);
+    auto result = jsObjectCall(jsContext, function, JSC::JSCCallbackFunction::Type::Method, object, arguments.span(), &exception);
     if (jscContextHandleExceptionIfNeeded(priv->context.get(), exception))
         return jsc_value_new_undefined(priv->context.get());
 
@@ -1376,7 +1389,7 @@ JSCValue* jsc_value_function_callv(JSCValue* value, unsigned parametersCount, JS
         WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
     });
 
-    auto result = jsObjectCall(jsContext, function, JSC::JSCCallbackFunction::Type::Function, nullptr, arguments, &exception);
+    auto result = jsObjectCall(jsContext, function, JSC::JSCCallbackFunction::Type::Function, nullptr, arguments.span(), &exception);
     if (jscContextHandleExceptionIfNeeded(priv->context.get(), exception))
         return jsc_value_new_undefined(priv->context.get());
 
@@ -1461,7 +1474,7 @@ JSCValue* jsc_value_constructor_callv(JSCValue* value, unsigned parametersCount,
         WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
     });
 
-    auto result = jsObjectCall(jsContext, function, JSC::JSCCallbackFunction::Type::Constructor, nullptr, arguments, &exception);
+    auto result = jsObjectCall(jsContext, function, JSC::JSCCallbackFunction::Type::Constructor, nullptr, arguments.span(), &exception);
     if (jscContextHandleExceptionIfNeeded(priv->context.get(), exception))
         return jsc_value_new_undefined(priv->context.get());
 
