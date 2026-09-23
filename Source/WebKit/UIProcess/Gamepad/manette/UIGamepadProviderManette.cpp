@@ -32,6 +32,10 @@
 #include <WebCore/ManetteGamepadProvider.h>
 #include <wtf/ProcessPrivilege.h>
 
+#if PLATFORM(WPE)
+#include "WPEWebViewLegacy.h"
+#endif
+
 namespace WebKit {
 
 using namespace WebCore;
@@ -47,7 +51,11 @@ void UIGamepadProvider::platformSetDefaultGamepadProvider()
 #if !PLATFORM(GTK)
 WebPageProxy* UIGamepadProvider::platformWebPageProxyForGamepadInput()
 {
+#if PLATFORM(WPE) && USE(MANETTE_GAMEPAD_PROVIDER)
+    return WKWPE::ViewLegacy::platformWebPageProxyForGamepadInput();
+#else
     return nullptr;
+#endif
 }
 #endif
 

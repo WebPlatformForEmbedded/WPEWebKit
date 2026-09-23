@@ -220,7 +220,6 @@ UIProcess/Automation/libwpe/WebAutomationSessionWPE.cpp
 
 UIProcess/CoordinatedGraphics/DrawingAreaProxyCoordinatedGraphics.cpp
 
-UIProcess/Gamepad/libwpe/UIGamepadProviderLibWPE.cpp
 
 UIProcess/geoclue/GeoclueGeolocationProvider.cpp
 

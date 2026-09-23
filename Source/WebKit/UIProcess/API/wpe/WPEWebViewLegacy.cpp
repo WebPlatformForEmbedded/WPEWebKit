@@ -38,7 +38,7 @@
 #include <wpe/wpe.h>
 #include <wtf/NeverDestroyed.h>
 
-#if ENABLE(GAMEPAD)
+#if ENABLE(GAMEPAD) && !USE(MANETTE_GAMEPAD_PROVIDER)
 #include <WebCore/GamepadProviderLibWPE.h>
 #endif
 
@@ -389,6 +389,12 @@ WebKit::WebPageProxy* ViewLegacy::platformWebPageProxyForGamepadInput()
     if (views.isEmpty())
         return nullptr;
 
+#if USE(MANETTE_GAMEPAD_PROVIDER)
+    auto index = views.findIf([](ViewLegacy* view) {
+        return view->viewState().contains(WebCore::ActivityState::IsVisible)
+            && view->viewState().contains(WebCore::ActivityState::IsFocused);
+    });
+#else
     struct wpe_view_backend* viewBackend = WebCore::GamepadProviderLibWPE::singleton().inputView();
 
     size_t index = notFound;
@@ -405,6 +411,7 @@ WebKit::WebPageProxy* ViewLegacy::platformWebPageProxyForGamepadInput()
                 && view->viewState().contains(WebCore::ActivityState::IsFocused);
         });
     }
+#endif
 
     if (index != notFound)
         return &(views[index]->page());
