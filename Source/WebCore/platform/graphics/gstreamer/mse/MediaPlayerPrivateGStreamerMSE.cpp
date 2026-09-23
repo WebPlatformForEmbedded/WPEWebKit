@@ -563,6 +563,9 @@ void MediaPlayerPrivateGStreamerMSE::setEosWithNoBuffers(bool eosWithNoBuffers)
             // error count integrity anymore.
         } else
             m_ignoreErrors = false;
+    } else {
+        GST_DEBUG_OBJECT(pipeline(), "Clear m_isEndReached.");
+        m_isEndReached = false;
     }
 }
 
