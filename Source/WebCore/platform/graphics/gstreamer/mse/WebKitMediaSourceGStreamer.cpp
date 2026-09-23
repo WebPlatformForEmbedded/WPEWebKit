@@ -643,9 +643,8 @@ static void webKitMediaSrcLoop(void* userData)
             GST_DEBUG_OBJECT(pad, "Pushed event was not handled: %" GST_PTR_FORMAT, event.get());
 
         if (isEOS) {
-            DataMutexLocker streamingMembersAfterEOS { stream->streamingMembersDataMutex };
-            GST_INFO_OBJECT(pad, "EOS pushed, resetting wasStreamStartSent to allow re-sending STREAM_START.");
-            streamingMembersAfterEOS->wasStreamStartSent = false;
+            GST_INFO_OBJECT(pad, "EOS pushed, pausing pad task.");
+            gst_pad_pause_task(pad);
         }
     } else
         ASSERT_NOT_REACHED();

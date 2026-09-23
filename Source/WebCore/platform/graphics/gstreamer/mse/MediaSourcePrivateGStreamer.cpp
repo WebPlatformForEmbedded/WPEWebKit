@@ -144,8 +144,22 @@ void MediaSourcePrivateGStreamer::markEndOfStream(EndOfStreamStatus endOfStreamS
 void MediaSourcePrivateGStreamer::unmarkEndOfStream()
 {
     ASSERT(isMainThread());
+    bool didEnd = m_playerPrivate.ended();
     m_playerPrivate.setEosWithNoBuffers(false);
     MediaSourcePrivate::unmarkEndOfStream();
+    if (m_hasAllTracks) {
+        if (didEnd) {
+            GST_DEBUG_OBJECT(m_playerPrivate.pipeline(), "Force flush tracks to clear EOS");
+        } else {
+            GST_WARNING_OBJECT(m_playerPrivate.pipeline(), "Force flush queued samples to clear EOS");
+        }
+        for (auto& privateSourceBuffer : m_sourceBuffers) {
+            auto sourceBuffer = downcast<SourceBufferPrivateGStreamer>(privateSourceBuffer);
+            for (auto& [trackId, _] : sourceBuffer->tracks()) {
+                sourceBuffer->flush(trackId);
+            }
+        }
+    }
 }
 
 MediaPlayer::ReadyState MediaSourcePrivateGStreamer::mediaPlayerReadyState() const
