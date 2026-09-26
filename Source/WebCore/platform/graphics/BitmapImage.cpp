@@ -86,6 +86,7 @@ void BitmapImage::destroyDecodedData(bool destroyAll)
     } else {
         m_source->destroyDecodedData(0, frameCount());
         m_currentFrameDecodingStatus = DecodingStatus::Invalid;
+        m_lastDecodingOptions = { DecodingMode::Auto };
     }
 
     // There's no need to throw away the decoder unless we're explicitly asked
@@ -257,6 +258,7 @@ ImageDrawResult BitmapImage::draw(GraphicsContext& context, const FloatRect& des
         // it is currently being decoded. New data may have been received since the previous request was made.
         if ((!frameIsCompatible && !frameIsBeingDecoded) || m_currentFrameDecodingStatus == DecodingStatus::Invalid) {
             LOG(Images, "BitmapImage::%s - %p - url: %s [requesting large async decoding]", __FUNCTION__, this, sourceURL().string().utf8().data());
+            m_lastDecodingOptions = { options.decodingMode() };
             m_source->requestFrameAsyncDecodingAtIndex(m_currentFrame, m_currentSubsamplingLevel, sizeForDrawing);
             m_currentFrameDecodingStatus = DecodingStatus::Decoding;
         }
@@ -300,6 +302,7 @@ ImageDrawResult BitmapImage::draw(GraphicsContext& context, const FloatRect& des
             }
             return ImageDrawResult::DidRequestDecoding;
         } else {
+            m_lastDecodingOptions = { options.decodingMode() };
             image = frameImageAtIndexCacheIfNeeded(m_currentFrame, m_currentSubsamplingLevel);
             LOG(Images, "BitmapImage::%s - %p - url: %s [an image frame will be decoded synchronously]", __FUNCTION__, this, sourceURL().string().utf8().data());
         }
@@ -664,6 +667,11 @@ DestinationColorSpace BitmapImage::colorSpace()
 unsigned BitmapImage::decodeCountForTesting() const
 {
     return m_decodeCountForTesting;
+}
+
+DecodingOptions BitmapImage::lastDecodingOptions() const
+{
+    return m_lastDecodingOptions;
 }
 
 void BitmapImage::dump(TextStream& ts) const

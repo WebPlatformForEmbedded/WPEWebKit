@@ -558,7 +558,7 @@ typedef (FetchRequest or FetchResponse) FetchObject;
     unsigned long imageDecodeCount(HTMLImageElement element);
     unsigned long pdfDocumentCachingCount(HTMLImageElement element);
     unsigned long remoteImagesCountForTesting();
-    undefined setLargeImageAsyncDecodingEnabledForTesting(HTMLImageElement element, boolean enabled);
+    undefined setAsyncDecodingEnabledForTesting(HTMLImageElement element, boolean enabled);
     undefined setForceUpdateImageDataEnabledForTesting(HTMLImageElement element, boolean enabled);
 
     undefined setGridMaxTracksLimit(unsigned long maxTracksLimit);
