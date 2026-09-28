@@ -138,7 +138,7 @@ namespace WebCore {
 #endif
 
 #if USE(LIBWPE)
-        static String keyValueForWPEKeyCode(unsigned);
+        static String keyValueForWPEKeyCode(unsigned, unsigned);
         static String keyCodeForHardwareKeyCode(unsigned);
         static String keyIdentifierForWPEKeyCode(unsigned);
         static int windowsKeyCodeForWPEKeyCode(unsigned);

@@ -40,8 +40,11 @@ namespace WebCore {
 // more like what Firefox does, and generate these switch statements
 // at build time.
 // https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/key/Key_Values
-String PlatformKeyboardEvent::keyValueForWPEKeyCode(unsigned keyCode)
+String PlatformKeyboardEvent::keyValueForWPEKeyCode(unsigned keyCode, unsigned hwKeyCode)
 {
+    if (keyCode == 0 && hwKeyCode == 0x181) // KEY_TV
+        return "TV"_s;
+
     switch (keyCode) {
     // Modifier keys.
     case WPE_KEY_Alt_L:
