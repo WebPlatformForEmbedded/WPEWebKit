@@ -70,6 +70,10 @@ static std::pair<GRefPtr<GstBuffer>, VideoFrameMetadataGStreamer*> ensureVideoFr
     IGNORE_WARNINGS_BEGIN("cast-align");
     auto modifiedBuffer = adoptGRef(gst_buffer_make_writable(buffer.leakRef()));
     IGNORE_WARNINGS_END;
+    if (!modifiedBuffer) {
+        GST_ERROR("Failed to make buffer writable");
+        return { nullptr, nullptr };
+    }
     meta = VIDEO_FRAME_METADATA_CAST(gst_buffer_add_meta(modifiedBuffer.get(), videoFrameMetadataGetInfo(), nullptr));
     return { WTFMove(modifiedBuffer), meta };
 }
@@ -109,6 +113,10 @@ const GstMetaInfo* videoFrameMetadataGetInfo()
 GRefPtr<GstBuffer> webkitGstBufferSetVideoFrameTimeMetadata(GRefPtr<GstBuffer>&& buffer, std::optional<WebCore::VideoFrameTimeMetadata>&& metadata)
 {
     auto modifiedBuffer = adoptGRef(gst_buffer_make_writable(buffer.leakRef()));
+    if (!modifiedBuffer) {
+        GST_ERROR("Failed to make buffer writable");
+        return nullptr;
+    }
     auto meta = getInternalVideoFrameMetadata(modifiedBuffer.get());
     if (meta) {
         meta->priv->videoSampleMetadata = WTFMove(metadata);
@@ -141,6 +149,8 @@ void webkitGstTraceProcessingTimeForElement(GstElement* element)
 
     gst_pad_add_probe(sinkPad.get(), probeType, [](GstPad*, GstPadProbeInfo* info, gpointer userData) -> GstPadProbeReturn {
         auto [modifiedBuffer, meta] = ensureVideoFrameMetadata(GRefPtr(GST_PAD_PROBE_INFO_BUFFER(info)));
+        if (!modifiedBuffer || !meta)
+            return GST_PAD_PROBE_OK;
         gst_pad_probe_info_set_buffer(info, modifiedBuffer.leakRef());
         Locker locker { meta->priv->lock };
         meta->priv->processingTimes.set(GST_ELEMENT_CAST(userData), std::make_pair(gst_util_get_timestamp(), GST_CLOCK_TIME_NONE));

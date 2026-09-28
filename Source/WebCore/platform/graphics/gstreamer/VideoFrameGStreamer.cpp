@@ -370,12 +370,20 @@ RefPtr<VideoFrameGStreamer> VideoFrameGStreamer::createFromPixelBuffer(Ref<Pixel
 
         GRefPtr buffer = gst_sample_get_buffer(sample.get());
         auto outputBuffer = webkitGstBufferSetVideoFrameTimeMetadata(WTFMove(buffer), WTFMove(metadata));
+        if (!outputBuffer) {
+            GST_ERROR("Failed to make buffer writable");
+            return nullptr;
+        }
         gst_buffer_add_video_meta(outputBuffer.get(), GST_VIDEO_FRAME_FLAG_NONE, format, width, height);
         setBufferFields(outputBuffer.get(), presentationTime, frameRate);
         sample = adoptGRef(gst_sample_make_writable(sample.leakRef()));
         gst_sample_set_buffer(sample.get(), outputBuffer.get());
     } else {
         auto outputBuffer = webkitGstBufferSetVideoFrameTimeMetadata(WTFMove(buffer), WTFMove(metadata));
+        if (!outputBuffer) {
+            GST_ERROR("Failed to make buffer writable");
+            return nullptr;
+        }
         gst_buffer_add_video_meta(outputBuffer.get(), GST_VIDEO_FRAME_FLAG_NONE, format, width, height);
         setBufferFields(outputBuffer.get(), presentationTime, frameRate);
         sample = adoptGRef(gst_sample_new(outputBuffer.get(), caps.get(), nullptr, nullptr));
@@ -444,6 +452,10 @@ void VideoFrameGStreamer::setMetadata(std::optional<VideoFrameTimeMetadata>&& me
     GRefPtr buffer = gst_sample_get_buffer(m_sample.get());
     RELEASE_ASSERT(buffer);
     auto modifiedBuffer = webkitGstBufferSetVideoFrameTimeMetadata(WTFMove(buffer), WTFMove(metadata));
+    if (!modifiedBuffer) {
+        GST_ERROR("Failed to make buffer writable");
+        return;
+    }
     m_sample = adoptGRef(gst_sample_make_writable(m_sample.leakRef()));
     gst_sample_set_buffer(m_sample.get(), modifiedBuffer.get());
 }
