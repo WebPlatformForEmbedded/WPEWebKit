@@ -167,7 +167,8 @@ GstElement* GStreamerCapturer::createSource()
             metadata.captureTime = MonotonicTime::now().secondsSinceEpoch();
             auto buffer = GST_PAD_PROBE_INFO_BUFFER(info);
             auto modifiedBuffer = webkitGstBufferSetVideoFrameTimeMetadata(GRefPtr(buffer), metadata);
-            gst_pad_probe_info_set_buffer(info, modifiedBuffer.leakRef());
+            if (modifiedBuffer)
+                gst_pad_probe_info_set_buffer(info, modifiedBuffer.leakRef());
             return GST_PAD_PROBE_OK;
         }, nullptr, nullptr);
     }

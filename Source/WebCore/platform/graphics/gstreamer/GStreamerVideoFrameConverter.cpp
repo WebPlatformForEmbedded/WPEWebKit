@@ -108,6 +108,10 @@ GRefPtr<GstSample> GStreamerVideoFrameConverter::convert(const GRefPtr<GstSample
 
     GRefPtr buffer = gst_sample_get_buffer(convertedSample.get());
     auto writableBuffer = adoptGRef(gst_buffer_make_writable(buffer.leakRef()));
+    if (!writableBuffer) {
+        GST_ERROR("Failed to make buffer writable");
+        return nullptr;
+    }
 
     if (auto meta = gst_buffer_get_video_meta(writableBuffer.get()))
         gst_buffer_remove_meta(writableBuffer.get(), GST_META_CAST(meta));
