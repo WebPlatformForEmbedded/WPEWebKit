@@ -980,7 +980,7 @@ void SourceBufferPrivate::didReceiveSample(Ref<MediaSample>&& originalSample)
                     auto safeDecodeTime = lastSampleBeforeSyncOrBeforeEndRef->decodeTime() + epsilon;
                     if (safeDecodeTime > sample->decodeTime()
                         && safeDecodeTime < (sample->decodeTime() + sample->duration() - 2 * contiguousFrameTolerance)) {
-                        INFO_LOG(LOGIDENTIFIER, "Discovered out-of-order frames, from: ", nextSampleInDecodeOrderRef.get(), " to: ", (nextSyncSample == trackBuffer.samples().decodeOrder().end() ? "[end]"_s : toString(nextSyncSample->second.get())),
+                        INFO_LOG(LOGIDENTIFIER, "Discovered out-of-order frames, from: ", toString(*nextSampleInDecodeOrderRef), " to: ", (nextSyncSample == trackBuffer.samples().decodeOrder().end() ? "[end]"_s : toString(*nextSyncSample->second)),
                         ", but fixed the ordering by changing sample DTS from ", sample->decodeTime(), " to ", safeDecodeTime);
                         sample->setTimestamps(sample->presentationTime(), safeDecodeTime);
                         break;
@@ -988,7 +988,7 @@ void SourceBufferPrivate::didReceiveSample(Ref<MediaSample>&& originalSample)
                 }
             }
 
-            INFO_LOG(LOGIDENTIFIER, "Discovered out-of-order frames, from: ", nextSampleInDecodeOrderRef.get(), " to: ", (nextSyncSample == trackBuffer.samples().decodeOrder().end() ? "[end]"_s : toString(nextSyncSample->second.get())));
+            INFO_LOG(LOGIDENTIFIER, "Discovered out-of-order frames, from: ", toString(*nextSampleInDecodeOrderRef), " to: ", (nextSyncSample == trackBuffer.samples().decodeOrder().end() ? "[end]"_s : toString(*nextSyncSample->second)));
             erasedSamples.addRange(nextSampleInDecodeOrder, nextSyncSample);
         } while (false);
 
