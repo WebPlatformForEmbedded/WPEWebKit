@@ -65,6 +65,9 @@ void webKitMediaSrcEmitStreams(WebKitMediaSrc* source, const Vector<RefPtr<WebCo
 
 void webKitMediaSrcFlush(WebKitMediaSrc*, TrackID streamId);
 
+void webKitMediaSrcFlushAndSuspend(WebKitMediaSrc*);
+void webKitMediaSrcResume(WebKitMediaSrc*);
+
 void webKitMediaSrcSetPlayer(WebKitMediaSrc*, ThreadSafeWeakPtr<WebCore::MediaPlayerPrivateGStreamerMSE>&&);
 
 G_END_DECLS
