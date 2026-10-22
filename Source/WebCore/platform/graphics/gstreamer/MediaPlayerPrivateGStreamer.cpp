@@ -46,6 +46,7 @@
 #include "MediaPlayer.h"
 #include "NotImplemented.h"
 #include "OriginAccessPatterns.h"
+#include "ParsedContentRange.h"
 #include "SecurityOrigin.h"
 #include "TextCombinerGStreamer.h"
 #include "TextSinkGStreamer.h"
@@ -2276,6 +2277,15 @@ void MediaPlayerPrivateGStreamer::handleMessage(GstMessage* message)
                     }
                 } else
                     contentLength = *contentLengthFromResponse;
+                if (!contentLength) {
+                    // A 206 without Content-Length (for instance sent chunked) still carries the full
+                    // resource size in Content-Range, so it is not a live stream.
+                    if (auto contentRangeValue = gstStructureGetString(responseHeaders.get(), httpHeaderNameString(HTTPHeaderName::ContentRange))) {
+                        ParsedContentRange contentRange(contentRangeValue.toString());
+                        if (contentRange.isValid() && contentRange.instanceLength() != ParsedContentRange::unknownLength)
+                            contentLength = contentRange.instanceLength();
+                    }
+                }
                 if (!isRangeRequest) {
                     m_isLiveStream = !contentLength;
                     GST_INFO_OBJECT(pipeline(), "%s stream detected", m_isLiveStream.value_or(false) ? "Live" : "Non-live");
