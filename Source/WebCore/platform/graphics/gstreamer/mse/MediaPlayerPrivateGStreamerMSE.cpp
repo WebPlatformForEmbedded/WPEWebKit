@@ -398,6 +398,9 @@ void MediaPlayerPrivateGStreamerMSE::propagateReadyStateToPlayer()
 void MediaPlayerPrivateGStreamerMSE::didPreroll()
 {
     ASSERT(GST_STATE(m_pipeline.get()) >= GST_STATE_PAUSED);
+
+    updateVideoSinkStatistics();
+
     // There are three circumstances in which a preroll can occur:
     // a) At the begining of playback. This is the point where we propagate >=HaveCurrentData to the player.
     // b) At the end of a seek. We emit the "seeked" event as well.
