@@ -299,6 +299,15 @@ void MediaPlayerPrivateGStreamer::tearDown(bool clearMediaPlayer)
     // about handlers running in the GStreamer thread.
     if (m_pipeline) {
         unregisterPipeline(m_pipeline);
+#if ENABLE(MEDIA_SOURCE)
+        if (m_source && WEBKIT_IS_MEDIA_SRC(m_source.get())) {
+            // Stop the source element first to ensure streaming threads are stopped before
+            // transitioning the pipeline to NULL, avoiding decrypter hangs caused by
+            // HDCP related issues.
+            GST_DEBUG_OBJECT(m_pipeline.get(), "Reset source to READY before pipeline destruction");
+            gst_element_set_state(m_source.get(), GST_STATE_READY);
+        }
+#endif // ENABLE(MEDIA_SOURCE)
         gst_element_set_state(m_pipeline.get(), GST_STATE_NULL);
 
         auto bus = adoptGRef(gst_pipeline_get_bus(GST_PIPELINE(m_pipeline.get())));
