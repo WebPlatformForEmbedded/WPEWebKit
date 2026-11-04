@@ -132,8 +132,6 @@ MediaPlayerPrivateGStreamerMSE::MediaPlayerPrivateGStreamerMSE(MediaPlayer* play
 MediaPlayerPrivateGStreamerMSE::~MediaPlayerPrivateGStreamerMSE()
 {
     GST_TRACE("destroying the player (%p)", this);
-
-    m_source.clear();
 }
 
 void MediaPlayerPrivateGStreamerMSE::load(const String&)
