@@ -1126,6 +1126,14 @@ void MediaPlayer::setPageIsSuspended(bool suspended)
     m_private->setPageIsSuspended(suspended);
 }
 
+void MediaPlayer::didDetachFromAncestor()
+{
+    m_private->didDetachFromAncestor();
+}
+void MediaPlayer::didFinishInsertingNode()
+{
+    m_private->didFinishInsertingNode();
+}
 void MediaPlayer::setVisibleForCanvas(bool visible)
 {
     if (visible == m_visibleForCanvas)

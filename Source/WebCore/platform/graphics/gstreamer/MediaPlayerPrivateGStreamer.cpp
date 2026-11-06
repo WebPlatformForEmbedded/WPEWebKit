@@ -647,6 +647,8 @@ void MediaPlayerPrivateGStreamer::seekToTarget(const SeekTarget& inTarget)
 
     GST_INFO_OBJECT(pipeline(), "[Seek] seek attempt to %s", toString(inTarget.time).utf8().data());
 
+    resumeDataFlowIfNeeded(false);
+
     // Avoid useless seeking.
     if (inTarget.time == currentTime()) {
         GST_DEBUG_OBJECT(pipeline(), "[Seek] Already at requested position. Aborting.");
@@ -5174,6 +5176,62 @@ void MediaPlayerPrivateGStreamer::setPageIsSuspended(bool suspended)
         auto& quirksManager = GStreamerQuirksManager::singleton();
         quirksManager.setHolePunchVideoRectangle(m_videoSink.get(), IntRect());
     }
+}
+
+void MediaPlayerPrivateGStreamer::didDetachFromAncestor()
+{
+    if (isMediaStreamPlayer() || !m_source)
+        return;
+
+    suspendDataFlowIfNeeded();
+}
+
+void MediaPlayerPrivateGStreamer::didFinishInsertingNode()
+{
+    if (isMediaStreamPlayer() || !m_source)
+        return;
+
+    resumeDataFlowIfNeeded(true);
+}
+
+void MediaPlayerPrivateGStreamer::suspendDataFlowIfNeeded()
+{
+#if PLATFORM(WPE)
+    if (m_playbackSuspendedWhileDetached)
+        return;
+
+    GST_INFO_OBJECT(m_pipeline.get(), "Suspending data flow");
+    suspendDataFlow();
+    m_playbackSuspendedWhileDetached = true;
+#endif // PLATFORM(WPE)
+}
+
+void MediaPlayerPrivateGStreamer::resumeDataFlowIfNeeded(bool restorePosition)
+{
+#if PLATFORM(WPE)
+    if (!m_playbackSuspendedWhileDetached)
+        return;
+
+    GST_INFO_OBJECT(m_pipeline.get(), "Resuming data flow from suspended state");
+    resumeDataFlow(restorePosition);
+    m_playbackSuspendedWhileDetached = false;
+#endif // PLATFORM(WPE)
+}
+
+void MediaPlayerPrivateGStreamer::suspendDataFlow()
+{
+    ASSERT(m_source && WEBKIT_IS_WEB_SRC(m_source.get()));
+
+    gst_element_send_event(GST_ELEMENT(m_source.get()), gst_event_new_flush_start());
+}
+
+void MediaPlayerPrivateGStreamer::resumeDataFlow(bool restorePosition)
+{
+    ASSERT(m_source && WEBKIT_IS_WEB_SRC(m_source.get()));
+
+    gst_element_send_event(GST_ELEMENT(m_source.get()), gst_event_new_flush_stop(false));
+    if (restorePosition)
+        doSeek(SeekTarget { currentTime() }, rate());
 }
 
 #if ENABLE(MEDIA_TELEMETRY)

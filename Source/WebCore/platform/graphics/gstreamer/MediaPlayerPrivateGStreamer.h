@@ -297,6 +297,9 @@ public:
     };
     void setVideoRectangle(const IntRect& rect);
 
+    void didDetachFromAncestor() final;
+    void didFinishInsertingNode() final;
+
 protected:
     enum MainThreadNotification {
         VideoChanged = 1 << 0,
@@ -436,6 +439,11 @@ protected:
 
     void didEnd();
 
+    void suspendDataFlowIfNeeded();
+    void resumeDataFlowIfNeeded(bool restorePosition);
+    virtual void suspendDataFlow();
+    virtual void resumeDataFlow(bool restorePosition);
+
     Ref<MainThreadNotifier<MainThreadNotification>> m_notifier;
     ThreadSafeWeakPtr<MediaPlayer> m_player;
     String m_referrer;
@@ -524,6 +532,8 @@ protected:
     GstSeekFlags m_seekFlags;
     bool m_ignoreErrors { false };
     Atomic<unsigned> m_queuedSyncErrors { 0 };
+
+    bool m_playbackSuspendedWhileDetached { false };
 
     TrackIDHashMap<Ref<AudioTrackPrivateGStreamer>> m_audioTracks;
     TrackIDHashMap<Ref<VideoTrackPrivateGStreamer>> m_videoTracks;
