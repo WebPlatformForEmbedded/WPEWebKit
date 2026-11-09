@@ -28,14 +28,15 @@
 
 #if ENABLE(GAMEPAD) && OS(LINUX)
 
-#ifndef MANETTE_CHECK_VERSION
-#define MANETTE_CHECK_VERSION(major,minor,micro) 0
-#endif
-
 #include "ManetteGamepadProvider.h"
 #include <linux/input-event-codes.h>
 #include <wtf/HexNumber.h>
+#include <wtf/MathExtras.h>
+#include <wtf/glib/GSpanExtras.h>
+#include <wtf/glib/GUniquePtr.h>
 #include <wtf/text/CString.h>
+#include <wtf/text/StringToIntegerConversion.h>
+#include <wtf/text/StringView.h>
 
 namespace WebCore {
 
@@ -196,8 +197,101 @@ static void onButtonReleased(ManetteDevice* device, ManetteButton button, Manett
     gamepad->buttonPressedOrReleased(device, toStandardGamepadButton(button), false);
 }
 #else
+
+static double analogButtonPressure(const ManetteGamepad::AnalogButton& analogButton, double value)
+{
+    // value is in [-1, 1]; pressure is in [0, 1].
+    double pressure = 0;
+    switch (analogButton.range) {
+    case ManetteGamepad::AxisRange::Full:
+        pressure = (value + 1) / 2;
+        break;
+    case ManetteGamepad::AxisRange::Positive:
+        pressure = std::max(value, 0.);
+        break;
+    case ManetteGamepad::AxisRange::Negative:
+        pressure = std::max(-value, 0.);
+        break;
+    }
+    return clampTo(analogButton.inverted ? 1 - pressure : pressure, 0., 1.);
+}
+
+static void onEvent(ManetteDevice* device, ManetteEvent* event, ManetteGamepad* gamepad)
+{
+    auto analogButtons = gamepad->analogButtonsForEvent(event);
+    if (analogButtons.isEmpty())
+        return; // not an analog button (e.g. a stick axis)
+
+    uint16_t axis;
+    double value;
+    if (!manette_event_get_absolute(event, &axis, &value))
+        return;
+
+    // The same axis can be split between two buttons, e.g. "lefttrigger:+a3,righttrigger:-a3".
+    for (auto& analogButton : analogButtons)
+        gamepad->analogButtonChanged(device, analogButton.button, analogButtonPressure(analogButton, value));
+}
+
+Vector<ManetteGamepad::AnalogButton, 2> ManetteGamepad::analogButtonsForEvent(ManetteEvent* event) const
+{
+    if (manette_event_get_hardware_type(event) != EV_ABS)
+        return { }; // digital button (bN)
+
+    uint16_t code = manette_event_get_hardware_code(event);
+    if (code >= ABS_HAT0X && code <= ABS_HAT3Y)
+        return { }; // D-pad from a hat (hN.M)
+
+    return m_analogButtons.get(manette_event_get_hardware_index(event));
+}
+
+void ManetteGamepad::parseAnalogButtons()
+{
+    m_analogButtons.clear();
+#if LIBMANETTE_CHECK_VERSION(0, 2, 8)
+    GUniquePtr<char> mapping(manette_device_get_mapping(m_device.get()));
+    if (!mapping)
+        return;
+
+    GUniquePtr<char*> entries(g_strsplit(mapping.get(), ",", -1));
+    for (const char* entryCString : span(entries.get())) {
+        auto entry = StringView::fromLatin1(entryCString);
+        StandardGamepadButton button;
+        if (entry.startsWith("lefttrigger:"_s))
+            button = StandardGamepadButton::LeftTrigger;
+        else if (entry.startsWith("righttrigger:"_s))
+            button = StandardGamepadButton::RightTrigger;
+        else
+            continue;
+
+        // Source can be "a2", "+a2", "-a2" or "a2~"; only axis sources are analog.
+        auto source = entry.substring(entry.find(':') + 1);
+        auto range = AxisRange::Full;
+        if (source.startsWith('+'))
+            range = AxisRange::Positive;
+        else if (source.startsWith('-'))
+            range = AxisRange::Negative;
+        if (range != AxisRange::Full)
+            source = source.substring(1);
+        if (!source.startsWith('a'))
+            continue; // e.g. "b6": trigger is a digital button on this device
+
+        auto index = parseIntegerAllowingTrailingJunk<uint16_t>(source.substring(1));
+        if (!index)
+            continue;
+
+        bool inverted = source.endsWith('~');
+        // The same axis can be bound to several buttons, e.g. "lefttrigger:+a3,righttrigger:-a3".
+        auto& buttonsForAxis = m_analogButtons.add(*index, Vector<AnalogButton, 2> { }).iterator->value;
+        buttonsForAxis.append({ button, range, inverted });
+    }
+#endif
+}
+
 static void onButtonPressEvent(ManetteDevice* device, ManetteEvent* event, ManetteGamepad* gamepad)
 {
+    if (!gamepad->analogButtonsForEvent(event).isEmpty())
+        return; // handled from the raw "event" with the analog value
+
     uint16_t button;
     if (!manette_event_get_button(event, &button))
         return;
@@ -207,6 +301,9 @@ static void onButtonPressEvent(ManetteDevice* device, ManetteEvent* event, Manet
 
 static void onButtonReleaseEvent(ManetteDevice* device, ManetteEvent* event, ManetteGamepad* gamepad)
 {
+    if (!gamepad->analogButtonsForEvent(event).isEmpty())
+        return; // handled from the raw "event" with the analog value
+
     uint16_t button;
     if (!manette_event_get_button(event, &button))
         return;
@@ -244,6 +341,8 @@ ManetteGamepad::ManetteGamepad(ManetteDevice* device, unsigned index)
     g_signal_connect(device, "button-released", G_CALLBACK(onButtonReleased), this);
     g_signal_connect(device, "absolute-axis-changed", G_CALLBACK(onAbsoluteAxisChanged), this);
 #else
+    parseAnalogButtons();
+    g_signal_connect(device, "event", G_CALLBACK(onEvent), this);
     g_signal_connect(device, "button-press-event", G_CALLBACK(onButtonPressEvent), this);
     g_signal_connect(device, "button-release-event", G_CALLBACK(onButtonReleaseEvent), this);
     g_signal_connect(device, "absolute-axis-event", G_CALLBACK(onAbsoluteAxisEvent), this);
