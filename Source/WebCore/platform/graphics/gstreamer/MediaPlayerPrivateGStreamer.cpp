@@ -299,6 +299,7 @@ void MediaPlayerPrivateGStreamer::tearDown(bool clearMediaPlayer)
     // about handlers running in the GStreamer thread.
     if (m_pipeline) {
         unregisterPipeline(m_pipeline);
+        willSetPipelineToNull();
         gst_element_set_state(m_pipeline.get(), GST_STATE_NULL);
 
         auto bus = adoptGRef(gst_pipeline_get_bus(GST_PIPELINE(m_pipeline.get())));

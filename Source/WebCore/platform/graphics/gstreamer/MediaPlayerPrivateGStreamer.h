@@ -435,6 +435,8 @@ protected:
     bool isPipelineWaitingPreroll() const;
 
     void didEnd();
+    void tearDown(bool clearMediaPlayer);
+    virtual void willSetPipelineToNull() { }
 
     Ref<MainThreadNotifier<MainThreadNotification>> m_notifier;
     ThreadSafeWeakPtr<MediaPlayer> m_player;
@@ -566,7 +568,6 @@ private:
         Function<void()> m_task = Function<void()>();
     };
 
-    void tearDown(bool clearMediaPlayer);
     bool isPlayerShuttingDown() const { return m_isPlayerShuttingDown.load(); }
     MediaTime maxTimeLoaded() const;
     bool setVideoSourceOrientation(ImageOrientation);
