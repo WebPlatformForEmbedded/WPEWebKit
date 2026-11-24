@@ -5103,12 +5103,27 @@ bool RenderBox::avoidsFloats() const
     return isReplacedOrInlineBlock() || isLegend() || isFieldset() || createsNewFormattingContext() || (element() && element()->isFormControlElement());
 }
 
+IntOutsets RenderBox::computeFilterOutsets() const
+{
+    if (!hasFilter())
+        return { };
+
+    auto& filter = style().filter();
+    // FIXME: Need to compute outsets for reference filters: webkit.org/b/237538.
+    if (filter.hasReferenceFilter())
+        return { };
+
+    return filter.outsets();
+}
+
 void RenderBox::addVisualEffectOverflow()
 {
     bool hasBoxShadow = style().boxShadow();
     bool hasBorderImageOutsets = style().hasBorderImageOutsets();
     bool hasOutline = outlineStyleForRepaint().hasOutlineInVisualOverflow();
-    if (!hasBoxShadow && !hasBorderImageOutsets && !hasOutline)
+    bool hasInflatingFilters = hasFilter() && !computeFilterOutsets().isZero();
+
+    if (!hasBoxShadow && !hasBorderImageOutsets && !hasOutline && !hasInflatingFilters)
         return;
 
     addVisualOverflow(applyVisualEffectOverflow(borderBoxRect()));
@@ -5117,7 +5132,22 @@ void RenderBox::addVisualEffectOverflow()
         fragmentedFlow->addFragmentsVisualEffectOverflow(*this);
 }
 
-LayoutRect RenderBox::applyVisualEffectOverflow(const LayoutRect& borderBox) const
+static void convertOutsetsToOverflowCoordinates(IntOutsets& outsets, BlockFlowDirection blockFlowDirection)
+{
+    switch (blockFlowDirection) {
+    case BlockFlowDirection::TopToBottom:
+    case BlockFlowDirection::LeftToRight:
+        break;
+    case BlockFlowDirection::BottomToTop:
+        std::swap(outsets.top(), outsets.bottom());
+        break;
+    case BlockFlowDirection::RightToLeft:
+        std::swap(outsets.left(), outsets.right());
+        break;
+    }
+}
+
+LayoutRect RenderBox::applyVisualEffectOverflow(const LayoutRect& borderBox, OptionSet<VisualEffectOverflowOption> options) const
 {
     LayoutUnit overflowMinX = borderBox.x();
     LayoutUnit overflowMaxX = borderBox.maxX();
@@ -5152,8 +5182,27 @@ LayoutRect RenderBox::applyVisualEffectOverflow(const LayoutRect& borderBox) con
         overflowMinY = std::min(overflowMinY, borderBox.y() - outlineSize);
         overflowMaxY = std::max(overflowMaxY, borderBox.maxY() + outlineSize);
     }
+
+    if (hasFilter() && !options.contains(VisualEffectOverflowOption::ExcludeFilterOutsets)) {
+        auto outsets = computeFilterOutsets();
+        convertOutsetsToOverflowCoordinates(outsets, style().blockFlowDirection());
+
+        overflowMinX = std::min(overflowMinX, borderBox.x() - outsets.left());
+        overflowMaxX = std::max(overflowMaxX, borderBox.maxX() + outsets.right());
+        overflowMinY = std::min(overflowMinY, borderBox.y() - outsets.top());
+        overflowMaxY = std::max(overflowMaxY, borderBox.maxY() + outsets.bottom());
+    }
+
     // Add in the final overflow with shadows and outsets combined.
     return LayoutRect(overflowMinX, overflowMinY, overflowMaxX - overflowMinX, overflowMaxY - overflowMinY);
+}
+
+bool RenderBox::hasLayoutOverflow() const
+{
+    if (!m_overflow)
+        return false;
+
+    return !flippedClientBoxRect().contains(m_overflow->layoutOverflowRect());
 }
 
 void RenderBox::addOverflowFromChild(const RenderBox& child, const LayoutSize& delta)
