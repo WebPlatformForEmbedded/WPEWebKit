@@ -1063,14 +1063,14 @@ void HTMLMediaElement::didFinishInsertingNode()
     }
 
     configureMediaControls();
+
+    if (RefPtr player = m_player) {
+        player->didFinishInsertingNode();
+    }
 }
 
 void HTMLMediaElement::pauseAfterDetachedTask()
 {
-    // If we were re-inserted into an active document, no need to pause.
-    if (m_inActiveDocument)
-        return;
-
     if (m_videoFullscreenMode != VideoFullscreenModePictureInPicture && m_networkState > NETWORK_EMPTY && !m_wasInterruptedForInvisibleAutoplay)
         pause();
     if (m_videoFullscreenMode == VideoFullscreenModeStandard)
@@ -1132,8 +1132,18 @@ void HTMLMediaElement::removedFromAncestor(RemovalType removalType, ContainerNod
     if (removalType.disconnectedFromDocument) {
         // Pause asynchronously to let the operation that removed us finish, in case we get inserted back into a document.
         queueTaskKeepingObjectAlive(*this, TaskSource::MediaElement, [this] {
-            if (!isContextStopped())
-                pauseAfterDetachedTask();
+            if (isContextStopped())
+                return;
+
+            // If we were re-inserted into an active document, no need to pause.
+            if (m_inActiveDocument)
+                return;
+
+            pauseAfterDetachedTask();
+
+            if (RefPtr player = m_player; player && m_videoFullscreenMode != VideoFullscreenModePictureInPicture) {
+                player->didDetachFromAncestor();
+            }
         });
     }
 
