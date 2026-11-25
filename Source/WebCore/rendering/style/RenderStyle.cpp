@@ -706,9 +706,21 @@ static bool positionChangeIsMovementOnly(const LengthBox& a, const LengthBox& b,
 
 inline bool RenderStyle::changeAffectsVisualOverflow(const RenderStyle& other) const
 {
-    if (m_nonInheritedData->miscData.ptr() != other.m_nonInheritedData->miscData.ptr()
-        && !arePointingToEqualData(m_nonInheritedData->miscData->boxShadow, other.m_nonInheritedData->miscData->boxShadow))
-        return true;
+    if (m_nonInheritedData->miscData.ptr() != other.m_nonInheritedData->miscData.ptr()) {
+        if (!arePointingToEqualData(m_nonInheritedData->miscData->boxShadow, other.m_nonInheritedData->miscData->boxShadow))
+            return true;
+
+        if (m_nonInheritedData->miscData->filter.ptr() != other.m_nonInheritedData->miscData->filter.ptr()) {
+            auto filterOutsets = [](const FilterOperations& operations) -> IntOutsets {
+                // FIXME: Need to compute outsets for reference filters: webkit.org/b/237538.
+                if (operations.hasReferenceFilter())
+                    return { };
+                return operations.outsets();
+            };
+            if (filterOutsets(m_nonInheritedData->miscData->filter->operations) != filterOutsets(other.m_nonInheritedData->miscData->filter->operations))
+                return true;
+        }
+    }
 
     if (m_rareInheritedData.ptr() != other.m_rareInheritedData.ptr()
         && !arePointingToEqualData(m_rareInheritedData->textShadow, other.m_rareInheritedData->textShadow))

@@ -154,6 +154,7 @@ public:
     // but it is on the right in vertical-rl.
     WEBCORE_EXPORT LayoutRect flippedClientBoxRect() const;
     LayoutRect layoutOverflowRect() const { return m_overflow ? m_overflow->layoutOverflowRect() : flippedClientBoxRect(); }
+    bool hasLayoutOverflow() const;
     inline LayoutUnit logicalLeftLayoutOverflow() const;
     inline LayoutUnit logicalRightLayoutOverflow() const;
     
@@ -167,8 +168,14 @@ public:
     void addVisualOverflow(const LayoutRect&);
     void clearOverflow();
 
+    IntOutsets computeFilterOutsets() const;
+
     void addVisualEffectOverflow();
-    LayoutRect applyVisualEffectOverflow(const LayoutRect&) const;
+
+    enum class VisualEffectOverflowOption : uint8_t {
+        ExcludeFilterOutsets = 1 << 0,
+    };
+    LayoutRect applyVisualEffectOverflow(const LayoutRect&, OptionSet<VisualEffectOverflowOption> = { }) const;
 
     void addOverflowFromChild(const RenderBox& child) { addOverflowFromChild(child, child.locationOffset()); }
     void addOverflowFromChild(const RenderBox& child, const LayoutSize& delta);
